@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "cloud-quran",
+    "slug": "cloud-quran",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "cloud-quran",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.devoxer.cloud-quran",
+      "appleTeamId": "MA2HBUUNVP",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.devoxer.cloudquran"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "headers": {
+            "Cross-Origin-Embedder-Policy": "credentialless",
+            "Cross-Origin-Opener-Policy": "same-origin"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "android": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 76
+          }
+        }
+      ],
+      "expo-sqlite",
+      ["expo-audio", { "enableBackgroundPlayback": true }],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-asset",
+        {
+          "assets": [
+            "./src/data/quran.db"
+          ]
+        }
+      ],
+      "./plugins/withAutoSigning"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

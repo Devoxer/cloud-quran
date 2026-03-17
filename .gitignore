@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+*.tsbuildinfo
+expo-env.d.ts
+
+# Build
+build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Lock files (keep only bun.lock)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# SQLite temp files
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Testing
+coverage/
+
+# Playwright
+test-results/
+playwright-report/
+**/e2e/screenshots/
+
+# Wrangler
+.wrangler/
+
+# Audio pipeline temp files
+tmp/
