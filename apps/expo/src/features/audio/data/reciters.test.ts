@@ -1,4 +1,4 @@
-import { RECITERS, type Reciter } from './reciters';
+import { RECITERS } from './reciters';
 
 describe('RECITERS catalog', () => {
   test('has 40 entries', () => {
@@ -34,9 +34,11 @@ describe('RECITERS catalog', () => {
 
   test('sections are ordered: murattal, then mujawwad, then muallim', () => {
     const firstMujawwadIndex = RECITERS.findIndex((r) => r.style === 'mujawwad');
-    const lastMurattalIndex = RECITERS.length - 1 - [...RECITERS].reverse().findIndex((r) => r.style === 'murattal');
+    const lastMurattalIndex =
+      RECITERS.length - 1 - [...RECITERS].reverse().findIndex((r) => r.style === 'murattal');
     const firstMuallimIndex = RECITERS.findIndex((r) => r.style === 'muallim');
-    const lastMujawwadIndex = RECITERS.length - 1 - [...RECITERS].reverse().findIndex((r) => r.style === 'mujawwad');
+    const lastMujawwadIndex =
+      RECITERS.length - 1 - [...RECITERS].reverse().findIndex((r) => r.style === 'mujawwad');
 
     expect(lastMurattalIndex).toBeLessThan(firstMujawwadIndex);
     expect(lastMujawwadIndex).toBeLessThan(firstMuallimIndex);

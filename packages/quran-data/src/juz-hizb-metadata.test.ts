@@ -1,9 +1,4 @@
-import {
-  getHizbForPage,
-  getJuzForPage,
-  HIZB_METADATA,
-  JUZ_METADATA,
-} from './juz-hizb-metadata';
+import { getHizbForPage, getJuzForPage, HIZB_METADATA, JUZ_METADATA } from './juz-hizb-metadata';
 
 describe('JUZ_METADATA', () => {
   test('has exactly 30 entries', () => {

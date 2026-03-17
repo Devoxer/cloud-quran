@@ -1,6 +1,5 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import Constants from 'expo-constants';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
@@ -46,7 +45,9 @@ export function SettingsScreen() {
           <SectionHeader title="Audio" />
           <Pressable style={styles.settingRow} onPress={toggleAutoFollowAudio}>
             <View style={styles.settingTextColumn}>
-              <AppText variant="ui" style={{ color: tokens.text.quran }}>Auto-follow audio</AppText>
+              <AppText variant="ui" style={{ color: tokens.text.quran }}>
+                Auto-follow audio
+              </AppText>
               <AppText variant="uiCaption" style={{ color: tokens.text.ui }}>
                 Scroll to the active verse during playback
               </AppText>
@@ -60,7 +61,9 @@ export function SettingsScreen() {
           <View style={styles.componentSpacer} />
           <Pressable style={styles.settingRow} onPress={toggleTapToSeek}>
             <View style={styles.settingTextColumn}>
-              <AppText variant="ui" style={{ color: tokens.text.quran }}>Tap to seek</AppText>
+              <AppText variant="ui" style={{ color: tokens.text.quran }}>
+                Tap to seek
+              </AppText>
               <AppText variant="uiCaption" style={{ color: tokens.text.ui }}>
                 Tap a verse to jump audio to that position
               </AppText>

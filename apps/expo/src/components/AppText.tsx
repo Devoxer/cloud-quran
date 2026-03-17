@@ -1,7 +1,7 @@
 import { I18nManager, StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useTheme } from '@/theme/ThemeProvider';
-import { KFGQPC_FONT_FAMILY, typography, type TypographyVariant } from '@/theme/tokens';
+import { KFGQPC_FONT_FAMILY, type TypographyVariant, typography } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
 
 export type AppTextProps = TextProps & {

@@ -1,7 +1,15 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
-
 import Ionicons from '@expo/vector-icons/Ionicons';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SectionList,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { RECITERS, type Reciter } from '@/features/audio/data/reciters';
@@ -50,9 +58,7 @@ const ReciterRow = React.memo(function ReciterRow({
           {reciter.nameEnglish} · {reciter.style}
         </AppText>
       </View>
-      {isSelected && (
-        <Ionicons name="checkmark-circle" size={22} color={accentColor} />
-      )}
+      {isSelected && <Ionicons name="checkmark-circle" size={22} color={accentColor} />}
     </Pressable>
   );
 });
@@ -66,8 +72,7 @@ export function ReciterSelector({ visible, onClose }: ReciterSelectorProps) {
   const sections: Section[] = useMemo(() => {
     const q = query.toLowerCase();
     const filtered = RECITERS.filter(
-      (r) =>
-        r.nameEnglish.toLowerCase().includes(q) || r.nameArabic.includes(query),
+      (r) => r.nameEnglish.toLowerCase().includes(q) || r.nameArabic.includes(query),
     );
     return [
       { title: 'Murattal', data: filtered.filter((r) => r.style === 'murattal') },
@@ -110,12 +115,7 @@ export function ReciterSelector({ visible, onClose }: ReciterSelectorProps) {
   );
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

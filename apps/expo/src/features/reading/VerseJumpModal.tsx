@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
@@ -19,7 +19,7 @@ export function VerseJumpModal({ visible, verseCount, onJump, onClose }: VerseJu
 
   const handleSubmit = useCallback(() => {
     const num = parseInt(value, 10);
-    if (isNaN(num) || num < 1 || num > verseCount) {
+    if (Number.isNaN(num) || num < 1 || num > verseCount) {
       setError(`Enter a number between 1 and ${verseCount}`);
       return;
     }

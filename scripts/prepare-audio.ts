@@ -41,50 +41,290 @@ const FFPROBE_WORKERS = 8;
 const RECITERS: ReciterConfig[] = [
   // EveryAyah format — per-verse download + ffprobe timing + ffmpeg concat
   // Re-sourced from QDC (9 reciters)
-  { id: 'alafasy', slug: 'mishari_al_afasy/murattal', qurancdnId: 7, downloadFormat: 'everyayah', everyAyahFolder: 'Alafasy_128kbps' },
-  { id: 'sudais', slug: 'abdurrahmaan_as_sudais/murattal', qurancdnId: 3, downloadFormat: 'everyayah', everyAyahFolder: 'Abdurrahmaan_As-Sudais_192kbps' },
-  { id: 'shatri', slug: 'abu_bakr_shatri/murattal', qurancdnId: 4, downloadFormat: 'everyayah', everyAyahFolder: 'Abu_Bakr_Ash-Shaatree_128kbps' },
-  { id: 'abdulbasit', slug: 'abdul_baset/murattal', qurancdnId: 2, downloadFormat: 'everyayah', everyAyahFolder: 'Abdul_Basit_Murattal_192kbps' },
-  { id: 'abdulbasit-mujawwad', slug: 'abdul_baset/mujawwad', qurancdnId: 1, downloadFormat: 'everyayah', everyAyahFolder: 'Abdul_Basit_Mujawwad_128kbps' },
-  { id: 'husary', slug: 'khalil_al_husary/murattal', qurancdnId: 6, downloadFormat: 'everyayah', everyAyahFolder: 'Husary_128kbps' },
-  { id: 'minshawi', slug: 'siddiq_minshawi/murattal', qurancdnId: 9, downloadFormat: 'everyayah', everyAyahFolder: 'Minshawy_Murattal_128kbps' },
-  { id: 'rifai', slug: 'hani_ar_rifai/murattal', qurancdnId: 5, downloadFormat: 'everyayah', everyAyahFolder: 'Hani_Rifai_192kbps' },
-  { id: 'shuraym', slug: 'saud_ash-shuraym/murattal', qurancdnId: 10, downloadFormat: 'everyayah', everyAyahFolder: 'Saood_ash-Shuraym_128kbps' },
+  {
+    id: 'alafasy',
+    slug: 'mishari_al_afasy/murattal',
+    qurancdnId: 7,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Alafasy_128kbps',
+  },
+  {
+    id: 'sudais',
+    slug: 'abdurrahmaan_as_sudais/murattal',
+    qurancdnId: 3,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Abdurrahmaan_As-Sudais_192kbps',
+  },
+  {
+    id: 'shatri',
+    slug: 'abu_bakr_shatri/murattal',
+    qurancdnId: 4,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Abu_Bakr_Ash-Shaatree_128kbps',
+  },
+  {
+    id: 'abdulbasit',
+    slug: 'abdul_baset/murattal',
+    qurancdnId: 2,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Abdul_Basit_Murattal_192kbps',
+  },
+  {
+    id: 'abdulbasit-mujawwad',
+    slug: 'abdul_baset/mujawwad',
+    qurancdnId: 1,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Abdul_Basit_Mujawwad_128kbps',
+  },
+  {
+    id: 'husary',
+    slug: 'khalil_al_husary/murattal',
+    qurancdnId: 6,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Husary_128kbps',
+  },
+  {
+    id: 'minshawi',
+    slug: 'siddiq_minshawi/murattal',
+    qurancdnId: 9,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Minshawy_Murattal_128kbps',
+  },
+  {
+    id: 'rifai',
+    slug: 'hani_ar_rifai/murattal',
+    qurancdnId: 5,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Hani_Rifai_192kbps',
+  },
+  {
+    id: 'shuraym',
+    slug: 'saud_ash-shuraym/murattal',
+    qurancdnId: 10,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Saood_ash-Shuraym_128kbps',
+  },
   // Re-added with timing (3 reciters — were audio-only in 3-8)
-  { id: 'ghamidi', slug: 'sa3d_al-ghaamidi/complete', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ghamadi_40kbps' },
-  { id: 'ajmi', slug: 'ahmed_ibn_3ali_al-3ajamy', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net' },
-  { id: 'minshawi-mujawwad', slug: 'minshawi_mujawwad', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Minshawy_Mujawwad_192kbps' },
+  {
+    id: 'ghamidi',
+    slug: 'sa3d_al-ghaamidi/complete',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ghamadi_40kbps',
+  },
+  {
+    id: 'ajmi',
+    slug: 'ahmed_ibn_3ali_al-3ajamy',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net',
+  },
+  {
+    id: 'minshawi-mujawwad',
+    slug: 'minshawi_mujawwad',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Minshawy_Mujawwad_192kbps',
+  },
   // New high-quality 128kbps+ (20 reciters) — slug/qurancdnId unused for everyayah format
-  { id: 'basfar', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Abdullah_Basfar_192kbps' },
-  { id: 'matroud', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Abdullah_Matroud_128kbps' },
-  { id: 'neana', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ahmed_Neana_128kbps' },
-  { id: 'alaqimy', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Akram_AlAlaqimy_128kbps' },
-  { id: 'hudhaify', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Hudhaify_128kbps' },
-  { id: 'suesy', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ali_Hajjaj_AlSuesy_128kbps' },
-  { id: 'qahtanee', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Khaalid_Abdullaah_al-Qahtaanee_192kbps' },
-  { id: 'tablawi', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Mohammad_al_Tablaway_128kbps' },
-  { id: 'abdulkareem', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Muhammad_AbdulKareem_128kbps' },
-  { id: 'ayyoub', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Muhammad_Ayyoub_128kbps' },
-  { id: 'jibreel', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Muhammad_Jibreel_128kbps' },
-  { id: 'qasim', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Muhsin_Al_Qasim_192kbps' },
-  { id: 'qatami', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Nasser_Alqatami_128kbps' },
-  { id: 'sahl', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Sahl_Yassin_128kbps' },
-  { id: 'budair', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Salah_Al_Budair_128kbps' },
-  { id: 'bukhatir', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Salaah_AbdulRahman_Bukhatir_128kbps' },
-  { id: 'salamah', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Yaser_Salamah_128kbps' },
-  { id: 'dussary', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Yasser_Ad-Dussary_128kbps' },
-  { id: 'husary-mujawwad', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Husary_128kbps_Mujawwad' },
-  { id: 'husary-muallim', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Husary_Muallim_128kbps' },
+  {
+    id: 'basfar',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Abdullah_Basfar_192kbps',
+  },
+  {
+    id: 'matroud',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Abdullah_Matroud_128kbps',
+  },
+  {
+    id: 'neana',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ahmed_Neana_128kbps',
+  },
+  {
+    id: 'alaqimy',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Akram_AlAlaqimy_128kbps',
+  },
+  {
+    id: 'hudhaify',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Hudhaify_128kbps',
+  },
+  {
+    id: 'suesy',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ali_Hajjaj_AlSuesy_128kbps',
+  },
+  {
+    id: 'qahtanee',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Khaalid_Abdullaah_al-Qahtaanee_192kbps',
+  },
+  {
+    id: 'tablawi',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Mohammad_al_Tablaway_128kbps',
+  },
+  {
+    id: 'abdulkareem',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Muhammad_AbdulKareem_128kbps',
+  },
+  {
+    id: 'ayyoub',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Muhammad_Ayyoub_128kbps',
+  },
+  {
+    id: 'jibreel',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Muhammad_Jibreel_128kbps',
+  },
+  {
+    id: 'qasim',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Muhsin_Al_Qasim_192kbps',
+  },
+  {
+    id: 'qatami',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Nasser_Alqatami_128kbps',
+  },
+  {
+    id: 'sahl',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Sahl_Yassin_128kbps',
+  },
+  {
+    id: 'budair',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Salah_Al_Budair_128kbps',
+  },
+  {
+    id: 'bukhatir',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Salaah_AbdulRahman_Bukhatir_128kbps',
+  },
+  {
+    id: 'salamah',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Yaser_Salamah_128kbps',
+  },
+  {
+    id: 'dussary',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Yasser_Ad-Dussary_128kbps',
+  },
+  {
+    id: 'husary-mujawwad',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Husary_128kbps_Mujawwad',
+  },
+  {
+    id: 'husary-muallim',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Husary_Muallim_128kbps',
+  },
   // New lower-bitrate (8 reciters)
-  { id: 'tunaiji', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'khalefa_al_tunaiji_64kbps' },
-  { id: 'jaber', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ali_Jaber_64kbps' },
-  { id: 'abbad', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Fares_Abbad_64kbps' },
-  { id: 'sowaid', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ayman_Sowaid_64kbps' },
-  { id: 'akhdar', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Ibrahim_Akhdar_32kbps' },
+  {
+    id: 'tunaiji',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'khalefa_al_tunaiji_64kbps',
+  },
+  {
+    id: 'jaber',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ali_Jaber_64kbps',
+  },
+  {
+    id: 'abbad',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Fares_Abbad_64kbps',
+  },
+  {
+    id: 'sowaid',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ayman_Sowaid_64kbps',
+  },
+  {
+    id: 'akhdar',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Ibrahim_Akhdar_32kbps',
+  },
   // ismail removed: Mustafa_Ismail_48kbps has incomplete coverage on EveryAyah (many surahs 404)
-  { id: 'mansoori', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'Karim_Mansoori_40kbps' },
-  { id: 'banna', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'mahmoud_ali_al_banna_32kbps' },
-  { id: 'alili', slug: '', qurancdnId: null, downloadFormat: 'everyayah', everyAyahFolder: 'aziz_alili_128kbps' },
+  {
+    id: 'mansoori',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'Karim_Mansoori_40kbps',
+  },
+  {
+    id: 'banna',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'mahmoud_ali_al_banna_32kbps',
+  },
+  {
+    id: 'alili',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'everyayah',
+    everyAyahFolder: 'aziz_alili_128kbps',
+  },
 ];
 
 const QDC_BASE = 'https://download.quranicaudio.com/qdc';
@@ -189,7 +429,11 @@ async function downloadReciterAudio(reciter: ReciterConfig): Promise<void> {
 // ─── EveryAyah Pipeline ─────────────────────────────────────────────────────
 
 // Download per-verse MP3s from EveryAyah.com for a single surah
-async function downloadEveryAyahVerses(reciter: ReciterConfig, surahNumber: number, verseCount: number): Promise<void> {
+async function downloadEveryAyahVerses(
+  reciter: ReciterConfig,
+  surahNumber: number,
+  verseCount: number,
+): Promise<void> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   mkdirSync(versesDir, { recursive: true });
 
@@ -218,7 +462,16 @@ async function downloadEveryAyahVerses(reciter: ReciterConfig, surahNumber: numb
 // Probe duration of a single MP3 file using ffprobe (returns ms)
 async function probeVerseDuration(filePath: string): Promise<number> {
   const proc = Bun.spawn(
-    ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
+    [
+      'ffprobe',
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ],
     { stdout: 'pipe', stderr: 'pipe' },
   );
   const timeout = setTimeout(() => proc.kill(), 30_000);
@@ -233,7 +486,11 @@ async function probeVerseDuration(filePath: string): Promise<number> {
 }
 
 // Probe durations of all verses in a surah (parallel, batched)
-async function probeAllVerseDurations(reciter: ReciterConfig, surahNumber: number, verseCount: number): Promise<number[]> {
+async function probeAllVerseDurations(
+  reciter: ReciterConfig,
+  surahNumber: number,
+  verseCount: number,
+): Promise<number[]> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   const sss = padSurah(surahNumber);
   const tasks: (() => Promise<number>)[] = [];
@@ -253,7 +510,10 @@ async function probeAllVerseDurations(reciter: ReciterConfig, surahNumber: numbe
 }
 
 // Generate manifest timing entries from probed durations (same schema as QuranCDN)
-function generateManifestFromDurations(surahNumber: number, verseDurations: number[]): ManifestVerseTiming[] {
+function generateManifestFromDurations(
+  surahNumber: number,
+  verseDurations: number[],
+): ManifestVerseTiming[] {
   let cumulativeMs = 0;
   return verseDurations.map((durationMs, index) => {
     const entry: ManifestVerseTiming = {
@@ -267,7 +527,11 @@ function generateManifestFromDurations(surahNumber: number, verseDurations: numb
 }
 
 // Concatenate per-verse MP3s into a single per-surah MP3 using ffmpeg
-async function concatSurah(reciter: ReciterConfig, surahNumber: number, verseCount: number): Promise<void> {
+async function concatSurah(
+  reciter: ReciterConfig,
+  surahNumber: number,
+  verseCount: number,
+): Promise<void> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   const sss = padSurah(surahNumber);
   const outputPath = resolve(TMP_DIR, reciter.id, `${sss}.mp3`);
@@ -280,11 +544,14 @@ async function concatSurah(reciter: ReciterConfig, surahNumber: number, verseCou
   }
   await Bun.write(filelistPath, lines.join('\n'));
 
-  const proc = Bun.spawn(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', filelistPath, '-c', 'copy', outputPath], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-    cwd: versesDir,
-  });
+  const proc = Bun.spawn(
+    ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', filelistPath, '-c', 'copy', outputPath],
+    {
+      stdout: 'pipe',
+      stderr: 'pipe',
+      cwd: versesDir,
+    },
+  );
   const timeout = setTimeout(() => proc.kill(), 5 * 60_000);
 
   const exitCode = await proc.exited;
@@ -298,7 +565,9 @@ async function concatSurah(reciter: ReciterConfig, surahNumber: number, verseCou
 // Full EveryAyah pipeline for one reciter: download verses, probe, concat, build manifest
 async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest> {
   if (!reciter.everyAyahFolder) {
-    throw new Error(`Reciter ${reciter.id} has downloadFormat 'everyayah' but no everyAyahFolder defined`);
+    throw new Error(
+      `Reciter ${reciter.id} has downloadFormat 'everyayah' but no everyAyahFolder defined`,
+    );
   }
 
   const dir = resolve(TMP_DIR, reciter.id);
@@ -310,14 +579,17 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
     try {
       const existing = JSON.parse(await Bun.file(existingManifestPath).text()) as Manifest;
       const surahKeys = Object.keys(existing);
-      const allConcatsExist = surahKeys.length === TOTAL_SURAHS &&
+      const allConcatsExist =
+        surahKeys.length === TOTAL_SURAHS &&
         surahKeys.every((s) => existsSync(resolve(dir, `${padSurah(Number(s))}.mp3`)));
       const allSurahsHaveTiming = surahKeys.every((s) => existing[s].length > 0);
       if (allConcatsExist && allSurahsHaveTiming) {
         console.log(`  ✅ ${reciter.id}: already processed (manifest + 114 MP3s valid), skipping`);
         return existing;
       }
-    } catch { /* invalid manifest, re-process */ }
+    } catch {
+      /* invalid manifest, re-process */
+    }
   }
 
   const manifest: Manifest = {};
@@ -391,7 +663,9 @@ async function phase1Download(): Promise<void> {
       // EveryAyah reciters are handled in phase1+2 combined (processEveryAyahReciter)
       continue;
     }
-    console.log(`Downloading ${reciter.id} (${reciter.slug}, format: ${reciter.downloadFormat})...`);
+    console.log(
+      `Downloading ${reciter.id} (${reciter.slug}, format: ${reciter.downloadFormat})...`,
+    );
     await downloadReciterAudio(reciter);
     console.log(`  ✅ ${reciter.id} complete`);
   }
@@ -451,7 +725,9 @@ async function fetchSurahTimings(
       });
     } catch (err) {
       if (attempt === retries) {
-        console.error(`  ⚠️ Timing API failed for surah ${surahNumber} after ${retries} attempts: ${err}`);
+        console.error(
+          `  ⚠️ Timing API failed for surah ${surahNumber} after ${retries} attempts: ${err}`,
+        );
         return [];
       }
       const waitSec = attempt * 2;
@@ -494,7 +770,9 @@ async function phase2Manifests(): Promise<void> {
         .map(([surah]) => surah);
 
       if (emptySurahs.length > 0) {
-        console.warn(`  ⚠️  ${reciter.id}: ${emptySurahs.length}/${totalSurahs} surahs have empty timing data`);
+        console.warn(
+          `  ⚠️  ${reciter.id}: ${emptySurahs.length}/${totalSurahs} surahs have empty timing data`,
+        );
       } else {
         console.log(`  ✅ All ${totalSurahs} surahs have timing data`);
       }
@@ -535,10 +813,23 @@ async function phase2Manifests(): Promise<void> {
 
 async function uploadToR2(localPath: string, r2Key: string, retries = 3): Promise<void> {
   for (let attempt = 1; attempt <= retries; attempt++) {
-    const proc = Bun.spawn(['npx', 'wrangler', 'r2', 'object', 'put', `${BUCKET}/${r2Key}`, '--file', localPath, '--remote'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+    const proc = Bun.spawn(
+      [
+        'npx',
+        'wrangler',
+        'r2',
+        'object',
+        'put',
+        `${BUCKET}/${r2Key}`,
+        '--file',
+        localPath,
+        '--remote',
+      ],
+      {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    );
 
     const exitCode = await proc.exited;
     if (exitCode === 0) return;

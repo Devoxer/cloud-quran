@@ -1,15 +1,12 @@
-import React from 'react';
-import { Platform } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-
 import {
   DefaultTheme,
   type Theme as NavigationTheme,
   ThemeProvider as NavigationThemeProvider,
 } from '@react-navigation/native';
+import { useFonts } from 'expo-font';
+import { Stack } from 'expo-router';
+import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { ErrorBoundary } from '@/components/ErrorBoundary';

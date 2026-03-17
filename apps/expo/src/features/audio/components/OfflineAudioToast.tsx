@@ -1,7 +1,5 @@
-import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
@@ -48,7 +46,10 @@ export function OfflineAudioToast() {
           accessibilityLabel="Download"
           style={[styles.downloadAction, { backgroundColor: tokens.accent.audio }]}
         >
-          <AppText variant="uiCaption" style={[styles.actionText, { color: tokens.surface.primary }]}>
+          <AppText
+            variant="uiCaption"
+            style={[styles.actionText, { color: tokens.surface.primary }]}
+          >
             Download
           </AppText>
         </Pressable>

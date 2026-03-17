@@ -1,7 +1,6 @@
+import type { SurahMetadata } from 'quran-data';
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-
-import type { SurahMetadata } from 'quran-data';
 
 import { AppText } from '@/components/AppText';
 import { DownloadButton } from '@/features/audio/components/DownloadButton';
@@ -17,7 +16,11 @@ interface SurahRowProps {
 
 const ROW_HEIGHT = 72;
 
-export const SurahRow = React.memo(function SurahRow({ surah, onPress, isSelected }: SurahRowProps) {
+export const SurahRow = React.memo(function SurahRow({
+  surah,
+  onPress,
+  isSelected,
+}: SurahRowProps) {
   const { tokens } = useTheme();
   const selectedReciterId = useAudioStore((s) => s.selectedReciterId);
 
@@ -32,7 +35,9 @@ export const SurahRow = React.memo(function SurahRow({ surah, onPress, isSelecte
         pressed && { opacity: 0.7 },
       ]}
     >
-      {isSelected && <View style={[styles.selectedIndicator, { backgroundColor: tokens.accent.bookmark }]} />}
+      {isSelected && (
+        <View style={[styles.selectedIndicator, { backgroundColor: tokens.accent.bookmark }]} />
+      )}
 
       <View style={[styles.numberBadge, { borderColor: tokens.border }]}>
         <AppText variant="ui">{surah.number}</AppText>

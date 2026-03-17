@@ -1,5 +1,5 @@
-import { Platform } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { Platform } from 'react-native';
 
 export interface TrackMetadata {
   surahNumber: number;
@@ -14,9 +14,7 @@ export interface LockScreenMetadata {
   artworkUrl?: string;
 }
 
-export type RemoteCommandHandler = (
-  command: 'play' | 'pause' | 'next' | 'previous',
-) => void;
+export type RemoteCommandHandler = (command: 'play' | 'pause' | 'next' | 'previous') => void;
 
 export interface IAudioService {
   play(): Promise<void>;
@@ -25,10 +23,7 @@ export interface IAudioService {
   loadTrack(uri: string, metadata?: TrackMetadata): Promise<void>;
   setPlaybackSpeed(rate: number): Promise<void>;
   getCurrentPositionMs(): number;
-  setLockScreenActive(
-    active: boolean,
-    metadata?: LockScreenMetadata,
-  ): void;
+  setLockScreenActive(active: boolean, metadata?: LockScreenMetadata): void;
   updateLockScreenInfo(metadata: LockScreenMetadata): void;
   onRemoteCommand(handler: RemoteCommandHandler): void;
   dispose(): void;
@@ -114,10 +109,7 @@ class ExpoAudioService implements IAudioService {
     return this.currentPositionMs;
   }
 
-  setLockScreenActive(
-    active: boolean,
-    metadata?: LockScreenMetadata,
-  ): void {
+  setLockScreenActive(active: boolean, metadata?: LockScreenMetadata): void {
     this.lockScreenActive = active;
     if (Platform.OS === 'web') {
       this.setWebMediaSession(active, metadata);
@@ -194,12 +186,8 @@ class ExpoAudioService implements IAudioService {
     }
   }
 
-  private setWebMediaSession(
-    active: boolean,
-    metadata?: LockScreenMetadata,
-  ): void {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator))
-      return;
+  private setWebMediaSession(active: boolean, metadata?: LockScreenMetadata): void {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
     if (active && metadata) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: metadata.title,
@@ -221,16 +209,11 @@ class ExpoAudioService implements IAudioService {
   }
 
   private setupWebRemoteHandlers(handler: RemoteCommandHandler): void {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator))
-      return;
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
     navigator.mediaSession.setActionHandler('play', () => handler('play'));
     navigator.mediaSession.setActionHandler('pause', () => handler('pause'));
-    navigator.mediaSession.setActionHandler('nexttrack', () =>
-      handler('next'),
-    );
-    navigator.mediaSession.setActionHandler('previoustrack', () =>
-      handler('previous'),
-    );
+    navigator.mediaSession.setActionHandler('nexttrack', () => handler('next'));
+    navigator.mediaSession.setActionHandler('previoustrack', () => handler('previous'));
   }
 }
 

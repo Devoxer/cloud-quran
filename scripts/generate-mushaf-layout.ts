@@ -9,8 +9,8 @@
 //   git clone --depth 1 https://github.com/zonetecde/mushaf-layout.git /tmp/mushaf-layout
 
 import { Database } from 'bun:sqlite';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata';
@@ -81,7 +81,9 @@ function ensureRepos(): void {
         stdio: 'inherit',
       });
     } catch {
-      console.error(`Failed to clone quran.com-images to ${QCI_REPO}. Check network and disk space.`);
+      console.error(
+        `Failed to clone quran.com-images to ${QCI_REPO}. Check network and disk space.`,
+      );
       process.exit(1);
     }
   }
@@ -111,7 +113,10 @@ function buildAllPages(
     const data = JSON.parse(readFileSync(filePath, 'utf-8')) as ZonePageData;
 
     // Collect words grouped by line number
-    const lineWords = new Map<number, { location: string; text: string; isEndMarker: boolean; surah: number; verse: number }[]>();
+    const lineWords = new Map<
+      number,
+      { location: string; text: string; isEndMarker: boolean; surah: number; verse: number }[]
+    >();
 
     for (const verse of data.verses) {
       for (const word of verse.words) {
@@ -211,7 +216,9 @@ function buildAllPages(
           const v1 = qpcV1Map[w.location];
           const v2 = qpcV2Map[w.location];
           if (!v1 || !v2) {
-            console.warn(`  ⚠️  Missing QPC glyph for word ${w.location} on page ${pageNum} (v1=${!!v1}, v2=${!!v2}) — skipping`);
+            console.warn(
+              `  ⚠️  Missing QPC glyph for word ${w.location} on page ${pageNum} (v1=${!!v1}, v2=${!!v2}) — skipping`,
+            );
             continue;
           }
 
@@ -341,9 +348,19 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
         let inQuote = false;
         for (let i = 0; i < t.length; i++) {
           const c = t[i];
-          if (c === "'" && !inQuote) { inQuote = true; continue; }
-          if (c === "'" && inQuote) { inQuote = false; continue; }
-          if (c === ',' && !inQuote) { vals.push(current); current = ''; continue; }
+          if (c === "'" && !inQuote) {
+            inQuote = true;
+            continue;
+          }
+          if (c === "'" && inQuote) {
+            inQuote = false;
+            continue;
+          }
+          if (c === ',' && !inQuote) {
+            vals.push(current);
+            current = '';
+            continue;
+          }
           current += c;
         }
         vals.push(current);
@@ -355,7 +372,7 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
     const stmt = db.prepare(`INSERT INTO ${table} VALUES (${placeholders})`);
     db.transaction(() => {
       for (const r of rows) {
-        stmt.run(...r.map((v) => (v === 'NULL' ? null : isNaN(Number(v)) ? v : Number(v))));
+        stmt.run(...r.map((v) => (v === 'NULL' ? null : Number.isNaN(Number(v)) ? v : Number(v))));
       }
     })();
   }
@@ -374,14 +391,16 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
     const layout = pages.get(pageNum)!;
 
     // Get quran.com-images line structure (verse locations per line)
-    const qciRows = db.query(`
+    const qciRows = db
+      .query(`
       SELECT gpl.line_number, ga.sura_number, ga.ayah_number
       FROM glyph_page_line gpl
       JOIN glyph g ON gpl.glyph_id = g.glyph_id
       LEFT JOIN glyph_ayah ga ON gpl.glyph_id = ga.glyph_id
       WHERE gpl.page_number = ? AND gpl.line_type = 'ayah' AND ga.sura_number IS NOT NULL
       ORDER BY gpl.line_number, gpl.position
-    `).all(pageNum) as { line_number: number; sura_number: number; ayah_number: number }[];
+    `)
+      .all(pageNum) as { line_number: number; sura_number: number; ayah_number: number }[];
 
     // Build set of unique verses per line (quran.com-images)
     const qciLineVerses = new Map<number, Set<string>>();
@@ -436,7 +455,9 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
 
   db.close();
 
-  console.log(`  Verified ${verifiedPages}/${TOTAL_PAGES - 2} pages (3-604) match quran.com-images`);
+  console.log(
+    `  Verified ${verifiedPages}/${TOTAL_PAGES - 2} pages (3-604) match quran.com-images`,
+  );
   if (mismatches.length > 0) {
     console.warn(`  ⚠️  ${mismatches.length} mismatches (showing first 10):`);
     for (const m of mismatches.slice(0, 10)) {
@@ -529,7 +550,8 @@ function main() {
   console.log(`  Output: ${OUTPUT_DIR}/`);
 
   const errors: string[] = [];
-  if (mismatchCount > 0) errors.push(`${mismatchCount} page(s) failed verification against quran.com-images`);
+  if (mismatchCount > 0)
+    errors.push(`${mismatchCount} page(s) failed verification against quran.com-images`);
   if (headerCount !== 114) errors.push(`Expected 114 surah headers, got ${headerCount}`);
   if (allVerses.size !== 6236) errors.push(`Expected 6236 verses, got ${allVerses.size}`);
   if (nonStandardPages.length > 0) {

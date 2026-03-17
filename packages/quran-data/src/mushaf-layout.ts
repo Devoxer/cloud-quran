@@ -37,4 +37,3 @@ export interface MushafPageLayout {
   /** Lines on this page */
   lines: MushafLine[];
 }
-

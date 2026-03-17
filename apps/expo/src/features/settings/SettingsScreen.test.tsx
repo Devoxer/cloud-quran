@@ -47,11 +47,24 @@ jest.mock('@/theme/ThemeProvider', () => ({
 }));
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'reading' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: false, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'reading' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: false,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -68,10 +81,30 @@ jest.mock('@/theme/tokens', () => ({
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, '2xl': 32, '3xl': 48, '4xl': 64, '5xl': 96 },
   typography: {
     quran: { fontFamily: 'KFGQPC', fontSize: 28, fontWeight: '400', lineHeightMultiplier: 2.0 },
-    translation: { fontFamily: 'serif', fontSize: 16, fontWeight: '400', lineHeightMultiplier: 1.6 },
-    verseNumber: { fontFamily: 'System', fontSize: 12, fontWeight: '500', lineHeightMultiplier: 1.0 },
-    surahTitleArabic: { fontFamily: 'KFGQPC', fontSize: 22, fontWeight: '700', lineHeightMultiplier: 1.4 },
-    surahTitleEnglish: { fontFamily: 'System', fontSize: 14, fontWeight: '500', lineHeightMultiplier: 1.4 },
+    translation: {
+      fontFamily: 'serif',
+      fontSize: 16,
+      fontWeight: '400',
+      lineHeightMultiplier: 1.6,
+    },
+    verseNumber: {
+      fontFamily: 'System',
+      fontSize: 12,
+      fontWeight: '500',
+      lineHeightMultiplier: 1.0,
+    },
+    surahTitleArabic: {
+      fontFamily: 'KFGQPC',
+      fontSize: 22,
+      fontWeight: '700',
+      lineHeightMultiplier: 1.4,
+    },
+    surahTitleEnglish: {
+      fontFamily: 'System',
+      fontSize: 14,
+      fontWeight: '500',
+      lineHeightMultiplier: 1.4,
+    },
     ui: { fontFamily: 'System', fontSize: 14, fontWeight: '400', lineHeightMultiplier: 1.4 },
     uiCaption: { fontFamily: 'System', fontSize: 12, fontWeight: '400', lineHeightMultiplier: 1.3 },
   },
@@ -79,22 +112,38 @@ jest.mock('@/theme/tokens', () => ({
 }));
 
 jest.mock('quran-data', () => ({
-  SURAH_METADATA: [{ number: 1, nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 }],
+  SURAH_METADATA: [
+    {
+      number: 1,
+      nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+  ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   HIZB_METADATA: [{ number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   TOTAL_PAGES: 604,
-  getPageForVerse: jest.fn(() => 1), getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
-  getJuzForPage: jest.fn(() => 1), getHizbForPage: jest.fn(() => 1),
+  getPageForVerse: jest.fn(() => 1),
+  getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
+  getJuzForPage: jest.fn(() => 1),
+  getHizbForPage: jest.fn(() => 1),
 }));
 
 jest.mock('@react-native-community/slider', () => ({ __esModule: true, default: 'Slider' }));
-jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0' } } }));
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '1.0.0' } },
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
   SafeAreaProvider: 'SafeAreaProvider',
 }));
 jest.mock('react-native-gesture-handler', () => ({
-  Swipeable: 'Swipeable', GestureHandlerRootView: 'GestureHandlerRootView',
+  Swipeable: 'Swipeable',
+  GestureHandlerRootView: 'GestureHandlerRootView',
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ navigate: jest.fn(), push: jest.fn(), back: jest.fn() }),

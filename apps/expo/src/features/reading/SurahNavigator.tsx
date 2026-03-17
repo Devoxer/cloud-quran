@@ -1,7 +1,6 @@
+import { SURAH_METADATA } from 'quran-data';
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-
-import { SURAH_METADATA } from 'quran-data';
 
 import { AppText } from '@/components/AppText';
 import { useTheme } from '@/theme/ThemeProvider';

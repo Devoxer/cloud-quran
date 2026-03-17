@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SURAH_METADATA } from 'quran-data';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
 import { DownloadButton } from '@/features/audio/components/DownloadButton';
@@ -15,10 +14,10 @@ import {
   useAudioStore,
 } from '@/features/audio/stores/useAudioStore';
 import { useDownloadStore } from '@/features/audio/stores/useDownloadStore';
+import { formatSpeed } from '@/features/audio/utils/formatSpeed';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
-import { formatSpeed } from '@/features/audio/utils/formatSpeed';
 
 const SPEED_PRESETS = [0.5, 0.7, 0.8, 1.0, 1.2, 1.5, 2.0] as const;
 const SLEEP_PRESETS: Array<{ value: number | 'end-of-surah'; label: string }> = [
@@ -71,14 +70,10 @@ export function ExpandedAudioPlayer() {
   const sleepTimerRemainingMs = useAudioStore((s) => s.sleepTimerRemainingMs);
   const setSleepTimer = useAudioStore((s) => s.setSleepTimer);
   const clearSleepTimer = useAudioStore((s) => s.clearSleepTimer);
-  const downloadCount = useDownloadStore((s) =>
-    s.getReciterDownloadCount(selectedReciterId),
-  );
+  const downloadCount = useDownloadStore((s) => s.getReciterDownloadCount(selectedReciterId));
   const downloadAll = useDownloadStore((s) => s.downloadAllForReciter);
   const deleteReciter = useDownloadStore((s) => s.deleteReciter);
-  const storageBytes = useDownloadStore(
-    (s) => s.storageUsageBytes[selectedReciterId] ?? 0,
-  );
+  const storageBytes = useDownloadStore((s) => s.storageUsageBytes[selectedReciterId] ?? 0);
   const refreshStorageUsage = useDownloadStore((s) => s.refreshStorageUsage);
   const isVisible = useUIStore((s) => s.isExpandedPlayerVisible);
   const toggleExpandedPlayer = useUIStore((s) => s.toggleExpandedPlayer);
@@ -105,7 +100,7 @@ export function ExpandedAudioPlayer() {
     const remaining = 114 - downloadCount;
     Alert.alert(
       'Download All Surahs',
-      `Download ${remaining} surahs for ${reciterName}?\n\nEstimated size: ~${(remaining / 114 * 1.5).toFixed(1)} GB\nThis may take a while on slower connections.`,
+      `Download ${remaining} surahs for ${reciterName}?\n\nEstimated size: ~${((remaining / 114) * 1.5).toFixed(1)} GB\nThis may take a while on slower connections.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -159,7 +154,11 @@ export function ExpandedAudioPlayer() {
     <View
       style={[
         styles.container,
-        { backgroundColor: tokens.surface.primary, paddingTop: insets.top, paddingBottom: insets.bottom },
+        {
+          backgroundColor: tokens.surface.primary,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        },
       ]}
     >
       {/* Header with close button */}
@@ -273,9 +272,7 @@ export function ExpandedAudioPlayer() {
                 style={[
                   styles.speedButton,
                   {
-                    backgroundColor: isActive
-                      ? tokens.accent.audio
-                      : tokens.surface.secondary,
+                    backgroundColor: isActive ? tokens.accent.audio : tokens.surface.secondary,
                   },
                 ]}
               >
@@ -319,15 +316,13 @@ export function ExpandedAudioPlayer() {
               <Pressable
                 key={String(preset.value)}
                 testID={`sleep-${preset.value}`}
-                onPress={() => isActive ? clearSleepTimer() : setSleepTimer(preset.value)}
+                onPress={() => (isActive ? clearSleepTimer() : setSleepTimer(preset.value))}
                 accessibilityRole="button"
                 accessibilityLabel={isActive ? `Cancel sleep timer` : `Sleep in ${preset.label}`}
                 style={[
                   styles.speedButton,
                   {
-                    backgroundColor: isActive
-                      ? tokens.accent.audio
-                      : tokens.surface.secondary,
+                    backgroundColor: isActive ? tokens.accent.audio : tokens.surface.secondary,
                   },
                 ]}
               >
@@ -354,11 +349,7 @@ export function ExpandedAudioPlayer() {
             {downloadCount}/114 downloaded
           </AppText>
           {storageBytes > 0 && (
-            <AppText
-              variant="uiCaption"
-              style={{ color: tokens.text.ui }}
-              testID="storage-usage"
-            >
+            <AppText variant="uiCaption" style={{ color: tokens.text.ui }} testID="storage-usage">
               ({formatBytes(storageBytes)})
             </AppText>
           )}

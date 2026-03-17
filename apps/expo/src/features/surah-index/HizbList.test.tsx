@@ -16,11 +16,24 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'reading' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: false, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'reading' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: false,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -41,11 +54,23 @@ jest.mock('quran-data', () => ({
     startVerse: 1,
     startPage: i * 10 + 1,
   })),
-  SURAH_METADATA: [{ number: 1, nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 }],
+  SURAH_METADATA: [
+    {
+      number: 1,
+      nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+  ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   TOTAL_PAGES: 604,
-  getPageForVerse: jest.fn(() => 1), getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
-  getJuzForPage: jest.fn(() => 1), getHizbForPage: jest.fn(() => 1),
+  getPageForVerse: jest.fn(() => 1),
+  getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
+  getJuzForPage: jest.fn(() => 1),
+  getHizbForPage: jest.fn(() => 1),
 }));
 
 jest.mock('expo-router', () => ({
@@ -75,30 +100,17 @@ function findElements(element: unknown, predicate: (el: MockElement) => boolean)
 }
 
 describe('HizbList', () => {
-  test('renders a FlatList with 60 hizb items', () => {
+  test('renders a FlashList with 60 hizb items', () => {
     const element = (HizbList as any)() as unknown as MockElement;
-    expect(element.type).toBe('FlatList');
+    expect(element.type).toBe('FlashList');
     const data = element.props.data as unknown[];
     expect(data.length).toBe(60);
   });
 
-  test('has getItemLayout for O(1) scrolling', () => {
+  test('has contentContainerStyle and ItemSeparatorComponent configured', () => {
     const element = (HizbList as any)() as unknown as MockElement;
-    const getItemLayout = element.props.getItemLayout as (...args: unknown[]) => unknown;
-    expect(getItemLayout).toBeDefined();
-    const layout = getItemLayout(null, 0) as { length: number; offset: number; index: number };
-    expect(layout).toHaveProperty('length');
-    expect(layout).toHaveProperty('offset');
-    expect(layout).toHaveProperty('index');
-  });
-
-  test('getItemLayout accounts for separator height', () => {
-    const element = (HizbList as any)() as unknown as MockElement;
-    const getItemLayout = element.props.getItemLayout as (_: unknown, index: number) => { length: number; offset: number; index: number };
-    const layout0 = getItemLayout(null, 0);
-    const layout1 = getItemLayout(null, 1);
-    expect(layout0.length).toBe(65); // ROW_HEIGHT (64) + hairlineWidth (1)
-    expect(layout1.offset).toBe(65); // (ROW_HEIGHT + hairlineWidth) * 1
+    expect(element.props.contentContainerStyle).toBeDefined();
+    expect(element.props.ItemSeparatorComponent).toBeDefined();
   });
 
   test('has contentContainerStyle for max-width', () => {

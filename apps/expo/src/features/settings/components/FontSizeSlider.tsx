@@ -1,7 +1,6 @@
-import React, { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
-
 import Slider from '@react-native-community/slider';
+import { useCallback } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { useTheme } from '@/theme/ThemeProvider';

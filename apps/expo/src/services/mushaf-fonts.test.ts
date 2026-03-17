@@ -15,7 +15,9 @@ jest.mock('expo-file-system', () => {
   class MockFile {
     uri: string;
     constructor(...parts: unknown[]) {
-      this.uri = parts.map((p) => (typeof p === 'string' ? p : (p as { uri: string })?.uri || '')).join('/');
+      this.uri = parts
+        .map((p) => (typeof p === 'string' ? p : (p as { uri: string })?.uri || ''))
+        .join('/');
     }
     get exists() {
       return mockFileExists;
@@ -26,7 +28,9 @@ jest.mock('expo-file-system', () => {
   class MockDirectory {
     uri: string;
     constructor(...parts: unknown[]) {
-      this.uri = parts.map((p) => (typeof p === 'string' ? p : (p as { uri: string })?.uri || '')).join('/');
+      this.uri = parts
+        .map((p) => (typeof p === 'string' ? p : (p as { uri: string })?.uri || ''))
+        .join('/');
     }
     get exists() {
       return mockDirExists;

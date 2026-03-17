@@ -6,7 +6,7 @@ jest.mock('react-native', () => ({
   View: 'View',
   ScrollView: 'ScrollView',
   Text: 'Text',
-  FlatList: 'FlatList',
+  FlatList: 'FlatList', // legacy — kept for non-migrated components
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   Modal: 'Modal',
@@ -33,6 +33,11 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
   Platform: { OS: 'ios', select: (obj: Record<string, unknown>) => obj.ios },
   NativeModules: {},
+}));
+
+// FlashList mock — string-type for manual tree walking tests
+jest.mock('@shopify/flash-list', () => ({
+  FlashList: 'FlashList',
 }));
 
 // Silence React Native warnings in test output

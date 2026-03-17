@@ -37,8 +37,7 @@ const mockDownloadState = {
 
 jest.mock('@/features/audio/stores/useDownloadStore', () => {
   const useDownloadStore = Object.assign(
-    (selector: (s: typeof mockDownloadState) => unknown) =>
-      selector(mockDownloadState),
+    (selector: (s: typeof mockDownloadState) => unknown) => selector(mockDownloadState),
     {
       getState: () => mockDownloadState,
       setState: () => {},
@@ -55,19 +54,14 @@ interface MockElement {
   props: Record<string, unknown>;
 }
 
-function findElements(
-  element: unknown,
-  predicate: (el: MockElement) => boolean,
-): MockElement[] {
+function findElements(element: unknown, predicate: (el: MockElement) => boolean): MockElement[] {
   const results: MockElement[] = [];
   function walk(node: unknown) {
     if (!node || typeof node !== 'object') return;
     const el = node as MockElement;
     if (predicate(el)) results.push(el);
     if (el.props?.children) {
-      const children = Array.isArray(el.props.children)
-        ? el.props.children
-        : [el.props.children];
+      const children = Array.isArray(el.props.children) ? el.props.children : [el.props.children];
       children.forEach(walk);
     }
   }
@@ -109,9 +103,7 @@ describe('DownloadButton', () => {
       surahNumber: 1,
     }) as unknown as MockElement;
     const icons = findElements(element, (el) => el.type === 'Ionicons');
-    expect(
-      icons.some((i) => i.props.name === 'cloud-download-outline'),
-    ).toBe(true);
+    expect(icons.some((i) => i.props.name === 'cloud-download-outline')).toBe(true);
   });
 
   it('calls startDownload on press when not downloaded', () => {
@@ -141,9 +133,7 @@ describe('DownloadButton', () => {
       reciterId: 'alafasy',
       surahNumber: 1,
     }) as unknown as MockElement;
-    expect(element.props.accessibilityLabel).toBe(
-      'Download audio for offline',
-    );
+    expect(element.props.accessibilityLabel).toBe('Download audio for offline');
   });
 
   it('has correct accessibility label for downloaded state', () => {

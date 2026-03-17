@@ -30,11 +30,24 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'reading' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: true, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'reading' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: true,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -47,10 +60,12 @@ jest.mock('@/theme/useUIStore', () => {
 
 jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Ionicons' }));
 
-import { RECITERS } from '@/features/audio/data/reciters';
 import { ReciterSelector } from './ReciterSelector';
 
-interface MockElement { type: unknown; props: Record<string, unknown> }
+interface MockElement {
+  type: unknown;
+  props: Record<string, unknown>;
+}
 
 /** Find a SectionList element by checking for the `sections` prop */
 function isSectionList(el: MockElement): boolean {
@@ -73,16 +88,28 @@ function findElements(element: unknown, predicate: (el: MockElement) => boolean)
       for (const section of sections) {
         // Render section header
         if (typeof el.props.renderSectionHeader === 'function') {
-          const headerResult = (el.props.renderSectionHeader as (info: { section: typeof section }) => unknown)({ section });
+          const headerResult = (
+            el.props.renderSectionHeader as (info: { section: typeof section }) => unknown
+          )({ section });
           walk(headerResult);
         }
         // Render items
         section.data.forEach((item, index) => {
-          const rendered = (el.props.renderItem as (info: { item: typeof item; index: number; section: typeof section }) => unknown)({ item, index, section });
+          const rendered = (
+            el.props.renderItem as (info: {
+              item: typeof item;
+              index: number;
+              section: typeof section;
+            }) => unknown
+          )({ item, index, section });
           if (rendered && typeof rendered === 'object') {
             const renderedEl = rendered as MockElement;
             const componentType = renderedEl.type as unknown;
-            if (typeof componentType === 'object' && componentType !== null && 'type' in (componentType as Record<string, unknown>)) {
+            if (
+              typeof componentType === 'object' &&
+              componentType !== null &&
+              'type' in (componentType as Record<string, unknown>)
+            ) {
               const innerFn = (componentType as { type: (...args: unknown[]) => unknown }).type;
               if (typeof innerFn === 'function') {
                 walk(innerFn(renderedEl.props));
@@ -104,7 +131,10 @@ function findElements(element: unknown, predicate: (el: MockElement) => boolean)
 function findText(element: unknown, text: string): boolean {
   const found: string[] = [];
   function walk(node: unknown) {
-    if (typeof node === 'string') { found.push(node); return; }
+    if (typeof node === 'string') {
+      found.push(node);
+      return;
+    }
     if (!node || typeof node !== 'object') return;
     const el = node as MockElement;
     if (el.props?.children) {
@@ -125,14 +155,20 @@ describe('ReciterSelector', () => {
   });
 
   test('renders modal with reciter list when visible', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
     expect(element).toBeDefined();
     expect(element.type).toBe('Modal');
     expect(element.props.visible).toBe(true);
   });
 
   test('renders SectionList with all 40 reciters', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
     const sectionLists = findElements(element, isSectionList);
     expect(sectionLists.length).toBe(1);
     const sections = sectionLists[0].props.sections as Array<{ data: unknown[] }>;
@@ -141,14 +177,20 @@ describe('ReciterSelector', () => {
   });
 
   test('renders Murattal, Mujawwad, and Muallim section headers', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
     const sectionLists = findElements(element, isSectionList);
     const sections = sectionLists[0].props.sections as Array<{ title: string }>;
     expect(sections.map((s) => s.title)).toEqual(['Murattal', 'Mujawwad', 'Muallim']);
   });
 
   test('murattal has 36, mujawwad has 3, muallim has 1', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
     const sectionLists = findElements(element, isSectionList);
     const sections = sectionLists[0].props.sections as Array<{ title: string; data: unknown[] }>;
     const murattal = sections.find((s) => s.title === 'Murattal');
@@ -161,21 +203,35 @@ describe('ReciterSelector', () => {
 
   test('shows checkmark for selected reciter', () => {
     mockAudioState.selectedReciterId = 'alafasy';
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
-    const rows = findElements(element, (el) =>
-      el.type === 'Pressable' && typeof el.props?.accessibilityLabel === 'string' &&
-      (el.props.accessibilityLabel as string).startsWith('Select '),
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
+    const rows = findElements(
+      element,
+      (el) =>
+        el.type === 'Pressable' &&
+        typeof el.props?.accessibilityLabel === 'string' &&
+        (el.props.accessibilityLabel as string).startsWith('Select '),
     );
-    const selectedRow = rows.find((r) => (r.props.accessibilityState as { selected: boolean })?.selected === true);
+    const selectedRow = rows.find(
+      (r) => (r.props.accessibilityState as { selected: boolean })?.selected === true,
+    );
     expect(selectedRow).toBeDefined();
-    expect((selectedRow!.props.accessibilityLabel as string)).toContain('Al-Afasy');
+    expect(selectedRow!.props.accessibilityLabel as string).toContain('Al-Afasy');
   });
 
   test('calls setReciter and onClose when a reciter is selected', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
-    const rows = findElements(element, (el) =>
-      el.type === 'Pressable' && typeof el.props?.accessibilityLabel === 'string' &&
-      (el.props.accessibilityLabel as string).includes('Al-Sudais'),
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
+    const rows = findElements(
+      element,
+      (el) =>
+        el.type === 'Pressable' &&
+        typeof el.props?.accessibilityLabel === 'string' &&
+        (el.props.accessibilityLabel as string).includes('Al-Sudais'),
     );
     expect(rows.length).toBe(1);
     (rows[0].props.onPress as () => void)();
@@ -184,9 +240,13 @@ describe('ReciterSelector', () => {
   });
 
   test('has close button that calls onClose', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
-    const closeBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Close reciter selector',
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
+    const closeBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Close reciter selector',
     );
     expect(closeBtn.length).toBe(1);
     (closeBtn[0].props.onPress as () => void)();
@@ -194,26 +254,39 @@ describe('ReciterSelector', () => {
   });
 
   test('renders header text', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
-    const headerTexts = findElements(element, (el) =>
-      el.props?.variant === 'ui' && el.props?.children === 'Select Reciter',
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
+    const headerTexts = findElements(
+      element,
+      (el) => el.props?.variant === 'ui' && el.props?.children === 'Select Reciter',
     );
     expect(headerTexts.length).toBe(1);
   });
 
   test('renders search input', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
-    const searchInput = findElements(element, (el) =>
-      el.type === 'TextInput' && el.props?.accessibilityLabel === 'Search reciters',
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
+    const searchInput = findElements(
+      element,
+      (el) => el.type === 'TextInput' && el.props?.accessibilityLabel === 'Search reciters',
     );
     expect(searchInput.length).toBe(1);
     expect(searchInput[0].props.placeholder).toBe('Search reciters...');
   });
 
   test('section headers render with correct titles', () => {
-    const element = (ReciterSelector as any)({ visible: true, onClose: mockOnClose }) as unknown as MockElement;
+    const element = (ReciterSelector as any)({
+      visible: true,
+      onClose: mockOnClose,
+    }) as unknown as MockElement;
     const sectionLists = findElements(element, isSectionList);
-    const renderSectionHeader = sectionLists[0].props.renderSectionHeader as (info: { section: { title: string } }) => unknown;
+    const renderSectionHeader = sectionLists[0].props.renderSectionHeader as (info: {
+      section: { title: string };
+    }) => unknown;
 
     const murattalHeader = renderSectionHeader({ section: { title: 'Murattal' } }) as MockElement;
     expect(findText(murattalHeader, 'Murattal')).toBe(true);

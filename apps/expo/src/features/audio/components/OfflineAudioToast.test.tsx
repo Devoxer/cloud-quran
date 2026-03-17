@@ -42,8 +42,7 @@ const mockAudioState = {
 
 jest.mock('@/features/audio/stores/useAudioStore', () => {
   const useAudioStore = Object.assign(
-    (selector: (s: typeof mockAudioState) => unknown) =>
-      selector(mockAudioState),
+    (selector: (s: typeof mockAudioState) => unknown) => selector(mockAudioState),
     {
       getState: () => mockAudioState,
       setState: (...args: unknown[]) => mockSetState(...args),
@@ -73,19 +72,14 @@ interface MockElement {
   props: Record<string, unknown>;
 }
 
-function findElements(
-  element: unknown,
-  predicate: (el: MockElement) => boolean,
-): MockElement[] {
+function findElements(element: unknown, predicate: (el: MockElement) => boolean): MockElement[] {
   const results: MockElement[] = [];
   function walk(node: unknown) {
     if (!node || typeof node !== 'object') return;
     const el = node as MockElement;
     if (predicate(el)) results.push(el);
     if (el.props?.children) {
-      const children = Array.isArray(el.props.children)
-        ? el.props.children
-        : [el.props.children];
+      const children = Array.isArray(el.props.children) ? el.props.children : [el.props.children];
       children.forEach(walk);
     }
   }
@@ -150,18 +144,14 @@ describe('OfflineAudioToast', () => {
       // Should NOT have a Download button
       const downloadBtn = findElements(
         element,
-        (el) =>
-          el.type === 'Pressable' &&
-          el.props?.accessibilityLabel === 'Download',
+        (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Download',
       );
       expect(downloadBtn.length).toBe(0);
 
       // Should still have Dismiss button
       const dismissBtn = findElements(
         element,
-        (el) =>
-          el.type === 'Pressable' &&
-          el.props?.accessibilityLabel === 'Dismiss',
+        (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Dismiss',
       );
       expect(dismissBtn.length).toBe(1);
     } finally {
@@ -173,9 +163,7 @@ describe('OfflineAudioToast', () => {
     const element = (OfflineAudioToast as any)() as unknown as MockElement;
     const downloadBtn = findElements(
       element,
-      (el) =>
-        el.type === 'Pressable' &&
-        el.props?.accessibilityLabel === 'Download',
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Download',
     );
     expect(downloadBtn.length).toBe(1);
     (downloadBtn[0].props.onPress as () => void)();
@@ -187,9 +175,7 @@ describe('OfflineAudioToast', () => {
     const element = (OfflineAudioToast as any)() as unknown as MockElement;
     const dismissBtn = findElements(
       element,
-      (el) =>
-        el.type === 'Pressable' &&
-        el.props?.accessibilityLabel === 'Dismiss',
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Dismiss',
     );
     expect(dismissBtn.length).toBe(1);
     (dismissBtn[0].props.onPress as () => void)();

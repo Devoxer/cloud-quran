@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
-
-import { getJuzForPage, getPageForVerse, JUZ_METADATA, SURAH_METADATA } from 'quran-data';
 import type { JuzMetadata } from 'quran-data';
+import { getJuzForPage, getPageForVerse, JUZ_METADATA, SURAH_METADATA } from 'quran-data';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -20,7 +19,7 @@ export function JuzList() {
   const currentSurah = useUIStore((s) => s.currentSurah);
   const currentVerse = useUIStore((s) => s.currentVerse);
   const { tokens } = useTheme();
-  const flatListRef = useRef<FlatList>(null);
+  const flashListRef = useRef<FlashListRef<JuzMetadata>>(null);
 
   const currentJuz = useMemo(() => {
     const page = getPageForVerse(currentSurah, currentVerse);
@@ -28,7 +27,7 @@ export function JuzList() {
   }, [currentSurah, currentVerse]);
 
   useEffect(() => {
-    flatListRef.current?.scrollToIndex({
+    flashListRef.current?.scrollToIndex({
       index: currentJuz - 1,
       animated: false,
       viewPosition: 0.3,
@@ -59,9 +58,7 @@ export function JuzList() {
           accessibilityLabel={`Juz ${item.number}, starts at ${surahName}`}
         >
           {isSelected && (
-            <View
-              style={[styles.selectedIndicator, { backgroundColor: tokens.accent.bookmark }]}
-            />
+            <View style={[styles.selectedIndicator, { backgroundColor: tokens.accent.bookmark }]} />
           )}
           <View style={[styles.numberBadge, { borderColor: tokens.border }]}>
             <AppText variant="ui">{item.number}</AppText>
@@ -80,31 +77,19 @@ export function JuzList() {
 
   const keyExtractor = useCallback((item: JuzMetadata) => `juz-${item.number}`, []);
 
-  const getItemLayout = useCallback(
-    (_data: unknown, index: number) => ({
-      length: ROW_HEIGHT + StyleSheet.hairlineWidth,
-      offset: (ROW_HEIGHT + StyleSheet.hairlineWidth) * index,
-      index,
-    }),
-    [],
-  );
-
   const separator = useCallback(
     () => <View style={[styles.separator, { backgroundColor: tokens.border }]} />,
     [tokens.border],
   );
 
   return (
-    <FlatList
-      ref={flatListRef}
+    <FlashList
+      ref={flashListRef}
       data={JUZ_METADATA}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
-      getItemLayout={getItemLayout}
       ItemSeparatorComponent={separator}
       contentContainerStyle={styles.content}
-      initialNumToRender={20}
-      maxToRenderPerBatch={15}
     />
   );
 }

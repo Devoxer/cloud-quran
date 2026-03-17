@@ -1,14 +1,13 @@
+import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   type LayoutChangeEvent,
   Platform,
   StyleSheet,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
-
-import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 
 import { Surface } from '@/components/Surface';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
@@ -139,7 +138,7 @@ export function MushafModeScreen() {
     const [surahStr, verseStr] = activeVerseKey.split(':');
     const surah = parseInt(surahStr, 10);
     const verse = parseInt(verseStr, 10);
-    if (isNaN(surah) || isNaN(verse)) return;
+    if (Number.isNaN(surah) || Number.isNaN(verse)) return;
 
     const targetPage = getPageForVerse(surah, verse);
     if (targetPage <= 0 || targetPage === currentPageRef.current) return;

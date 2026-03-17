@@ -1,19 +1,17 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { LinearGradient } from 'expo-linear-gradient';
-
 import type { MushafLine, MushafPageLayout } from 'quran-data';
 import { SURAH_METADATA } from 'quran-data';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
-import { useUIStore } from '@/theme/useUIStore';
 import { getPageFontFamily, loadPageFont, preloadAdjacentFonts } from '@/services/mushaf-fonts';
 import { getPageLayout } from '@/services/mushaf-layout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { KFGQPC_FONT_FAMILY, spacing } from '@/theme/tokens';
+import { useUIStore } from '@/theme/useUIStore';
 
 import { MushafPageHeader } from './MushafPageHeader';
 
@@ -73,9 +71,20 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
     loadData();
   }, [loadData]);
 
+  // Tap-to-seek: only when setting is on AND audio is already playing
+  const handleWordTap = useCallback(
+    (verseKey: string) => {
+      if (tapToSeek && isAudioPlaying) {
+        seekToVerse(verseKey);
+      }
+    },
+    [tapToSeek, isAudioPlaying, seekToVerse],
+  );
+
   // Responsive font size based on container width (5.9vw matching quran.com)
   const { width: screenWidth } = useWindowDimensions();
-  const containerWidth = contentWidthProp ?? (Platform.OS === 'web' ? Math.min(screenWidth, 700) : screenWidth);
+  const containerWidth =
+    contentWidthProp ?? (Platform.OS === 'web' ? Math.min(screenWidth, 700) : screenWidth);
   const glyphFontSize = containerWidth * (Platform.OS === 'web' ? 0.059 : 0.065);
 
   const safeAreaStyle = { paddingTop: insets.top, paddingBottom: insets.bottom };
@@ -83,7 +92,12 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
   if (error) {
     return (
       <View
-        style={[styles.container, styles.errorContainer, safeAreaStyle, { backgroundColor: tokens.surface.primary }]}
+        style={[
+          styles.container,
+          styles.errorContainer,
+          safeAreaStyle,
+          { backgroundColor: tokens.surface.primary },
+        ]}
         accessibilityLabel={`Page ${pageNumber}, loading error`}
       >
         <AppText variant="ui" style={{ color: tokens.text.ui }}>
@@ -112,10 +126,7 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
         {Array.from({ length: 15 }, (_, i) => (
           <View
             key={i}
-            style={[
-              styles.skeletonLine,
-              { backgroundColor: tokens.border, opacity: 0.3 },
-            ]}
+            style={[styles.skeletonLine, { backgroundColor: tokens.border, opacity: 0.3 }]}
           />
         ))}
       </View>
@@ -128,18 +139,16 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
   const surahNum = firstLocation ? parseInt(firstLocation.split(':')[0], 10) : 0;
   const surahName = surahNum > 0 ? SURAH_METADATA[surahNum - 1]?.nameEnglish : '';
 
-  // Tap-to-seek: only when setting is on AND audio is already playing
-  const handleWordTap = useCallback((verseKey: string) => {
-    if (tapToSeek && isAudioPlaying) {
-      seekToVerse(verseKey);
-    }
-  }, [tapToSeek, isAudioPlaying, seekToVerse]);
-
   const isSpecialPage = pageNumber <= 2;
 
   return (
     <Pressable
-      style={[styles.container, safeAreaStyle, { backgroundColor: tokens.surface.primary }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+      style={[
+        styles.container,
+        safeAreaStyle,
+        { backgroundColor: tokens.surface.primary },
+        Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
+      ]}
       accessibilityLabel={`Page ${pageNumber}, Surah ${surahName}`}
       accessibilityRole="text"
       onPress={onTap}
@@ -161,7 +170,7 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
                 surfaceSecondary={tokens.surface.secondary}
                 activeVerseKey={activeVerseKey}
                 highlightColor={tokens.accent.highlight}
-              onWordTap={handleWordTap}
+                onWordTap={handleWordTap}
               />
             ))}
           </View>
@@ -218,7 +227,18 @@ interface MushafLineViewProps {
   onWordTap?: (verseKey: string) => void;
 }
 
-function MushafLineView({ line, fontFamily, glyphFontSize, quranColor, uiColor, borderColor, surfaceSecondary, activeVerseKey, highlightColor, onWordTap }: MushafLineViewProps) {
+function MushafLineView({
+  line,
+  fontFamily,
+  glyphFontSize,
+  quranColor,
+  uiColor,
+  borderColor,
+  surfaceSecondary,
+  activeVerseKey,
+  highlightColor,
+  onWordTap,
+}: MushafLineViewProps) {
   if (line.type === 'surah-header') {
     const surahNum = parseInt(line.surah || '0', 10);
     const metadata = surahNum > 0 ? SURAH_METADATA[surahNum - 1] : null;
@@ -237,7 +257,12 @@ function MushafLineView({ line, fontFamily, glyphFontSize, quranColor, uiColor, 
         <Text
           style={[
             styles.basmalaText,
-            { fontFamily: KFGQPC_FONT_FAMILY, color: quranColor, fontSize: glyphFontSize * 0.8, lineHeight: glyphFontSize * 0.8 * 1.4 },
+            {
+              fontFamily: KFGQPC_FONT_FAMILY,
+              color: quranColor,
+              fontSize: glyphFontSize * 0.8,
+              lineHeight: glyphFontSize * 0.8 * 1.4,
+            },
           ]}
         >
           {BASMALA_TEXT}
@@ -255,9 +280,7 @@ function MushafLineView({ line, fontFamily, glyphFontSize, quranColor, uiColor, 
   return (
     <Text style={[styles.textLineText, { lineHeight, color: quranColor }]}>
       {line.words.map((word, i) => {
-        const wordFont = word.fontPage
-          ? getPageFontFamily(word.fontPage)
-          : fontFamily;
+        const wordFont = word.fontPage ? getPageFontFamily(word.fontPage) : fontFamily;
         const isWordActive = !!(activePrefix && word.location.startsWith(activePrefix));
         const verseKey = word.location.substring(0, word.location.lastIndexOf(':'));
         return (
@@ -269,9 +292,10 @@ function MushafLineView({ line, fontFamily, glyphFontSize, quranColor, uiColor, 
                   fontFamily: word.qpcV1 ? wordFont : KFGQPC_FONT_FAMILY,
                   fontSize: glyphFontSize,
                 },
-                isWordActive && highlightColor && {
-                  backgroundColor: highlightColor,
-                },
+                isWordActive &&
+                  highlightColor && {
+                    backgroundColor: highlightColor,
+                  },
               ]}
               onPress={onWordTap ? () => onWordTap(verseKey) : undefined}
             >

@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
-
-import { getHizbForPage, getPageForVerse, HIZB_METADATA, SURAH_METADATA } from 'quran-data';
 import type { HizbMetadata } from 'quran-data';
+import { getHizbForPage, getPageForVerse, HIZB_METADATA, SURAH_METADATA } from 'quran-data';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -20,7 +19,7 @@ export function HizbList() {
   const currentSurah = useUIStore((s) => s.currentSurah);
   const currentVerse = useUIStore((s) => s.currentVerse);
   const { tokens } = useTheme();
-  const flatListRef = useRef<FlatList>(null);
+  const flashListRef = useRef<FlashListRef<HizbMetadata>>(null);
 
   const currentHizb = useMemo(() => {
     const page = getPageForVerse(currentSurah, currentVerse);
@@ -28,7 +27,7 @@ export function HizbList() {
   }, [currentSurah, currentVerse]);
 
   useEffect(() => {
-    flatListRef.current?.scrollToIndex({
+    flashListRef.current?.scrollToIndex({
       index: currentHizb - 1,
       animated: false,
       viewPosition: 0.3,
@@ -59,9 +58,7 @@ export function HizbList() {
           accessibilityLabel={`Hizb ${item.number}, Juz ${item.juz}, starts at ${surahName}`}
         >
           {isSelected && (
-            <View
-              style={[styles.selectedIndicator, { backgroundColor: tokens.accent.bookmark }]}
-            />
+            <View style={[styles.selectedIndicator, { backgroundColor: tokens.accent.bookmark }]} />
           )}
           <View style={[styles.numberBadge, { borderColor: tokens.border }]}>
             <AppText variant="ui">{item.number}</AppText>
@@ -80,31 +77,19 @@ export function HizbList() {
 
   const keyExtractor = useCallback((item: HizbMetadata) => `hizb-${item.number}`, []);
 
-  const getItemLayout = useCallback(
-    (_data: unknown, index: number) => ({
-      length: ROW_HEIGHT + StyleSheet.hairlineWidth,
-      offset: (ROW_HEIGHT + StyleSheet.hairlineWidth) * index,
-      index,
-    }),
-    [],
-  );
-
   const separator = useCallback(
     () => <View style={[styles.separator, { backgroundColor: tokens.border }]} />,
     [tokens.border],
   );
 
   return (
-    <FlatList
-      ref={flatListRef}
+    <FlashList
+      ref={flashListRef}
       data={HIZB_METADATA}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
-      getItemLayout={getItemLayout}
       ItemSeparatorComponent={separator}
       contentContainerStyle={styles.content}
-      initialNumToRender={20}
-      maxToRenderPerBatch={15}
     />
   );
 }

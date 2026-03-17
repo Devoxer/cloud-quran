@@ -1,7 +1,6 @@
+import { getHizbForPage, getJuzForPage, SURAH_METADATA } from 'quran-data';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-
-import { getHizbForPage, getJuzForPage, SURAH_METADATA } from 'quran-data';
 
 import { AppText } from '@/components/AppText';
 import { useTheme } from '@/theme/ThemeProvider';

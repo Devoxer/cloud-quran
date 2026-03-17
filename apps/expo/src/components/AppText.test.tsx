@@ -46,7 +46,11 @@ jest.mock('@/theme/useUIStore', () => {
     (selector: (s: typeof mockUIState) => unknown) => selector(mockUIState),
     {
       getState: () => mockUIState,
-      setState: (partial: Partial<typeof mockUIState> | ((s: typeof mockUIState) => Partial<typeof mockUIState>)) => {
+      setState: (
+        partial:
+          | Partial<typeof mockUIState>
+          | ((s: typeof mockUIState) => Partial<typeof mockUIState>),
+      ) => {
         Object.assign(mockUIState, typeof partial === 'function' ? partial(mockUIState) : partial);
       },
       subscribe: () => () => {},

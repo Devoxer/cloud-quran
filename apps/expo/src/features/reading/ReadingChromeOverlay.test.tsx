@@ -12,11 +12,25 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'reading' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: true, scrollVersion: 0, firstVisibleVerse: null as string | null,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'reading' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: true,
+  scrollVersion: 0,
+  firstVisibleVerse: null as string | null,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -27,14 +41,25 @@ jest.mock('@/theme/useUIStore', () => {
   return { useUIStore };
 });
 
-
 jest.mock('quran-data', () => ({
-  SURAH_METADATA: [{ number: 1, nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 }],
+  SURAH_METADATA: [
+    {
+      number: 1,
+      nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+  ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   HIZB_METADATA: [{ number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   TOTAL_PAGES: 604,
-  getPageForVerse: jest.fn(() => 1), getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
-  getJuzForPage: jest.fn(() => 1), getHizbForPage: jest.fn(() => 1),
+  getPageForVerse: jest.fn(() => 1),
+  getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
+  getJuzForPage: jest.fn(() => 1),
+  getHizbForPage: jest.fn(() => 1),
 }));
 
 const mockAudioState = {
@@ -60,13 +85,19 @@ jest.mock('expo-router', () => ({
 
 import { ReadingChromeOverlay } from './ReadingChromeOverlay';
 
-interface MockElement { type: string | symbol | object; props: Record<string, unknown> }
+interface MockElement {
+  type: string | symbol | object;
+  props: Record<string, unknown>;
+}
 
 function findElements(element: unknown, predicate: (el: MockElement) => boolean): MockElement[] {
   const results: MockElement[] = [];
   function walk(node: unknown) {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
     const el = node as MockElement;
     if (predicate(el)) results.push(el);
     if (el.props?.children) {
@@ -133,7 +164,8 @@ describe('ReadingChromeOverlay', () => {
 
   test('settings gear press navigates to settings', () => {
     const element = renderOverlay();
-    const settingsButton = findElements(element,
+    const settingsButton = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Settings',
     );
     expect(settingsButton.length).toBe(1);
@@ -155,7 +187,8 @@ describe('ReadingChromeOverlay', () => {
   test('verse indicator has onPress handler', () => {
     const mockOnVerseJumpPress = jest.fn();
     const element = renderOverlay({ onVerseJumpPress: mockOnVerseJumpPress });
-    const verseJumpButton = findElements(element,
+    const verseJumpButton = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Go to verse',
     );
     expect(verseJumpButton.length).toBe(1);
@@ -165,7 +198,8 @@ describe('ReadingChromeOverlay', () => {
 
   test('renders mode toggle button', () => {
     const element = renderOverlay();
-    const modeToggle = findElements(element,
+    const modeToggle = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Switch to Mushaf Mode',
     );
     expect(modeToggle.length).toBe(1);
@@ -189,7 +223,8 @@ describe('ReadingChromeOverlay', () => {
   test('calls setMode with opposite mode on toggle press', () => {
     mockUIState.setMode.mockClear();
     const element = renderOverlay();
-    const modeToggle = findElements(element,
+    const modeToggle = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Switch to Mushaf Mode',
     );
     (modeToggle[0].props.onPress as () => void)();
@@ -199,7 +234,8 @@ describe('ReadingChromeOverlay', () => {
   test('has correct accessibility label for mushaf mode toggle', () => {
     mockUIState.currentMode = 'mushaf';
     const element = renderOverlay();
-    const modeToggle = findElements(element,
+    const modeToggle = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Switch to Reading Mode',
     );
     expect(modeToggle.length).toBe(1);
@@ -208,7 +244,8 @@ describe('ReadingChromeOverlay', () => {
   test('shows play button when no audio is loaded', () => {
     mockAudioState.currentSurah = null;
     const element = renderOverlay();
-    const playBtn = findElements(element,
+    const playBtn = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play surah',
     );
     expect(playBtn.length).toBe(1);
@@ -217,7 +254,8 @@ describe('ReadingChromeOverlay', () => {
   test('hides play button when audio is loaded', () => {
     mockAudioState.currentSurah = 1;
     const element = renderOverlay();
-    const playBtn = findElements(element,
+    const playBtn = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play surah',
     );
     expect(playBtn.length).toBe(0);
@@ -228,7 +266,8 @@ describe('ReadingChromeOverlay', () => {
     mockAudioState.play.mockClear();
     mockUIState.firstVisibleVerse = '1:3';
     const element = renderOverlay();
-    const playBtn = findElements(element,
+    const playBtn = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play surah',
     );
     (playBtn[0].props.onPress as () => void)();
@@ -240,7 +279,8 @@ describe('ReadingChromeOverlay', () => {
     mockAudioState.play.mockClear();
     mockUIState.firstVisibleVerse = null;
     const element = renderOverlay();
-    const playBtn = findElements(element,
+    const playBtn = findElements(
+      element,
       (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play surah',
     );
     (playBtn[0].props.onPress as () => void)();
@@ -275,5 +315,4 @@ describe('ReadingChromeOverlay', () => {
     });
     expect(verseCaption).toBeDefined();
   });
-
 });

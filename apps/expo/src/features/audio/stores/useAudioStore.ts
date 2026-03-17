@@ -1,54 +1,38 @@
 import { Asset } from 'expo-asset';
+import { SURAH_COUNT } from 'quran-data';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-
-import { SURAH_COUNT } from 'quran-data';
-
-import { mmkvStorage } from '@/services/mmkv';
-import { audioService } from '@/services/audio';
-import { audioDownloadService } from '@/services/audio-download';
+import { RECITERS } from '@/features/audio/data/reciters';
+import { useDownloadStore } from '@/features/audio/stores/useDownloadStore';
 import { buildAudioUrl } from '@/features/audio/utils/audioUrlBuilder';
 import { formatNowPlayingTitle } from '@/features/audio/utils/formatNowPlaying';
-import { RECITERS } from '@/features/audio/data/reciters';
-import {
-  audioTimingService,
-  findActiveVerse,
-  VerseTiming,
-} from '@/services/audio-timing';
+import { audioService } from '@/services/audio';
+import { audioDownloadService } from '@/services/audio-download';
+import { audioTimingService, findActiveVerse, VerseTiming } from '@/services/audio-timing';
+import { mmkvStorage } from '@/services/mmkv';
 import { useUIStore } from '@/theme/useUIStore';
-import { useDownloadStore } from '@/features/audio/stores/useDownloadStore';
 
-export function getNextVerseKey(
-  currentKey: string,
-  timings: VerseTiming[],
-): string | null {
+export function getNextVerseKey(currentKey: string, timings: VerseTiming[]): string | null {
   const idx = timings.findIndex((t) => t.verseKey === currentKey);
   if (idx < 0 || idx >= timings.length - 1) return null;
   return timings[idx + 1].verseKey;
 }
 
-export function getPreviousVerseKey(
-  currentKey: string,
-  timings: VerseTiming[],
-): string | null {
+export function getPreviousVerseKey(currentKey: string, timings: VerseTiming[]): string | null {
   const idx = timings.findIndex((t) => t.verseKey === currentKey);
   if (idx <= 0) return null;
   return timings[idx - 1].verseKey;
 }
 
 function getReciterName(reciterId: string): string {
-  return (
-    RECITERS.find((r) => r.id === reciterId)?.nameEnglish ?? reciterId
-  );
+  return RECITERS.find((r) => r.id === reciterId)?.nameEnglish ?? reciterId;
 }
 
 let cachedArtworkUrl: string | undefined | null = null;
 function resolveArtworkUrl(): string | undefined {
   if (cachedArtworkUrl !== null) return cachedArtworkUrl;
   try {
-    const asset = Asset.fromModule(
-      require('../../../../assets/audio-artwork.png'),
-    );
+    const asset = Asset.fromModule(require('../../../../assets/audio-artwork.png'));
     cachedArtworkUrl = asset.uri ?? undefined;
     return cachedArtworkUrl;
   } catch (e) {
@@ -139,7 +123,12 @@ export const useAudioStore = create<AudioState>()(
           return;
         }
 
-        if (isNaturalEnd && state.continuousPlayback && state.currentSurah !== null && state.currentSurah < SURAH_COUNT) {
+        if (
+          isNaturalEnd &&
+          state.continuousPlayback &&
+          state.currentSurah !== null &&
+          state.currentSurah < SURAH_COUNT
+        ) {
           const nextSurah = state.currentSurah + 1;
           setTimeout(() => {
             get().play(nextSurah);
@@ -156,11 +145,7 @@ export const useAudioStore = create<AudioState>()(
         }
 
         // Interruption recovery: isPlaying resumed after interruption
-        if (
-          status.isPlaying &&
-          !state.isPlaying &&
-          state.wasInterrupted
-        ) {
+        if (status.isPlaying && !state.isPlaying && state.wasInterrupted) {
           updates.wasInterrupted = false;
           updates.interruptedAtMs = 0;
           updates.interruptedAtTimestamp = 0;
@@ -168,18 +153,12 @@ export const useAudioStore = create<AudioState>()(
           // not for quick lock screen pause/resume (< 5s)
           const INTERRUPTION_THRESHOLD_MS = 5000;
           if (
-            Date.now() - state.interruptedAtTimestamp >
-              INTERRUPTION_THRESHOLD_MS &&
+            Date.now() - state.interruptedAtTimestamp > INTERRUPTION_THRESHOLD_MS &&
             state.verseTimings.length > 0
           ) {
-            const nearestVerse = findActiveVerse(
-              state.verseTimings,
-              state.interruptedAtMs,
-            );
+            const nearestVerse = findActiveVerse(state.verseTimings, state.interruptedAtMs);
             if (nearestVerse) {
-              const timing = state.verseTimings.find(
-                (t) => t.verseKey === nearestVerse,
-              );
+              const timing = state.verseTimings.find((t) => t.verseKey === nearestVerse);
               if (timing) {
                 audioService.seekToPosition(timing.timestampFrom);
                 updates.activeVerseKey = nearestVerse;
@@ -196,10 +175,7 @@ export const useAudioStore = create<AudioState>()(
 
         // Update active verse from timing data when playing
         if (status.isPlaying && state.verseTimings.length > 0) {
-          const newVerse = findActiveVerse(
-            state.verseTimings,
-            status.positionMs,
-          );
+          const newVerse = findActiveVerse(state.verseTimings, status.positionMs);
           if (newVerse && newVerse !== state.activeVerseKey) {
             updates.activeVerseKey = newVerse;
             updates.currentVerseKey = newVerse;
@@ -239,10 +215,7 @@ export const useAudioStore = create<AudioState>()(
           }
           case 'previous': {
             const prevKey = state.activeVerseKey
-              ? getPreviousVerseKey(
-                  state.activeVerseKey,
-                  state.verseTimings,
-                )
+              ? getPreviousVerseKey(state.activeVerseKey, state.verseTimings)
               : null;
             if (prevKey) state.seekToVerse(prevKey);
             break;
@@ -340,7 +313,9 @@ export const useAudioStore = create<AudioState>()(
             // regardless of error type. When a local file fails, show the actual error.
             const hasLocalFile = !!localUri;
             const errorMsg = hasLocalFile
-              ? (e instanceof Error ? e.message : 'Failed to load audio')
+              ? e instanceof Error
+                ? e.message
+                : 'Failed to load audio'
               : 'offline-no-audio';
             set({
               error: errorMsg,
@@ -383,11 +358,7 @@ export const useAudioStore = create<AudioState>()(
           if (currentSurah) {
             const reciterName = getReciterName(selectedReciterId);
             audioService.updateLockScreenInfo({
-              title: formatNowPlayingTitle(
-                currentSurah,
-                verseKey,
-                reciterName,
-              ),
+              title: formatNowPlayingTitle(currentSurah, verseKey, reciterName),
               artist: reciterName,
               albumTitle: 'Cloud Quran',
               artworkUrl: resolveArtworkUrl(),
@@ -401,9 +372,11 @@ export const useAudioStore = create<AudioState>()(
           if (currentSurah && isPlaying) {
             // Preserve current verse position when switching reciters
             const verseKey = activeVerseKey ?? currentVerseKey ?? undefined;
-            get().play(currentSurah, reciterId, verseKey).catch(() => {
-              // Error state is set inside play()
-            });
+            get()
+              .play(currentSurah, reciterId, verseKey)
+              .catch(() => {
+                // Error state is set inside play()
+              });
           }
         },
 

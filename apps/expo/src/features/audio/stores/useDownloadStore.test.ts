@@ -84,9 +84,7 @@ describe('useDownloadStore', () => {
         });
       });
 
-      const downloadPromise = useDownloadStore
-        .getState()
-        .startDownload('alafasy', 1);
+      const downloadPromise = useDownloadStore.getState().startDownload('alafasy', 1);
 
       // Wait for downloadSurah to resolve (returns handle)
       await Promise.resolve();
@@ -118,9 +116,7 @@ describe('useDownloadStore', () => {
 
       const promise = useDownloadStore.getState().startDownload('alafasy', 1);
       capturedOnProgress!(0.5);
-      expect(useDownloadStore.getState().downloadProgress['alafasy/1']).toBe(
-        0.5,
-      );
+      expect(useDownloadStore.getState().downloadProgress['alafasy/1']).toBe(0.5);
       await promise;
     });
 
@@ -241,9 +237,7 @@ describe('useDownloadStore', () => {
   describe('markAsCached', () => {
     it('marks surah as downloaded', () => {
       useDownloadStore.getState().markAsCached('alafasy', 1);
-      expect(useDownloadStore.getState().downloads['alafasy/1']).toBe(
-        'downloaded',
-      );
+      expect(useDownloadStore.getState().downloads['alafasy/1']).toBe('downloaded');
     });
   });
 
@@ -254,15 +248,11 @@ describe('useDownloadStore', () => {
       await useDownloadStore.getState().refreshStorageUsage('alafasy');
 
       expect(mockGetStorageUsage).toHaveBeenCalledWith('alafasy');
-      expect(useDownloadStore.getState().storageUsageBytes['alafasy']).toBe(
-        52_428_800,
-      );
+      expect(useDownloadStore.getState().storageUsageBytes['alafasy']).toBe(52_428_800);
     });
 
     it('updates storage for different reciters independently', async () => {
-      mockGetStorageUsage
-        .mockResolvedValueOnce(50_000_000)
-        .mockResolvedValueOnce(30_000_000);
+      mockGetStorageUsage.mockResolvedValueOnce(50_000_000).mockResolvedValueOnce(30_000_000);
 
       await useDownloadStore.getState().refreshStorageUsage('alafasy');
       await useDownloadStore.getState().refreshStorageUsage('sudais');
@@ -282,9 +272,7 @@ describe('useDownloadStore', () => {
     });
 
     it('isDownloaded returns false for non-downloaded surah', () => {
-      expect(useDownloadStore.getState().isDownloaded('alafasy', 1)).toBe(
-        false,
-      );
+      expect(useDownloadStore.getState().isDownloaded('alafasy', 1)).toBe(false);
     });
 
     it('getProgress returns progress value', () => {
@@ -307,9 +295,7 @@ describe('useDownloadStore', () => {
           'sudais/1': 'downloaded',
         },
       });
-      expect(
-        useDownloadStore.getState().getReciterDownloadCount('alafasy'),
-      ).toBe(2);
+      expect(useDownloadStore.getState().getReciterDownloadCount('alafasy')).toBe(2);
     });
   });
 });

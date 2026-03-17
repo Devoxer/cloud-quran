@@ -3,7 +3,10 @@ jest.mock('react', () => ({
   useCallback: (fn: unknown) => fn,
   useMemo: (fn: () => unknown) => (fn as () => unknown)(),
   useRef: (val: unknown) => ({ current: val ?? null }),
-  useState: (initial: unknown) => [typeof initial === 'function' ? (initial as () => unknown)() : initial, () => {}],
+  useState: (initial: unknown) => [
+    typeof initial === 'function' ? (initial as () => unknown)() : initial,
+    () => {},
+  ],
   useEffect: () => {},
 }));
 
@@ -13,11 +16,24 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'mushaf' as string, fontSize: 28,
-  currentSurah: 2, currentVerse: 5, lastReadTimestamp: Date.now(), isChromeVisible: false, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'mushaf' as string,
+  fontSize: 28,
+  currentSurah: 2,
+  currentVerse: 5,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: false,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -29,7 +45,17 @@ jest.mock('@/theme/useUIStore', () => {
 });
 
 jest.mock('quran-data', () => ({
-  SURAH_METADATA: [{ number: 1, nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 }],
+  SURAH_METADATA: [
+    {
+      number: 1,
+      nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+  ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   HIZB_METADATA: [{ number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   TOTAL_PAGES: 604,
@@ -38,7 +64,8 @@ jest.mock('quran-data', () => ({
     return 2;
   }),
   getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
-  getJuzForPage: jest.fn(() => 1), getHizbForPage: jest.fn(() => 1),
+  getJuzForPage: jest.fn(() => 1),
+  getHizbForPage: jest.fn(() => 1),
 }));
 
 // Get reference to mock after jest.mock has been applied
@@ -145,7 +172,10 @@ describe('MushafModeScreen', () => {
   test('FlatList has getItemLayout for O(1) scrolling', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
     const flatLists = findElements(element, (el) => el.type === 'FlatList');
-    const getItemLayout = flatLists[0].props.getItemLayout as (data: any, index: number) => { length: number; offset: number; index: number };
+    const getItemLayout = flatLists[0].props.getItemLayout as (
+      data: any,
+      index: number,
+    ) => { length: number; offset: number; index: number };
     expect(getItemLayout).toBeDefined();
     const layout = getItemLayout(null, 5);
     expect(layout.length).toBe(375); // SCREEN_WIDTH

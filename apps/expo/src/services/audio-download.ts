@@ -1,5 +1,5 @@
-import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { buildAudioUrl } from '@/features/audio/utils/audioUrlBuilder';
 
@@ -22,21 +22,13 @@ class AudioDownloadService {
     });
   }
 
-  async isDownloaded(
-    reciterId: string,
-    surahNumber: number,
-  ): Promise<boolean> {
+  async isDownloaded(reciterId: string, surahNumber: number): Promise<boolean> {
     if (Platform.OS === 'web') return false;
-    const info = await FileSystem.getInfoAsync(
-      getAudioPath(reciterId, surahNumber),
-    );
+    const info = await FileSystem.getInfoAsync(getAudioPath(reciterId, surahNumber));
     return info.exists;
   }
 
-  async getLocalAudioUri(
-    reciterId: string,
-    surahNumber: number,
-  ): Promise<string | null> {
+  async getLocalAudioUri(reciterId: string, surahNumber: number): Promise<string | null> {
     if (Platform.OS === 'web') return null;
     const path = getAudioPath(reciterId, surahNumber);
     const info = await FileSystem.getInfoAsync(path);
@@ -58,18 +50,11 @@ class AudioDownloadService {
     const remoteUrl = buildAudioUrl(reciterId, surahNumber);
     const localPath = getAudioPath(reciterId, surahNumber);
 
-    const resumable = FileSystem.createDownloadResumable(
-      remoteUrl,
-      localPath,
-      {},
-      (progress) => {
-        if (onProgress && progress.totalBytesExpectedToWrite > 0) {
-          onProgress(
-            progress.totalBytesWritten / progress.totalBytesExpectedToWrite,
-          );
-        }
-      },
-    );
+    const resumable = FileSystem.createDownloadResumable(remoteUrl, localPath, {}, (progress) => {
+      if (onProgress && progress.totalBytesExpectedToWrite > 0) {
+        onProgress(progress.totalBytesWritten / progress.totalBytesExpectedToWrite);
+      }
+    });
 
     // Return handle immediately so caller can track/cancel before download completes
     const downloadPromise = resumable.downloadAsync().then(() => {});
@@ -128,10 +113,7 @@ class AudioDownloadService {
     return total;
   }
 
-  async cacheStreamedAudio(
-    reciterId: string,
-    surahNumber: number,
-  ): Promise<void> {
+  async cacheStreamedAudio(reciterId: string, surahNumber: number): Promise<void> {
     if (Platform.OS === 'web') return;
 
     // Skip if already cached/downloaded

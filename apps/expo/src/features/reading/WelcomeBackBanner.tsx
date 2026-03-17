@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { SURAH_METADATA } from 'quran-data';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { SURAH_METADATA } from 'quran-data';
 
 import { AppText } from '@/components/AppText';
 import { useTheme } from '@/theme/ThemeProvider';

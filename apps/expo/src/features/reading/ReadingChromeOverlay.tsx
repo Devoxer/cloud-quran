@@ -1,12 +1,9 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { SURAH_METADATA } from 'quran-data';
+import { useCallback, useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { useRouter } from 'expo-router';
-
-import Ionicons from '@expo/vector-icons/Ionicons';
-
-import { SURAH_METADATA } from 'quran-data';
 
 import { AppText } from '@/components/AppText';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
@@ -63,7 +60,9 @@ export function ReadingChromeOverlay({ onVerseJumpPress }: ReadingChromeOverlayP
           onPress={handleModeToggle}
           style={styles.modeToggle}
           accessibilityRole="button"
-          accessibilityLabel={currentMode === 'reading' ? 'Switch to Mushaf Mode' : 'Switch to Reading Mode'}
+          accessibilityLabel={
+            currentMode === 'reading' ? 'Switch to Mushaf Mode' : 'Switch to Reading Mode'
+          }
         >
           <Ionicons
             name={currentMode === 'reading' ? 'albums-outline' : 'list-outline'}

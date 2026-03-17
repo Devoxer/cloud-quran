@@ -1,10 +1,9 @@
-import { findActiveVerse, audioTimingService, VerseTiming } from './audio-timing';
+import { audioTimingService, findActiveVerse, VerseTiming } from './audio-timing';
 
 // Mock the URL builder
 jest.mock('@/features/audio/utils/audioUrlBuilder', () => ({
   buildManifestUrl: jest.fn(
-    (reciterId: string) =>
-      `https://cdn.nobleachievements.com/audio/${reciterId}/manifest.json`,
+    (reciterId: string) => `https://cdn.nobleachievements.com/audio/${reciterId}/manifest.json`,
   ),
 }));
 
@@ -71,16 +70,12 @@ describe('findActiveVerse', () => {
   });
 
   it('handles single-verse timings', () => {
-    const single: VerseTiming[] = [
-      { verseKey: '114:1', timestampFrom: 0, timestampTo: 3000 },
-    ];
+    const single: VerseTiming[] = [{ verseKey: '114:1', timestampFrom: 0, timestampTo: 3000 }];
     expect(findActiveVerse(single, 1500)).toBe('114:1');
   });
 
   it('returns null for position before first verse (negative)', () => {
-    const timings: VerseTiming[] = [
-      { verseKey: '2:1', timestampFrom: 100, timestampTo: 5000 },
-    ];
+    const timings: VerseTiming[] = [{ verseKey: '2:1', timestampFrom: 100, timestampTo: 5000 }];
     expect(findActiveVerse(timings, 50)).toBeNull();
   });
 });

@@ -16,12 +16,25 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system', currentMode: 'reading', fontSize: 28, currentSurah: 1,
-  currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: true, scrollVersion: 0,
+  selectedTheme: 'system',
+  currentMode: 'reading',
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: true,
+  scrollVersion: 0,
   tapToSeek: false,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 jest.mock('@/theme/useUIStore', () => {
   const useUIStore = Object.assign(
@@ -32,12 +45,24 @@ jest.mock('@/theme/useUIStore', () => {
 });
 
 jest.mock('quran-data', () => ({
-  SURAH_METADATA: [{ number: 1, nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 }],
+  SURAH_METADATA: [
+    {
+      number: 1,
+      nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+  ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   HIZB_METADATA: [{ number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   TOTAL_PAGES: 604,
-  getPageForVerse: jest.fn(() => 1), getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
-  getJuzForPage: jest.fn(() => 1), getHizbForPage: jest.fn(() => 1),
+  getPageForVerse: jest.fn(() => 1),
+  getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
+  getJuzForPage: jest.fn(() => 1),
+  getHizbForPage: jest.fn(() => 1),
 }));
 
 jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Ionicons' }));
@@ -56,7 +81,11 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
         play: mockAudioPlay,
       }),
     {
-      getState: () => ({ currentSurah: mockCurrentSurah, seekToVerse: mockSeekToVerse, play: mockAudioPlay }),
+      getState: () => ({
+        currentSurah: mockCurrentSurah,
+        seekToVerse: mockSeekToVerse,
+        play: mockAudioPlay,
+      }),
       setState: () => {},
       subscribe: () => () => {},
     },
@@ -231,8 +260,9 @@ describe('VerseRow', () => {
       );
     });
     expect(badges.length).toBeGreaterThanOrEqual(1);
-    const badgeStyle = (Array.isArray(badges[0].props.style) ? badges[0].props.style : [badges[0].props.style])
-      .find((s: Record<string, unknown>) => s && 'borderColor' in s);
+    const badgeStyle = (
+      Array.isArray(badges[0].props.style) ? badges[0].props.style : [badges[0].props.style]
+    ).find((s: Record<string, unknown>) => s && 'borderColor' in s);
     expect(badgeStyle.borderColor).toBe(themes.light.accent.audio);
   });
 
@@ -250,8 +280,9 @@ describe('VerseRow', () => {
       );
     });
     expect(badges.length).toBeGreaterThanOrEqual(1);
-    const badgeStyle = (Array.isArray(badges[0].props.style) ? badges[0].props.style : [badges[0].props.style])
-      .find((s: Record<string, unknown>) => s && 'borderColor' in s);
+    const badgeStyle = (
+      Array.isArray(badges[0].props.style) ? badges[0].props.style : [badges[0].props.style]
+    ).find((s: Record<string, unknown>) => s && 'borderColor' in s);
     expect(badgeStyle.borderColor).toBe(themes.light.text.ui);
   });
 

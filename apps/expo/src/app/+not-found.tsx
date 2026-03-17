@@ -1,6 +1,5 @@
-import { StyleSheet, View } from 'react-native';
-
 import { Link, Stack } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Surface } from '@/components/Surface';

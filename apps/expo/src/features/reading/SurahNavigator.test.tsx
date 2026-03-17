@@ -16,11 +16,24 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'reading' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: true, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'reading' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: true,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -76,7 +89,8 @@ describe('SurahNavigator', () => {
   test('shows previous and next surah names', () => {
     const onNavigate = jest.fn();
     const element = (SurahNavigator as (...args: unknown[]) => unknown)({
-      currentSurah: 2, onNavigate,
+      currentSurah: 2,
+      onNavigate,
     }) as unknown as MockElement;
     const englishNames = findElements(element, (el) => el.props?.variant === 'surahTitleEnglish');
     expect(englishNames.length).toBe(2);
@@ -87,7 +101,8 @@ describe('SurahNavigator', () => {
   test('wraps correctly: Surah 1 prev -> Surah 114', () => {
     const onNavigate = jest.fn();
     const element = (SurahNavigator as (...args: unknown[]) => unknown)({
-      currentSurah: 1, onNavigate,
+      currentSurah: 1,
+      onNavigate,
     }) as unknown as MockElement;
     const englishNames = findElements(element, (el) => el.props?.variant === 'surahTitleEnglish');
     expect(englishNames[0].props.children).toBe('Mankind');
@@ -101,7 +116,8 @@ describe('SurahNavigator', () => {
   test('wraps correctly: Surah 114 next -> Surah 1', () => {
     const onNavigate = jest.fn();
     const element = (SurahNavigator as (...args: unknown[]) => unknown)({
-      currentSurah: 114, onNavigate,
+      currentSurah: 114,
+      onNavigate,
     }) as unknown as MockElement;
     const englishNames = findElements(element, (el) => el.props?.variant === 'surahTitleEnglish');
     expect(englishNames[1].props.children).toBe('The Opening');
@@ -114,7 +130,8 @@ describe('SurahNavigator', () => {
   test('calls onNavigate with correct surah number', () => {
     const onNavigate = jest.fn();
     const element = (SurahNavigator as (...args: unknown[]) => unknown)({
-      currentSurah: 50, onNavigate,
+      currentSurah: 50,
+      onNavigate,
     }) as unknown as MockElement;
     const pressables = findElements(element, (el) => el.type === 'Pressable');
     (pressables[0].props.onPress as (...args: unknown[]) => unknown)();

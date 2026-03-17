@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Platform, StyleSheet, useColorScheme } from 'react-native';
 
-import { animation, type ThemeName, themes, type ThemeTokens } from './tokens';
+import { animation, type ThemeName, type ThemeTokens, themes } from './tokens';
 import { useUIStore } from './useUIStore';
 
 interface ThemeContextValue {

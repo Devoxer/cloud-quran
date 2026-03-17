@@ -1,8 +1,8 @@
-import React, { useCallback } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
 import { Surface } from '@/components/Surface';
@@ -10,7 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
 
-import { BookmarkRow, ROW_HEIGHT } from './BookmarkRow';
+import { BookmarkRow } from './BookmarkRow';
 import type { BookmarkedVerse } from './hooks/useBookmarkedVerses';
 import { useBookmarkedVerses } from './hooks/useBookmarkedVerses';
 import { useBookmarkStore } from './useBookmarkStore';
@@ -62,15 +62,6 @@ export function BookmarksScreen() {
     [handleBookmarkPress, handleDelete],
   );
 
-  const getItemLayout = useCallback(
-    (_data: unknown, index: number) => ({
-      length: ROW_HEIGHT + StyleSheet.hairlineWidth,
-      offset: (ROW_HEIGHT + StyleSheet.hairlineWidth) * index,
-      index,
-    }),
-    [],
-  );
-
   if (!isLoading && verses.length === 0) {
     return (
       <Surface style={[styles.emptyContainer, { paddingTop: insets.top }]}>
@@ -82,16 +73,12 @@ export function BookmarksScreen() {
 
   return (
     <Surface>
-      <FlatList
+      <FlashList
         data={verses}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ItemSeparatorComponent={ItemSeparator}
-        getItemLayout={getItemLayout}
         contentContainerStyle={[styles.content, { paddingTop: insets.top }]}
-        initialNumToRender={20}
-        maxToRenderPerBatch={20}
-        windowSize={5}
       />
     </Surface>
   );

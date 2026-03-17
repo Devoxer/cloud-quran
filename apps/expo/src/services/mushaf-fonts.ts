@@ -1,12 +1,9 @@
-import { Platform } from 'react-native';
-
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Font from 'expo-font';
-
 import { TOTAL_PAGES } from 'quran-data';
+import { Platform } from 'react-native';
 
-const FONT_CDN_BASE =
-  'https://raw.githubusercontent.com/nuqayah/qpc-fonts/master/mushaf-woff2';
+const FONT_CDN_BASE = 'https://raw.githubusercontent.com/nuqayah/qpc-fonts/master/mushaf-woff2';
 
 /**
  * Pages with patched fonts bundled locally.

@@ -27,12 +27,25 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'mushaf' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: false, scrollVersion: 0,
+  selectedTheme: 'system' as string,
+  currentMode: 'mushaf' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: false,
+  scrollVersion: 0,
   tapToSeek: false,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -45,8 +58,24 @@ jest.mock('@/theme/useUIStore', () => {
 
 jest.mock('quran-data', () => ({
   SURAH_METADATA: [
-    { number: 1, nameArabic: 'الفاتحة', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 },
-    { number: 2, nameArabic: 'البقرة', nameEnglish: 'The Cow', nameTransliteration: 'Al-Baqarah', verseCount: 286, revelationType: 'medinan', order: 87 },
+    {
+      number: 1,
+      nameArabic: 'الفاتحة',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+    {
+      number: 2,
+      nameArabic: 'البقرة',
+      nameEnglish: 'The Cow',
+      nameTransliteration: 'Al-Baqarah',
+      verseCount: 286,
+      revelationType: 'medinan',
+      order: 87,
+    },
   ],
   JUZ_METADATA: [
     { number: 1, startSurah: 1, startVerse: 1, startPage: 1 },
@@ -67,9 +96,27 @@ let mockIsAudioPlaying = false;
 const mockSeekToVerse = jest.fn();
 jest.mock('@/features/audio/stores/useAudioStore', () => {
   const useAudioStore = Object.assign(
-    (selector: (s: { activeVerseKey: string | null; isPlaying: boolean; seekToVerse: jest.Mock }) => unknown) =>
-      selector({ activeVerseKey: mockActiveVerseKey, isPlaying: mockIsAudioPlaying, seekToVerse: mockSeekToVerse }),
-    { getState: () => ({ activeVerseKey: mockActiveVerseKey, isPlaying: mockIsAudioPlaying, seekToVerse: mockSeekToVerse }), setState: () => {}, subscribe: () => () => {} },
+    (
+      selector: (s: {
+        activeVerseKey: string | null;
+        isPlaying: boolean;
+        seekToVerse: jest.Mock;
+      }) => unknown,
+    ) =>
+      selector({
+        activeVerseKey: mockActiveVerseKey,
+        isPlaying: mockIsAudioPlaying,
+        seekToVerse: mockSeekToVerse,
+      }),
+    {
+      getState: () => ({
+        activeVerseKey: mockActiveVerseKey,
+        isPlaying: mockIsAudioPlaying,
+        seekToVerse: mockSeekToVerse,
+      }),
+      setState: () => {},
+      subscribe: () => () => {},
+    },
   );
   return { useAudioStore };
 });
@@ -126,8 +173,14 @@ function findElements(element: unknown, predicate: (el: MockElement) => boolean)
 function findAllText(element: unknown): string[] {
   const texts: string[] = [];
   function walk(node: unknown) {
-    if (typeof node === 'string') { texts.push(node); return; }
-    if (typeof node === 'number') { texts.push(String(node)); return; }
+    if (typeof node === 'string') {
+      texts.push(node);
+      return;
+    }
+    if (typeof node === 'number') {
+      texts.push(String(node));
+      return;
+    }
     if (!node || typeof node !== 'object') return;
     const el = node as MockElement;
     if (el.props?.children) {
@@ -145,7 +198,10 @@ const sampleLayout = {
   lines: [
     { line: 1, type: 'surah-header', text: 'سُورَةُ ٱلْفَاتِحَةِ', surah: '001' },
     {
-      line: 2, type: 'text', text: 'بِسْمِ ٱللَّهِ', verseRange: '1:1-1:1',
+      line: 2,
+      type: 'text',
+      text: 'بِسْمِ ٱللَّهِ',
+      verseRange: '1:1-1:1',
       words: [
         { location: '1:1:1', word: 'بِسْمِ', qpcV1: '\uFC41', qpcV2: '\uFC41' },
         { location: '1:1:2', word: 'ٱللَّهِ', qpcV1: '\uFC42', qpcV2: '\uFC42' },
@@ -169,12 +225,15 @@ describe('MushafPage — loading state', () => {
     expect(element.type).toBe('View');
     expect(element.props.accessibilityLabel).toContain('loading');
     // Should have skeleton line elements (15 placeholder lines)
-    const skeletonLines = findElements(element, (el) =>
-      el.type === 'View' && typeof el.props.style === 'object' &&
-      Array.isArray(el.props.style) && el.props.style.some &&
-      el.props.style.some((s: Record<string, unknown>) =>
-        typeof s === 'object' && s !== null && 'opacity' in s
-      )
+    const skeletonLines = findElements(
+      element,
+      (el) =>
+        el.type === 'View' &&
+        typeof el.props.style === 'object' &&
+        Array.isArray(el.props.style) &&
+        el.props.style.some?.(
+          (s: Record<string, unknown>) => typeof s === 'object' && s !== null && 'opacity' in s,
+        ),
     );
     expect(skeletonLines.length).toBe(15);
   });
@@ -214,8 +273,9 @@ describe('MushafPage — error state', () => {
   test('retry button has accessibility label', () => {
     mockError = 'Failed to load';
     const element = render({ pageNumber: 1 });
-    const retryButtons = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props.accessibilityLabel === 'Retry loading page'
+    const retryButtons = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props.accessibilityLabel === 'Retry loading page',
     );
     expect(retryButtons.length).toBe(1);
   });
@@ -259,8 +319,9 @@ describe('MushafPage — loaded state', () => {
 
   test('passes QPC font family to line renderers', () => {
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'fontFamily' in el.props && el.props.fontFamily === 'QCF_P001'
+    const lineViews = findElements(
+      element,
+      (el) => 'fontFamily' in el.props && el.props.fontFamily === 'QCF_P001',
     );
     expect(lineViews.length).toBeGreaterThan(0);
   });
@@ -268,8 +329,9 @@ describe('MushafPage — loaded state', () => {
   test('passes theme text.quran color to line renderers', () => {
     const element = render({ pageNumber: 1 });
     const { themes } = require('@/theme/tokens');
-    const lineViews = findElements(element, (el) =>
-      'quranColor' in el.props && el.props.quranColor === themes.light.text.quran
+    const lineViews = findElements(
+      element,
+      (el) => 'quranColor' in el.props && el.props.quranColor === themes.light.text.quran,
     );
     expect(lineViews.length).toBeGreaterThan(0);
   });
@@ -319,9 +381,7 @@ describe('MushafPage — loaded state', () => {
   test('basmala line keeps centered justification', () => {
     mockLayout = {
       page: 2,
-      lines: [
-        { line: 1, type: 'basmala', text: 'بِسْمِ ٱللَّهِ', qpcV1: '#"!' },
-      ],
+      lines: [{ line: 1, type: 'basmala', text: 'بِسْمِ ٱللَّهِ', qpcV1: '#"!' }],
     };
     const element = render({ pageNumber: 2 });
     const basmalaViews = findElements(element, (el) => {
@@ -356,9 +416,7 @@ describe('MushafPage — loaded state', () => {
   test('basmala renders with Uthmani font and actual Arabic text (not QPC glyphs)', () => {
     mockLayout = {
       page: 2,
-      lines: [
-        { line: 1, type: 'basmala', text: 'بِسْمِ ٱللَّهِ', qpcV1: '#"!' },
-      ],
+      lines: [{ line: 1, type: 'basmala', text: 'بِسْمِ ٱللَّهِ', qpcV1: '#"!' }],
     };
     const element = render({ pageNumber: 2 });
     const basmalaViews = findElements(element, (el) => {
@@ -391,8 +449,9 @@ describe('MushafPage — verse highlighting', () => {
   test('passes activeVerseKey to line views when active verse set', () => {
     mockActiveVerseKey = '1:1';
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'activeVerseKey' in el.props && el.props.activeVerseKey === '1:1',
+    const lineViews = findElements(
+      element,
+      (el) => 'activeVerseKey' in el.props && el.props.activeVerseKey === '1:1',
     );
     expect(lineViews.length).toBeGreaterThan(0);
   });
@@ -400,8 +459,9 @@ describe('MushafPage — verse highlighting', () => {
   test('passes null activeVerseKey when no active verse', () => {
     mockActiveVerseKey = null;
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'activeVerseKey' in el.props && el.props.activeVerseKey === null,
+    const lineViews = findElements(
+      element,
+      (el) => 'activeVerseKey' in el.props && el.props.activeVerseKey === null,
     );
     expect(lineViews.length).toBeGreaterThan(0);
   });
@@ -410,8 +470,10 @@ describe('MushafPage — verse highlighting', () => {
     mockActiveVerseKey = '1:1';
     const element = render({ pageNumber: 1 });
     const { themes } = require('@/theme/tokens');
-    const highlighted = findElements(element, (el) =>
-      'highlightColor' in el.props && el.props.highlightColor === themes.light.accent.highlight,
+    const highlighted = findElements(
+      element,
+      (el) =>
+        'highlightColor' in el.props && el.props.highlightColor === themes.light.accent.highlight,
     );
     expect(highlighted.length).toBeGreaterThan(0);
   });
@@ -428,12 +490,16 @@ describe('MushafPage — verse highlighting', () => {
     const lineEl = textLineViews[0];
     const rendered = (lineEl as any).type(lineEl.props);
     expect(rendered.type).toBe('Text');
-    const children = Array.isArray(rendered.props.children) ? rendered.props.children : [rendered.props.children];
+    const children = Array.isArray(rendered.props.children)
+      ? rendered.props.children
+      : [rendered.props.children];
     const wordTexts = findElements({ type: 'Fragment', props: { children } }, (el) => {
       if (el.type !== 'Text') return false;
       const style = el.props.style;
       if (!Array.isArray(style)) return false;
-      return style.some((s: Record<string, unknown>) => s && typeof s === 'object' && 'backgroundColor' in s);
+      return style.some(
+        (s: Record<string, unknown>) => s && typeof s === 'object' && 'backgroundColor' in s,
+      );
     });
     expect(wordTexts.length).toBe(2);
   });
@@ -449,12 +515,16 @@ describe('MushafPage — verse highlighting', () => {
     expect(textLineViews.length).toBeGreaterThan(0);
     const lineEl = textLineViews[0];
     const rendered = (lineEl as any).type(lineEl.props);
-    const children = Array.isArray(rendered.props.children) ? rendered.props.children : [rendered.props.children];
+    const children = Array.isArray(rendered.props.children)
+      ? rendered.props.children
+      : [rendered.props.children];
     const wordTexts = findElements({ type: 'Fragment', props: { children } }, (el) => {
       if (el.type !== 'Text') return false;
       const style = el.props.style;
       if (!Array.isArray(style)) return false;
-      return style.some((s: Record<string, unknown>) => s && typeof s === 'object' && 'backgroundColor' in s);
+      return style.some(
+        (s: Record<string, unknown>) => s && typeof s === 'object' && 'backgroundColor' in s,
+      );
     });
     expect(wordTexts.length).toBe(0);
   });
@@ -474,16 +544,18 @@ describe('MushafPage — tap-to-seek', () => {
 
   test('passes onWordTap handler to line views', () => {
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
+    const lineViews = findElements(
+      element,
+      (el) => 'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
     );
     expect(lineViews.length).toBeGreaterThan(0);
   });
 
   test('onWordTap calls seekToVerse when tapToSeek is on and audio is playing', () => {
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
+    const lineViews = findElements(
+      element,
+      (el) => 'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
     );
     const handler = lineViews[0].props.onWordTap as (verseKey: string) => void;
     handler('1:1');
@@ -493,8 +565,9 @@ describe('MushafPage — tap-to-seek', () => {
   test('onWordTap does NOT call seekToVerse when tapToSeek is off', () => {
     mockUIState.tapToSeek = false;
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
+    const lineViews = findElements(
+      element,
+      (el) => 'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
     );
     const handler = lineViews[0].props.onWordTap as (verseKey: string) => void;
     handler('1:1');
@@ -504,8 +577,9 @@ describe('MushafPage — tap-to-seek', () => {
   test('onWordTap does NOT call seekToVerse when audio is not playing', () => {
     mockIsAudioPlaying = false;
     const element = render({ pageNumber: 1 });
-    const lineViews = findElements(element, (el) =>
-      'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
+    const lineViews = findElements(
+      element,
+      (el) => 'onWordTap' in el.props && typeof el.props.onWordTap === 'function',
     );
     const handler = lineViews[0].props.onWordTap as (verseKey: string) => void;
     handler('1:1');

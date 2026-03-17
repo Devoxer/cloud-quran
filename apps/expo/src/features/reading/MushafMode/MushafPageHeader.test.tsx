@@ -4,7 +4,10 @@ jest.mock('react', () => ({
   useMemo: (fn: () => unknown) => (fn as () => unknown)(),
   useRef: (val: unknown) => ({ current: val ?? null }),
   useEffect: () => {},
-  useState: (initial: unknown) => [typeof initial === 'function' ? (initial as () => unknown)() : initial, jest.fn()],
+  useState: (initial: unknown) => [
+    typeof initial === 'function' ? (initial as () => unknown)() : initial,
+    jest.fn(),
+  ],
 }));
 
 jest.mock('@/theme/ThemeProvider', () => {
@@ -13,11 +16,24 @@ jest.mock('@/theme/ThemeProvider', () => {
 });
 
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'mushaf' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: false, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'mushaf' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: false,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -30,7 +46,15 @@ jest.mock('@/theme/useUIStore', () => {
 
 jest.mock('quran-data', () => ({
   SURAH_METADATA: [
-    { number: 1, nameArabic: 'الفاتحة', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 },
+    {
+      number: 1,
+      nameArabic: 'الفاتحة',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
   ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   HIZB_METADATA: [{ number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
@@ -56,8 +80,14 @@ interface MockElement {
 function findAllText(element: unknown): string[] {
   const texts: string[] = [];
   function walk(node: unknown) {
-    if (typeof node === 'string') { texts.push(node); return; }
-    if (typeof node === 'number') { texts.push(String(node)); return; }
+    if (typeof node === 'string') {
+      texts.push(node);
+      return;
+    }
+    if (typeof node === 'number') {
+      texts.push(String(node));
+      return;
+    }
     if (!node || typeof node !== 'object') return;
     const el = node as MockElement;
     if (el.props?.children) {
@@ -71,7 +101,8 @@ function findAllText(element: unknown): string[] {
 
 // Get the inner render function from React.memo
 const HeaderRender =
-  (MushafPageHeader as unknown as { type: (...args: unknown[]) => unknown }).type || MushafPageHeader;
+  (MushafPageHeader as unknown as { type: (...args: unknown[]) => unknown }).type ||
+  MushafPageHeader;
 
 describe('MushafPageHeader', () => {
   test('renders juz and hizb info', () => {
@@ -113,7 +144,9 @@ describe('MushafPageHeader', () => {
   test('has no bottom border separator', () => {
     const element = (HeaderRender as any)({ pageNumber: 1, surahNumber: 1 }) as MockElement;
     const style = element.props.style;
-    const flatStyle = Array.isArray(style) ? Object.assign({}, ...style) : style as Record<string, unknown>;
+    const flatStyle = Array.isArray(style)
+      ? Object.assign({}, ...style)
+      : (style as Record<string, unknown>);
     expect(flatStyle.borderBottomWidth).toBeUndefined();
   });
 });

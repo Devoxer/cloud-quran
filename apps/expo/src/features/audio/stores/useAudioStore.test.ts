@@ -69,13 +69,9 @@ jest.mock('@/theme/useUIStore', () => ({
   },
 }));
 
-import {
-  useAudioStore,
-  getNextVerseKey,
-  getPreviousVerseKey,
-} from './useAudioStore';
 import { audioService } from '@/services/audio';
 import { audioTimingService, findActiveVerse } from '@/services/audio-timing';
+import { getNextVerseKey, getPreviousVerseKey, useAudioStore } from './useAudioStore';
 
 const mockedAudioService = audioService as jest.Mocked<typeof audioService>;
 const mockedTimingService = audioTimingService as jest.Mocked<typeof audioTimingService>;
@@ -83,7 +79,12 @@ const mockedFindActiveVerse = findActiveVerse as jest.MockedFunction<typeof find
 
 // Capture the status callback registered during store creation (before clearAllMocks)
 const statusCallback = (mockedAudioService as any).onStatusUpdate.mock.calls[0]?.[0] as
-  | ((s: { isPlaying: boolean; isBuffering: boolean; positionMs: number; durationMs: number }) => void)
+  | ((s: {
+      isPlaying: boolean;
+      isBuffering: boolean;
+      positionMs: number;
+      durationMs: number;
+    }) => void)
   | undefined;
 
 // Capture the remote command handler registered during store creation
@@ -230,9 +231,7 @@ describe('useAudioStore', () => {
     });
 
     it('does not seek when startVerseKey is not provided', async () => {
-      const sampleTimings = [
-        { verseKey: '1:1', timestampFrom: 0, timestampTo: 5000 },
-      ];
+      const sampleTimings = [{ verseKey: '1:1', timestampFrom: 0, timestampTo: 5000 }];
       mockedTimingService.getVerseTimings.mockResolvedValueOnce(sampleTimings);
 
       await useAudioStore.getState().play(1);

@@ -1,17 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { SURAH_METADATA } from 'quran-data';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
 import { Surface } from '@/components/Surface';
+import { useAudioStore } from '@/features/audio/stores/useAudioStore';
 import type { VerseWithTranslation } from '@/services/sqlite';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
-
-import { useAudioStore } from '@/features/audio/stores/useAudioStore';
 
 import { useVerses } from './hooks/useVerses';
 import { ReadingChromeOverlay } from './ReadingChromeOverlay';
@@ -22,7 +21,7 @@ import { VerseRow } from './VerseRow';
 import { WelcomeBackBanner } from './WelcomeBackBanner';
 
 // Pressable on web (onTouchEnd doesn't fire for mouse clicks),
-// View on native (Pressable interferes with FlatList scroll gestures)
+// View on native (Pressable interferes with FlashList scroll gestures)
 const TapContainer = Platform.OS === 'web' ? Pressable : View;
 const FooterGuard = Platform.OS === 'web' ? Pressable : View;
 
@@ -51,22 +50,20 @@ export function ReadingModeScreen() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [isPositionReady, setIsPositionReady] = useState(currentVerse <= 1);
   const isAudioPlaying = useAudioStore((s) => s.isPlaying);
-  const flatListRef = useRef<FlatList>(null);
+  const flashListRef = useRef<FlashListRef<VerseWithTranslation>>(null);
   const isScrolling = useRef(false);
   const scrollCooldownUntil = useRef(0);
   const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialVerse = useRef(currentVerse);
   const hasMounted = useRef(false);
   const lastScrollVersion = useRef(scrollVersion);
-  // Render enough items upfront so scrollToIndex succeeds without cascading retries
-  const initialRenderCount = useRef(Math.max(20, currentVerse + 5)).current;
   const scrollViewOffset = insets.top + spacing.lg;
   const contentStyle = useMemo(
     () => [styles.content, { paddingTop: scrollViewOffset }],
     [scrollViewOffset],
   );
 
-  // CRITICAL: These must be useRef to remain stable — FlatList throws if they change after mount
+  // CRITICAL: These must be useRef to remain stable — FlashList throws if they change after mount
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
     minimumViewTime: 500,
@@ -82,23 +79,6 @@ export function ReadingModeScreen() {
     },
   ).current;
 
-  const onScrollToIndexFailed = useCallback(
-    (info: { index: number; averageItemLength: number }) => {
-      const offset = info.averageItemLength * info.index;
-      flatListRef.current?.scrollToOffset({ offset, animated: false });
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: info.index,
-          animated: false,
-          viewPosition: 0,
-          viewOffset: scrollViewOffset,
-        });
-        setIsPositionReady(true);
-      }, 100);
-    },
-    [scrollViewOffset],
-  );
-
   // On initial mount, scroll to saved verse position. On surah change, scroll to top.
   useEffect(() => {
     if (!hasMounted.current) {
@@ -107,21 +87,23 @@ export function ReadingModeScreen() {
       if (initialVerse.current > 1) {
         const index = Math.min(initialVerse.current - 1, verses.length - 1);
         const timer = setTimeout(() => {
-          flatListRef.current?.scrollToIndex({
-            index,
-            animated: false,
-            viewPosition: 0,
-            viewOffset: scrollViewOffset,
-          });
-          setIsPositionReady(true);
+          flashListRef.current
+            ?.scrollToIndex({
+              index,
+              animated: false,
+              viewPosition: 0,
+              viewOffset: scrollViewOffset,
+            })
+            .then(() => setIsPositionReady(true))
+            .catch(() => setIsPositionReady(true));
         }, 100);
         return () => clearTimeout(timer);
       }
       return;
     }
     // Surah change: scroll to top
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, [surahNumber, verses.length]);
+    flashListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [verses.length, scrollViewOffset]);
 
   // Scroll to target verse when navigating from bookmarks (or other external navigation)
   useEffect(() => {
@@ -131,10 +113,10 @@ export function ReadingModeScreen() {
     const targetVerse = useUIStore.getState().currentVerse;
     const index = Math.min(targetVerse - 1, verses.length - 1);
     if (index <= 0) {
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      flashListRef.current?.scrollToOffset({ offset: 0, animated: false });
     } else {
       setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
+        flashListRef.current?.scrollToIndex({
           index,
           animated: false,
           viewPosition: 0,
@@ -164,12 +146,12 @@ export function ReadingModeScreen() {
 
     const [, verseStr] = activeVerseKey.split(':');
     const verseNum = parseInt(verseStr, 10);
-    if (isNaN(verseNum)) return;
+    if (Number.isNaN(verseNum)) return;
 
     const index = verseNum - 1;
     if (index < 0 || index >= verses.length) return;
 
-    flatListRef.current?.scrollToIndex({
+    flashListRef.current?.scrollToIndex({
       index,
       animated: true,
       viewPosition: 0.3,
@@ -179,7 +161,7 @@ export function ReadingModeScreen() {
   const handleVerseJump = useCallback(
     (verseNumber: number) => {
       const index = verseNumber - 1;
-      flatListRef.current?.scrollToIndex({
+      flashListRef.current?.scrollToIndex({
         index,
         animated: true,
         viewPosition: 0,
@@ -197,7 +179,7 @@ export function ReadingModeScreen() {
     setBannerDismissed(true);
   }, [isChromeVisible, hideChrome]);
 
-  // Native: View + onTouchEnd (doesn't interfere with FlatList scroll gestures)
+  // Native: View + onTouchEnd (doesn't interfere with FlashList scroll gestures)
   // Web: Pressable + onPress (onTouchEnd doesn't fire for mouse clicks)
   const handleTouchEnd = useCallback(() => {
     if (!isScrolling.current) {
@@ -257,7 +239,7 @@ export function ReadingModeScreen() {
       </FooterGuard>
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [surahNumber, setCurrentSurah],
+    [surahNumber, setCurrentSurah, footerGuardProps],
   );
 
   if (isLoading) {
@@ -293,8 +275,8 @@ export function ReadingModeScreen() {
         style={[styles.flex, !isPositionReady && styles.hidden]}
         {...(tapContainerProps as any)}
       >
-        <FlatList
-          ref={flatListRef}
+        <FlashList
+          ref={flashListRef}
           data={verses}
           extraData={activeVerseKey}
           renderItem={renderItem}
@@ -308,11 +290,7 @@ export function ReadingModeScreen() {
           onMomentumScrollEnd={handleScrollEnd}
           viewabilityConfig={viewabilityConfig}
           onViewableItemsChanged={onViewableItemsChanged}
-          onScrollToIndexFailed={onScrollToIndexFailed}
           scrollEventThrottle={16}
-          initialNumToRender={initialRenderCount}
-          maxToRenderPerBatch={10}
-          windowSize={5}
         />
       </TapContainer>
       {isPositionReady && (

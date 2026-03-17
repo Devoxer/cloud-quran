@@ -33,11 +33,24 @@ jest.mock('@/theme/ThemeProvider', () => {
 
 jest.mock('@/theme/useUIStore', () => {
   const mockState = {
-    selectedTheme: 'system', currentMode: 'reading', fontSize: 28, currentSurah: 1,
-    currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: true, scrollVersion: 0,
-    setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-    setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-    toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+    selectedTheme: 'system',
+    currentMode: 'reading',
+    fontSize: 28,
+    currentSurah: 1,
+    currentVerse: 1,
+    lastReadTimestamp: Date.now(),
+    isChromeVisible: true,
+    scrollVersion: 0,
+    setTheme: jest.fn(),
+    setMode: jest.fn(),
+    setFontSize: jest.fn(),
+    setCurrentSurah: jest.fn(),
+    setCurrentVerse: jest.fn(),
+    navigateToVerse: jest.fn(),
+    syncReadingPosition: jest.fn(),
+    toggleChrome: jest.fn(),
+    showChrome: jest.fn(),
+    hideChrome: jest.fn(),
   };
   const useUIStore = Object.assign(
     (selector: (s: typeof mockState) => unknown) => selector(mockState),
@@ -47,12 +60,24 @@ jest.mock('@/theme/useUIStore', () => {
 });
 
 jest.mock('quran-data', () => ({
-  SURAH_METADATA: [{ number: 1, nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 }],
+  SURAH_METADATA: [
+    {
+      number: 1,
+      nameArabic: '\u0627\u0644\u0641\u0627\u062a\u062d\u0629',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
+  ],
   JUZ_METADATA: [{ number: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   HIZB_METADATA: [{ number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 }],
   TOTAL_PAGES: 604,
-  getPageForVerse: jest.fn(() => 1), getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
-  getJuzForPage: jest.fn(() => 1), getHizbForPage: jest.fn(() => 1),
+  getPageForVerse: jest.fn(() => 1),
+  getFirstVerseForPage: jest.fn(() => ({ surah: 1, verse: 1 })),
+  getJuzForPage: jest.fn(() => 1),
+  getHizbForPage: jest.fn(() => 1),
 }));
 
 import { VerseJumpModal } from './VerseJumpModal';

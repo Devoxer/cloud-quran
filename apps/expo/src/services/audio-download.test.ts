@@ -29,10 +29,9 @@ describe('AudioDownloadService', () => {
   describe('ensureDirectoryExists', () => {
     it('creates reciter directory with intermediates', async () => {
       await audioDownloadService.ensureDirectoryExists('alafasy');
-      expect(mockMakeDirectoryAsync).toHaveBeenCalledWith(
-        'file:///mock-docs/audio/alafasy/',
-        { intermediates: true },
-      );
+      expect(mockMakeDirectoryAsync).toHaveBeenCalledWith('file:///mock-docs/audio/alafasy/', {
+        intermediates: true,
+      });
     });
   });
 
@@ -41,9 +40,7 @@ describe('AudioDownloadService', () => {
       mockGetInfoAsync.mockResolvedValue({ exists: true, size: 1024 });
       const result = await audioDownloadService.isDownloaded('alafasy', 1);
       expect(result).toBe(true);
-      expect(mockGetInfoAsync).toHaveBeenCalledWith(
-        'file:///mock-docs/audio/alafasy/001.mp3',
-      );
+      expect(mockGetInfoAsync).toHaveBeenCalledWith('file:///mock-docs/audio/alafasy/001.mp3');
     });
 
     it('returns false when file does not exist', async () => {
@@ -116,17 +113,27 @@ describe('AudioDownloadService', () => {
 
     it('calls onProgress callback during download', async () => {
       const onProgress = jest.fn();
-      let capturedCallback: (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void;
-      mockCreateDownloadResumable.mockImplementation((_url: string, _path: string, _opts: object, cb: (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void) => {
-        capturedCallback = cb;
-        return {
-          downloadAsync: jest.fn().mockImplementation(async () => {
-            capturedCallback({ totalBytesWritten: 50, totalBytesExpectedToWrite: 100 });
-            return { uri: 'file:///mock-docs/audio/alafasy/001.mp3' };
-          }),
-          pauseAsync: jest.fn(),
-        };
-      });
+      let capturedCallback: (p: {
+        totalBytesWritten: number;
+        totalBytesExpectedToWrite: number;
+      }) => void;
+      mockCreateDownloadResumable.mockImplementation(
+        (
+          _url: string,
+          _path: string,
+          _opts: object,
+          cb: (p: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void,
+        ) => {
+          capturedCallback = cb;
+          return {
+            downloadAsync: jest.fn().mockImplementation(async () => {
+              capturedCallback({ totalBytesWritten: 50, totalBytesExpectedToWrite: 100 });
+              return { uri: 'file:///mock-docs/audio/alafasy/001.mp3' };
+            }),
+            pauseAsync: jest.fn(),
+          };
+        },
+      );
 
       const handle = await audioDownloadService.downloadSurah('alafasy', 1, onProgress);
       await handle!.downloadPromise;
@@ -165,10 +172,9 @@ describe('AudioDownloadService', () => {
   describe('deleteSurah', () => {
     it('deletes the local audio file', async () => {
       await audioDownloadService.deleteSurah('alafasy', 1);
-      expect(mockDeleteAsync).toHaveBeenCalledWith(
-        'file:///mock-docs/audio/alafasy/001.mp3',
-        { idempotent: true },
-      );
+      expect(mockDeleteAsync).toHaveBeenCalledWith('file:///mock-docs/audio/alafasy/001.mp3', {
+        idempotent: true,
+      });
     });
 
     it('is no-op on web platform', async () => {
@@ -186,10 +192,9 @@ describe('AudioDownloadService', () => {
   describe('deleteReciter', () => {
     it('deletes the entire reciter directory', async () => {
       await audioDownloadService.deleteReciter('alafasy');
-      expect(mockDeleteAsync).toHaveBeenCalledWith(
-        'file:///mock-docs/audio/alafasy/',
-        { idempotent: true },
-      );
+      expect(mockDeleteAsync).toHaveBeenCalledWith('file:///mock-docs/audio/alafasy/', {
+        idempotent: true,
+      });
     });
   });
 
@@ -279,17 +284,13 @@ describe('AudioDownloadService', () => {
     it('pads surah numbers correctly', async () => {
       mockGetInfoAsync.mockResolvedValue({ exists: false });
       await audioDownloadService.getLocalAudioUri('alafasy', 7);
-      expect(mockGetInfoAsync).toHaveBeenCalledWith(
-        'file:///mock-docs/audio/alafasy/007.mp3',
-      );
+      expect(mockGetInfoAsync).toHaveBeenCalledWith('file:///mock-docs/audio/alafasy/007.mp3');
     });
 
     it('handles three-digit surah numbers', async () => {
       mockGetInfoAsync.mockResolvedValue({ exists: false });
       await audioDownloadService.getLocalAudioUri('alafasy', 114);
-      expect(mockGetInfoAsync).toHaveBeenCalledWith(
-        'file:///mock-docs/audio/alafasy/114.mp3',
-      );
+      expect(mockGetInfoAsync).toHaveBeenCalledWith('file:///mock-docs/audio/alafasy/114.mp3');
     });
   });
 });

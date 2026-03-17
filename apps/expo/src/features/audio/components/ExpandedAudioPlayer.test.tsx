@@ -118,13 +118,16 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 import { Alert } from 'react-native';
-import { ExpandedAudioPlayer } from './ExpandedAudioPlayer';
 import { getNextVerseKey, getPreviousVerseKey } from '@/features/audio/stores/useAudioStore';
+import { ExpandedAudioPlayer } from './ExpandedAudioPlayer';
 
 const mockedGetNext = getNextVerseKey as jest.MockedFunction<typeof getNextVerseKey>;
 const mockedGetPrev = getPreviousVerseKey as jest.MockedFunction<typeof getPreviousVerseKey>;
 
-interface MockElement { type: string; props: Record<string, unknown> }
+interface MockElement {
+  type: string;
+  props: Record<string, unknown>;
+}
 
 function findElements(element: unknown, predicate: (el: MockElement) => boolean): MockElement[] {
   const results: MockElement[] = [];
@@ -206,9 +209,13 @@ describe('ExpandedAudioPlayer', () => {
     mockAudioState.playbackSpeed = 1.0;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
     // Find pressable elements that are speed buttons
-    const speedButtons = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityRole === 'button' &&
-      typeof el.props?.testID === 'string' && (el.props.testID as string).startsWith('speed-'),
+    const speedButtons = findElements(
+      element,
+      (el) =>
+        el.type === 'Pressable' &&
+        el.props?.accessibilityRole === 'button' &&
+        typeof el.props?.testID === 'string' &&
+        (el.props.testID as string).startsWith('speed-'),
     );
     expect(speedButtons.length).toBe(7);
     // The 1.0x button should have active style
@@ -218,8 +225,9 @@ describe('ExpandedAudioPlayer', () => {
 
   test('calls setSpeed when a speed button is pressed', () => {
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const speedButtons = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'speed-1.5',
+    const speedButtons = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'speed-1.5',
     );
     expect(speedButtons.length).toBe(1);
     (speedButtons[0].props.onPress as () => void)();
@@ -229,22 +237,29 @@ describe('ExpandedAudioPlayer', () => {
   test('shows pause icon when playing', () => {
     mockAudioState.isPlaying = true;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const icons = findElements(element, (el) => el.type === 'Ionicons' && el.props?.name === 'pause-circle');
+    const icons = findElements(
+      element,
+      (el) => el.type === 'Ionicons' && el.props?.name === 'pause-circle',
+    );
     expect(icons.length).toBeGreaterThan(0);
   });
 
   test('shows play icon when paused', () => {
     mockAudioState.isPlaying = false;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const icons = findElements(element, (el) => el.type === 'Ionicons' && el.props?.name === 'play-circle');
+    const icons = findElements(
+      element,
+      (el) => el.type === 'Ionicons' && el.props?.name === 'play-circle',
+    );
     expect(icons.length).toBeGreaterThan(0);
   });
 
   test('calls pause on play/pause button press when playing', () => {
     mockAudioState.isPlaying = true;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Pause',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Pause',
     );
     expect(btn.length).toBe(1);
     (btn[0].props.onPress as () => void)();
@@ -255,8 +270,9 @@ describe('ExpandedAudioPlayer', () => {
     mockAudioState.isPlaying = false;
     mockAudioState.durationMs = 120000;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
     );
     expect(btn.length).toBe(1);
     (btn[0].props.onPress as () => void)();
@@ -268,8 +284,9 @@ describe('ExpandedAudioPlayer', () => {
     mockAudioState.isPlaying = false;
     mockAudioState.durationMs = 0;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
     );
     expect(btn.length).toBe(1);
     (btn[0].props.onPress as () => void)();
@@ -280,8 +297,9 @@ describe('ExpandedAudioPlayer', () => {
   test('next verse button calls seekToVerse with next key', () => {
     mockedGetNext.mockReturnValueOnce('2:6');
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Next verse',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Next verse',
     );
     expect(btn.length).toBe(1);
     (btn[0].props.onPress as () => void)();
@@ -291,8 +309,9 @@ describe('ExpandedAudioPlayer', () => {
   test('previous verse button calls seekToVerse with previous key', () => {
     mockedGetPrev.mockReturnValueOnce('2:4');
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Previous verse',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Previous verse',
     );
     expect(btn.length).toBe(1);
     (btn[0].props.onPress as () => void)();
@@ -307,8 +326,9 @@ describe('ExpandedAudioPlayer', () => {
 
   test('close button calls toggleExpandedPlayer', () => {
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const closeBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Close player',
+    const closeBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Close player',
     );
     expect(closeBtn.length).toBe(1);
     (closeBtn[0].props.onPress as () => void)();
@@ -318,8 +338,9 @@ describe('ExpandedAudioPlayer', () => {
   test('shows Download All button when downloadCount < 114', () => {
     mockDownloadStoreState.downloadCount = 5;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'download-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'download-all-button',
     );
     expect(btn.length).toBe(1);
   });
@@ -328,8 +349,9 @@ describe('ExpandedAudioPlayer', () => {
     mockDownloadStoreState.downloadCount = 10;
     const alertSpy = jest.spyOn(Alert, 'alert');
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'download-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'download-all-button',
     );
     (btn[0].props.onPress as () => void)();
     // 104 remaining out of 114 total → ~1.4 GB estimate
@@ -350,8 +372,9 @@ describe('ExpandedAudioPlayer', () => {
     mockDownloadStoreState.downloadCount = 10;
     const alertSpy = jest.spyOn(Alert, 'alert');
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'download-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'download-all-button',
     );
     (btn[0].props.onPress as () => void)();
     const buttons = alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[];
@@ -364,8 +387,9 @@ describe('ExpandedAudioPlayer', () => {
   test('hides Download All button when all 114 downloaded', () => {
     mockDownloadStoreState.downloadCount = 114;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'download-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'download-all-button',
     );
     expect(btn.length).toBe(0);
   });
@@ -373,8 +397,9 @@ describe('ExpandedAudioPlayer', () => {
   test('shows Delete All button when downloadCount > 0', () => {
     mockDownloadStoreState.downloadCount = 10;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
     );
     expect(btn.length).toBe(1);
   });
@@ -382,8 +407,9 @@ describe('ExpandedAudioPlayer', () => {
   test('hides Delete All button when downloadCount is 0', () => {
     mockDownloadStoreState.downloadCount = 0;
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
     );
     expect(btn.length).toBe(0);
   });
@@ -392,8 +418,9 @@ describe('ExpandedAudioPlayer', () => {
     mockDownloadStoreState.downloadCount = 10;
     const alertSpy = jest.spyOn(Alert, 'alert');
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
     );
     (btn[0].props.onPress as () => void)();
     expect(alertSpy).toHaveBeenCalledWith(
@@ -411,8 +438,9 @@ describe('ExpandedAudioPlayer', () => {
     mockDownloadStoreState.downloadCount = 10;
     const alertSpy = jest.spyOn(Alert, 'alert');
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const btn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
+    const btn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'delete-all-button',
     );
     (btn[0].props.onPress as () => void)();
     // Simulate pressing "Delete All" in the alert
@@ -443,15 +471,17 @@ describe('ExpandedAudioPlayer', () => {
 
   test('renders tappable reciter row with chevron', () => {
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const reciterBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Select reciter',
+    const reciterBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Select reciter',
     );
     expect(reciterBtn.length).toBe(1);
     const text = flattenText(reciterBtn[0]);
     expect(text).toContain('Mishary Rashid Al-Afasy');
     // Should have a chevron icon
-    const chevron = findElements(reciterBtn[0], (el) =>
-      el.type === 'Ionicons' && el.props?.name === 'chevron-forward',
+    const chevron = findElements(
+      reciterBtn[0],
+      (el) => el.type === 'Ionicons' && el.props?.name === 'chevron-forward',
     );
     expect(chevron.length).toBe(1);
   });
@@ -465,8 +495,9 @@ describe('ExpandedAudioPlayer', () => {
 
   test('stop button calls stop() and toggleExpandedPlayer', () => {
     const element = (ExpandedAudioPlayer as any)() as unknown as MockElement;
-    const stopBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.testID === 'stop-button',
+    const stopBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.testID === 'stop-button',
     );
     expect(stopBtn.length).toBe(1);
     (stopBtn[0].props.onPress as () => void)();

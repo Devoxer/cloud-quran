@@ -19,16 +19,10 @@ interface Manifest {
 }
 
 export interface IAudioTimingService {
-  getVerseTimings(
-    surahNumber: number,
-    reciterId: string,
-  ): Promise<VerseTiming[]>;
+  getVerseTimings(surahNumber: number, reciterId: string): Promise<VerseTiming[]>;
 }
 
-export function findActiveVerse(
-  timings: VerseTiming[],
-  positionMs: number,
-): string | null {
+export function findActiveVerse(timings: VerseTiming[], positionMs: number): string | null {
   if (!timings.length) return null;
   let lo = 0;
   let hi = timings.length - 1;
@@ -44,10 +38,7 @@ export function findActiveVerse(
 class AudioTimingService implements IAudioTimingService {
   private manifestCache = new Map<string, Manifest>();
 
-  async getVerseTimings(
-    surahNumber: number,
-    reciterId: string,
-  ): Promise<VerseTiming[]> {
+  async getVerseTimings(surahNumber: number, reciterId: string): Promise<VerseTiming[]> {
     try {
       let manifest = this.manifestCache.get(reciterId);
       if (!manifest) {

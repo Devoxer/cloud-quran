@@ -1,7 +1,6 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
 import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
-
-import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
 import { useBookmarkStore } from '@/features/bookmarks/useBookmarkStore';
@@ -50,18 +49,13 @@ export const VerseRow = React.memo(function VerseRow({
   // Tap-to-seek only when setting is on AND audio is already loaded
   const canSeek = tapToSeek && currentSurah !== null;
 
-  const handleVerseTap = canSeek
-    ? () => seekToVerse(`${surahNumber}:${verseNumber}`)
-    : undefined;
+  const handleVerseTap = canSeek ? () => seekToVerse(`${surahNumber}:${verseNumber}`) : undefined;
 
   const Container = canSeek ? Pressable : View;
 
   return (
     <Container
-      style={[
-        styles.container,
-        isActive && { backgroundColor: tokens.accent.highlight },
-      ]}
+      style={[styles.container, isActive && { backgroundColor: tokens.accent.highlight }]}
       testID={isActive ? 'verse-row-highlighted' : undefined}
       {...(canSeek ? { onPress: handleVerseTap, accessibilityRole: 'button' as const } : {})}
       accessibilityLabel={`Verse ${verseNumber}`}

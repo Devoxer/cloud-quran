@@ -54,17 +54,13 @@
       [
         "expo-font",
         {
-          "fonts": [
-            "./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf"
-          ]
+          "fonts": ["./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf"]
         }
       ],
       [
         "expo-asset",
         {
-          "assets": [
-            "./src/data/quran.db"
-          ]
+          "assets": ["./src/data/quran.db"]
         }
       ],
       "./plugins/withAutoSigning"

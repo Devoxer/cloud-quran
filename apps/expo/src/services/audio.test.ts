@@ -32,9 +32,9 @@ const mockCreateAudioPlayer = jest.fn(() => mockPlayer);
 jest.mock('expo-audio', () => ({
   __esModule: true,
   createAudioPlayer: (...args: unknown[]) => {
-      mockCreateAudioPlayer.apply(null, args);
-      return mockPlayer;
-    },
+    mockCreateAudioPlayer.apply(null, args);
+    return mockPlayer;
+  },
   setAudioModeAsync: (opts: unknown) => mockSetAudioModeAsync(opts),
 }));
 
@@ -49,7 +49,9 @@ describe('ExpoAudioService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPlaybackRate = 1;
-    mockSetPlaybackRate.mockImplementation((val: number) => { mockPlaybackRate = val; });
+    mockSetPlaybackRate.mockImplementation((val: number) => {
+      mockPlaybackRate = val;
+    });
     audioService.dispose();
   });
 
@@ -70,10 +72,7 @@ describe('ExpoAudioService', () => {
 
     it('registers a playbackStatusUpdate listener', async () => {
       await audioService.play();
-      expect(mockAddListener).toHaveBeenCalledWith(
-        'playbackStatusUpdate',
-        expect.any(Function),
-      );
+      expect(mockAddListener).toHaveBeenCalledWith('playbackStatusUpdate', expect.any(Function));
     });
 
     it('only initializes once', async () => {
@@ -431,30 +430,16 @@ describe('Web MediaSession', () => {
   it('registers all MediaSession action handlers', () => {
     const handler = jest.fn();
     webService.onRemoteCommand(handler);
-    expect(mockSetActionHandler).toHaveBeenCalledWith(
-      'play',
-      expect.any(Function),
-    );
-    expect(mockSetActionHandler).toHaveBeenCalledWith(
-      'pause',
-      expect.any(Function),
-    );
-    expect(mockSetActionHandler).toHaveBeenCalledWith(
-      'nexttrack',
-      expect.any(Function),
-    );
-    expect(mockSetActionHandler).toHaveBeenCalledWith(
-      'previoustrack',
-      expect.any(Function),
-    );
+    expect(mockSetActionHandler).toHaveBeenCalledWith('play', expect.any(Function));
+    expect(mockSetActionHandler).toHaveBeenCalledWith('pause', expect.any(Function));
+    expect(mockSetActionHandler).toHaveBeenCalledWith('nexttrack', expect.any(Function));
+    expect(mockSetActionHandler).toHaveBeenCalledWith('previoustrack', expect.any(Function));
   });
 
   it('forwards play command to handler', () => {
     const handler = jest.fn();
     webService.onRemoteCommand(handler);
-    const playCall = mockSetActionHandler.mock.calls.find(
-      (c: any[]) => c[0] === 'play',
-    );
+    const playCall = mockSetActionHandler.mock.calls.find((c: any[]) => c[0] === 'play');
     playCall[1]();
     expect(handler).toHaveBeenCalledWith('play');
   });
@@ -462,9 +447,7 @@ describe('Web MediaSession', () => {
   it('forwards nexttrack as next command', () => {
     const handler = jest.fn();
     webService.onRemoteCommand(handler);
-    const nextCall = mockSetActionHandler.mock.calls.find(
-      (c: any[]) => c[0] === 'nexttrack',
-    );
+    const nextCall = mockSetActionHandler.mock.calls.find((c: any[]) => c[0] === 'nexttrack');
     nextCall[1]();
     expect(handler).toHaveBeenCalledWith('next');
   });
@@ -472,9 +455,7 @@ describe('Web MediaSession', () => {
   it('forwards previoustrack as previous command', () => {
     const handler = jest.fn();
     webService.onRemoteCommand(handler);
-    const prevCall = mockSetActionHandler.mock.calls.find(
-      (c: any[]) => c[0] === 'previoustrack',
-    );
+    const prevCall = mockSetActionHandler.mock.calls.find((c: any[]) => c[0] === 'previoustrack');
     prevCall[1]();
     expect(handler).toHaveBeenCalledWith('previous');
   });

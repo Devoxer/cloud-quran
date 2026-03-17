@@ -44,12 +44,25 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
 
 const mockToggleExpandedPlayer = jest.fn();
 const mockUIState = {
-  selectedTheme: 'system' as string, currentMode: 'reading' as string, fontSize: 28,
-  currentSurah: 1, currentVerse: 1, lastReadTimestamp: Date.now(), isChromeVisible: true,
-  isExpandedPlayerVisible: false, scrollVersion: 0,
-  setTheme: jest.fn(), setMode: jest.fn(), setFontSize: jest.fn(), setCurrentSurah: jest.fn(),
-  setCurrentVerse: jest.fn(), navigateToVerse: jest.fn(), syncReadingPosition: jest.fn(),
-  toggleChrome: jest.fn(), showChrome: jest.fn(), hideChrome: jest.fn(),
+  selectedTheme: 'system' as string,
+  currentMode: 'reading' as string,
+  fontSize: 28,
+  currentSurah: 1,
+  currentVerse: 1,
+  lastReadTimestamp: Date.now(),
+  isChromeVisible: true,
+  isExpandedPlayerVisible: false,
+  scrollVersion: 0,
+  setTheme: jest.fn(),
+  setMode: jest.fn(),
+  setFontSize: jest.fn(),
+  setCurrentSurah: jest.fn(),
+  setCurrentVerse: jest.fn(),
+  navigateToVerse: jest.fn(),
+  syncReadingPosition: jest.fn(),
+  toggleChrome: jest.fn(),
+  showChrome: jest.fn(),
+  hideChrome: jest.fn(),
   toggleExpandedPlayer: mockToggleExpandedPlayer,
 };
 
@@ -63,7 +76,15 @@ jest.mock('@/theme/useUIStore', () => {
 
 jest.mock('quran-data', () => ({
   SURAH_METADATA: [
-    { number: 1, nameArabic: 'الفاتحة', nameEnglish: 'The Opening', nameTransliteration: 'Al-Fatihah', verseCount: 7, revelationType: 'meccan', order: 5 },
+    {
+      number: 1,
+      nameArabic: 'الفاتحة',
+      nameEnglish: 'The Opening',
+      nameTransliteration: 'Al-Fatihah',
+      verseCount: 7,
+      revelationType: 'meccan',
+      order: 5,
+    },
   ],
 }));
 
@@ -73,9 +94,12 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-import { MiniPlayerBar, MINI_PLAYER_HEIGHT } from './MiniPlayerBar';
+import { MINI_PLAYER_HEIGHT, MiniPlayerBar } from './MiniPlayerBar';
 
-interface MockElement { type: string; props: Record<string, unknown> }
+interface MockElement {
+  type: string;
+  props: Record<string, unknown>;
+}
 
 function findElements(element: unknown, predicate: (el: MockElement) => boolean): MockElement[] {
   const results: MockElement[] = [];
@@ -147,8 +171,9 @@ describe('MiniPlayerBar', () => {
   test('calls pause when play button pressed during playback', () => {
     mockAudioState.isPlaying = true;
     const element = (MiniPlayerBar as any)() as unknown as MockElement;
-    const playBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Pause',
+    const playBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Pause',
     );
     expect(playBtn.length).toBe(1);
     (playBtn[0].props.onPress as () => void)();
@@ -159,8 +184,9 @@ describe('MiniPlayerBar', () => {
     mockAudioState.isPlaying = false;
     mockAudioState.durationMs = 120000;
     const element = (MiniPlayerBar as any)() as unknown as MockElement;
-    const playBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
+    const playBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
     );
     expect(playBtn.length).toBe(1);
     (playBtn[0].props.onPress as () => void)();
@@ -172,8 +198,9 @@ describe('MiniPlayerBar', () => {
     mockAudioState.isPlaying = false;
     mockAudioState.durationMs = 0;
     const element = (MiniPlayerBar as any)() as unknown as MockElement;
-    const playBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
+    const playBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Play',
     );
     expect(playBtn.length).toBe(1);
     (playBtn[0].props.onPress as () => void)();
@@ -187,8 +214,9 @@ describe('MiniPlayerBar', () => {
 
   test('tapping info area calls toggleExpandedPlayer', () => {
     const element = (MiniPlayerBar as any)() as unknown as MockElement;
-    const infoBtn = findElements(element, (el) =>
-      el.type === 'Pressable' && el.props?.accessibilityLabel === 'Open audio player',
+    const infoBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Open audio player',
     );
     expect(infoBtn.length).toBe(1);
     (infoBtn[0].props.onPress as () => void)();
@@ -202,7 +230,9 @@ describe('MiniPlayerBar', () => {
     const progressBar = findElements(element, (el) => el.props?.testID === 'mini-progress-bar');
     expect(progressBar.length).toBe(1);
     // Progress fill should exist as a child
-    const children = Array.isArray(progressBar[0].props.children) ? progressBar[0].props.children : [progressBar[0].props.children];
+    const children = Array.isArray(progressBar[0].props.children)
+      ? progressBar[0].props.children
+      : [progressBar[0].props.children];
     expect(children.length).toBeGreaterThan(0);
   });
 

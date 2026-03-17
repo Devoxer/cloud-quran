@@ -26,8 +26,6 @@ describe('formatNowPlayingTitle', () => {
   });
 
   it('falls back to generic name for invalid surah number', () => {
-    expect(formatNowPlayingTitle(999, '999:1', 'Reciter')).toBe(
-      'Surah 999 : 1 — Reciter',
-    );
+    expect(formatNowPlayingTitle(999, '999:1', 'Reciter')).toBe('Surah 999 : 1 — Reciter');
   });
 });

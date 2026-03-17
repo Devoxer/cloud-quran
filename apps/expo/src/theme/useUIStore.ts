@@ -77,10 +77,8 @@ export const useUIStore = create<UIState>()(
       setFirstVisibleVerse: (verseKey) => set({ firstVisibleVerse: verseKey }),
       toggleExpandedPlayer: () =>
         set((state) => ({ isExpandedPlayerVisible: !state.isExpandedPlayerVisible })),
-      toggleAutoFollowAudio: () =>
-        set((state) => ({ autoFollowAudio: !state.autoFollowAudio })),
-      toggleTapToSeek: () =>
-        set((state) => ({ tapToSeek: !state.tapToSeek })),
+      toggleAutoFollowAudio: () => set((state) => ({ autoFollowAudio: !state.autoFollowAudio })),
+      toggleTapToSeek: () => set((state) => ({ tapToSeek: !state.tapToSeek })),
     }),
     {
       name: 'ui-state',

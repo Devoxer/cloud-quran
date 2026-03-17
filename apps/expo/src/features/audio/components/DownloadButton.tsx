@@ -1,7 +1,5 @@
-import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useDownloadStore } from '@/features/audio/stores/useDownloadStore';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,19 +10,11 @@ interface DownloadButtonProps {
   size?: number;
 }
 
-export function DownloadButton({
-  reciterId,
-  surahNumber,
-  size = 24,
-}: DownloadButtonProps) {
+export function DownloadButton({ reciterId, surahNumber, size = 24 }: DownloadButtonProps) {
   const { tokens } = useTheme();
   const downloadStatus =
-    useDownloadStore(
-      (s) => s.downloads[`${reciterId}/${surahNumber}`],
-    ) ?? 'none';
-  const progress = useDownloadStore((s) =>
-    s.getProgress(reciterId, surahNumber),
-  );
+    useDownloadStore((s) => s.downloads[`${reciterId}/${surahNumber}`]) ?? 'none';
+  const progress = useDownloadStore((s) => s.getProgress(reciterId, surahNumber));
   const startDownload = useDownloadStore((s) => s.startDownload);
   const deleteSurah = useDownloadStore((s) => s.deleteSurah);
 
@@ -46,8 +36,7 @@ export function DownloadButton({
         ? 'cloud-download-outline'
         : 'download-outline';
 
-  const iconColor =
-    downloadStatus === 'downloaded' ? tokens.accent.audio : tokens.text.ui;
+  const iconColor = downloadStatus === 'downloaded' ? tokens.accent.audio : tokens.text.ui;
 
   return (
     <Pressable

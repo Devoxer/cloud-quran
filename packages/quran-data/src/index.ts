@@ -1,11 +1,11 @@
-export { TOTAL_PAGES, TOTAL_VERSES, SURAH_COUNT } from './constants';
+export { SURAH_COUNT, TOTAL_PAGES, TOTAL_VERSES } from './constants';
 export { VERSE_HASHES } from './hashes';
-export type { JuzMetadata, HizbMetadata } from './juz-hizb-metadata';
+export type { HizbMetadata, JuzMetadata } from './juz-hizb-metadata';
 export {
-  JUZ_METADATA,
-  HIZB_METADATA,
-  getJuzForPage,
   getHizbForPage,
+  getJuzForPage,
+  HIZB_METADATA,
+  JUZ_METADATA,
 } from './juz-hizb-metadata';
 export type { MushafLine, MushafPageLayout, MushafWord } from './mushaf-layout';
 export type { SurahMetadata } from './surah-metadata';

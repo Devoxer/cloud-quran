@@ -1,10 +1,8 @@
+import { SURAH_COUNT } from 'quran-data';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-
-import { SURAH_COUNT } from 'quran-data';
-
-import { mmkvStorage } from '@/services/mmkv';
 import { audioDownloadService } from '@/services/audio-download';
+import { mmkvStorage } from '@/services/mmkv';
 
 type DownloadStatus = 'none' | 'downloading' | 'downloaded';
 
@@ -16,10 +14,7 @@ interface DownloadState {
   activeDownloads: string[];
   storageUsageBytes: Record<string, number>;
   // Actions
-  startDownload: (
-    reciterId: string,
-    surahNumber: number,
-  ) => Promise<void>;
+  startDownload: (reciterId: string, surahNumber: number) => Promise<void>;
   downloadAllForReciter: (reciterId: string) => Promise<void>;
   cancelDownload: (reciterId: string, surahNumber: number) => Promise<void>;
   cancelBatchDownload: () => void;
@@ -38,10 +33,7 @@ function makeKey(reciterId: string, surahNumber: number): string {
 }
 
 // Track active download resumables for cancel support
-const activeResumables = new Map<
-  string,
-  { pauseAsync: () => Promise<void> }
->();
+const activeResumables = new Map<string, { pauseAsync: () => Promise<void> }>();
 
 // Flag to cancel batch download-all operations
 let batchCancelled = false;
@@ -128,9 +120,7 @@ export const useDownloadStore = create<DownloadState>()(
         for (let i = 0; i < toDownload.length; i += CONCURRENCY) {
           if (batchCancelled) break;
           const batch = toDownload.slice(i, i + CONCURRENCY);
-          await Promise.all(
-            batch.map((surah) => get().startDownload(reciterId, surah)),
-          );
+          await Promise.all(batch.map((surah) => get().startDownload(reciterId, surah)));
         }
       },
 
@@ -200,9 +190,7 @@ export const useDownloadStore = create<DownloadState>()(
       },
 
       isDownloaded: (reciterId, surahNumber) => {
-        return (
-          get().downloads[makeKey(reciterId, surahNumber)] === 'downloaded'
-        );
+        return get().downloads[makeKey(reciterId, surahNumber)] === 'downloaded';
       },
 
       getProgress: (reciterId, surahNumber) => {
@@ -211,8 +199,7 @@ export const useDownloadStore = create<DownloadState>()(
 
       getReciterDownloadCount: (reciterId) => {
         return Object.entries(get().downloads).filter(
-          ([key, status]) =>
-            key.startsWith(`${reciterId}/`) && status === 'downloaded',
+          ([key, status]) => key.startsWith(`${reciterId}/`) && status === 'downloaded',
         ).length;
       },
     }),
