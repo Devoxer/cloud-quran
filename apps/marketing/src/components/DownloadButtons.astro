@@ -1,0 +1,121 @@
+---
+interface Props {
+  layout?: 'horizontal' | 'vertical';
+}
+
+const { layout = 'horizontal' } = Astro.props;
+
+const R2_BASE_URL = import.meta.env.PUBLIC_R2_URL ?? 'https://downloads.cloudquran.app';
+const WEB_APP_URL = 'https://app.cloudquran.app';
+
+const downloads = {
+  ios: 'https://apps.apple.com/app/cloud-quran/id0000000000',
+  android: 'https://play.google.com/store/apps/details?id=app.cloudquran',
+  macOs: `${R2_BASE_URL}/desktop/latest/cloud-quran-mac.dmg`,
+  windows: `${R2_BASE_URL}/desktop/latest/cloud-quran-win.exe`,
+  linux: `${R2_BASE_URL}/desktop/latest/cloud-quran-linux.AppImage`,
+  web: WEB_APP_URL,
+};
+---
+
+<div class:list={['download-buttons', layout]}>
+  <div class="button-group">
+    <h3>Mobile</h3>
+    <div class="buttons">
+      <a href={downloads.ios} class="btn btn-primary" target="_blank" rel="noopener">
+        iOS App Store
+      </a>
+      <a href={downloads.android} class="btn btn-primary" target="_blank" rel="noopener">
+        Google Play
+      </a>
+    </div>
+  </div>
+
+  <div class="button-group">
+    <h3>Desktop</h3>
+    <div class="buttons">
+      <a href={downloads.macOs} class="btn btn-secondary">
+        macOS (.dmg)
+      </a>
+      <a href={downloads.windows} class="btn btn-secondary">
+        Windows (.exe)
+      </a>
+      <a href={downloads.linux} class="btn btn-secondary">
+        Linux (.AppImage)
+      </a>
+    </div>
+  </div>
+
+  <div class="button-group">
+    <h3>Web</h3>
+    <div class="buttons">
+      <a href={downloads.web} class="btn btn-accent" target="_blank" rel="noopener">
+        Try on Web
+      </a>
+    </div>
+  </div>
+</div>
+
+<style>
+  .download-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .download-buttons.horizontal {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .button-group h3 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.5rem;
+  }
+
+  .buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+
+  .btn:hover {
+    opacity: 0.85;
+    text-decoration: none;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .btn-secondary {
+    background: var(--color-text);
+    color: white;
+  }
+
+  .btn-accent {
+    background: var(--color-accent);
+    color: white;
+  }
+
+  .btn-icon {
+    font-size: 1.1rem;
+  }
+</style>

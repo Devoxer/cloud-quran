@@ -69,6 +69,13 @@ export const typography = {
     fontWeight: '400' as const,
     lineHeightMultiplier: 1.3,
   },
+  transliteration: {
+    fontFamily: 'System',
+    fontSize: 14,
+    fontWeight: '400' as const,
+    fontStyle: 'italic' as const,
+    lineHeightMultiplier: 1.5,
+  },
 } as const;
 
 export const spacing = {

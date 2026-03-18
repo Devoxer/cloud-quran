@@ -1,3 +1,5 @@
+const mockShareFn = jest.fn().mockResolvedValue({ action: 'sharedAction' });
+
 jest.mock('react', () => ({
   ...jest.requireActual('react'),
   useCallback: (fn: unknown) => fn,
@@ -31,6 +33,8 @@ const mockUIState = {
   toggleChrome: jest.fn(),
   showChrome: jest.fn(),
   hideChrome: jest.fn(),
+  showTransliteration: false,
+  toggleTransliteration: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -82,6 +86,14 @@ jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Io
 jest.mock('expo-router', () => ({
   useRouter: () => ({ navigate: mockNavigate, push: jest.fn(), back: jest.fn() }),
 }));
+
+jest.mock('@/features/sync/components/OfflineIndicator', () => ({
+  OfflineIndicator: () => null,
+}));
+
+// Inject Share mock onto the auto-mocked react-native module
+const RN = require('react-native');
+RN.Share = { share: mockShareFn };
 
 import { ReadingChromeOverlay } from './ReadingChromeOverlay';
 
@@ -314,5 +326,140 @@ describe('ReadingChromeOverlay', () => {
       return text.includes('Verse');
     });
     expect(verseCaption).toBeDefined();
+  });
+
+  test('renders transliteration toggle button in reading mode', () => {
+    mockUIState.currentMode = 'reading';
+    const element = renderOverlay();
+    const translitButton = findElements(
+      element,
+      (el) =>
+        el.type === 'Pressable' &&
+        typeof el.props?.accessibilityLabel === 'string' &&
+        (el.props.accessibilityLabel as string).includes('transliteration'),
+    );
+    expect(translitButton.length).toBe(1);
+  });
+
+  test('transliteration toggle button not shown in mushaf mode', () => {
+    mockUIState.currentMode = 'mushaf';
+    const element = renderOverlay();
+    const translitButton = findElements(
+      element,
+      (el) =>
+        el.type === 'Pressable' &&
+        typeof el.props?.accessibilityLabel === 'string' &&
+        (el.props.accessibilityLabel as string).includes('transliteration'),
+    );
+    expect(translitButton.length).toBe(0);
+  });
+
+  test('transliteration toggle calls toggleTransliteration on press', () => {
+    mockUIState.currentMode = 'reading';
+    mockUIState.toggleTransliteration.mockClear();
+    const element = renderOverlay();
+    const translitButton = findElements(
+      element,
+      (el) =>
+        el.type === 'Pressable' &&
+        typeof el.props?.accessibilityLabel === 'string' &&
+        (el.props.accessibilityLabel as string).includes('transliteration'),
+    )[0];
+    (translitButton.props.onPress as () => void)();
+    expect(mockUIState.toggleTransliteration).toHaveBeenCalled();
+  });
+
+  test('renders share button', () => {
+    const element = renderOverlay();
+    const shareBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Share verse',
+    );
+    expect(shareBtn.length).toBe(1);
+  });
+
+  test('share button has share-outline icon', () => {
+    const element = renderOverlay();
+    const icons = findElements(element, (el) => el.type === 'Ionicons');
+    const shareIcon = icons.find((i) => i.props.name === 'share-outline');
+    expect(shareIcon).toBeDefined();
+  });
+
+  test('share handler calls Share.share with correct URL and message (iOS)', async () => {
+    mockUIState.currentSurah = 2;
+    mockUIState.currentVerse = 255;
+
+    const quranData = require('quran-data');
+    quranData.SURAH_METADATA[1] = {
+      number: 2,
+      nameArabic: 'البقرة',
+      nameEnglish: 'The Cow',
+      nameTransliteration: 'Al-Baqarah',
+      verseCount: 286,
+      revelationType: 'medinan',
+      order: 87,
+    };
+
+    RN.Platform.OS = 'ios';
+    mockShareFn.mockClear();
+
+    const element = renderOverlay();
+    const shareBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Share verse',
+    );
+    await (shareBtn[0].props.onPress as () => Promise<void>)();
+    expect(mockShareFn).toHaveBeenCalledWith({
+      url: 'https://cloudquran.app/quran/2/255',
+      message: 'The Cow (البقرة), Verse 255 — Cloud Quran',
+    });
+
+    RN.Platform.OS = 'ios';
+    mockUIState.currentSurah = 1;
+    mockUIState.currentVerse = 1;
+  });
+
+  test('share handler calls Share.share with URL in message on Android', async () => {
+    mockUIState.currentSurah = 2;
+    mockUIState.currentVerse = 255;
+
+    const quranData = require('quran-data');
+    quranData.SURAH_METADATA[1] = {
+      number: 2,
+      nameArabic: 'البقرة',
+      nameEnglish: 'The Cow',
+      nameTransliteration: 'Al-Baqarah',
+      verseCount: 286,
+      revelationType: 'medinan',
+      order: 87,
+    };
+
+    RN.Platform.OS = 'android';
+    mockShareFn.mockClear();
+
+    const element = renderOverlay();
+    const shareBtn = findElements(
+      element,
+      (el) => el.type === 'Pressable' && el.props?.accessibilityLabel === 'Share verse',
+    );
+    await (shareBtn[0].props.onPress as () => Promise<void>)();
+    expect(mockShareFn).toHaveBeenCalledWith({
+      message: 'The Cow (البقرة), Verse 255 — Cloud Quran\nhttps://cloudquran.app/quran/2/255',
+    });
+
+    RN.Platform.OS = 'ios';
+    mockUIState.currentSurah = 1;
+    mockUIState.currentVerse = 1;
+  });
+
+  test('transliteration toggle shows accent color when active', () => {
+    mockUIState.currentMode = 'reading';
+    mockUIState.showTransliteration = true;
+    const element = renderOverlay();
+    const icons = findElements(element, (el) => el.type === 'Ionicons' && el.props?.name === 'text');
+    expect(icons.length).toBeGreaterThanOrEqual(1);
+    const { themes } = require('@/theme/tokens');
+    expect(icons[0].props.color).toBe(themes.light.accent.audio);
+    mockUIState.showTransliteration = false;
   });
 });

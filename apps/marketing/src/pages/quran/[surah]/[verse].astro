@@ -1,0 +1,123 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import SEOHead from '../../../components/SEOHead.astro';
+import VerseDisplay from '../../../components/VerseDisplay.astro';
+import { getVerseData, getTafsirExcerpt, SURAH_METADATA } from '../../../data/quran';
+
+export function getStaticPaths() {
+  const paths = [];
+  for (const surah of SURAH_METADATA) {
+    for (let verse = 1; verse <= surah.verseCount; verse++) {
+      paths.push({
+        params: { surah: String(surah.number), verse: String(verse) },
+        props: { surahMeta: surah },
+      });
+    }
+  }
+  return paths;
+}
+
+const { surah, verse } = Astro.params;
+const { surahMeta } = Astro.props;
+const surahNum = Number(surah);
+const verseNum = Number(verse);
+
+const data = getVerseData(surahNum, verseNum);
+const tafsirExcerpt = getTafsirExcerpt(data.tafsir);
+const translationExcerpt = data.translation.slice(0, 155);
+
+const title = `${surahMeta.nameEnglish} - ${surahMeta.nameTransliteration} (${surahMeta.nameArabic}) - Verse ${verse} | Cloud Quran`;
+const description = translationExcerpt;
+const canonicalUrl = `https://cloudquran.app/quran/${surah}/${verse}`;
+
+// Compute prev/next verse links
+const totalVerses = surahMeta.verseCount;
+let prevUrl: string | null = null;
+let nextUrl: string | null = null;
+
+if (verseNum > 1) {
+  prevUrl = `/quran/${surah}/${verseNum - 1}`;
+} else if (surahNum > 1) {
+  const prevSurah = SURAH_METADATA[surahNum - 2];
+  prevUrl = `/quran/${prevSurah.number}/${prevSurah.verseCount}`;
+}
+
+if (verseNum < totalVerses) {
+  nextUrl = `/quran/${surah}/${verseNum + 1}`;
+} else if (surahNum < 114) {
+  nextUrl = `/quran/${surahNum + 1}/1`;
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: title,
+  description: data.translation,
+  url: canonicalUrl,
+  publisher: {
+    '@type': 'Organization',
+    name: 'Cloud Quran',
+    url: 'https://cloudquran.app',
+  },
+  inLanguage: ['ar', 'en'],
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'Cloud Quran',
+    url: 'https://cloudquran.app',
+  },
+};
+---
+
+<BaseLayout title={title} description={description}>
+  <Fragment slot="head">
+    <SEOHead
+      title={title}
+      description={description}
+      canonicalUrl={canonicalUrl}
+      type="article"
+      jsonLd={jsonLd}
+    />
+    <link rel="alternate" hreflang="ar" href={canonicalUrl} />
+    <link rel="alternate" hreflang="en" href={canonicalUrl} />
+    <link rel="alternate" hreflang="x-default" href={canonicalUrl} />
+  </Fragment>
+
+  <VerseDisplay
+    arabic={data.arabic}
+    translation={data.translation}
+    tafsirExcerpt={tafsirExcerpt}
+    surahName={surahMeta.nameTransliteration}
+    surahNameArabic={surahMeta.nameArabic}
+    surah={surahNum}
+    verse={verseNum}
+  />
+
+  <nav class="verse-nav">
+    {prevUrl ? <a href={prevUrl} class="nav-link prev">&larr; Previous Verse</a> : <span />}
+    {nextUrl ? <a href={nextUrl} class="nav-link next">Next Verse &rarr;</a> : <span />}
+  </nav>
+</BaseLayout>
+
+<style>
+  .verse-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 720px;
+    margin: 2rem auto 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .nav-link {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-primary);
+    text-decoration: none;
+    padding: 0.5rem 0;
+  }
+
+  .nav-link:hover {
+    text-decoration: underline;
+  }
+</style>

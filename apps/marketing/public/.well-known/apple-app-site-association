@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "MA2HBUUNVP.com.devoxer.cloud-quran",
+        "paths": ["/quran/*/*"]
+      }
+    ]
+  }
+}

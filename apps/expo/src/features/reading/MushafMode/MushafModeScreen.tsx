@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -11,10 +12,14 @@ import {
 
 import { Surface } from '@/components/Surface';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
+import { useBookmarkStore } from '@/features/bookmarks/useBookmarkStore';
 import { preloadAdjacentFonts } from '@/services/mushaf-fonts';
+import { getVersesByPositions } from '@/services/sqlite';
 import { useUIStore } from '@/theme/useUIStore';
 
 import { ReadingChromeOverlay } from '../ReadingChromeOverlay';
+import { TafsirSheet } from '../TafsirSheet';
+import { VerseContextMenu } from '../VerseContextMenu';
 
 import { MushafPage } from './MushafPage';
 
@@ -114,6 +119,64 @@ export function MushafModeScreen() {
 
   // Keep ref in sync for flush-on-unmount
   currentPageRef.current = currentPage;
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    surahNumber: 1,
+    verseNumber: 1,
+    position: { x: 0, y: 0 },
+  });
+
+  // Tafsir sheet state
+  const [tafsirSheet, setTafsirSheet] = useState({
+    visible: false,
+    surahNumber: 1,
+    verseNumber: 1,
+    uthmaniText: '',
+  });
+
+  const handleLongPress = useCallback(
+    (surah: number, verse: number, x: number, y: number) => {
+      setContextMenu({ visible: true, surahNumber: surah, verseNumber: verse, position: { x, y } });
+    },
+    [],
+  );
+
+  const handlePlayFromHere = useCallback(() => {
+    useAudioStore.getState().seekToVerse(`${contextMenu.surahNumber}:${contextMenu.verseNumber}`);
+  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
+
+  const handleTafsir = useCallback(async () => {
+    const verses = await getVersesByPositions([
+      { surahNumber: contextMenu.surahNumber, verseNumber: contextMenu.verseNumber },
+    ]);
+    setTafsirSheet({
+      visible: true,
+      surahNumber: contextMenu.surahNumber,
+      verseNumber: contextMenu.verseNumber,
+      uthmaniText: verses[0]?.uthmaniText ?? '',
+    });
+  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
+
+  const handleBookmark = useCallback(() => {
+    useBookmarkStore.getState().toggleBookmark(contextMenu.surahNumber, contextMenu.verseNumber);
+  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
+
+  const handleCopy = useCallback(async () => {
+    const verses = await getVersesByPositions([
+      { surahNumber: contextMenu.surahNumber, verseNumber: contextMenu.verseNumber },
+    ]);
+    if (verses[0]) {
+      Clipboard.setStringAsync(`${verses[0].uthmaniText}\n\n${verses[0].translationText}`);
+    }
+  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
+
+  const isContextVerseBookmarked = useBookmarkStore((s) =>
+    s.bookmarks.some(
+      (b) => b.surahNumber === contextMenu.surahNumber && b.verseNumber === contextMenu.verseNumber,
+    ),
+  );
 
   // Auto-hide chrome after 3 seconds
   useEffect(() => {
@@ -334,14 +397,14 @@ export function MushafModeScreen() {
 
   const renderPage = useCallback(
     ({ item: pageNumber }: { item: number }) => {
-      const content = <MushafPage pageNumber={pageNumber} onTap={handleTap} />;
+      const content = <MushafPage pageNumber={pageNumber} onTap={handleTap} onLongPress={handleLongPress} />;
       return (
         <View style={pageStyle}>
           {IS_WEB ? <View style={styles.webPageInner}>{content}</View> : content}
         </View>
       );
     },
-    [pageStyle, handleTap],
+    [pageStyle, handleTap, handleLongPress],
   );
 
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);
@@ -369,6 +432,7 @@ export function MushafModeScreen() {
                 <MushafPage
                   pageNumber={leftPage}
                   onTap={handleTap}
+                  onLongPress={handleLongPress}
                   contentWidth={dualContentWidth}
                 />
               ) : (
@@ -379,12 +443,32 @@ export function MushafModeScreen() {
               <MushafPage
                 pageNumber={rightPage}
                 onTap={handleTap}
+                onLongPress={handleLongPress}
                 contentWidth={dualContentWidth}
               />
             </View>
           </View>
         </View>
         <ReadingChromeOverlay />
+        <VerseContextMenu
+          visible={contextMenu.visible}
+          surahNumber={contextMenu.surahNumber}
+          verseNumber={contextMenu.verseNumber}
+          position={contextMenu.position}
+          isBookmarked={isContextVerseBookmarked}
+          onPlayFromHere={handlePlayFromHere}
+          onTafsir={handleTafsir}
+          onBookmark={handleBookmark}
+          onCopy={handleCopy}
+          onDismiss={() => setContextMenu((s) => ({ ...s, visible: false }))}
+        />
+        <TafsirSheet
+          visible={tafsirSheet.visible}
+          surahNumber={tafsirSheet.surahNumber}
+          verseNumber={tafsirSheet.verseNumber}
+          uthmaniText={tafsirSheet.uthmaniText}
+          onDismiss={() => setTafsirSheet((s) => ({ ...s, visible: false }))}
+        />
       </Surface>
     );
   }
@@ -417,6 +501,25 @@ export function MushafModeScreen() {
         />
       </View>
       <ReadingChromeOverlay />
+      <VerseContextMenu
+        visible={contextMenu.visible}
+        surahNumber={contextMenu.surahNumber}
+        verseNumber={contextMenu.verseNumber}
+        position={contextMenu.position}
+        isBookmarked={isContextVerseBookmarked}
+        onPlayFromHere={handlePlayFromHere}
+        onTafsir={handleTafsir}
+        onBookmark={handleBookmark}
+        onCopy={handleCopy}
+        onDismiss={() => setContextMenu((s) => ({ ...s, visible: false }))}
+      />
+      <TafsirSheet
+        visible={tafsirSheet.visible}
+        surahNumber={tafsirSheet.surahNumber}
+        verseNumber={tafsirSheet.verseNumber}
+        uthmaniText={tafsirSheet.uthmaniText}
+        onDismiss={() => setTafsirSheet((s) => ({ ...s, visible: false }))}
+      />
     </Surface>
   );
 }

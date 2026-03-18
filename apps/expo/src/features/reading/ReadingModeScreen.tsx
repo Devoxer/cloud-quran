@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { SURAH_METADATA } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -7,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Surface } from '@/components/Surface';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
+import { useBookmarkStore } from '@/features/bookmarks/useBookmarkStore';
 import type { VerseWithTranslation } from '@/services/sqlite';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -16,6 +18,8 @@ import { useVerses } from './hooks/useVerses';
 import { ReadingChromeOverlay } from './ReadingChromeOverlay';
 import { SurahHeader } from './SurahHeader';
 import { SurahNavigator } from './SurahNavigator';
+import { TafsirSheet } from './TafsirSheet';
+import { VerseContextMenu } from './VerseContextMenu';
 import { VerseJumpModal } from './VerseJumpModal';
 import { VerseRow } from './VerseRow';
 import { WelcomeBackBanner } from './WelcomeBackBanner';
@@ -24,6 +28,20 @@ import { WelcomeBackBanner } from './WelcomeBackBanner';
 // View on native (Pressable interferes with FlashList scroll gestures)
 const TapContainer = Platform.OS === 'web' ? Pressable : View;
 const FooterGuard = Platform.OS === 'web' ? Pressable : View;
+
+interface ContextMenuState {
+  visible: boolean;
+  surahNumber: number;
+  verseNumber: number;
+  position: { x: number; y: number };
+}
+
+interface TafsirState {
+  visible: boolean;
+  surahNumber: number;
+  verseNumber: number;
+  uthmaniText: string;
+}
 
 function ItemSeparator() {
   return <View style={styles.separator} />;
@@ -39,6 +57,7 @@ export function ReadingModeScreen() {
   const isChromeVisible = useUIStore((s) => s.isChromeVisible);
   const scrollVersion = useUIStore((s) => s.scrollVersion);
   const activeVerseKey = useAudioStore((s) => s.activeVerseKey);
+  const showTransliteration = useUIStore((s) => s.showTransliteration);
   const activeVerseKeyRef = useRef(activeVerseKey);
   activeVerseKeyRef.current = activeVerseKey;
   const autoFollowAudio = useUIStore((s) => s.autoFollowAudio);
@@ -62,6 +81,22 @@ export function ReadingModeScreen() {
     () => [styles.content, { paddingTop: scrollViewOffset }],
     [scrollViewOffset],
   );
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    visible: false,
+    surahNumber: 1,
+    verseNumber: 1,
+    position: { x: 0, y: 0 },
+  });
+
+  // Tafsir sheet state
+  const [tafsir, setTafsir] = useState<TafsirState>({
+    visible: false,
+    surahNumber: 1,
+    verseNumber: 1,
+    uthmaniText: '',
+  });
 
   // CRITICAL: These must be useRef to remain stable — FlashList throws if they change after mount
   const viewabilityConfig = useRef({
@@ -196,6 +231,50 @@ export function ReadingModeScreen() {
   const tapContainerProps =
     Platform.OS === 'web' ? { onPress: handleTouchEnd } : { onTouchEnd: handleTouchEnd };
 
+  // Long-press handler for context menu
+  const handleLongPress = useCallback(
+    (surah: number, verse: number, x: number, y: number) => {
+      setContextMenu({ visible: true, surahNumber: surah, verseNumber: verse, position: { x, y } });
+    },
+    [],
+  );
+
+  // Context menu action handlers
+  const handlePlayFromHere = useCallback(() => {
+    useAudioStore.getState().seekToVerse(`${contextMenu.surahNumber}:${contextMenu.verseNumber}`);
+  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
+
+  const handleTafsir = useCallback(() => {
+    const verse = verses.find(
+      (v) => v.surahNumber === contextMenu.surahNumber && v.verseNumber === contextMenu.verseNumber,
+    );
+    setTafsir({
+      visible: true,
+      surahNumber: contextMenu.surahNumber,
+      verseNumber: contextMenu.verseNumber,
+      uthmaniText: verse?.uthmaniText ?? '',
+    });
+  }, [contextMenu.surahNumber, contextMenu.verseNumber, verses]);
+
+  const handleBookmark = useCallback(() => {
+    useBookmarkStore.getState().toggleBookmark(contextMenu.surahNumber, contextMenu.verseNumber);
+  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
+
+  const handleCopy = useCallback(() => {
+    const verse = verses.find(
+      (v) => v.surahNumber === contextMenu.surahNumber && v.verseNumber === contextMenu.verseNumber,
+    );
+    if (verse) {
+      Clipboard.setStringAsync(`${verse.uthmaniText}\n\n${verse.translationText}`);
+    }
+  }, [contextMenu.surahNumber, contextMenu.verseNumber, verses]);
+
+  const isContextVerseBookmarked = useBookmarkStore((s) =>
+    s.bookmarks.some(
+      (b) => b.surahNumber === contextMenu.surahNumber && b.verseNumber === contextMenu.verseNumber,
+    ),
+  );
+
   const keyExtractor = useCallback(
     (item: VerseWithTranslation) => `${item.surahNumber}:${item.verseNumber}`,
     [],
@@ -208,10 +287,12 @@ export function ReadingModeScreen() {
         verseNumber={item.verseNumber}
         uthmaniText={item.uthmaniText}
         translationText={item.translationText}
+        transliterationText={item.transliterationText}
         isHighlighted={`${item.surahNumber}:${item.verseNumber}` === activeVerseKeyRef.current}
+        onLongPress={handleLongPress}
       />
     ),
-    [],
+    [handleLongPress],
   );
 
   const renderHeader = useCallback(
@@ -278,7 +359,8 @@ export function ReadingModeScreen() {
         <FlashList
           ref={flashListRef}
           data={verses}
-          extraData={activeVerseKey}
+          extraData={`${activeVerseKey}-${showTransliteration}`}
+          estimatedItemSize={showTransliteration ? 220 : 180}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           ListHeaderComponent={renderHeader}
@@ -305,6 +387,25 @@ export function ReadingModeScreen() {
             verseCount={metadata.verseCount}
             onJump={handleVerseJump}
             onClose={() => setIsVerseJumpVisible(false)}
+          />
+          <VerseContextMenu
+            visible={contextMenu.visible}
+            surahNumber={contextMenu.surahNumber}
+            verseNumber={contextMenu.verseNumber}
+            position={contextMenu.position}
+            isBookmarked={isContextVerseBookmarked}
+            onPlayFromHere={handlePlayFromHere}
+            onTafsir={handleTafsir}
+            onBookmark={handleBookmark}
+            onCopy={handleCopy}
+            onDismiss={() => setContextMenu((s) => ({ ...s, visible: false }))}
+          />
+          <TafsirSheet
+            visible={tafsir.visible}
+            surahNumber={tafsir.surahNumber}
+            verseNumber={tafsir.verseNumber}
+            uthmaniText={tafsir.uthmaniText}
+            onDismiss={() => setTafsir((s) => ({ ...s, visible: false }))}
           />
         </>
       )}

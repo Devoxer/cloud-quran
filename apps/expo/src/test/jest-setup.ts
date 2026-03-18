@@ -40,6 +40,12 @@ jest.mock('@shopify/flash-list', () => ({
   FlashList: 'FlashList',
 }));
 
+// NetInfo mock — prevents native module errors in tests that transitively import it
+jest.mock('@react-native-community/netinfo', () => ({
+  addEventListener: jest.fn(() => jest.fn()),
+  fetch: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+}));
+
 // Silence React Native warnings in test output
 jest.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
   const msg = typeof args[0] === 'string' ? args[0] : '';

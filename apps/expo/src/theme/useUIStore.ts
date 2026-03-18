@@ -20,6 +20,8 @@ interface UIState {
   firstVisibleVerse: string | null;
   autoFollowAudio: boolean;
   tapToSeek: boolean;
+  preferredTafsirSource: string | null;
+  showTransliteration: boolean;
   setTheme: (theme: ThemeSelection) => void;
   setMode: (mode: ReadingMode) => void;
   setFontSize: (size: number) => void;
@@ -34,6 +36,8 @@ interface UIState {
   toggleExpandedPlayer: () => void;
   toggleAutoFollowAudio: () => void;
   toggleTapToSeek: () => void;
+  toggleTransliteration: () => void;
+  setPreferredTafsirSource: (source: string) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -51,6 +55,8 @@ export const useUIStore = create<UIState>()(
       firstVisibleVerse: null,
       autoFollowAudio: true,
       tapToSeek: false,
+      preferredTafsirSource: null,
+      showTransliteration: false,
       setTheme: (theme) => set({ selectedTheme: theme }),
       setMode: (mode) => set({ currentMode: mode }),
       setFontSize: (size) => set({ fontSize: Math.min(44, Math.max(20, size)) }),
@@ -79,6 +85,9 @@ export const useUIStore = create<UIState>()(
         set((state) => ({ isExpandedPlayerVisible: !state.isExpandedPlayerVisible })),
       toggleAutoFollowAudio: () => set((state) => ({ autoFollowAudio: !state.autoFollowAudio })),
       toggleTapToSeek: () => set((state) => ({ tapToSeek: !state.tapToSeek })),
+      toggleTransliteration: () =>
+        set((state) => ({ showTransliteration: !state.showTransliteration })),
+      setPreferredTafsirSource: (source) => set({ preferredTafsirSource: source }),
     }),
     {
       name: 'ui-state',
@@ -92,6 +101,8 @@ export const useUIStore = create<UIState>()(
         lastReadTimestamp: state.lastReadTimestamp,
         autoFollowAudio: state.autoFollowAudio,
         tapToSeek: state.tapToSeek,
+        preferredTafsirSource: state.preferredTafsirSource,
+        showTransliteration: state.showTransliteration,
       }),
     },
   ),

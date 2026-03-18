@@ -122,6 +122,21 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
 });
 
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(),
+  ImpactFeedbackStyle: { Light: 'LIGHT' },
+}));
+jest.mock('react-native-gesture-handler', () => ({
+  Gesture: {
+    LongPress: () => ({
+      minDuration: () => ({ onStart: () => ({}) }),
+    }),
+  },
+  GestureDetector: ({ children }: { children: unknown }) => children,
+}));
+jest.mock('react-native-reanimated', () => ({
+  runOnJS: (fn: unknown) => fn,
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));

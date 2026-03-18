@@ -1,8 +1,11 @@
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { MushafLine, MushafPageLayout } from 'quran-data';
 import { SURAH_METADATA } from 'quran-data';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
@@ -28,14 +31,37 @@ function collectFontPages(layout: MushafPageLayout): number[] {
   return [...pages];
 }
 
+/** Hit-test pressed coordinates against verse word positions in the layout */
+function hitTestVerse(
+  y: number,
+  layout: MushafPageLayout,
+  contentTop: number,
+  contentHeight: number,
+): { surahNumber: number; verseNumber: number } | null {
+  const textLines = layout.lines.filter((l) => l.type === 'text' && l.words?.length);
+  if (textLines.length === 0) return null;
+
+  // Lines are evenly distributed in the content area
+  const relativeY = y - contentTop;
+  const lineIndex = Math.floor((relativeY / contentHeight) * textLines.length);
+  const clampedIndex = Math.max(0, Math.min(textLines.length - 1, lineIndex));
+  const line = textLines[clampedIndex];
+
+  if (!line.words?.length) return null;
+  const firstWord = line.words[0];
+  const parts = firstWord.location.split(':');
+  return { surahNumber: parseInt(parts[0], 10), verseNumber: parseInt(parts[1], 10) };
+}
+
 interface MushafPageProps {
   pageNumber: number;
   onTap?: () => void;
   /** Override container width for font sizing (used in dual-page spread mode) */
   contentWidth?: number;
+  onLongPress?: (surahNumber: number, verseNumber: number, x: number, y: number) => void;
 }
 
-export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }: MushafPageProps) {
+export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp, onLongPress }: MushafPageProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const activeVerseKey = useAudioStore((s) => s.activeVerseKey);
@@ -70,6 +96,52 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
     setLayout(null);
     loadData();
   }, [loadData]);
+
+  const contentLayoutRef = useRef({ top: 0, height: 0 });
+
+  const handleContentLayout = useCallback(
+    (e: { nativeEvent: { layout: { y: number; height: number } } }) => {
+      contentLayoutRef.current = {
+        top: e.nativeEvent.layout.y,
+        height: e.nativeEvent.layout.height,
+      };
+    },
+    [],
+  );
+
+  const handleLongPressJS = useCallback(
+    (x: number, y: number) => {
+      if (!layout || !onLongPress) return;
+      const verse = hitTestVerse(
+        y,
+        layout,
+        contentLayoutRef.current.top,
+        contentLayoutRef.current.height,
+      );
+      if (verse) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onLongPress(verse.surahNumber, verse.verseNumber, x, y);
+      }
+    },
+    [layout, onLongPress],
+  );
+
+  const handleContextMenu = useCallback(
+    (e: { preventDefault: () => void; nativeEvent: { pageX: number; pageY: number } }) => {
+      if (!layout || !onLongPress) return;
+      e.preventDefault();
+      const verse = hitTestVerse(
+        e.nativeEvent.pageY,
+        layout,
+        contentLayoutRef.current.top,
+        contentLayoutRef.current.height,
+      );
+      if (verse) {
+        onLongPress(verse.surahNumber, verse.verseNumber, e.nativeEvent.pageX, e.nativeEvent.pageY);
+      }
+    },
+    [layout, onLongPress],
+  );
 
   // Tap-to-seek: only when setting is on AND audio is already playing
   const handleWordTap = useCallback(
@@ -141,7 +213,7 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
 
   const isSpecialPage = pageNumber <= 2;
 
-  return (
+  const pageContent = (
     <Pressable
       style={[
         styles.container,
@@ -152,10 +224,14 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
       accessibilityLabel={`Page ${pageNumber}, Surah ${surahName}`}
       accessibilityRole="text"
       onPress={onTap}
+      {...(Platform.OS === 'web' && onLongPress ? { onContextMenu: handleContextMenu as any } : {})}
     >
       <MushafPageHeader pageNumber={pageNumber} surahNumber={surahNum || 1} />
 
-      <View style={isSpecialPage ? styles.specialPageContent : styles.pageContent}>
+      <View
+        style={isSpecialPage ? styles.specialPageContent : styles.pageContent}
+        onLayout={handleContentLayout}
+      >
         {isSpecialPage && (
           <View style={[styles.specialPageFrame, { borderColor: tokens.border }]}>
             {layout.lines.map((line) => (
@@ -210,6 +286,19 @@ export function MushafPage({ pageNumber, onTap, contentWidth: contentWidthProp }
       />
     </Pressable>
   );
+
+  // On native, wrap with GestureDetector for long-press support
+  if (Platform.OS !== 'web' && onLongPress) {
+    const longPress = Gesture.LongPress()
+      .minDuration(500)
+      .onStart((event) => {
+        runOnJS(handleLongPressJS)(event.absoluteX, event.absoluteY);
+      });
+
+    return <GestureDetector gesture={longPress}>{pageContent}</GestureDetector>;
+  }
+
+  return pageContent;
 }
 
 const BASMALA_TEXT = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ';

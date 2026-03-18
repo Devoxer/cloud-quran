@@ -1,0 +1,146 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SEOHead from '../components/SEOHead.astro';
+
+const title = 'Privacy Policy — Cloud Quran';
+const description = 'Cloud Quran privacy policy. Zero data collection, zero third-party SDKs, zero analytics. Your reading is private.';
+---
+
+<BaseLayout title={title} description={description}>
+  <Fragment slot="head">
+    <SEOHead title={title} description={description} canonicalUrl="https://cloudquran.app/privacy" />
+  </Fragment>
+  <article class="privacy">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: March 2026</p>
+
+    <section>
+      <h2>Our Commitment</h2>
+      <p>
+        Cloud Quran is built on a simple principle: your relationship with the Quran is private.
+        We do not collect, track, or monetize your data in any way.
+      </p>
+    </section>
+
+    <section>
+      <h2>What We Do NOT Collect</h2>
+      <ul>
+        <li><strong>Zero analytics:</strong> No usage tracking, no page views, no session recording.</li>
+        <li><strong>Zero third-party SDKs:</strong> No Google Analytics, no Firebase, no Facebook SDK, no advertising libraries.</li>
+        <li><strong>Zero device fingerprinting:</strong> We do not identify or track your device.</li>
+        <li><strong>Zero personal data collection:</strong> We do not collect your name, email, location, or any personal information unless you explicitly sign in.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Local-First Architecture</h2>
+      <p>
+        The complete Quran text is bundled directly in the app. All core reading features
+        work entirely offline without any network connection. Your reading position, bookmarks,
+        and preferences are stored locally on your device by default.
+      </p>
+    </section>
+
+    <section>
+      <h2>Optional Sync (Signed-In Users)</h2>
+      <p>
+        If you choose to create an account and sign in, we store the following data
+        in Cloudflare D1 (a database hosted on Cloudflare's global network) to enable
+        cross-device sync:
+      </p>
+      <ul>
+        <li><strong>Reading position:</strong> Your current surah and verse, so you can resume on another device.</li>
+        <li><strong>Bookmarks:</strong> Verses you have bookmarked.</li>
+        <li><strong>Preferences:</strong> Theme, font size, and reading mode settings.</li>
+        <li><strong>Account identity:</strong> Your authentication credentials (email or OAuth provider ID) for sign-in purposes only.</li>
+      </ul>
+      <p>
+        This data is used exclusively for sync functionality. It is never shared with
+        third parties, never used for advertising, and never analyzed for behavioral insights.
+      </p>
+    </section>
+
+    <section>
+      <h2>Data Deletion</h2>
+      <p>
+        You can delete your account and all associated sync data at any time from the
+        app settings. Deletion is immediate and permanent. Local data remains on your device
+        until you uninstall the app.
+      </p>
+    </section>
+
+    <section>
+      <h2>Open Source Transparency</h2>
+      <p>
+        Cloud Quran's commitment to privacy is verifiable. Our code is open source, and
+        you can inspect exactly what data the app accesses and transmits. We believe
+        privacy should be structural, not a checkbox.
+      </p>
+    </section>
+
+    <section>
+      <h2>Audio Streaming</h2>
+      <p>
+        When you play audio recitations, the app fetches audio files from our CDN
+        (content delivery network). These requests use standard HTTPS and carry no
+        user-identifying information beyond the IP address inherent in any internet connection.
+        Downloaded audio files for offline listening are stored only on your device.
+      </p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <p>
+        If you have questions about this privacy policy, contact us at
+        <a href="mailto:privacy@cloudquran.app">privacy@cloudquran.app</a>.
+      </p>
+    </section>
+  </article>
+</BaseLayout>
+
+<style>
+  .privacy {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .privacy h1 {
+    font-size: 2rem;
+    color: var(--color-primary);
+    margin-bottom: 0.25rem;
+  }
+
+  .updated {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 2rem;
+  }
+
+  .privacy section {
+    margin-bottom: 2rem;
+  }
+
+  .privacy h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+  }
+
+  .privacy p {
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin-bottom: 0.75rem;
+  }
+
+  .privacy ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .privacy li {
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin-bottom: 0.5rem;
+  }
+</style>

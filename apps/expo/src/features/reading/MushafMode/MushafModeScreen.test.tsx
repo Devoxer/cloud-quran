@@ -79,6 +79,32 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Ionicons' }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(),
+}));
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(),
+  ImpactFeedbackStyle: { Light: 'LIGHT' },
+}));
+jest.mock('react-native-gesture-handler', () => ({
+  Gesture: {
+    LongPress: () => ({
+      minDuration: () => ({ onStart: () => ({}) }),
+    }),
+    Pan: () => ({
+      onUpdate: () => ({ onEnd: () => ({}) }),
+    }),
+  },
+  GestureDetector: ({ children }: { children: unknown }) => children,
+}));
+jest.mock('react-native-reanimated', () => ({
+  default: { View: 'Animated.View' },
+  Easing: { inOut: () => ({}), ease: {} },
+  useSharedValue: () => ({ value: 0 }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (v: number) => v,
+  runOnJS: (fn: unknown) => fn,
+}));
 
 jest.mock('@/features/audio/stores/useAudioStore', () => {
   const mockAudioState = {
@@ -95,8 +121,21 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
 // Mock Surface and ReadingChromeOverlay as string types for tree inspection
 jest.mock('@/components/Surface', () => ({ Surface: 'Surface' }));
 jest.mock('../ReadingChromeOverlay', () => ({ ReadingChromeOverlay: 'ReadingChromeOverlay' }));
+jest.mock('../VerseContextMenu', () => ({ VerseContextMenu: () => null }));
+jest.mock('../TafsirSheet', () => ({ TafsirSheet: () => null }));
 jest.mock('./MushafPage', () => ({ MushafPage: 'MushafPage' }));
 jest.mock('@/components/AppText', () => ({ AppText: 'AppText' }));
+jest.mock('@/features/bookmarks/useBookmarkStore', () => {
+  const useBookmarkStore = Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({ bookmarks: [], toggleBookmark: jest.fn() }),
+    { getState: () => ({ bookmarks: [], toggleBookmark: jest.fn() }), setState: () => {}, subscribe: () => () => {} },
+  );
+  return { useBookmarkStore };
+});
+jest.mock('@/services/sqlite', () => ({
+  getVersesByPositions: jest.fn(() => Promise.resolve([])),
+}));
 
 // Mock mushaf services
 jest.mock('@/services/mushaf-fonts', () => ({

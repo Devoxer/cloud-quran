@@ -1,0 +1,12 @@
+name = "cloud-quran-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:8081,http://localhost:19006,http://localhost:8787"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cloud-quran"
+database_id = "placeholder-create-via-wrangler-d1-create"
+migrations_dir = "drizzle/migrations"

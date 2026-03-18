@@ -17,6 +17,9 @@ config.resolver.nodeModulesPaths = [
 
 config.resolver.assetExts.push('db');
 
+// Required for hono/client to work with React Native
+config.resolver.unstable_enablePackageExports = true;
+
 // Add wasm asset support for expo-sqlite web
 config.resolver.assetExts.push('wasm');
 

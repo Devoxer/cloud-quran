@@ -1,6 +1,22 @@
 {
-  "name": "website",
+  "name": "marketing",
   "version": "0.0.1",
   "private": true,
-  "description": "Cloud Quran marketing website (Astro - placeholder)"
+  "type": "module",
+  "description": "Cloud Quran marketing website with per-verse SEO pages",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.3.0",
+    "astro": "^5.10.0",
+    "quran-data": "workspace:*"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.8",
+    "fast-xml-parser": "^5.4.2",
+    "typescript": "~5.9.2"
+  }
 }

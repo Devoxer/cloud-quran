@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.devoxer.cloud-quran",
       "appleTeamId": "MA2HBUUNVP",
+      "associatedDomains": ["applinks:cloudquran.app"],
       "infoPlist": {
         "UIBackgroundModes": ["audio"]
       }
@@ -23,7 +24,21 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.devoxer.cloudquran"
+      "package": "com.devoxer.cloudquran",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "cloudquran.app",
+              "pathPrefix": "/quran"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -50,7 +65,12 @@
         }
       ],
       "expo-sqlite",
-      ["expo-audio", { "enableBackgroundPlayback": true }],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
       [
         "expo-font",
         {
@@ -63,7 +83,9 @@
           "assets": ["./src/data/quran.db"]
         }
       ],
-      "./plugins/withAutoSigning"
+      "./plugins/withAutoSigning",
+      "expo-secure-store",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

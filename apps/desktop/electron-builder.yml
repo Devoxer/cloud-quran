@@ -1,0 +1,45 @@
+appId: com.devoxer.cloud-quran
+productName: Cloud Quran
+
+directories:
+  output: release
+
+files:
+  - dist/**/*
+  - "!node_modules"
+
+extraResources:
+  - from: ../expo/dist
+    to: expo-dist
+    filter:
+      - "**/*"
+
+mac:
+  category: public.app-category.education
+  target:
+    - dmg
+  icon: resources/icon.icns
+
+win:
+  target:
+    - nsis
+  icon: resources/icon.png
+
+linux:
+  target:
+    - AppImage
+  category: Education
+  icon: resources/icon.png
+
+nsis:
+  oneClick: true
+  perMachine: false
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

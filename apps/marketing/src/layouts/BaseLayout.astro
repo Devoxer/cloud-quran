@@ -1,0 +1,183 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Read the Holy Quran online with accurate Uthmani script, English translation, and tafsir. Available on iOS, Android, Web, and Desktop.' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/KFGQPCUthmanicScriptHAFS.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <meta name="description" content={description} />
+    {/* TODO: Replace PLACEHOLDER_APP_STORE_ID with actual App Store ID after submission */}
+    <meta name="apple-itunes-app" content={`app-id=PLACEHOLDER_APP_STORE_ID, app-argument=${Astro.url.href}`} />
+    <title>{title}</title>
+    <slot name="head" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/" class="logo">Cloud Quran</a>
+        <div class="nav-links">
+          <a href="/quran/1/1">Read Quran</a>
+          <a href="/download">Download</a>
+          <a href="/privacy">Privacy</a>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer>
+      <div class="footer-content">
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="/download">Download</a>
+          <a href="/privacy">Privacy Policy</a>
+        </div>
+        <p class="copyright">&copy; {new Date().getFullYear()} Cloud Quran. All rights reserved.</p>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  @font-face {
+    font-family: 'KFGQPC';
+    src: url('/fonts/KFGQPCUthmanicScriptHAFS.ttf') format('truetype');
+    font-display: swap;
+  }
+
+  :root {
+    --color-primary: #1B6B4A;
+    --color-primary-light: #E8F5E9;
+    --color-text: #1a1a2e;
+    --color-text-secondary: #4a4a6a;
+    --color-bg: #FAFAF5;
+    --color-surface: #FFFFFF;
+    --color-border: #e0e0d8;
+    --color-accent: #C8A96E;
+    --font-arabic: 'KFGQPC', 'Traditional Arabic', serif;
+    --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+    --max-width: 1080px;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-family: var(--font-ui);
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  a {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  header {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  header nav {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+
+  .logo:hover {
+    text-decoration: none;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  .nav-links a {
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .nav-links a:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  footer {
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    padding: 2rem 1rem;
+    margin-top: auto;
+  }
+
+  .footer-content {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .footer-links a {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .copyright {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+  }
+</style>

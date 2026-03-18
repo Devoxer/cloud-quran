@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SEOHead from '../components/SEOHead.astro';
+import DownloadButtons from '../components/DownloadButtons.astro';
+
+const title = 'Download Cloud Quran — iOS, Android, Desktop, Web';
+const description = 'Download Cloud Quran for free on iOS, Android, macOS, Windows, Linux, or use it on the web. No account required.';
+---
+
+<BaseLayout title={title} description={description}>
+  <Fragment slot="head">
+    <SEOHead title={title} description={description} canonicalUrl="https://cloudquran.app/download" />
+  </Fragment>
+  <section class="download-page">
+    <h1>Download Cloud Quran</h1>
+    <p class="subtitle">
+      Free on every platform. No account required. No ads. No tracking.
+    </p>
+    <DownloadButtons layout="vertical" />
+  </section>
+
+  <section class="requirements">
+    <h2>System Requirements</h2>
+    <div class="req-grid">
+      <div class="req-item">
+        <h3>iOS</h3>
+        <p>iOS 16 or later</p>
+      </div>
+      <div class="req-item">
+        <h3>Android</h3>
+        <p>Android 8.0 or later</p>
+      </div>
+      <div class="req-item">
+        <h3>macOS</h3>
+        <p>macOS 12 (Monterey) or later</p>
+      </div>
+      <div class="req-item">
+        <h3>Windows</h3>
+        <p>Windows 10 or later</p>
+      </div>
+      <div class="req-item">
+        <h3>Linux</h3>
+        <p>Ubuntu 20.04+ or equivalent</p>
+      </div>
+      <div class="req-item">
+        <h3>Web</h3>
+        <p>Any modern browser</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .download-page {
+    text-align: center;
+    padding: 3rem 0;
+  }
+
+  .download-page h1 {
+    font-size: 2rem;
+    color: var(--color-primary);
+    margin-bottom: 0.75rem;
+  }
+
+  .subtitle {
+    color: var(--color-text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .requirements {
+    padding: 2rem 0;
+  }
+
+  .requirements h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .req-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+  }
+
+  .req-item {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .req-item h3 {
+    font-size: 0.95rem;
+    color: var(--color-primary);
+    margin-bottom: 0.25rem;
+  }
+
+  .req-item p {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+  }
+</style>

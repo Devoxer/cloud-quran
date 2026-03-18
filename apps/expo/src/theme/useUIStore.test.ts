@@ -33,6 +33,11 @@ interface UIState {
   isChromeVisible: boolean;
   isExpandedPlayerVisible: boolean;
   scrollVersion: number;
+  firstVisibleVerse: string | null;
+  autoFollowAudio: boolean;
+  tapToSeek: boolean;
+  preferredTafsirSource: string | null;
+  showTransliteration: boolean;
   setTheme: (theme: ThemeSelection) => void;
   setMode: (mode: ReadingMode) => void;
   setFontSize: (size: number) => void;
@@ -43,7 +48,12 @@ interface UIState {
   toggleChrome: () => void;
   showChrome: () => void;
   hideChrome: () => void;
+  setFirstVisibleVerse: (verseKey: string | null) => void;
   toggleExpandedPlayer: () => void;
+  toggleAutoFollowAudio: () => void;
+  toggleTapToSeek: () => void;
+  toggleTransliteration: () => void;
+  setPreferredTafsirSource: (source: string) => void;
 }
 
 const useUIStore = create<UIState>()(
@@ -58,6 +68,11 @@ const useUIStore = create<UIState>()(
       isChromeVisible: false,
       isExpandedPlayerVisible: false,
       scrollVersion: 0,
+      firstVisibleVerse: null,
+      autoFollowAudio: true,
+      tapToSeek: false,
+      preferredTafsirSource: null,
+      showTransliteration: false,
       setTheme: (theme) => set({ selectedTheme: theme }),
       setMode: (mode) => set({ currentMode: mode }),
       setFontSize: (size) => set({ fontSize: Math.min(44, Math.max(20, size)) }),
@@ -81,8 +96,14 @@ const useUIStore = create<UIState>()(
       toggleChrome: () => set((state) => ({ isChromeVisible: !state.isChromeVisible })),
       showChrome: () => set({ isChromeVisible: true }),
       hideChrome: () => set({ isChromeVisible: false }),
+      setFirstVisibleVerse: (verseKey) => set({ firstVisibleVerse: verseKey }),
       toggleExpandedPlayer: () =>
         set((state) => ({ isExpandedPlayerVisible: !state.isExpandedPlayerVisible })),
+      toggleAutoFollowAudio: () => set((state) => ({ autoFollowAudio: !state.autoFollowAudio })),
+      toggleTapToSeek: () => set((state) => ({ tapToSeek: !state.tapToSeek })),
+      toggleTransliteration: () =>
+        set((state) => ({ showTransliteration: !state.showTransliteration })),
+      setPreferredTafsirSource: (source) => set({ preferredTafsirSource: source }),
     }),
     {
       name: 'ui-state',
@@ -94,6 +115,10 @@ const useUIStore = create<UIState>()(
         currentSurah: state.currentSurah,
         currentVerse: state.currentVerse,
         lastReadTimestamp: state.lastReadTimestamp,
+        autoFollowAudio: state.autoFollowAudio,
+        tapToSeek: state.tapToSeek,
+        preferredTafsirSource: state.preferredTafsirSource,
+        showTransliteration: state.showTransliteration,
       }),
     },
   ),
@@ -229,6 +254,30 @@ describe('useUIStore', () => {
       expect(parsed.state.selectedTheme).toBe('dark');
     } else {
       expect(useUIStore.getState().selectedTheme).toBe('dark');
+    }
+  });
+
+  test('showTransliteration defaults to false', () => {
+    expect(useUIStore.getState().showTransliteration).toBe(false);
+  });
+
+  test('toggleTransliteration toggles showTransliteration', () => {
+    expect(useUIStore.getState().showTransliteration).toBe(false);
+    useUIStore.getState().toggleTransliteration();
+    expect(useUIStore.getState().showTransliteration).toBe(true);
+    useUIStore.getState().toggleTransliteration();
+    expect(useUIStore.getState().showTransliteration).toBe(false);
+  });
+
+  test('showTransliteration is persisted to MMKV storage', () => {
+    useUIStore.getState().toggleTransliteration();
+    expect(useUIStore.getState().showTransliteration).toBe(true);
+    const stored = mockStorage.get('ui-state');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      expect(parsed.state.showTransliteration).toBe(true);
+    } else {
+      expect(useUIStore.getState().showTransliteration).toBe(true);
     }
   });
 });
