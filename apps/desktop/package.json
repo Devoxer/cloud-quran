@@ -1,19 +1,6 @@
 {
   "name": "desktop",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "private": true,
-  "description": "Cloud Quran desktop app (Electron)",
-  "main": "dist/main.js",
-  "scripts": {
-    "start": "electron .",
-    "build": "tsc",
-    "dist": "electron-builder",
-    "dev": "tsc && electron ."
-  },
-  "devDependencies": {
-    "electron": "^35.0.0",
-    "electron-builder": "^26.0.0",
-    "typescript": "~5.9.2"
-  },
-  "dependencies": {}
+  "description": "Cloud Quran desktop app (Electrobun - placeholder)"
 }

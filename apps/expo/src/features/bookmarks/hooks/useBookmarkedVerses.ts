@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getVersesByPositions } from '@/services/sqlite';
 
-import { useBookmarkStore } from '../useBookmarkStore';
+import { useBookmarks } from '../useBookmarkStore';
 
 export interface BookmarkedVerse {
   surahNumber: number;
@@ -10,16 +10,28 @@ export interface BookmarkedVerse {
   createdAt: number;
   uthmaniText: string;
   translationText: string;
+  bookmarkId: string;
 }
 
 export function useBookmarkedVerses() {
-  const bookmarks = useBookmarkStore((s) => s.bookmarks);
+  const { bookmarks, isLoading: bookmarksLoading } = useBookmarks();
   const [verses, setVerses] = useState<BookmarkedVerse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Stabilize bookmarks reference — only change when IDs actually differ
+  const bookmarksKey = useMemo(
+    () => bookmarks.map((b) => b.id).join(','),
+    [bookmarks],
+  );
+  const stableBookmarks = useRef(bookmarks);
+  if (bookmarksKey !== stableBookmarks.current.map((b) => b.id).join(',')) {
+    stableBookmarks.current = bookmarks;
+  }
+
   const loadVerses = useCallback(async () => {
-    if (bookmarks.length === 0) {
+    const bks = stableBookmarks.current;
+    if (bks.length === 0) {
       setVerses([]);
       setIsLoading(false);
       return;
@@ -27,14 +39,25 @@ export function useBookmarkedVerses() {
     setIsLoading(true);
     setError(null);
     try {
-      const verseData = await getVersesByPositions(bookmarks);
-      const merged = bookmarks
+      const positions = bks.map((b) => ({
+        surahNumber: b.surah,
+        verseNumber: b.verse,
+      }));
+      const verseData = await getVersesByPositions(positions);
+      const merged = bks
         .map((b) => {
           const verse = verseData.find(
-            (v) => v.surahNumber === b.surahNumber && v.verseNumber === b.verseNumber,
+            (v) => v.surahNumber === b.surah && v.verseNumber === b.verse,
           );
           return verse
-            ? { ...b, uthmaniText: verse.uthmaniText, translationText: verse.translationText }
+            ? {
+                surahNumber: b.surah,
+                verseNumber: b.verse,
+                createdAt: b.createdAt,
+                uthmaniText: verse.uthmaniText,
+                translationText: verse.translationText,
+                bookmarkId: b.id,
+              }
             : null;
         })
         .filter((v): v is BookmarkedVerse => v !== null)
@@ -45,11 +68,11 @@ export function useBookmarkedVerses() {
     } finally {
       setIsLoading(false);
     }
-  }, [bookmarks]);
+  }, [bookmarksKey]);
 
   useEffect(() => {
     loadVerses();
   }, [loadVerses]);
 
-  return { verses, isLoading, error };
+  return { verses, isLoading: isLoading || bookmarksLoading, error };
 }

@@ -12,43 +12,47 @@ describe('getDefaultMode', () => {
   }
 
   test('returns mushaf when locale starts with ar', () => {
-    Intl.DateTimeFormat = (() => ({
-      resolvedOptions: () => ({
-        locale: 'ar-SA',
-        calendar: '',
-        numberingSystem: '',
-        timeZone: '',
-      }),
-      format: () => '',
-      formatToParts: () => [],
-      formatRange: () => '',
-      formatRangeToParts: () => [],
-    })) as any;
+    Intl.DateTimeFormat = function () {
+      return {
+        resolvedOptions: () => ({
+          locale: 'ar-SA',
+          calendar: '',
+          numberingSystem: '',
+          timeZone: '',
+        }),
+        format: () => '',
+        formatToParts: () => [],
+        formatRange: () => '',
+        formatRangeToParts: () => [],
+      };
+    } as any;
     const getDefaultMode = importFresh();
     expect(getDefaultMode()).toBe('mushaf');
   });
 
   test('returns reading when locale is non-Arabic', () => {
-    Intl.DateTimeFormat = (() => ({
-      resolvedOptions: () => ({
-        locale: 'en-US',
-        calendar: '',
-        numberingSystem: '',
-        timeZone: '',
-      }),
-      format: () => '',
-      formatToParts: () => [],
-      formatRange: () => '',
-      formatRangeToParts: () => [],
-    })) as any;
+    Intl.DateTimeFormat = function () {
+      return {
+        resolvedOptions: () => ({
+          locale: 'en-US',
+          calendar: '',
+          numberingSystem: '',
+          timeZone: '',
+        }),
+        format: () => '',
+        formatToParts: () => [],
+        formatRange: () => '',
+        formatRangeToParts: () => [],
+      };
+    } as any;
     const getDefaultMode = importFresh();
     expect(getDefaultMode()).toBe('reading');
   });
 
   test('returns reading when Intl throws', () => {
-    Intl.DateTimeFormat = (() => {
+    Intl.DateTimeFormat = function () {
       throw new Error('Intl not available');
-    }) as any;
+    } as any;
     const getDefaultMode = importFresh();
     expect(getDefaultMode()).toBe('reading');
   });

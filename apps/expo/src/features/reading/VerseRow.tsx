@@ -1,12 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
-import React, { useCallback } from 'react';
-import { I18nManager, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import React from 'react';
+import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
-import { useBookmarkStore } from '@/features/bookmarks/useBookmarkStore';
+import { toggleBookmark, useBookmarks } from '@/features/bookmarks/useBookmarkStore';
 import { useTheme } from '@/theme/ThemeProvider';
 import { KFGQPC_FONT_FAMILY, spacing, typography } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
@@ -23,9 +20,7 @@ interface VerseRowProps {
   verseNumber: number;
   uthmaniText: string;
   translationText: string;
-  transliterationText?: string;
   isHighlighted?: boolean;
-  onLongPress?: (surahNumber: number, verseNumber: number, x: number, y: number) => void;
 }
 
 export const VerseRow = React.memo(function VerseRow({
@@ -33,20 +28,17 @@ export const VerseRow = React.memo(function VerseRow({
   verseNumber,
   uthmaniText,
   translationText,
-  transliterationText,
   isHighlighted = false,
-  onLongPress,
 }: VerseRowProps) {
   const { tokens } = useTheme();
   const fontSize = useUIStore((s) => s.fontSize);
   const tapToSeek = useUIStore((s) => s.tapToSeek);
-  const showTransliteration = useUIStore((s) => s.showTransliteration);
   const currentSurah = useAudioStore((s) => s.currentSurah);
   const seekToVerse = useAudioStore((s) => s.seekToVerse);
-  const isBookmarked = useBookmarkStore((s) =>
-    s.bookmarks.some((b) => b.surahNumber === surahNumber && b.verseNumber === verseNumber),
+  const { bookmarks } = useBookmarks();
+  const isBookmarked = bookmarks.some(
+    (b) => b.surah === surahNumber && b.verse === verseNumber,
   );
-  const toggleBookmark = useBookmarkStore((s) => s.toggleBookmark);
   const lineHeight = Math.round(fontSize * typography.quran.lineHeightMultiplier);
   const badgeFontSize = Math.round(fontSize * 0.45);
   const displayText = uthmaniText.replace(SMALL_HIGH_ROUNDED_ZERO, '');
@@ -59,37 +51,20 @@ export const VerseRow = React.memo(function VerseRow({
 
   const handleVerseTap = canSeek ? () => seekToVerse(`${surahNumber}:${verseNumber}`) : undefined;
 
-  const handleLongPressJS = useCallback(
-    (x: number, y: number) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onLongPress?.(surahNumber, verseNumber, x, y);
-    },
-    [onLongPress, surahNumber, verseNumber],
-  );
-
-  const handleContextMenu = useCallback(
-    (e: { preventDefault: () => void; nativeEvent: { pageX: number; pageY: number } }) => {
-      e.preventDefault();
-      onLongPress?.(surahNumber, verseNumber, e.nativeEvent.pageX, e.nativeEvent.pageY);
-    },
-    [onLongPress, surahNumber, verseNumber],
-  );
-
   const Container = canSeek ? Pressable : View;
 
-  const content = (
+  return (
     <Container
       style={[styles.container, isActive && { backgroundColor: tokens.accent.highlight }]}
       testID={isActive ? 'verse-row-highlighted' : undefined}
       {...(canSeek ? { onPress: handleVerseTap, accessibilityRole: 'button' as const } : {})}
-      {...(Platform.OS === 'web' && onLongPress ? { onContextMenu: handleContextMenu as (e: any) => void } : {})}
       accessibilityLabel={`Verse ${verseNumber}`}
     >
       <View style={styles.metaRow}>
         <Pressable
           onPress={(e) => {
             e.stopPropagation();
-            toggleBookmark(surahNumber, verseNumber);
+            toggleBookmark(surahNumber, verseNumber, bookmarks);
           }}
           onTouchEnd={(e) => e.stopPropagation()}
           accessibilityRole="button"
@@ -138,20 +113,6 @@ export const VerseRow = React.memo(function VerseRow({
       >
         {displayText}
       </Text>
-      {showTransliteration && transliterationText && (
-        <Text
-          style={{
-            color: tokens.text.translation,
-            fontSize: typography.transliteration.fontSize,
-            fontStyle: typography.transliteration.fontStyle,
-            lineHeight: Math.round(
-              typography.transliteration.fontSize * typography.transliteration.lineHeightMultiplier,
-            ),
-          }}
-        >
-          {transliterationText}
-        </Text>
-      )}
       <Text
         style={{
           color: tokens.text.translation,
@@ -166,19 +127,6 @@ export const VerseRow = React.memo(function VerseRow({
       </Text>
     </Container>
   );
-
-  // On native, wrap with GestureDetector for long-press support
-  if (Platform.OS !== 'web' && onLongPress) {
-    const longPress = Gesture.LongPress()
-      .minDuration(500)
-      .onStart((event) => {
-        runOnJS(handleLongPressJS)(event.absoluteX, event.absoluteY);
-      });
-
-    return <GestureDetector gesture={longPress}>{content}</GestureDetector>;
-  }
-
-  return content;
 });
 
 const styles = StyleSheet.create({

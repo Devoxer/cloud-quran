@@ -25,8 +25,6 @@ const mockUIState = {
   isChromeVisible: true,
   scrollVersion: 0,
   tapToSeek: false,
-  showTransliteration: false,
-  toggleTransliteration: jest.fn(),
   setTheme: jest.fn(),
   setMode: jest.fn(),
   setFontSize: jest.fn(),
@@ -69,24 +67,6 @@ jest.mock('quran-data', () => ({
 
 jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Ionicons' }));
 
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'LIGHT' },
-}));
-
-jest.mock('react-native-gesture-handler', () => ({
-  Gesture: {
-    LongPress: () => ({
-      minDuration: () => ({ onStart: () => ({}) }),
-    }),
-  },
-  GestureDetector: ({ children }: { children: unknown }) => children,
-}));
-
-jest.mock('react-native-reanimated', () => ({
-  runOnJS: (fn: unknown) => fn,
-}));
-
 // Mock useAudioStore — mutable state for per-test control
 let mockCurrentSurah: number | null = null;
 const mockSeekToVerse = jest.fn();
@@ -113,27 +93,17 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
   return { useAudioStore };
 });
 
-// Mock useBookmarkStore — mutable state for per-test control
-let mockBookmarks: Array<{ surahNumber: number; verseNumber: number; createdAt: number }> = [];
+// Mock bookmark store — mutable state for per-test control
+let mockBookmarks: Array<{ id: string; surah: number; verse: number; createdAt: number }> = [];
 const mockToggleBookmark = jest.fn();
 
-jest.mock('@/features/bookmarks/useBookmarkStore', () => {
-  const useBookmarkStore = Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        bookmarks: mockBookmarks,
-        addBookmark: () => {},
-        removeBookmark: () => {},
-        toggleBookmark: mockToggleBookmark,
-      }),
-    {
-      getState: () => ({ bookmarks: mockBookmarks }),
-      setState: () => {},
-      subscribe: () => () => {},
-    },
-  );
-  return { useBookmarkStore };
-});
+jest.mock('@/features/bookmarks/useBookmarkStore', () => ({
+  useBookmarks: () => ({ bookmarks: mockBookmarks, isLoading: false, error: null }),
+  toggleBookmark: (...args: unknown[]) => mockToggleBookmark(...args),
+  addBookmark: jest.fn(),
+  removeBookmark: jest.fn(),
+  removeBookmarkById: jest.fn(),
+}));
 
 const imported = require('./VerseRow');
 // React.memo wraps the component — extract the inner render function
@@ -229,7 +199,7 @@ describe('VerseRow', () => {
   });
 
   test('bookmark icon shows bookmark (filled) for bookmarked verse', () => {
-    mockBookmarks = [{ surahNumber: 1, verseNumber: 1, createdAt: Date.now() }];
+    mockBookmarks = [{ id: 'bk-1', surah: 1, verse: 1, createdAt: Date.now() }];
     const element = VerseRow(defaultProps) as unknown as MockElement;
     const icons = findElements(element, (el) => el.type === 'Ionicons');
     expect(icons[0].props.name).toBe('bookmark');
@@ -346,91 +316,5 @@ describe('VerseRow', () => {
     mockCurrentSurah = 1;
     const element = VerseRow(defaultProps) as unknown as MockElement;
     expect(element.props.accessibilityRole).toBe('button');
-  });
-
-  test('accepts onLongPress callback prop', () => {
-    mockBookmarks = [];
-    const mockLongPress = jest.fn();
-    const element = VerseRow({ ...defaultProps, onLongPress: mockLongPress }) as unknown as MockElement;
-    // On web (test environment), onContextMenu should be set
-    expect(element).toBeDefined();
-  });
-
-  test('renders without onLongPress (backwards compatible)', () => {
-    mockBookmarks = [];
-    const element = VerseRow(defaultProps) as unknown as MockElement;
-    expect(element).toBeDefined();
-    expect(element.type).toBe('View');
-  });
-
-  test('does not render transliteration when showTransliteration is false', () => {
-    mockBookmarks = [];
-    mockUIState.showTransliteration = false;
-    const element = VerseRow({
-      ...defaultProps,
-      transliterationText: 'Bismi Allahi arrahmani arraheem',
-    }) as unknown as MockElement;
-    const textElements = findElements(element, (el) => el.type === 'Text');
-    const transliteration = textElements.find(
-      (el) => el.props.children === 'Bismi Allahi arrahmani arraheem',
-    );
-    expect(transliteration).toBeUndefined();
-  });
-
-  test('renders transliteration when showTransliteration is true', () => {
-    mockBookmarks = [];
-    mockUIState.showTransliteration = true;
-    const element = VerseRow({
-      ...defaultProps,
-      transliterationText: 'Bismi Allahi arrahmani arraheem',
-    }) as unknown as MockElement;
-    const textElements = findElements(element, (el) => el.type === 'Text');
-    const transliteration = textElements.find(
-      (el) => el.props.children === 'Bismi Allahi arrahmani arraheem',
-    );
-    expect(transliteration).toBeDefined();
-    mockUIState.showTransliteration = false;
-  });
-
-  test('transliteration text has italic fontStyle', () => {
-    mockBookmarks = [];
-    mockUIState.showTransliteration = true;
-    const element = VerseRow({
-      ...defaultProps,
-      transliterationText: 'Bismi Allahi arrahmani arraheem',
-    }) as unknown as MockElement;
-    const textElements = findElements(element, (el) => el.type === 'Text');
-    const transliteration = textElements.find(
-      (el) => el.props.children === 'Bismi Allahi arrahmani arraheem',
-    );
-    expect(transliteration).toBeDefined();
-    const style = transliteration!.props.style;
-    const styles = Array.isArray(style) ? style : [style];
-    const fontStyle = styles.find((s: Record<string, unknown>) => s && 'fontStyle' in s);
-    expect(fontStyle?.fontStyle).toBe('italic');
-    mockUIState.showTransliteration = false;
-  });
-
-  test('does not render transliteration when transliterationText is undefined', () => {
-    mockBookmarks = [];
-    mockUIState.showTransliteration = true;
-    const element = VerseRow(defaultProps) as unknown as MockElement;
-    const textElements = findElements(element, (el) => el.type === 'Text');
-    // Should only have Arabic + translation + badge = 3 Text elements
-    expect(textElements.length).toBe(3);
-    mockUIState.showTransliteration = false;
-  });
-
-  test('renders three-layer layout when transliteration is enabled', () => {
-    mockBookmarks = [];
-    mockUIState.showTransliteration = true;
-    const element = VerseRow({
-      ...defaultProps,
-      transliterationText: 'Bismi Allahi arrahmani arraheem',
-    }) as unknown as MockElement;
-    const textElements = findElements(element, (el) => el.type === 'Text');
-    // Badge + Arabic + transliteration + translation = 4 Text elements
-    expect(textElements.length).toBe(4);
-    mockUIState.showTransliteration = false;
   });
 });

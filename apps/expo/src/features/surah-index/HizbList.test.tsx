@@ -107,10 +107,9 @@ describe('HizbList', () => {
     expect(data.length).toBe(60);
   });
 
-  test('has contentContainerStyle and ItemSeparatorComponent configured', () => {
+  test('has drawDistance configured', () => {
     const element = (HizbList as any)() as unknown as MockElement;
-    expect(element.props.contentContainerStyle).toBeDefined();
-    expect(element.props.ItemSeparatorComponent).toBeDefined();
+    expect(element.props.drawDistance).toBe(250);
   });
 
   test('has contentContainerStyle for max-width', () => {

@@ -10,7 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
 
-export const ROW_HEIGHT = 64;
+const ROW_HEIGHT = 64;
 const MAX_CONTENT_WIDTH = 680;
 
 export function JuzList() {
@@ -90,6 +90,7 @@ export function JuzList() {
       keyExtractor={keyExtractor}
       ItemSeparatorComponent={separator}
       contentContainerStyle={styles.content}
+      drawDistance={250}
     />
   );
 }

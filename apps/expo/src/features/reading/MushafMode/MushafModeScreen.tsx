@@ -1,8 +1,7 @@
-import * as Clipboard from 'expo-clipboard';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
   type LayoutChangeEvent,
   Platform,
   StyleSheet,
@@ -12,14 +11,10 @@ import {
 
 import { Surface } from '@/components/Surface';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
-import { useBookmarkStore } from '@/features/bookmarks/useBookmarkStore';
 import { preloadAdjacentFonts } from '@/services/mushaf-fonts';
-import { getVersesByPositions } from '@/services/sqlite';
 import { useUIStore } from '@/theme/useUIStore';
 
 import { ReadingChromeOverlay } from '../ReadingChromeOverlay';
-import { TafsirSheet } from '../TafsirSheet';
-import { VerseContextMenu } from '../VerseContextMenu';
 
 import { MushafPage } from './MushafPage';
 
@@ -31,7 +26,7 @@ const MIN_DUAL_HEIGHT = 700;
 
 // For web: reverse data so page 604 is at index 0 (left), page 1 at index 603 (right)
 // This achieves RTL order naturally without inverted (which breaks web scroll/drag)
-// For native: normal order with inverted={true} on FlatList
+// For native: normal order with inverted={true} on FlashList
 const PAGE_DATA = IS_WEB
   ? Array.from({ length: TOTAL_PAGES }, (_, i) => TOTAL_PAGES - i)
   : Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
@@ -42,22 +37,22 @@ function pageToIndex(page: number): number {
 
 /**
  * On Safari/Chrome, CSS scroll-snap (from pagingEnabled) fights programmatic scrollTo.
- * Workaround: temporarily disable scroll-snap on the DOM node, then use FlatList's
+ * Workaround: temporarily disable scroll-snap on the DOM node, then use FlashList's
  * scrollToIndex. Re-enable snap on next user touch or after a safety timeout.
  * Global timer/listener tracking prevents race conditions from rapid successive calls.
  */
 let _snapTimer: ReturnType<typeof setTimeout> | null = null;
 let _snapListener: (() => void) | null = null;
 
-function scrollFlatListToIndex(
-  flatListRef: React.RefObject<FlatList | null>,
+function scrollFlashListToIndex(
+  flashListRef: React.RefObject<FlashListRef<number> | null>,
   index: number,
   _screenWidth: number,
 ) {
-  if (!flatListRef.current) return;
+  if (!flashListRef.current) return;
 
   if (IS_WEB) {
-    const scrollNode = (flatListRef.current as any).getScrollableNode?.();
+    const scrollNode = (flashListRef.current as any).getScrollableNode?.();
     if (scrollNode?.style) {
       // Cancel any previous re-enable timer/listener
       if (_snapTimer) clearTimeout(_snapTimer);
@@ -78,7 +73,7 @@ function scrollFlatListToIndex(
     }
   }
 
-  flatListRef.current.scrollToIndex({ index, animated: false });
+  flashListRef.current.scrollToIndex({ index, animated: false });
 }
 
 export function MushafModeScreen() {
@@ -93,7 +88,7 @@ export function MushafModeScreen() {
   const isAudioPlaying = useAudioStore((s) => s.isPlaying);
   const autoFollowAudio = useUIStore((s) => s.autoFollowAudio);
 
-  const flatListRef = useRef<FlatList>(null);
+  const flashListRef = useRef<FlashListRef<number>>(null);
   const isScrolling = useRef(false);
   const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,64 +114,6 @@ export function MushafModeScreen() {
 
   // Keep ref in sync for flush-on-unmount
   currentPageRef.current = currentPage;
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState({
-    visible: false,
-    surahNumber: 1,
-    verseNumber: 1,
-    position: { x: 0, y: 0 },
-  });
-
-  // Tafsir sheet state
-  const [tafsirSheet, setTafsirSheet] = useState({
-    visible: false,
-    surahNumber: 1,
-    verseNumber: 1,
-    uthmaniText: '',
-  });
-
-  const handleLongPress = useCallback(
-    (surah: number, verse: number, x: number, y: number) => {
-      setContextMenu({ visible: true, surahNumber: surah, verseNumber: verse, position: { x, y } });
-    },
-    [],
-  );
-
-  const handlePlayFromHere = useCallback(() => {
-    useAudioStore.getState().seekToVerse(`${contextMenu.surahNumber}:${contextMenu.verseNumber}`);
-  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
-
-  const handleTafsir = useCallback(async () => {
-    const verses = await getVersesByPositions([
-      { surahNumber: contextMenu.surahNumber, verseNumber: contextMenu.verseNumber },
-    ]);
-    setTafsirSheet({
-      visible: true,
-      surahNumber: contextMenu.surahNumber,
-      verseNumber: contextMenu.verseNumber,
-      uthmaniText: verses[0]?.uthmaniText ?? '',
-    });
-  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
-
-  const handleBookmark = useCallback(() => {
-    useBookmarkStore.getState().toggleBookmark(contextMenu.surahNumber, contextMenu.verseNumber);
-  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
-
-  const handleCopy = useCallback(async () => {
-    const verses = await getVersesByPositions([
-      { surahNumber: contextMenu.surahNumber, verseNumber: contextMenu.verseNumber },
-    ]);
-    if (verses[0]) {
-      Clipboard.setStringAsync(`${verses[0].uthmaniText}\n\n${verses[0].translationText}`);
-    }
-  }, [contextMenu.surahNumber, contextMenu.verseNumber]);
-
-  const isContextVerseBookmarked = useBookmarkStore((s) =>
-    s.bookmarks.some(
-      (b) => b.surahNumber === contextMenu.surahNumber && b.verseNumber === contextMenu.verseNumber,
-    ),
-  );
 
   // Auto-hide chrome after 3 seconds
   useEffect(() => {
@@ -216,7 +153,7 @@ export function MushafModeScreen() {
     if (isDualPageRef.current) {
       syncReadingPosition(surah, verse);
     } else {
-      scrollFlatListToIndex(flatListRef, pageToIndex(targetPage), screenWidth);
+      scrollFlashListToIndex(flashListRef, pageToIndex(targetPage), screenWidth);
     }
   }, [activeVerseKey, isAudioPlaying, autoFollowAudio, screenWidth, syncReadingPosition]);
 
@@ -249,7 +186,7 @@ export function MushafModeScreen() {
       currentPageRef.current = targetPage;
       setCurrentPage(targetPage);
       if (!isDualPageRef.current) {
-        scrollFlatListToIndex(flatListRef, pageToIndex(targetPage), screenWidth);
+        scrollFlashListToIndex(flashListRef, pageToIndex(targetPage), screenWidth);
       }
     }
   }, [scrollVersion, screenWidth]);
@@ -274,9 +211,9 @@ export function MushafModeScreen() {
         currentPageRef.current = targetPage;
         setCurrentPage(targetPage);
         if (!isDualPageRef.current) {
-          scrollFlatListToIndex(flatListRef, pageToIndex(targetPage), screenWidth);
+          scrollFlashListToIndex(flashListRef, pageToIndex(targetPage), screenWidth);
         } else {
-          // In dual mode, sync position immediately (no FlatList viewability callback)
+          // In dual mode, sync position immediately (no FlashList viewability callback)
           const { surah, verse } = getFirstVerseForPage(targetPage);
           syncReadingPosition(surah, verse);
         }
@@ -298,12 +235,12 @@ export function MushafModeScreen() {
         positionDebounce.current = null;
       }
       requestAnimationFrame(() => {
-        scrollFlatListToIndex(flatListRef, pageToIndex(currentPageRef.current), screenWidth);
+        scrollFlashListToIndex(flashListRef, pageToIndex(currentPageRef.current), screenWidth);
       });
     }
   }, [screenWidth]);
 
-  // Measure container height (shared by single-page FlatList and dual-page spread)
+  // Measure container height (shared by single-page FlashList and dual-page spread)
   const handleContainerLayout = useCallback((e: LayoutChangeEvent) => {
     if (IS_WEB) {
       const { height } = e.nativeEvent.layout;
@@ -311,7 +248,7 @@ export function MushafModeScreen() {
     }
   }, []);
 
-  const handleFlatListLayout = useCallback(
+  const handleFlashListLayout = useCallback(
     (e: LayoutChangeEvent) => {
       handleContainerLayout(e);
 
@@ -319,32 +256,11 @@ export function MushafModeScreen() {
       if (!hasScrolledToInitial.current && IS_WEB) {
         hasScrolledToInitial.current = true;
         requestAnimationFrame(() => {
-          scrollFlatListToIndex(flatListRef, pageToIndex(currentPage), screenWidth);
+          scrollFlashListToIndex(flashListRef, pageToIndex(currentPage), screenWidth);
         });
       }
     },
     [currentPage, screenWidth, handleContainerLayout],
-  );
-
-  // Safety net: if scrollToIndex fails, fall back to scrollToOffset
-  const handleScrollToIndexFailed = useCallback(
-    (info: { index: number; averageItemLength: number }) => {
-      flatListRef.current?.scrollToOffset({
-        offset: info.index * screenWidth,
-        animated: false,
-      });
-    },
-    [screenWidth],
-  );
-
-  // getItemLayout for O(1) scroll positioning
-  const getItemLayout = useCallback(
-    (_: any, index: number) => ({
-      length: screenWidth,
-      offset: screenWidth * index,
-      index,
-    }),
-    [screenWidth],
   );
 
   // Track current page from scroll position (debounced position update)
@@ -397,14 +313,14 @@ export function MushafModeScreen() {
 
   const renderPage = useCallback(
     ({ item: pageNumber }: { item: number }) => {
-      const content = <MushafPage pageNumber={pageNumber} onTap={handleTap} onLongPress={handleLongPress} />;
+      const content = <MushafPage pageNumber={pageNumber} onTap={handleTap} />;
       return (
         <View style={pageStyle}>
           {IS_WEB ? <View style={styles.webPageInner}>{content}</View> : content}
         </View>
       );
     },
-    [pageStyle, handleTap, handleLongPress],
+    [pageStyle, handleTap],
   );
 
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);
@@ -432,7 +348,6 @@ export function MushafModeScreen() {
                 <MushafPage
                   pageNumber={leftPage}
                   onTap={handleTap}
-                  onLongPress={handleLongPress}
                   contentWidth={dualContentWidth}
                 />
               ) : (
@@ -443,32 +358,12 @@ export function MushafModeScreen() {
               <MushafPage
                 pageNumber={rightPage}
                 onTap={handleTap}
-                onLongPress={handleLongPress}
                 contentWidth={dualContentWidth}
               />
             </View>
           </View>
         </View>
         <ReadingChromeOverlay />
-        <VerseContextMenu
-          visible={contextMenu.visible}
-          surahNumber={contextMenu.surahNumber}
-          verseNumber={contextMenu.verseNumber}
-          position={contextMenu.position}
-          isBookmarked={isContextVerseBookmarked}
-          onPlayFromHere={handlePlayFromHere}
-          onTafsir={handleTafsir}
-          onBookmark={handleBookmark}
-          onCopy={handleCopy}
-          onDismiss={() => setContextMenu((s) => ({ ...s, visible: false }))}
-        />
-        <TafsirSheet
-          visible={tafsirSheet.visible}
-          surahNumber={tafsirSheet.surahNumber}
-          verseNumber={tafsirSheet.verseNumber}
-          uthmaniText={tafsirSheet.uthmaniText}
-          onDismiss={() => setTafsirSheet((s) => ({ ...s, visible: false }))}
-        />
       </Surface>
     );
   }
@@ -477,8 +372,8 @@ export function MushafModeScreen() {
   return (
     <Surface>
       <View style={styles.container}>
-        <FlatList
-          ref={flatListRef}
+        <FlashList
+          ref={flashListRef}
           data={PAGE_DATA}
           renderItem={renderPage}
           keyExtractor={keyExtractor}
@@ -486,40 +381,17 @@ export function MushafModeScreen() {
           pagingEnabled
           inverted={!IS_WEB}
           showsHorizontalScrollIndicator={false}
-          getItemLayout={getItemLayout}
           initialScrollIndex={pageToIndex(currentPage)}
-          onLayout={handleFlatListLayout}
-          onScrollToIndexFailed={handleScrollToIndexFailed}
+          onLayout={handleFlashListLayout}
           onScrollBeginDrag={handleScrollBeginDrag}
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
           viewabilityConfig={viewabilityConfig}
           onViewableItemsChanged={onViewableItemsChanged}
-          windowSize={3}
-          maxToRenderPerBatch={2}
-          removeClippedSubviews
+          drawDistance={250}
         />
       </View>
       <ReadingChromeOverlay />
-      <VerseContextMenu
-        visible={contextMenu.visible}
-        surahNumber={contextMenu.surahNumber}
-        verseNumber={contextMenu.verseNumber}
-        position={contextMenu.position}
-        isBookmarked={isContextVerseBookmarked}
-        onPlayFromHere={handlePlayFromHere}
-        onTafsir={handleTafsir}
-        onBookmark={handleBookmark}
-        onCopy={handleCopy}
-        onDismiss={() => setContextMenu((s) => ({ ...s, visible: false }))}
-      />
-      <TafsirSheet
-        visible={tafsirSheet.visible}
-        surahNumber={tafsirSheet.surahNumber}
-        verseNumber={tafsirSheet.verseNumber}
-        uthmaniText={tafsirSheet.uthmaniText}
-        onDismiss={() => setTafsirSheet((s) => ({ ...s, visible: false }))}
-      />
     </Surface>
   );
 }

@@ -9,6 +9,7 @@ import { formatNowPlayingTitle } from '@/features/audio/utils/formatNowPlaying';
 import { audioService } from '@/services/audio';
 import { audioDownloadService } from '@/services/audio-download';
 import { audioTimingService, findActiveVerse, VerseTiming } from '@/services/audio-timing';
+import { db, id } from '@/services/instantdb';
 import { mmkvStorage } from '@/services/mmkv';
 import { useUIStore } from '@/theme/useUIStore';
 
@@ -26,6 +27,25 @@ export function getPreviousVerseKey(currentKey: string, timings: VerseTiming[]):
 
 function getReciterName(reciterId: string): string {
   return RECITERS.find((r) => r.id === reciterId)?.nameEnglish ?? reciterId;
+}
+
+// Sync audio position to InstantDB (fire-and-forget)
+// Persisted in useAudioStore via _audioPositionId to avoid orphaned entities on restart
+function syncAudioPosition(surah: number, verseKey: string, reciterId: string) {
+  const store = useAudioStore.getState();
+  let apId = store._audioPositionId;
+  if (!apId) {
+    apId = id();
+    useAudioStore.setState({ _audioPositionId: apId });
+  }
+  db.transact(
+    db.tx.audioPosition[apId].update({
+      surah,
+      verse: parseInt(verseKey.split(':')[1] || '1', 10),
+      reciterId,
+      updatedAt: Date.now(),
+    }),
+  );
 }
 
 let cachedArtworkUrl: string | undefined | null = null;
@@ -67,6 +87,7 @@ interface AudioState {
   selectedReciterId: string;
   playbackSpeed: number;
   continuousPlayback: boolean;
+  _audioPositionId: string | null;
   // Actions
   play: (surah: number, reciterId?: string, startVerseKey?: string) => Promise<void>;
   pause: () => void;
@@ -245,6 +266,7 @@ export const useAudioStore = create<AudioState>()(
         selectedReciterId: 'alafasy',
         playbackSpeed: 1.0,
         continuousPlayback: true,
+        _audioPositionId: null,
 
         play: async (surah, reciterId?, startVerseKey?) => {
           const rid = reciterId ?? get().selectedReciterId;
@@ -265,6 +287,7 @@ export const useAudioStore = create<AudioState>()(
             interruptedAtMs: 0,
             interruptedAtTimestamp: 0,
           });
+          syncAudioPosition(surah, `${surah}:1`, rid);
           try {
             await audioService.loadTrack(url, {
               surahNumber: surah,
@@ -369,6 +392,9 @@ export const useAudioStore = create<AudioState>()(
         setReciter: (reciterId) => {
           const { currentSurah, isPlaying, activeVerseKey, currentVerseKey } = get();
           set({ selectedReciterId: reciterId });
+          if (currentSurah) {
+            syncAudioPosition(currentSurah, currentVerseKey ?? `${currentSurah}:1`, reciterId);
+          }
           if (currentSurah && isPlaying) {
             // Preserve current verse position when switching reciters
             const verseKey = activeVerseKey ?? currentVerseKey ?? undefined;
@@ -472,6 +498,7 @@ export const useAudioStore = create<AudioState>()(
         selectedReciterId: state.selectedReciterId,
         playbackSpeed: state.playbackSpeed,
         continuousPlayback: state.continuousPlayback,
+        _audioPositionId: state._audioPositionId,
       }),
     },
   ),

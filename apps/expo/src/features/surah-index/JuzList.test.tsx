@@ -106,10 +106,9 @@ describe('JuzList', () => {
     expect(data.length).toBe(30);
   });
 
-  test('has contentContainerStyle and ItemSeparatorComponent configured', () => {
+  test('has drawDistance configured', () => {
     const element = (JuzList as any)() as unknown as MockElement;
-    expect(element.props.contentContainerStyle).toBeDefined();
-    expect(element.props.ItemSeparatorComponent).toBeDefined();
+    expect(element.props.drawDistance).toBe(250);
   });
 
   test('has contentContainerStyle for max-width', () => {

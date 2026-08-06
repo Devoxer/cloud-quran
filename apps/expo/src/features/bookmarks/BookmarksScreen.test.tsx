@@ -72,10 +72,11 @@ let mockBookmarkedVerses: Array<{
   createdAt: number;
   uthmaniText: string;
   translationText: string;
+  bookmarkId: string;
 }> = [];
 let mockIsLoading = false;
 const mockNavigate = jest.fn();
-const mockRemoveBookmark = jest.fn();
+const mockRemoveBookmarkById = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ navigate: mockNavigate, push: jest.fn(), back: jest.fn() }),
@@ -88,19 +89,13 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));
 jest.mock('@expo/vector-icons/Ionicons', () => ({ default: 'Ionicons' }));
-jest.mock('@/features/bookmarks/useBookmarkStore', () => {
-  const useBookmarkStore = Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        bookmarks: [],
-        addBookmark: () => {},
-        removeBookmark: mockRemoveBookmark,
-        toggleBookmark: () => {},
-      }),
-    { getState: () => ({ bookmarks: [] }), setState: () => {}, subscribe: () => () => {} },
-  );
-  return { useBookmarkStore };
-});
+jest.mock('@/features/bookmarks/useBookmarkStore', () => ({
+  useBookmarks: () => ({ bookmarks: [], isLoading: false, error: null }),
+  toggleBookmark: jest.fn(),
+  addBookmark: jest.fn(),
+  removeBookmark: jest.fn(),
+  removeBookmarkById: (...args: unknown[]) => mockRemoveBookmarkById(...args),
+}));
 jest.mock('./hooks/useBookmarkedVerses', () => ({
   useBookmarkedVerses: () => ({
     verses: mockBookmarkedVerses,
@@ -157,6 +152,7 @@ describe('BookmarksScreen', () => {
         createdAt: 1000,
         uthmaniText: 'text1',
         translationText: 'trans1',
+        bookmarkId: 'bk-1',
       },
       {
         surahNumber: 2,
@@ -164,6 +160,7 @@ describe('BookmarksScreen', () => {
         createdAt: 2000,
         uthmaniText: 'text2',
         translationText: 'trans2',
+        bookmarkId: 'bk-2',
       },
     ];
     mockIsLoading = false;
@@ -173,7 +170,7 @@ describe('BookmarksScreen', () => {
     expect(flatLists[0].props.data).toEqual(mockBookmarkedVerses);
   });
 
-  test('FlashList has data and renderItem configured', () => {
+  test('FlashList has drawDistance configured', () => {
     mockBookmarkedVerses = [
       {
         surahNumber: 1,
@@ -181,13 +178,13 @@ describe('BookmarksScreen', () => {
         createdAt: 1000,
         uthmaniText: 'text',
         translationText: 'translation',
+        bookmarkId: 'bk-1',
       },
     ];
     mockIsLoading = false;
     const element = (BookmarksScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    expect(flatLists[0].props.data).toBeDefined();
-    expect(flatLists[0].props.renderItem).toBeDefined();
+    const flashLists = findElements(element, (el) => el.type === 'FlashList');
+    expect(flashLists[0].props.drawDistance).toBe(250);
   });
 
   test('bookmark press calls navigateToVerse and router.navigate (AC #4)', () => {
@@ -200,6 +197,7 @@ describe('BookmarksScreen', () => {
         createdAt: 1000,
         uthmaniText: 'text',
         translationText: 'trans',
+        bookmarkId: 'bk-1',
       },
     ];
     mockIsLoading = false;
@@ -215,8 +213,8 @@ describe('BookmarksScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
-  test('bookmark delete calls removeBookmark (AC #5)', () => {
-    mockRemoveBookmark.mockClear();
+  test('bookmark delete calls removeBookmarkById (AC #5)', () => {
+    mockRemoveBookmarkById.mockClear();
     mockBookmarkedVerses = [
       {
         surahNumber: 1,
@@ -224,6 +222,7 @@ describe('BookmarksScreen', () => {
         createdAt: 1000,
         uthmaniText: 'text',
         translationText: 'trans',
+        bookmarkId: 'bk-del-1',
       },
     ];
     mockIsLoading = false;
@@ -235,7 +234,7 @@ describe('BookmarksScreen', () => {
     const rendered = renderItem({ item: mockBookmarkedVerses[0] }) as unknown as MockElement;
     expect(rendered.props.onDelete).toBeDefined();
     (rendered.props.onDelete as () => void)();
-    expect(mockRemoveBookmark).toHaveBeenCalledWith(1, 1);
+    expect(mockRemoveBookmarkById).toHaveBeenCalledWith('bk-del-1');
   });
 
   test('FlashList keyExtractor produces surah:verse format', () => {
@@ -246,6 +245,7 @@ describe('BookmarksScreen', () => {
         createdAt: 1000,
         uthmaniText: 'text',
         translationText: 'trans',
+        bookmarkId: 'bk-1',
       },
     ];
     mockIsLoading = false;

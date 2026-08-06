@@ -1,41 +1,31 @@
-import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
-import { useEffect } from 'react';
-import { useIsAuthenticated } from '@/features/auth';
-import { SignInSheet } from '@/features/auth/components/SignInSheet';
-import { useAuthFlow } from '@/features/auth/hooks/useAuthFlow';
+import { useRouter } from 'expo-router';
 
-export default function SignInRoute() {
-  const { signInWithApple, signInWithGoogle, signInWithMagicLink, handleMagicLinkCallback } =
-    useAuthFlow();
-  const isAuthenticated = useIsAuthenticated();
+import { Surface } from '@/components/Surface';
+import { SignInMethodList } from '@/features/auth/components/SignInMethodList';
 
-  // Listen for magic link deep link callback
-  useEffect(() => {
-    const subscription = Linking.addEventListener('url', (event) => {
-      handleMagicLinkCallback(event.url);
-    });
+export default function SignInScreen() {
+  const router = useRouter();
 
-    // Check if app was opened via a magic link deep link
-    Linking.getInitialURL().then((url) => {
-      if (url) handleMagicLinkCallback(url);
-    });
-
-    return () => subscription.remove();
-  }, [handleMagicLinkCallback]);
-
-  // Dismiss modal once authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.dismiss();
+  const handleSuccess = () => {
+    // Navigate back to the app — AuthGate will detect the new auth state
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/settings');
     }
-  }, [isAuthenticated]);
+  };
+
+  const handleCancel = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/settings');
+    }
+  };
 
   return (
-    <SignInSheet
-      onAppleSignIn={signInWithApple}
-      onGoogleSignIn={signInWithGoogle}
-      onMagicLinkSignIn={signInWithMagicLink}
-    />
+    <Surface>
+      <SignInMethodList onSuccess={handleSuccess} onCancel={handleCancel} />
+    </Surface>
   );
 }

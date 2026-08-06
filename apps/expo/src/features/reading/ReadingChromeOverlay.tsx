@@ -2,12 +2,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { SURAH_METADATA } from 'quran-data';
 import { useCallback, useEffect, useRef } from 'react';
-import { Animated, Platform, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/AppText';
 import { useAudioStore } from '@/features/audio/stores/useAudioStore';
-import { OfflineIndicator } from '@/features/sync/components/OfflineIndicator';
 import { useTheme } from '@/theme/ThemeProvider';
 import { animation, spacing } from '@/theme/tokens';
 import { useUIStore } from '@/theme/useUIStore';
@@ -25,8 +24,6 @@ export function ReadingChromeOverlay({ onVerseJumpPress }: ReadingChromeOverlayP
   const audioCurrentSurah = useAudioStore((s) => s.currentSurah);
   const audioPlay = useAudioStore((s) => s.play);
   const firstVisibleVerse = useUIStore((s) => s.firstVisibleVerse);
-  const showTransliteration = useUIStore((s) => s.showTransliteration);
-  const toggleTransliteration = useUIStore((s) => s.toggleTransliteration);
   const { tokens } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -35,21 +32,6 @@ export function ReadingChromeOverlay({ onVerseJumpPress }: ReadingChromeOverlayP
   const handleModeToggle = useCallback(() => {
     setMode(currentMode === 'reading' ? 'mushaf' : 'reading');
   }, [currentMode, setMode]);
-
-  const handleShare = useCallback(async () => {
-    const shareUrl = `https://cloudquran.app/quran/${currentSurah}/${currentVerse}`;
-    const surahMeta = SURAH_METADATA[currentSurah - 1];
-    const message = `${surahMeta.nameEnglish} (${surahMeta.nameArabic}), Verse ${currentVerse} — Cloud Quran`;
-    try {
-      if (Platform.OS === 'android') {
-        await Share.share({ message: `${message}\n${shareUrl}` });
-      } else {
-        await Share.share({ url: shareUrl, message });
-      }
-    } catch {
-      // Share failed (e.g., no share target available) — no action needed
-    }
-  }, [currentSurah, currentVerse]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -73,40 +55,21 @@ export function ReadingChromeOverlay({ onVerseJumpPress }: ReadingChromeOverlayP
         },
       ]}
     >
-      <OfflineIndicator />
       <View style={styles.content}>
-        <View style={styles.leftControls}>
-          <Pressable
-            onPress={handleModeToggle}
-            style={styles.modeToggle}
-            accessibilityRole="button"
-            accessibilityLabel={
-              currentMode === 'reading' ? 'Switch to Mushaf Mode' : 'Switch to Reading Mode'
-            }
-          >
-            <Ionicons
-              name={currentMode === 'reading' ? 'albums-outline' : 'list-outline'}
-              size={22}
-              color={tokens.text.ui}
-            />
-          </Pressable>
-          {currentMode === 'reading' && (
-            <Pressable
-              onPress={toggleTransliteration}
-              style={styles.transliterationToggle}
-              accessibilityRole="button"
-              accessibilityLabel={
-                showTransliteration ? 'Hide transliteration' : 'Show transliteration'
-              }
-            >
-              <Ionicons
-                name={showTransliteration ? 'text' : 'text-outline'}
-                size={20}
-                color={showTransliteration ? tokens.accent.audio : tokens.text.ui}
-              />
-            </Pressable>
-          )}
-        </View>
+        <Pressable
+          onPress={handleModeToggle}
+          style={styles.modeToggle}
+          accessibilityRole="button"
+          accessibilityLabel={
+            currentMode === 'reading' ? 'Switch to Mushaf Mode' : 'Switch to Reading Mode'
+          }
+        >
+          <Ionicons
+            name={currentMode === 'reading' ? 'albums-outline' : 'list-outline'}
+            size={22}
+            color={tokens.text.ui}
+          />
+        </Pressable>
         <View style={styles.titleContainer}>
           <AppText variant="surahTitleArabic" style={{ color: tokens.text.quran }}>
             {metadata.nameArabic}
@@ -138,14 +101,6 @@ export function ReadingChromeOverlay({ onVerseJumpPress }: ReadingChromeOverlayP
             <Ionicons name="play-circle-outline" size={26} color={tokens.accent.audio} />
           </Pressable>
         )}
-        <Pressable
-          onPress={handleShare}
-          style={styles.shareButton}
-          accessibilityRole="button"
-          accessibilityLabel="Share verse"
-        >
-          <Ionicons name="share-outline" size={22} color={tokens.text.ui} />
-        </Pressable>
         <Pressable
           onPress={() => router.navigate('/settings')}
           style={styles.settingsButton}
@@ -180,16 +135,10 @@ const styles = StyleSheet.create({
   },
   playButton: {
     position: 'absolute',
-    right: spacing.lg + 72,
-    top: 0,
-    padding: spacing.sm,
-    zIndex: 1,
-  },
-  shareButton: {
-    position: 'absolute',
     right: spacing.lg + 36,
     top: 0,
     padding: spacing.sm,
+    zIndex: 1,
   },
   settingsButton: {
     position: 'absolute',
@@ -197,19 +146,11 @@ const styles = StyleSheet.create({
     top: 0,
     padding: spacing.sm,
   },
-  leftControls: {
+  modeToggle: {
     position: 'absolute',
     left: spacing.lg,
     top: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    padding: spacing.sm,
     zIndex: 1,
-  },
-  modeToggle: {
-    padding: spacing.sm,
-  },
-  transliterationToggle: {
-    padding: spacing.sm,
   },
 });

@@ -36,8 +36,6 @@ const mockUIState = {
   hideChrome: jest.fn(),
   firstVisibleVerse: null as string | null,
   setFirstVisibleVerse: jest.fn(),
-  showTransliteration: false,
-  toggleTransliteration: jest.fn(),
 };
 
 jest.mock('@/theme/useUIStore', () => {
@@ -75,14 +73,12 @@ const mockVerses = [
     verseNumber: 1,
     uthmaniText: 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
     translationText: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
-    transliterationText: 'Bismi Allahi arrahmani arraheem',
   },
   {
     surahNumber: 1,
     verseNumber: 2,
     uthmaniText: 'ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ',
     translationText: 'All praise is due to Allah, Lord of the worlds,',
-    transliterationText: 'Alhamdu lillahi rabbi alAAalameen',
   },
 ];
 const mockRetry = jest.fn();
@@ -114,58 +110,21 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));
 jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Ionicons' }));
-jest.mock('expo-clipboard', () => ({
-  setStringAsync: jest.fn(),
-}));
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'LIGHT' },
-}));
-jest.mock('react-native-gesture-handler', () => ({
-  Gesture: {
-    LongPress: () => ({
-      minDuration: () => ({ onStart: () => ({}) }),
-    }),
-    Pan: () => ({
-      onUpdate: () => ({ onEnd: () => ({}) }),
-    }),
-  },
-  GestureDetector: ({ children }: { children: unknown }) => children,
-}));
-jest.mock('react-native-reanimated', () => ({
-  default: { View: 'Animated.View' },
-  Easing: { inOut: () => ({}), ease: {} },
-  useSharedValue: () => ({ value: 0 }),
-  useAnimatedStyle: () => ({}),
-  withTiming: (v: number) => v,
-  runOnJS: (fn: unknown) => fn,
-}));
-jest.mock('./VerseContextMenu', () => ({ VerseContextMenu: () => null }));
-jest.mock('./TafsirSheet', () => ({ TafsirSheet: () => null }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ navigate: jest.fn(), push: jest.fn(), back: jest.fn() }),
 }));
-jest.mock('@/features/bookmarks/useBookmarkStore', () => {
-  const useBookmarkStore = Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        bookmarks: [],
-        addBookmark: () => {},
-        removeBookmark: () => {},
-        toggleBookmark: () => {},
-      }),
-    { getState: () => ({ bookmarks: [] }), setState: () => {}, subscribe: () => () => {} },
-  );
-  return { useBookmarkStore };
-});
+jest.mock('@/features/bookmarks/useBookmarkStore', () => ({
+  useBookmarks: () => ({ bookmarks: [], isLoading: false, error: null }),
+  toggleBookmark: jest.fn(),
+  addBookmark: jest.fn(),
+  removeBookmark: jest.fn(),
+  removeBookmarkById: jest.fn(),
+}));
 jest.mock('./hooks/useVerses', () => ({
   useVerses: () => mockUseVersesState,
 }));
 jest.mock('@react-navigation/bottom-tabs', () => ({
   useBottomTabBarHeight: () => 49,
-}));
-jest.mock('@/features/sync/components/OfflineIndicator', () => ({
-  OfflineIndicator: () => null,
 }));
 
 import { ReadingModeScreen } from './ReadingModeScreen';
@@ -211,11 +170,11 @@ describe('ReadingModeScreen', () => {
     expect(keyExtractor({ surahNumber: 2, verseNumber: 255 })).toBe('2:255');
   });
 
-  test('FlashList has scrollEventThrottle configured', () => {
+  test('FlashList has drawDistance configured', () => {
     mockUseVersesState = { verses: mockVerses, isLoading: false, error: null, retry: mockRetry };
     const element = (ReadingModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    expect(flatLists[0].props.scrollEventThrottle).toBe(16);
+    const flashLists = findElements(element, (el) => el.type === 'FlashList');
+    expect(flashLists[0].props.drawDistance).toBe(750);
   });
 
   test('renders loading state with ActivityIndicator', () => {
@@ -351,11 +310,18 @@ describe('ReadingModeScreen', () => {
     expect(flatLists[0].props.initialScrollIndex).toBeUndefined();
   });
 
-  test('FlashList does NOT have onScrollToIndexFailed (v2 uses Promise)', () => {
+  test('FlashList has scrollEventThrottle set to 16', () => {
     mockUseVersesState = { verses: mockVerses, isLoading: false, error: null, retry: mockRetry };
     const element = (ReadingModeScreen as any)() as unknown as MockElement;
     const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    expect(flatLists[0].props.onScrollToIndexFailed).toBeUndefined();
+    expect(flatLists[0].props.scrollEventThrottle).toBe(16);
+  });
+
+  test('FlashList does NOT have onScrollToIndexFailed (FlashList v2 handles internally)', () => {
+    mockUseVersesState = { verses: mockVerses, isLoading: false, error: null, retry: mockRetry };
+    const element = (ReadingModeScreen as any)() as unknown as MockElement;
+    const flashLists = findElements(element, (el) => el.type === 'FlashList');
+    expect(flashLists[0].props.onScrollToIndexFailed).toBeUndefined();
   });
 
   test('renders error state with retry option', () => {
@@ -417,11 +383,11 @@ describe('ReadingModeScreen — verse highlighting', () => {
     expect(verse1.props.isHighlighted).toBe(false);
   });
 
-  test('FlashList has extraData set to activeVerseKey and showTransliteration for re-render trigger', () => {
+  test('FlashList has extraData set to activeVerseKey for re-render trigger', () => {
     mockActiveVerseKey = '1:3';
     const element = (ReadingModeScreen as any)() as unknown as MockElement;
     const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    expect(flatLists[0].props.extraData).toBe('1:3-false');
+    expect(flatLists[0].props.extraData).toBe('1:3');
   });
 
   test('FlashList has onScrollEndDrag and onMomentumScrollEnd for scroll cooldown', () => {
@@ -429,25 +395,5 @@ describe('ReadingModeScreen — verse highlighting', () => {
     const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists[0].props.onScrollEndDrag).toBeDefined();
     expect(flatLists[0].props.onMomentumScrollEnd).toBeDefined();
-  });
-
-  test('renderItem passes transliterationText to VerseRow', () => {
-    mockUseVersesState = { verses: mockVerses, isLoading: false, error: null, retry: mockRetry };
-    const element = (ReadingModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    const renderItem = flatLists[0].props.renderItem as (info: {
-      item: (typeof mockVerses)[0];
-    }) => any;
-    const verse1 = renderItem({ item: mockVerses[0] });
-    expect(verse1.props.transliterationText).toBe('Bismi Allahi arrahmani arraheem');
-  });
-
-  test('FlashList extraData includes showTransliteration state', () => {
-    mockActiveVerseKey = '1:1';
-    mockUIState.showTransliteration = true;
-    const element = (ReadingModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    expect(flatLists[0].props.extraData).toBe('1:1-true');
-    mockUIState.showTransliteration = false;
   });
 });

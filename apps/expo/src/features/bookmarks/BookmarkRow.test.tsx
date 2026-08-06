@@ -69,19 +69,13 @@ jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: 'GestureHandlerRootView',
 }));
 
-jest.mock('@/features/bookmarks/useBookmarkStore', () => {
-  const useBookmarkStore = Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        bookmarks: [],
-        addBookmark: () => {},
-        removeBookmark: () => {},
-        toggleBookmark: () => {},
-      }),
-    { getState: () => ({ bookmarks: [] }), setState: () => {}, subscribe: () => () => {} },
-  );
-  return { useBookmarkStore };
-});
+jest.mock('@/features/bookmarks/useBookmarkStore', () => ({
+  useBookmarks: () => ({ bookmarks: [], isLoading: false, error: null }),
+  toggleBookmark: jest.fn(),
+  addBookmark: jest.fn(),
+  removeBookmark: jest.fn(),
+  removeBookmarkById: jest.fn(),
+}));
 
 const imported = require('./BookmarkRow');
 const BookmarkRow =

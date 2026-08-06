@@ -3,6 +3,9 @@ node_modules/
 
 # Expo
 .expo/
+
+# Astro
+.astro/
 dist/
 *.tsbuildinfo
 expo-env.d.ts

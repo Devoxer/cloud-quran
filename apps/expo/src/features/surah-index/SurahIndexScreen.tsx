@@ -116,6 +116,7 @@ export function SurahIndexScreen() {
             keyExtractor={keyExtractor}
             ItemSeparatorComponent={ItemSeparator}
             contentContainerStyle={styles.content}
+            drawDistance={250}
           />
         )}
         {activeTab === 'juz' && <JuzList />}

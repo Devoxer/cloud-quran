@@ -116,7 +116,6 @@ function main() {
   lines.push(' * @returns Page number (1-604), or -1 if not found');
   lines.push(' */');
   lines.push('export function getPageForVerse(surah: number, verse: number): number {');
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: code generation — template literal is output, not a mistake
   lines.push('  return VERSE_PAGE_MAP[`${surah}:${verse}`] ?? -1;');
   lines.push('}');
   lines.push('');

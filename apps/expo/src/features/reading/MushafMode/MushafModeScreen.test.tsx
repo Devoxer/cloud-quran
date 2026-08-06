@@ -79,32 +79,6 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('@expo/vector-icons/Ionicons', () => ({ __esModule: true, default: 'Ionicons' }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
-jest.mock('expo-clipboard', () => ({
-  setStringAsync: jest.fn(),
-}));
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'LIGHT' },
-}));
-jest.mock('react-native-gesture-handler', () => ({
-  Gesture: {
-    LongPress: () => ({
-      minDuration: () => ({ onStart: () => ({}) }),
-    }),
-    Pan: () => ({
-      onUpdate: () => ({ onEnd: () => ({}) }),
-    }),
-  },
-  GestureDetector: ({ children }: { children: unknown }) => children,
-}));
-jest.mock('react-native-reanimated', () => ({
-  default: { View: 'Animated.View' },
-  Easing: { inOut: () => ({}), ease: {} },
-  useSharedValue: () => ({ value: 0 }),
-  useAnimatedStyle: () => ({}),
-  withTiming: (v: number) => v,
-  runOnJS: (fn: unknown) => fn,
-}));
 
 jest.mock('@/features/audio/stores/useAudioStore', () => {
   const mockAudioState = {
@@ -121,21 +95,8 @@ jest.mock('@/features/audio/stores/useAudioStore', () => {
 // Mock Surface and ReadingChromeOverlay as string types for tree inspection
 jest.mock('@/components/Surface', () => ({ Surface: 'Surface' }));
 jest.mock('../ReadingChromeOverlay', () => ({ ReadingChromeOverlay: 'ReadingChromeOverlay' }));
-jest.mock('../VerseContextMenu', () => ({ VerseContextMenu: () => null }));
-jest.mock('../TafsirSheet', () => ({ TafsirSheet: () => null }));
 jest.mock('./MushafPage', () => ({ MushafPage: 'MushafPage' }));
 jest.mock('@/components/AppText', () => ({ AppText: 'AppText' }));
-jest.mock('@/features/bookmarks/useBookmarkStore', () => {
-  const useBookmarkStore = Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({ bookmarks: [], toggleBookmark: jest.fn() }),
-    { getState: () => ({ bookmarks: [], toggleBookmark: jest.fn() }), setState: () => {}, subscribe: () => () => {} },
-  );
-  return { useBookmarkStore };
-});
-jest.mock('@/services/sqlite', () => ({
-  getVersesByPositions: jest.fn(() => Promise.resolve([])),
-}));
 
 // Mock mushaf services
 jest.mock('@/services/mushaf-fonts', () => ({
@@ -179,17 +140,17 @@ describe('MushafModeScreen', () => {
     expect(element.type).toBe('Surface');
   });
 
-  test('renders a horizontal FlatList with pagingEnabled', () => {
+  test('renders a horizontal FlashList with pagingEnabled', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists.length).toBe(1);
     expect(flatLists[0].props.horizontal).toBe(true);
     expect(flatLists[0].props.pagingEnabled).toBe(true);
   });
 
-  test('FlatList has 604 pages of data', () => {
+  test('FlashList has 604 pages of data', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     const data = flatLists[0].props.data as number[];
     expect(data.length).toBe(604);
     expect(data[0]).toBe(1);
@@ -204,41 +165,32 @@ describe('MushafModeScreen', () => {
     });
     const element = (MushafModeScreen as any)() as unknown as MockElement;
     expect(mockGetPageForVerse).toHaveBeenCalledWith(2, 5);
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists[0].props.initialScrollIndex).toBe(1); // page 2 -> index 1
   });
 
-  test('FlatList has getItemLayout for O(1) scrolling', () => {
+  test('FlashList has drawDistance configured', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
-    const getItemLayout = flatLists[0].props.getItemLayout as (
-      data: any,
-      index: number,
-    ) => { length: number; offset: number; index: number };
-    expect(getItemLayout).toBeDefined();
-    const layout = getItemLayout(null, 5);
-    expect(layout.length).toBe(375); // SCREEN_WIDTH
-    expect(layout.offset).toBe(375 * 5);
-    expect(layout.index).toBe(5);
+    const flashLists = findElements(element, (el) => el.type === 'FlashList');
+    expect(flashLists[0].props.drawDistance).toBe(250);
   });
 
-  test('FlatList has inverted={true} for RTL page direction', () => {
+  test('FlashList has inverted={true} for RTL page direction', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists[0].props.inverted).toBe(true);
   });
 
-  test('FlatList has performance optimizations', () => {
+  test('FlashList has performance optimizations', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
-    expect(flatLists[0].props.windowSize).toBe(3);
-    expect(flatLists[0].props.removeClippedSubviews).toBe(true);
-    expect(flatLists[0].props.showsHorizontalScrollIndicator).toBe(false);
+    const flashLists = findElements(element, (el) => el.type === 'FlashList');
+    expect(flashLists[0].props.drawDistance).toBe(250);
+    expect(flashLists[0].props.showsHorizontalScrollIndicator).toBe(false);
   });
 
   test('renderItem produces MushafPage wrapped in View with viewport dimensions', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     const renderItem = flatLists[0].props.renderItem as (info: { item: number }) => any;
     const rendered = renderItem({ item: 42 });
     expect(rendered.type).toBe('View');
@@ -251,7 +203,7 @@ describe('MushafModeScreen', () => {
 
   test('passes onTap handler to MushafPage for chrome toggle (no Pressable wrapper)', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists.length).toBe(1);
     const renderItem = flatLists[0].props.renderItem as (info: { item: number }) => any;
     const rendered = renderItem({ item: 1 });
@@ -262,7 +214,7 @@ describe('MushafModeScreen', () => {
   test('onTap callback calls toggleChrome when not scrolling', () => {
     mockUIState.toggleChrome.mockClear();
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     const renderItem = flatLists[0].props.renderItem as (info: { item: number }) => any;
     const rendered = renderItem({ item: 1 });
     const mushafPages = findElements(rendered, (el) => el.type === 'MushafPage');
@@ -296,15 +248,15 @@ describe('MushafModeScreen', () => {
     expect(sliders.length).toBe(0);
   });
 
-  test('has onViewableItemsChanged callback on FlatList', () => {
+  test('has onViewableItemsChanged callback on FlashList', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists[0].props.onViewableItemsChanged).toBeDefined();
   });
 
   test('has scroll event handlers for chrome guard', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists[0].props.onScrollBeginDrag).toBeDefined();
     expect(flatLists[0].props.onScrollEndDrag).toBeDefined();
     expect(flatLists[0].props.onMomentumScrollEnd).toBeDefined();
@@ -312,14 +264,14 @@ describe('MushafModeScreen', () => {
 
   test('keyExtractor returns page-based key', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     const keyExtractor = flatLists[0].props.keyExtractor as (item: number) => string;
     expect(keyExtractor(42)).toBe('page-42');
   });
 
-  test('FlatList has onLayout handler for web scroll fix', () => {
+  test('FlashList has onLayout handler for web scroll fix', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     expect(flatLists[0].props.onLayout).toBeDefined();
     expect(typeof flatLists[0].props.onLayout).toBe('function');
   });
@@ -340,9 +292,9 @@ describe('MushafModeScreen — audio auto-advance wiring', () => {
     expect(selectorSpy).toHaveReturnedWith(false);
   });
 
-  test('scroll handlers on FlatList enable isScrolling guard for auto-advance', () => {
+  test('scroll handlers on FlashList enable isScrolling guard for auto-advance', () => {
     const element = (MushafModeScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlatList');
+    const flatLists = findElements(element, (el) => el.type === 'FlashList');
     // onScrollBeginDrag sets isScrolling.current = true (guards auto-advance)
     expect(flatLists[0].props.onScrollBeginDrag).toBeDefined();
     // onScrollEndDrag/onMomentumScrollEnd reset isScrolling.current = false

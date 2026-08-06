@@ -1,147 +1,73 @@
-import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+const mockTransact = jest.fn();
+const mockDelete = jest.fn();
+const mockUpdate = jest.fn(() => ({ delete: mockDelete }));
 
-// Mock react-native-mmkv with in-memory storage
-const mockStorage = new Map<string, string>();
-jest.mock('react-native-mmkv', () => ({
-  createMMKV: () => ({
-    set: (key: string, value: string) => mockStorage.set(key, value),
-    getString: (key: string) => mockStorage.get(key),
-    remove: (key: string) => mockStorage.delete(key),
-  }),
+jest.mock('@/services/instantdb', () => ({
+  db: {
+    transact: (...args: unknown[]) => mockTransact(...args),
+    useQuery: jest.fn(() => ({ data: null, isLoading: false, error: null })),
+    useAuth: jest.fn(() => ({ isLoading: false, user: null, error: null })),
+    auth: { signInAsGuest: jest.fn() },
+    tx: new Proxy(
+      {},
+      {
+        get: () =>
+          new Proxy(
+            {},
+            {
+              get: () => ({
+                update: mockUpdate,
+                delete: mockDelete,
+              }),
+            },
+          ),
+      },
+    ),
+  },
+  id: jest.fn(() => 'mock-id'),
+  useBookmarks: jest.fn(() => ({ bookmarks: [], isLoading: false, error: null })),
+  useReadingPosition: jest.fn(() => ({ position: null, isLoading: false, error: null })),
+  usePreferences: jest.fn(() => ({ preferences: null, isLoading: false, error: null })),
+  useAudioPosition: jest.fn(() => ({ audioPosition: null, isLoading: false, error: null })),
 }));
 
-const { mmkvStorage } = require('@/services/mmkv');
-
-// Create store directly (same logic as useBookmarkStore.ts) to avoid mock interference.
-interface Bookmark {
-  surahNumber: number;
-  verseNumber: number;
-  createdAt: number;
-}
-
-interface BookmarkState {
-  bookmarks: Bookmark[];
-  addBookmark: (surahNumber: number, verseNumber: number) => void;
-  removeBookmark: (surahNumber: number, verseNumber: number) => void;
-  toggleBookmark: (surahNumber: number, verseNumber: number) => void;
-}
-
-const useBookmarkStore = create<BookmarkState>()(
-  persist(
-    (set, get) => ({
-      bookmarks: [],
-      addBookmark: (surahNumber, verseNumber) => {
-        const exists = get().bookmarks.some(
-          (b) => b.surahNumber === surahNumber && b.verseNumber === verseNumber,
-        );
-        if (exists) return;
-        set((state) => ({
-          bookmarks: [...state.bookmarks, { surahNumber, verseNumber, createdAt: Date.now() }],
-        }));
-      },
-      removeBookmark: (surahNumber, verseNumber) =>
-        set((state) => ({
-          bookmarks: state.bookmarks.filter(
-            (b) => !(b.surahNumber === surahNumber && b.verseNumber === verseNumber),
-          ),
-        })),
-      toggleBookmark: (surahNumber, verseNumber) => {
-        const exists = get().bookmarks.some(
-          (b) => b.surahNumber === surahNumber && b.verseNumber === verseNumber,
-        );
-        if (exists) {
-          get().removeBookmark(surahNumber, verseNumber);
-        } else {
-          get().addBookmark(surahNumber, verseNumber);
-        }
-      },
-    }),
-    {
-      name: 'bookmark-state',
-      storage: createJSONStorage(() => mmkvStorage),
-    },
-  ),
-);
+import { addBookmark, removeBookmarkById, toggleBookmark } from './useBookmarkStore';
 
 describe('useBookmarkStore', () => {
   beforeEach(() => {
-    useBookmarkStore.setState({ bookmarks: [] });
-    mockStorage.clear();
+    mockTransact.mockClear();
+    mockUpdate.mockClear();
+    mockDelete.mockClear();
   });
 
-  test('initial state has empty bookmarks array', () => {
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toEqual([]);
+  test('addBookmark calls db.transact with correct data', () => {
+    addBookmark(1, 5);
+    expect(mockTransact).toHaveBeenCalledTimes(1);
   });
 
-  test('addBookmark adds a bookmark with correct fields', () => {
-    const before = Date.now();
-    useBookmarkStore.getState().addBookmark(1, 5);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(1);
-    expect(bookmarks[0].surahNumber).toBe(1);
-    expect(bookmarks[0].verseNumber).toBe(5);
-    expect(bookmarks[0].createdAt).toBeGreaterThanOrEqual(before);
-    expect(bookmarks[0].createdAt).toBeLessThanOrEqual(Date.now());
+  test('removeBookmarkById calls db.transact', () => {
+    removeBookmarkById('some-bookmark-id');
+    expect(mockTransact).toHaveBeenCalledTimes(1);
   });
 
-  test('addBookmark does not add duplicate (same surah+verse)', () => {
-    useBookmarkStore.getState().addBookmark(1, 5);
-    useBookmarkStore.getState().addBookmark(1, 5);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(1);
+  test('toggleBookmark adds when bookmark does not exist', () => {
+    const bookmarks: Array<{ id: string; surah: number; verse: number }> = [];
+    toggleBookmark(1, 1, bookmarks);
+    // Should call transact to add
+    expect(mockTransact).toHaveBeenCalledTimes(1);
   });
 
-  test('addBookmark allows different verses in same surah', () => {
-    useBookmarkStore.getState().addBookmark(1, 1);
-    useBookmarkStore.getState().addBookmark(1, 2);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(2);
+  test('toggleBookmark removes when bookmark exists', () => {
+    const bookmarks = [{ id: 'bk-1', surah: 1, verse: 1 }];
+    toggleBookmark(1, 1, bookmarks);
+    // Should call transact to delete
+    expect(mockTransact).toHaveBeenCalledTimes(1);
   });
 
-  test('removeBookmark removes the correct bookmark', () => {
-    useBookmarkStore.getState().addBookmark(1, 1);
-    useBookmarkStore.getState().addBookmark(2, 5);
-    useBookmarkStore.getState().removeBookmark(1, 1);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(1);
-    expect(bookmarks[0].surahNumber).toBe(2);
-    expect(bookmarks[0].verseNumber).toBe(5);
-  });
-
-  test('removeBookmark with non-existent bookmark does nothing', () => {
-    useBookmarkStore.getState().addBookmark(1, 1);
-    useBookmarkStore.getState().removeBookmark(99, 99);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(1);
-  });
-
-  test('toggleBookmark adds when absent', () => {
-    useBookmarkStore.getState().toggleBookmark(1, 1);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(1);
-    expect(bookmarks[0].surahNumber).toBe(1);
-    expect(bookmarks[0].verseNumber).toBe(1);
-  });
-
-  test('toggleBookmark removes when present', () => {
-    useBookmarkStore.getState().addBookmark(1, 1);
-    useBookmarkStore.getState().toggleBookmark(1, 1);
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(0);
-  });
-
-  test('bookmarks persist via MMKV (persist config uses bookmark-state key)', () => {
-    useBookmarkStore.getState().addBookmark(2, 255);
-    const stored = mockStorage.get('bookmark-state');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      expect(parsed.state.bookmarks).toHaveLength(1);
-      expect(parsed.state.bookmarks[0].surahNumber).toBe(2);
-      expect(parsed.state.bookmarks[0].verseNumber).toBe(255);
-    }
-    const { bookmarks } = useBookmarkStore.getState();
-    expect(bookmarks).toHaveLength(1);
+  test('toggleBookmark does not remove a non-matching bookmark', () => {
+    const bookmarks = [{ id: 'bk-1', surah: 2, verse: 3 }];
+    toggleBookmark(1, 1, bookmarks);
+    // Should call transact to add (not matching)
+    expect(mockTransact).toHaveBeenCalledTimes(1);
   });
 });

@@ -163,11 +163,10 @@ describe('SurahIndexScreen', () => {
     expect(keyExtractor({ number: 114 })).toBe('114');
   });
 
-  test('has FlashList with data and renderItem configured', () => {
+  test('has FlashList drawDistance configured', () => {
     const element = (SurahIndexScreen as any)() as unknown as MockElement;
-    const flatLists = findElements(element, (el) => el.type === 'FlashList');
-    expect(flatLists[0].props.data).toBeDefined();
-    expect(flatLists[0].props.renderItem).toBeDefined();
+    const flashLists = findElements(element, (el) => el.type === 'FlashList');
+    expect(flashLists[0].props.drawDistance).toBe(250);
   });
 
   test('calls navigateToVerse and navigates on surah press', () => {
