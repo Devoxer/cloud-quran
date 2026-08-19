@@ -173,6 +173,21 @@ export const useUIStore = create<UIState>()(
     {
       name: 'ui-state',
       storage: createJSONStorage(() => mmkvStorage),
+      // v1 strips the two entity ids from blobs written before they were
+      // removed from partialize. Dropping them from partialize only stops
+      // future WRITES — an existing blob still rehydrates them, so installs
+      // carrying a stale id would keep failing every transact without this.
+      version: 1,
+      migrate: (persisted, fromVersion) => {
+        if (fromVersion < 1 && persisted && typeof persisted === 'object') {
+          const { _preferencesId, _readingPositionId, ...rest } = persisted as Record<
+            string,
+            unknown
+          >;
+          return rest;
+        }
+        return persisted;
+      },
       partialize: (state) => ({
         // Only persist transient prefs and local cache of synced values
         autoFollowAudio: state.autoFollowAudio,
@@ -183,8 +198,13 @@ export const useUIStore = create<UIState>()(
         currentSurah: state.currentSurah,
         currentVerse: state.currentVerse,
         lastReadTimestamp: state.lastReadTimestamp,
-        _preferencesId: state._preferencesId,
-        _readingPositionId: state._readingPositionId,
+        // _preferencesId / _readingPositionId are deliberately NOT persisted.
+        // A persisted id outlives the entity it names (Instant app reset, a new
+        // guest identity, server-side deletion). InstantDB treats `.update()` on
+        // an unknown id as a CREATE, so the partial payloads below would then
+        // create a row missing schema-required attributes and every write would
+        // fail `validation-failed` forever. The ids are re-derived from the
+        // server on each launch by useInstantDBSync instead.
       }),
     },
   ),
@@ -195,9 +215,45 @@ export const useUIStore = create<UIState>()(
  * Uses useEffect to avoid calling setState during render.
  * Call this once in the root layout (inside AuthGate).
  */
-export function useInstantDBSync() {
-  const { preferences } = usePreferences();
-  const { position } = useReadingPosition();
+export function useInstantDBSync(isAuthed: boolean) {
+  const { preferences, isLoading: prefsLoading } = usePreferences();
+  const { position, isLoading: positionLoading } = useReadingPosition();
+
+  // Create the singleton entities only once the server has actually answered
+  // "you have none". Creating them earlier (on auth, before the query settles)
+  // would mint a duplicate on every cold start now that the ids aren't persisted.
+  useEffect(() => {
+    if (!isAuthed || prefsLoading || preferences) return;
+    const store = useUIStore.getState();
+    const prefId = id();
+    db.transact(
+      db.tx.preferences[prefId].update({
+        theme: store.selectedTheme === 'system' ? 'light' : store.selectedTheme,
+        fontSize: store.fontSize,
+        reciterId: 'ar.alafasy',
+        readingMode: store.currentMode,
+        speedRate: 1.0,
+        transliteration: false,
+      }),
+    );
+    useUIStore.setState({ _preferencesId: prefId });
+  }, [isAuthed, prefsLoading, preferences]);
+
+  useEffect(() => {
+    if (!isAuthed || positionLoading || position) return;
+    const store = useUIStore.getState();
+    const rpId = id();
+    db.transact(
+      db.tx.readingPosition[rpId].update({
+        surah: store.currentSurah,
+        verse: store.currentVerse,
+        page: 1,
+        mode: store.currentMode,
+        updatedAt: Date.now(),
+      }),
+    );
+    useUIStore.setState({ _readingPositionId: rpId });
+  }, [isAuthed, positionLoading, position]);
 
   // Sync preferences from InstantDB → Zustand local cache
   useEffect(() => {
@@ -227,45 +283,4 @@ export function useInstantDBSync() {
   }, [position]);
 
   return { preferences, position };
-}
-
-/**
- * Ensure the singleton preferences and readingPosition entities exist.
- * Called once after guest auth completes.
- * Module-level guard prevents StrictMode double-fire from creating duplicates.
- */
-let _entitiesEnsured = false;
-export function ensureInstantDBEntities() {
-  if (_entitiesEnsured) return;
-  const store = useUIStore.getState();
-
-  if (!store._preferencesId) {
-    const prefId = id();
-    db.transact(
-      db.tx.preferences[prefId].update({
-        theme: store.selectedTheme === 'system' ? 'light' : store.selectedTheme,
-        fontSize: store.fontSize,
-        reciterId: 'ar.alafasy',
-        readingMode: store.currentMode,
-        speedRate: 1.0,
-        transliteration: false,
-      }),
-    );
-    useUIStore.setState({ _preferencesId: prefId });
-  }
-
-  if (!store._readingPositionId) {
-    const rpId = id();
-    db.transact(
-      db.tx.readingPosition[rpId].update({
-        surah: store.currentSurah,
-        verse: store.currentVerse,
-        page: 1,
-        mode: store.currentMode,
-        updatedAt: Date.now(),
-      }),
-    );
-    useUIStore.setState({ _readingPositionId: rpId });
-  }
-  _entitiesEnsured = true;
 }

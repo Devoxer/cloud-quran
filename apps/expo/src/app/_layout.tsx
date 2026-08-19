@@ -15,7 +15,7 @@ import { useGuestDataTransfer } from '@/features/auth/hooks/useGuestDataTransfer
 import { db } from '@/services/instantdb';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { KFGQPC_FONT_FAMILY } from '@/theme/tokens';
-import { ensureInstantDBEntities, useInstantDBSync } from '@/theme/useUIStore';
+import { useInstantDBSync } from '@/theme/useUIStore';
 
 function useNavigationTheme(): NavigationTheme {
   const { tokens, themeName } = useTheme();
@@ -42,18 +42,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, error]);
 
-  // Once authenticated, ensure InstantDB entities exist
-  useEffect(() => {
-    if (user) {
-      ensureInstantDBEntities();
-    }
-  }, [user]);
-
   // Transfer linked guest data when upgrading from guest to authenticated
   useGuestDataTransfer(user);
 
   // Sync InstantDB data into Zustand local cache
-  useInstantDBSync();
+  useInstantDBSync(Boolean(user));
 
   // Don't block rendering — app works offline via local store
   return <>{children}</>;
