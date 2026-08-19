@@ -211,6 +211,22 @@ export const useUIStore = create<UIState>()(
 );
 
 /**
+ * One creation attempt per app session, per entity.
+ *
+ * These MUST be latched before the transact, not after it resolves. InstantDB
+ * applies a transact optimistically, so a rejected create goes: local entity
+ * appears -> effect settles -> server rejects -> optimistic write rolls back ->
+ * the query reads null again -> the effect re-fires. Without a latch that is an
+ * unbounded create loop against a server that is refusing every write (observed
+ * on device: 245+ transacts in ~30s while perms were denying creates).
+ *
+ * Retrying cannot help here: a create that fails perms or validation will fail
+ * identically every time. Attempt once, let the error surface, stop.
+ */
+let _preferencesCreateAttempted = false;
+let _readingPositionCreateAttempted = false;
+
+/**
  * Hook to sync InstantDB data into the Zustand store.
  * Uses useEffect to avoid calling setState during render.
  * Call this once in the root layout (inside AuthGate).
@@ -223,7 +239,8 @@ export function useInstantDBSync(isAuthed: boolean) {
   // "you have none". Creating them earlier (on auth, before the query settles)
   // would mint a duplicate on every cold start now that the ids aren't persisted.
   useEffect(() => {
-    if (!isAuthed || prefsLoading || preferences) return;
+    if (!isAuthed || prefsLoading || preferences || _preferencesCreateAttempted) return;
+    _preferencesCreateAttempted = true;
     const store = useUIStore.getState();
     const prefId = id();
     db.transact(
@@ -240,7 +257,8 @@ export function useInstantDBSync(isAuthed: boolean) {
   }, [isAuthed, prefsLoading, preferences]);
 
   useEffect(() => {
-    if (!isAuthed || positionLoading || position) return;
+    if (!isAuthed || positionLoading || position || _readingPositionCreateAttempted) return;
+    _readingPositionCreateAttempted = true;
     const store = useUIStore.getState();
     const rpId = id();
     db.transact(
