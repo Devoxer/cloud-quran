@@ -1,0 +1,75 @@
+{
+  "sections": {
+    "myNotes": "Mis notas",
+    "addButton": "Añadir"
+  },
+  "counts": {
+    "noteCount_one": "{{count}} nota",
+    "noteCount_many": "{{count}} notas",
+    "noteCount_other": "{{count}} notas",
+    "bookCount_one": "{{count}} libro",
+    "bookCount_many": "{{count}} libros",
+    "bookCount_other": "{{count}} libros",
+    "summary": "{{notes}} · {{books}}"
+  },
+  "editor": {
+    "addTitle": "Añadir nota",
+    "editTitle": "Editar nota",
+    "placeholder": "Escribe tu nota...",
+    "deleteButton": "Eliminar nota",
+    "notFound": "No se pudo encontrar esta nota."
+  },
+  "discardDialog": {
+    "title": "¿Descartar cambios?",
+    "message": "Tienes cambios sin guardar. ¿Seguro que quieres descartarlos?",
+    "confirm": "Descartar",
+    "cancel": "Seguir editando"
+  },
+  "deleteDialog": {
+    "title": "¿Eliminar nota?",
+    "message": "Esta acción no se puede deshacer."
+  },
+  "emptyState": {
+    "title": "Aún no hay notas",
+    "bookDescription": "Toca Añadir para escribir tu primera nota sobre este libro.",
+    "allNotesDescription": "Añade notas desde la pantalla de detalles de un libro para verlas aquí",
+    "discoverCta": "Descubrir libros"
+  },
+  "errorState": {
+    "title": "No se pudieron cargar las notas",
+    "description": "Por favor, inténtalo de nuevo más tarde"
+  },
+  "search": {
+    "placeholder": "Buscar notas",
+    "noResultsTitle": "No hay resultados para «{{query}}»",
+    "noResultsDescription": "Prueba con otro término de búsqueda"
+  },
+  "signUpPrompt": {
+    "message": "Guarda tus notas y sincronízalas en todos tus dispositivos"
+  },
+  "errors": {
+    "mustSignInCreate": "Debes iniciar sesión para crear notas",
+    "mustSignInUpdate": "Debes iniciar sesión para actualizar notas",
+    "mustSignInDelete": "Debes iniciar sesión para eliminar notas",
+    "noBookSelected": "No hay ningún libro seleccionado",
+    "contentEmpty": "El contenido de la nota no puede estar vacío",
+    "noteIdRequired": "Se requiere el ID de la nota",
+    "createFailed": "Error al crear la nota",
+    "updateFailed": "Error al actualizar la nota",
+    "deleteFailed": "Error al eliminar la nota"
+  },
+  "a11y": {
+    "notePreview": "Nota sobre {{book}}: {{preview}}",
+    "notePreviewShort": "Nota: {{preview}}",
+    "unknownBook": "libro desconocido",
+    "editNote": "Editar nota",
+    "editNoteHint": "Toca para editar esta nota",
+    "bookCover": "Portada de {{title}}",
+    "viewBook": "Ver {{title}} de {{author}}",
+    "viewBookHint": "Toca para abrir los detalles del libro",
+    "addNote": "Añadir nota",
+    "saveNote": "Guardar nota",
+    "noteContent": "Contenido de la nota",
+    "noteContentHint": "Introduce el texto de tu nota"
+  }
+}

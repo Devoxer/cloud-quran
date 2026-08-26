@@ -1,6 +1,29 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.8/schema.json",
-  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/build/**",
+      "!**/.expo/**",
+      "!apps/marketing/**",
+      "!_bmad/**",
+      "!**/.claude/**",
+      "!**/.github/**",
+      "!**/docs/**",
+      "!**/_bmad-output/**",
+      "!**/*.lock",
+      "!**/expo-env.d.ts",
+      "!**/features/quotes/data/daily-quotes.*.json",
+      "!**/.turbo/**"
+    ]
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -9,57 +32,124 @@
   },
   "javascript": {
     "formatter": {
-      "semicolons": "always",
       "quoteStyle": "single",
-      "trailingCommas": "all"
-    }
+      "trailingCommas": "es5",
+      "semicolons": "always"
+    },
+    "globals": ["__DEV__"]
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noExplicitAny": "off",
-        "noGlobalIsNan": "error",
-        "noArrayIndexKey": "off",
-        "noAssignInExpressions": "off",
-        "noImplicitAnyLet": "off",
-        "noTemplateCurlyInString": "off"
-      },
-      "style": {
-        "noCommonJs": "off",
-        "noNonNullAssertion": "off",
-        "useNodejsImportProtocol": "off",
-        "useTemplate": "off",
-        "useImportType": "off"
-      },
-      "complexity": {
-        "useLiteralKeys": "off",
-        "useArrowFunction": "off",
-        "noBannedTypes": "off",
-        "useOptionalChain": "off"
-      },
+      "recommended": false,
       "correctness": {
+        "noChildrenProp": "error",
+        "noEmptyCharacterClassInRegex": "warn",
+        "noEmptyPattern": "warn",
+        "noUndeclaredVariables": "error",
+        "noUnreachable": "warn",
+        "noUnusedLabels": "warn",
+        "noUnusedVariables": "error",
         "useExhaustiveDependencies": "warn",
         "useHookAtTopLevel": "warn",
-        "noUnusedFunctionParameters": "off",
-        "noUnusedPrivateClassMembers": "off"
+        "useIsNan": "error",
+        "useJsxKeyInIterable": "error",
+        "useValidTypeof": "error",
+        "noUnusedImports": "error"
+      },
+      "security": {
+        "noDangerouslySetInnerHtmlWithChildren": "error"
+      },
+      "style": {
+        "useBlockStatements": "off"
+      },
+      "suspicious": {
+        "noCommentText": "error",
+        "noDoubleEquals": "warn",
+        "noDuplicateCase": "error",
+        "noDuplicateClassMembers": "error",
+        "noDuplicateJsxProps": "error",
+        "noDuplicateObjectKeys": "error",
+        "noDuplicateParameters": "error",
+        "noRedeclare": "warn",
+        "noUnsafeNegation": "warn",
+        "noUnusedExpressions": "warn",
+        "noVar": "error",
+        "noWith": "warn"
       }
     }
   },
-  "files": {
-    "includes": [
-      "**",
-      "!**/node_modules",
-      "!**/dist",
-      "!**/build",
-      "!**/.expo",
-      "!**/_bmad",
-      "!**/_bmad-output",
-      "!**/.claude",
-      "!**/docs",
-      "!**/bun.lock",
-      "!**/*.tsbuildinfo"
-    ]
+  "overrides": [
+    {
+      "includes": ["**/*.ts", "**/*.tsx", "**/*.d.ts"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noBannedTypes": "warn",
+            "noUselessConstructor": "warn"
+          },
+          "correctness": {
+            "noUndeclaredVariables": "off",
+            "noUnusedVariables": "error",
+            "noUnusedImports": "error"
+          },
+          "style": {
+            "noCommonJs": "warn",
+            "useConsistentArrayType": {
+              "level": "warn",
+              "options": {
+                "syntax": "shorthand"
+              }
+            }
+          },
+          "suspicious": {
+            "noDuplicateClassMembers": "error",
+            "noExtraNonNullAssertion": "warn",
+            "noRedeclare": "warn"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/__tests__/**/*", "**/*.test.*", "**/*.spec.*", "**/jest.setup.*"],
+      "javascript": {
+        "globals": [
+          "expect",
+          "beforeAll",
+          "beforeEach",
+          "afterAll",
+          "describe",
+          "it",
+          "afterEach",
+          "jest"
+        ]
+      },
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredVariables": "off"
+          },
+          "style": {
+            "noCommonJs": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/eas.json"],
+      "json": {
+        "parser": {
+          "allowComments": true
+        }
+      }
+    }
+  ],
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   }
 }

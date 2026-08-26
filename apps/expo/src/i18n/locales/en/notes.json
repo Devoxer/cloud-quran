@@ -1,0 +1,73 @@
+{
+  "sections": {
+    "myNotes": "My Notes",
+    "addButton": "Add"
+  },
+  "counts": {
+    "noteCount_one": "{{count}} note",
+    "noteCount_other": "{{count}} notes",
+    "bookCount_one": "{{count}} book",
+    "bookCount_other": "{{count}} books",
+    "summary": "{{notes}} · {{books}}"
+  },
+  "editor": {
+    "addTitle": "Add Note",
+    "editTitle": "Edit Note",
+    "placeholder": "Write your note...",
+    "deleteButton": "Delete note",
+    "notFound": "This note couldn't be found."
+  },
+  "discardDialog": {
+    "title": "Discard changes?",
+    "message": "You have unsaved changes. Are you sure you want to discard?",
+    "confirm": "Discard",
+    "cancel": "Keep Editing"
+  },
+  "deleteDialog": {
+    "title": "Delete Note?",
+    "message": "This action cannot be undone."
+  },
+  "emptyState": {
+    "title": "No notes yet",
+    "bookDescription": "Tap Add to jot down your first note on this book.",
+    "allNotesDescription": "Add notes from book detail screens to see them here",
+    "discoverCta": "Discover Books"
+  },
+  "errorState": {
+    "title": "Unable to load notes",
+    "description": "Please try again later"
+  },
+  "search": {
+    "placeholder": "Search notes",
+    "noResultsTitle": "No results for \"{{query}}\"",
+    "noResultsDescription": "Try a different search term"
+  },
+  "signUpPrompt": {
+    "message": "Keep your notes and sync them across devices"
+  },
+  "errors": {
+    "mustSignInCreate": "You must be signed in to create notes",
+    "mustSignInUpdate": "You must be signed in to update notes",
+    "mustSignInDelete": "You must be signed in to delete notes",
+    "noBookSelected": "No book selected",
+    "contentEmpty": "Note content cannot be empty",
+    "noteIdRequired": "Note ID is required",
+    "createFailed": "Failed to create note",
+    "updateFailed": "Failed to update note",
+    "deleteFailed": "Failed to delete note"
+  },
+  "a11y": {
+    "notePreview": "Note on {{book}}: {{preview}}",
+    "notePreviewShort": "Note: {{preview}}",
+    "unknownBook": "unknown book",
+    "editNote": "Edit note",
+    "editNoteHint": "Tap to edit this note",
+    "bookCover": "Cover of {{title}}",
+    "viewBook": "View {{title}} by {{author}}",
+    "viewBookHint": "Tap to open book details",
+    "addNote": "Add note",
+    "saveNote": "Save note",
+    "noteContent": "Note content",
+    "noteContentHint": "Enter your note text"
+  }
+}

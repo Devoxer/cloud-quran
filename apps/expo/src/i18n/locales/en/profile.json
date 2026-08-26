@@ -1,0 +1,191 @@
+{
+  "hero": {
+    "guestName": "Guest",
+    "guestSubtitle": "Sync your progress across devices",
+    "noName": "No name set",
+    "edit": "Edit",
+    "stats": {
+      "dayStreak": "Day streak",
+      "hoursSaved": "Hours saved",
+      "finished": "Finished"
+    }
+  },
+  "appearance": {
+    "label": "Appearance",
+    "light": "Light",
+    "dark": "Dark",
+    "auto": "Auto"
+  },
+  "palette": {
+    "label": "Color"
+  },
+  "groups": {
+    "preferences": "PREFERENCES",
+    "support": "SUPPORT",
+    "about": "ABOUT",
+    "account": "ACCOUNT"
+  },
+  "rows": {
+    "playback": "Playback",
+    "language": "Language",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "sendFeedback": "Send Feedback",
+    "restorePurchases": "Restore Purchases",
+    "signOut": "Sign Out",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "refundPolicy": "Refund Policy",
+    "contactUs": "Contact Us",
+    "version": "Version",
+    "signIn": "Sign In",
+    "yourData": "Your Data"
+  },
+  "signOutDialog": {
+    "title": "Sign Out",
+    "message": "Are you sure you want to sign out?",
+    "confirm": "Sign Out"
+  },
+  "restore": {
+    "restoredTitle": "Purchases restored",
+    "restoredMessage": "Your subscription has been restored to this account.",
+    "noneTitle": "No purchases found",
+    "noneMessage": "There were no previous purchases to restore.",
+    "failedTitle": "Restore failed"
+  },
+  "editProfile": {
+    "title": "Edit Profile",
+    "nameLabel": "Display Name",
+    "namePlaceholder": "Enter your name",
+    "updateFailed": "Could not save your profile. Please try again."
+  },
+  "feedback": {
+    "title": "Send Feedback",
+    "categoryLabel": "Category",
+    "category": {
+      "bug": "Bug",
+      "suggestion": "Suggestion",
+      "general": "General"
+    },
+    "messageLabel": "Message",
+    "messagePlaceholder": "Tell us what's on your mind...",
+    "submit": "Submit",
+    "unavailable": "Sending isn't available yet. Nothing was sent, and your message is still here."
+  },
+  "playback": {
+    "audioGroup": "AUDIO",
+    "readingGroup": "READING",
+    "speed": "Playback Speed",
+    "voice": "Narration Voice",
+    "deviceFootnote": "These preferences apply on this device only.",
+    "pauseOnRead": "Pause audio when reading",
+    "autoScroll": "Auto-scroll",
+    "highlight": "Highlight text"
+  },
+  "privacySettings": {
+    "crashReportsLabel": "Send crash reports",
+    "crashReportsDescription": "Share scrubbed crash and error reports so bugs get fixed.",
+    "crashReportsFootnote": "Reports are scrubbed of personal data. No analytics, no ads. Turning it on takes effect next launch.",
+    "updateError": "Failed to update setting. Please try again."
+  },
+  "a11y": {
+    "editProfile": "Edit profile",
+    "viewStats": "View your stats",
+    "playbackSettings": "Playback Settings",
+    "privacy": "Privacy Settings",
+    "restorePurchases": "Restore purchases",
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account",
+    "feedbackMessage": "Feedback message",
+    "submitFeedback": "Submit feedback",
+    "displayName": "Display name",
+    "displayNameHint": "Enter your display name, maximum {{max}} characters",
+    "legal": {
+      "privacyPolicyHint": "Opens privacy policy in your browser",
+      "termsOfServiceHint": "Opens terms of service in your browser",
+      "refundPolicyHint": "Opens refund policy in your browser",
+      "contactUsHint": "Opens contact page in your browser"
+    },
+    "palette": {
+      "terracotta": "Terracotta",
+      "cobalt": "Cobalt",
+      "forest": "Forest",
+      "plum": "Plum",
+      "honey": "Honey",
+      "slate": "Slate"
+    },
+    "language": "Language",
+    "signIn": "Sign in",
+    "copyEmail": "Copy your account email address",
+    "yourData": "Your data",
+    "exportData": "Export my data",
+    "purgeData": "Delete my synced data",
+    "syncToggle": "Sync to my account"
+  },
+  "language": {
+    "footnote": "Sets menus and narration on this device. Downloads keep the language they were made in.",
+    "switchFailedTitle": "Couldn't switch language",
+    "switchFailedMessage": "Your language is unchanged. Check your connection and try again."
+  },
+  "auth": {
+    "intro": "Cloud Quran works without an account. Signing in syncs your reading position, bookmarks and preferences.",
+    "syncDetailsLink": "What syncs and who sees it",
+    "apple": "Continue with Apple",
+    "google": "Continue with Google",
+    "emailLabel": "Email address",
+    "emailPlaceholder": "you@example.com",
+    "sendCode": "Email me a code",
+    "sending": "Sending...",
+    "codeSentTo": "Enter the 6-digit code sent to {{email}}.",
+    "useAnotherEmail": "Use a different address",
+    "or": "or",
+    "cancelled": "Sign-in was cancelled. Nothing has changed.",
+    "failed": "Sign-in didn't work. Please try again.",
+    "sendFailed": "We couldn't send a code to that address. Check it and try again.",
+    "codeFailed": "That code isn't right, or it has expired. Ask for a new one.",
+    "emailInvalid": "Enter a valid email address.",
+    "unavailable": "This method isn't available in this build. Use your email address instead."
+  },
+  "account": {
+    "signedIn": "Signed in",
+    "syncFootnote": "Optional. Signing in carries your reading position, bookmarks and preferences to your other devices.",
+    "othersGroup": "APP",
+    "emailPending": "No address shared yet — sign in again on this device to share one.",
+    "emailFootnote": "The address for this account. An Apple private relay address works the same way.",
+    "copyEmail": "Copy address",
+    "emailCopied": "Address copied"
+  },
+  "data": {
+    "syncGroup": "SYNCING",
+    "syncToggle": "Sync to my account",
+    "syncToggleDescription": "Carries your reading position, bookmarks and preferences to your other devices.",
+    "syncFootnote": "Off stops this device sending and fetching. Nothing is deleted. It applies before you sign in too.",
+    "syncProcessors": "Cloudflare stores it — never sold, never for ads. Your sign-in provider knows you signed in, not what you read.",
+    "syncToggleFailed": "We couldn't save that setting on this device. Please try again.",
+    "group": "YOUR DATA",
+    "footnote": "These act on synced data only. Downloads and this device's settings are untouched.",
+    "export": "Export my data",
+    "exportDescription": "A JSON file with everything synced to your account.",
+    "exportFailed": "We couldn't put your export together. Check your connection and try again.",
+    "exportUnavailable": "This device has nowhere to save the file. Try the export from the phone app.",
+    "purge": "Delete my synced data",
+    "purgeDescription": "Empties everything synced to your account. Your account stays.",
+    "purgeDone": "Your synced data is gone. Your account is untouched.",
+    "purgeFailed": "Nothing was deleted. Check your connection and try again.",
+    "purgeDialog": {
+      "title": "Delete my synced data",
+      "message": "Deletes your synced data from every device. Your account stays. This can't be undone.",
+      "confirm": "Delete data"
+    },
+    "deleteAccount": "Delete my account",
+    "deleteAccountDescription": "Deletes the account, its data and your sign-in methods. You keep reading as a guest.",
+    "deleteAccountDone": "Your account and its data are gone. You're browsing as a guest again.",
+    "deleteAccountFailed": "Your account was not deleted, and nothing was changed. Please try again.",
+    "deleteAccountOffline": "You need a connection to delete your account. Nothing was changed.",
+    "deleteAccountDialog": {
+      "title": "Delete my account",
+      "message": "Deletes your account, its synced data and your sign-in methods. This can't be undone.",
+      "confirm": "Delete account"
+    }
+  }
+}

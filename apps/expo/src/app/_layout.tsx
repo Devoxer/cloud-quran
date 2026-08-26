@@ -1,90 +1,294 @@
-import {
-  DefaultTheme,
-  type Theme as NavigationTheme,
-  ThemeProvider as NavigationThemeProvider,
-} from '@react-navigation/native';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
+// SDK 56: expo-router no longer depends on react-navigation; it re-exports ThemeProvider.
+// The Theme type is the global `ReactNavigation.Theme` (expo-router augments that namespace).
+import { ThemeProvider as NavigationThemeProvider, Stack, usePathname } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect, useMemo, useRef } from 'react';
+import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+import 'react-native-reanimated';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { useGuestDataTransfer } from '@/features/auth/hooks/useGuestDataTransfer';
-import { db } from '@/services/instantdb';
-import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { KFGQPC_FONT_FAMILY } from '@/theme/tokens';
-import { useInstantDBSync } from '@/theme/useUIStore';
+import { AlertHost } from '@/components/ui/AlertHost';
+import { ColorTokens } from '@/constants/Colors';
+import { initI18n } from '@/i18n';
+import { ensureAnonymousSession, useSession } from '@/lib/auth';
+import { validateConfig } from '@/lib/config';
+import { addBreadcrumb, initErrorTracking, setSentryDeviceContext, withSentry } from '@/lib/errors';
+import { initLocalization } from '@/lib/localization';
+// Side-effect import: keeps the present-but-unwired baseline native-module
+// wrappers (secure-store / clipboard / sharing) in the bundle graph. Story 17.9.
+import '@/lib/nativeBaseline';
+import { initializeNotifications } from '@/lib/notifications';
+import { isTelemetryEnabled } from '@/lib/privacyPrefs';
+import { prefetchSyncReads, queryClient, setSyncUserId, startSyncManagers } from '@/lib/sync';
+import { useTheme } from '@/lib/theme';
 
-function useNavigationTheme(): NavigationTheme {
-  const { tokens, themeName } = useTheme();
+// Initialize error tracking early, before any other code — but ONLY with consent.
+// Story 5-1 review: this used to run unconditionally, gated inside `initErrorTracking` on DSN
+// presence alone. Cloud Quran's rule is opt-IN, PII-scrubbed Sentry as the single exception to
+// zero third-party telemetry (PRD NFR8), so presence of a DSN is not consent. `isTelemetryEnabled`
+// reads the device-local MMKV pref; `(profile)/privacy-settings.tsx` is the opt-in surface.
+if (isTelemetryEnabled()) {
+  initErrorTracking();
+}
+
+// Read device locale + timezone once (the localization DATA layer — Story 17.9), then
+// initialize i18next synchronously (Story 20.2).
+//
+// ⚠️ THIS ORDER IS LOAD-BEARING AGAIN as of Story 24.13, reversing the 20.6 note that used to
+// stand here ("`initI18n()` never reads `getCachedLocale()`"). It does now: `initI18n()` takes its
+// `lng` from `getStoredLanguage()`, which seeds an UNSET preference from the device locale via
+// `deviceSeedLanguage()` → `getCachedLocale()` (§ D1 — safe because exposure is the compile-time
+// `EXPOSED_LANGUAGES`, not an async DB read). Swap these two lines and the cache is still `null`
+// when i18next initializes, so every device-seeded launch silently falls back to `en` — with no
+// error and no test signal outside `language.test.ts`.
+initLocalization();
+initI18n();
+
+// Attach additive device/app context to Sentry (additive only — Sentry-RN
+// already auto-captures app version / OS / device model). Fire-and-forget;
+// never blocks boot. (Story 17.9)
+void setSentryDeviceContext();
+
+// Initialize push notifications handler early, before any notifications can be received
+// This sets up the foreground handler and creates Android notification channels
+initializeNotifications();
+
+// INTENTIONAL: Module-level validateConfig() execution
+// This runs once when the module loads, before React renders.
+// Purpose: Early detection of missing environment variables during development.
+// The return value is intentionally ignored (void) since the function only logs
+// warnings to console - it never blocks app startup or throws errors.
+void validateConfig();
+
+// story 5-2: `void initRevenueCat()` sat here. Cloud Quran is free and waqf-funded — there is no
+// entitlement concept, no purchase flow and no SDK to boot. Nothing replaces it.
+
+export {
+  // Catch any errors thrown by the Layout component.
+  ErrorBoundary,
+} from 'expo-router';
+
+export const unstable_settings = {
+  initialRouteName: '(tabs)',
+};
+
+// Prevent the splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync();
+
+/**
+ * Creates a React Navigation theme using our Cozy Warmth design tokens
+ */
+function createNavigationTheme(colors: ColorTokens, isDark: boolean): ReactNavigation.Theme {
   return {
-    dark: themeName === 'dark',
+    dark: isDark,
     colors: {
-      primary: tokens.accent.audio,
-      background: tokens.surface.primary,
-      card: tokens.surface.secondary,
-      text: tokens.text.ui,
-      border: tokens.border,
-      notification: tokens.accent.highlight,
+      primary: colors.accent.primary,
+      background: colors.background.primary,
+      card: colors.background.secondary,
+      text: colors.text.primary,
+      border: colors.border,
+      notification: colors.accent.primary,
     },
-    fonts: DefaultTheme.fonts,
+    fonts: {
+      regular: { fontFamily: 'System', fontWeight: '400' },
+      medium: { fontFamily: 'System', fontWeight: '500' },
+      bold: { fontFamily: 'System', fontWeight: '700' },
+      heavy: { fontFamily: 'System', fontWeight: '900' },
+    },
   };
 }
 
-function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isLoading, user, error } = db.useAuth();
+function RootLayout() {
+  const [loaded, error] = useFonts({
+    SpaceMono: require('../../assets/fonts/SpaceMono-Regular.ttf'),
+  });
+
+  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
 
   useEffect(() => {
-    if (!isLoading && !user && !error) {
-      db.auth.signInAsGuest();
+    if (loaded) {
+      SplashScreen.hideAsync();
     }
-  }, [isLoading, user, error]);
+  }, [loaded]);
 
-  // Transfer linked guest data when upgrading from guest to authenticated
-  useGuestDataTransfer(user);
+  // ⚠️ story 5-5: THE SESSION IS MINTED HERE, AND NOTHING WAITS FOR IT. An effect with no
+  // state, no branch and no return value — it runs AFTER the first paint, by definition, so it
+  // cannot gate anything. Cloud Quran is anonymous-first and local-first: every reading surface
+  // works with no identity at all, so a session is an enhancement that arrives whenever the
+  // network allows, and an offline first launch is a silent no-op that retries next time.
+  //
+  // What used to stand in this file was InstantDB's `db.auth` wearing React clothes — a
+  // `<Stack.Protected>` guard, two `!isAuthenticated` early returns and a stall timeout. That is
+  // what `__tests__/app/root-layout-boot.test.tsx:116-148` scans this source to keep out, and
+  // why a session read here must never become a value the render path can branch on.
+  //
+  // Module scope would work too and is where the other boot calls live; an effect is used
+  // because a network call at IMPORT time leaks a live handle into every Jest suite that
+  // requires this file (the runner force-exits and warns), and an effect nobody mounts is inert.
+  useEffect(() => {
+    // ⚠️ THE `.catch` IS NOT REDUNDANT WITH THE ONE INSIDE. `ensureAnonymousSession` swallows its
+    // own failures today, so nothing can reject here — but this repo has already shipped exactly
+    // this shape once (a boot promise with no `.catch`, which Node 24 turns into a non-zero
+    // exit), and the call site is what survives a refactor of the callee. A rejected boot promise
+    // must never become a redbox on a cold, offline start.
+    void ensureAnonymousSession().catch(() => {});
+  }, []);
 
-  // Sync InstantDB data into Zustand local cache
-  useInstantDBSync(Boolean(user));
+  // ⚠️ story 5-6: the query cache's ONLINE and FOCUS signals. TanStack's `onlineManager` and
+  // `focusManager` have no React Native defaults — left unwired, a query would never know the
+  // device came back online and a queued write would never drain until the next cold start.
+  // `startSyncManagers` returns its own teardown; nothing here is read by the render path.
+  useEffect(() => startSyncManagers(), []);
 
-  // Don't block rendering — app works offline via local store
-  return <>{children}</>;
+  // Story 5-1 review: the notification listener block was deleted, not left inert. After the
+  // domain deletion its handler computed `parseNotificationData(response)`, discarded it, and had
+  // a comments-only body — while still registering two subscriptions and calling
+  // `getLastNotificationResponse()` (whose promise carried no `.catch`, which Node 24 turns into
+  // a non-zero exit). Cloud Quran's reminders are story 8-4 and are explicitly not streak-based,
+  // so this is rebuilt there rather than carried as dead wiring.
+
+  if (!loaded) {
+    return null;
+  }
+
+  return (
+    // ⚠️ story 5-6: `QueryClientProvider` GATES NOTHING ON A REMOTE ANSWER. It renders its
+    // children with whatever the synchronous MMKV cache holds — there is no `isRestoring`, no
+    // persist-client and no boolean derived from the network, which is why
+    // `@tanstack/react-query-persist-client` is deliberately not a dependency (its restore is
+    // asynchronous, which is a boot gate wearing a different name). See `lib/sync.ts`.
+    //
+    // ⚠️ IT IS NOT "UNCONDITIONAL", AND THE FIRST DRAFT OF THIS COMMENT SAID IT WAS. This whole
+    // subtree sits below `if (!loaded) return null` — the FONT gate, which predates this story
+    // and is a local, synchronous, bounded wait rather than a remote one. Writing "unconditional"
+    // over a conditional is how a comment stops being checkable; the claim that matters is about
+    // the network, and that one is true.
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        {/* Mirrors the resolved session id into the query/cache keys. Renders null. */}
+        <SyncIdentityBridge />
+        {/* KeyboardProvider (react-native-keyboard-controller) — outermost
+          app-content provider so KeyboardAwareScrollView works on every
+          routed form. Sits just inside the gesture root, above the
+          gesture-driven BottomSheets. Story 17.6. */}
+        <KeyboardProvider>
+          {/* Theme is a provider-free hook (@/lib/theme) — no <ThemeProvider> here.
+              story 5-2: <AnalyticsProvider> wrapped this subtree. It was a pass-through with
+              zero useAnalytics() consumers, and Cloud Quran ships zero third-party analytics
+              (PRD NFR8), so it was removed rather than emptied. */}
+          <RootLayoutNav />
+          {/* story 5-1: the audio engine host mounted here in the source app. Cloud Quran's
+              engine arrives in epic 7 (surah tracks + per-ayah offsets) and re-mounts as a
+              null-rendering sibling in this exact position — NOT wrapped around the tree, so
+              its position ticks stay off the nav graph. */}
+          {/* Single mounted host for the imperative useAlert() native alert. */}
+          <AlertHost />
+        </KeyboardProvider>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
+  );
 }
 
-function AppContent() {
-  const navigationTheme = useNavigationTheme();
+/**
+ * The one place the session id reaches the query cache (story 5-6).
+ *
+ * ⚠️ IT RENDERS NULL AND BRANCHES ON NOTHING. `lib/sync.ts` keys every query and every MMKV cache
+ * entry on the user id, and it reads that id from an MMKV MIRROR rather than from `useSession()` —
+ * because `useSession()` is pending on a cold offline launch, and keying reads off a pending
+ * network answer is the boot gate this layout exists to keep out. This component is the bridge:
+ * it observes the session and writes a RESOLVED id into the mirror. It cannot gate anything,
+ * because it renders nothing and nobody reads its result.
+ *
+ * ⚠️ IT IS ITS OWN COMPONENT, NOT AN EFFECT IN `RootLayout`. `useSession()` re-renders its caller
+ * on every session change; hoisting it into the layout would re-render the whole tree — including
+ * the navigator — each time the session store ticks. A null-rendering sibling absorbs that.
+ *
+ * ⚠️ `lib/sync.ts` MUST NOT IMPORT `@/lib/auth` ITSELF: `auth.ts` → `accountTeardown.ts` →
+ * `sync.ts` is a fixed chain (sign-out clears the outbox), so a `sync` → `auth` edge closes a
+ * require cycle. A route may import both, which is why the bridge lives here.
+ */
+function SyncIdentityBridge() {
+  const { data } = useSession();
+  const userId = data?.user?.id;
+  useEffect(() => {
+    setSyncUserId(userId);
+    // ⚠️ AND PULL, ONCE PER RESOLVED IDENTITY. Nothing else in the app reads the four synced
+    // entities yet (Epic 6 owns the reading surfaces), and even once it does, a reader who never
+    // opens the screen that mounts a given hook would never learn what their other device wrote.
+    // Fire-and-forget, offline-safe, and it gates nothing — see `prefetchSyncReads`.
+    if (userId) prefetchSyncReads();
+  }, [userId]);
+  return null;
+}
+
+function RootLayoutNav() {
+  const { colors, isDark } = useTheme();
+  // `useTranslation('navigation')` was dropped here with the `player` Stack.Screen — its only
+  // reader was that screen's `title: t('titles.nowPlaying')`. Epic 7 brings both back together.
+
+  // Memoize navigation theme to prevent unnecessary re-renders
+  const navigationTheme = useMemo(() => createNavigationTheme(colors, isDark), [colors, isDark]);
+
+  // story 5-1: the streak reminder was here. Cloud Quran's reminders are story 8-4, and
+  // they are explicitly NOT streak-based — no guilt messaging (epic 1 acceptance).
+
+  // Track navigation changes for Sentry breadcrumbs (Story 14.2 - AC#1)
+  const pathname = usePathname();
+  const previousPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (pathname && pathname !== previousPathRef.current) {
+      addBreadcrumb('navigation', `Navigated to ${pathname}`, { from: previousPathRef.current });
+      previousPathRef.current = pathname;
+    }
+  }, [pathname]);
+
+  // Story 17.3.5 follow-up #6 (user direction): removed the cold-launch
+  // reset. Expo Router's default state restoration is the canonical
+  // behavior (Apple Music / Apple Podcasts restore the last tab on cold
+  // launch). The reset was also interfering with tab navigation in
+  // unexpected ways. `+native-intent.tsx` still catches genuine system
+  // deep-links (push notifications etc.).
+
+  // ⚠️ story 5-2: THE STACK MOUNTS UNCONDITIONALLY, and that is the point of this edit.
+  // What used to stand here was wisdom-fruits' auth boot gate: `useAuth()` +
+  // `useAuthEffects()`, an auto-guest sign-in effect, a 10s stall timeout with a retry
+  // takeover, a cold-boot `/(welcome)` bounce, two `!isAuthenticated` early returns and a
+  // `<Stack.Protected>` guard. All of it was InstantDB's `db.auth` wearing React clothes, and
+  // with the SDK gone `isAuthenticated` could never turn true — the spinner would have hung
+  // forever with no bypass. Cloud Quran is anonymous and local-only until story 5-5 brings
+  // Better Auth in; there is no session to wait for, so there is nothing to gate on.
   return (
     <NavigationThemeProvider value={navigationTheme}>
-      <AnimatedSplashOverlay />
-      <ErrorBoundary screenName="App">
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(auth)" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-      </ErrorBoundary>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* Story 5-1 review: `subscription` and `player` Stack.Screen registrations were
+            removed. Both route files went with the domain deletion, so expo-router logged
+            `[Layout children]: No route named "…" exists` and dropped them on every boot.
+            The player returns in epic 7 (recitation audio) and there is no subscription
+            screen — Cloud Quran has no monetization surface. story 5-2 removed the
+            `(welcome)` and `auth/callback` registrations for the same reason: their route
+            files went with InstantDB auth. Story 5-5 rebuilds sign-in on Better Auth. */}
+      </Stack>
     </NavigationThemeProvider>
   );
 }
 
-export default function RootLayout() {
-  // Config plugin embeds font natively; useFonts provides web runtime fallback
-  const [fontsLoaded] = useFonts(
-    Platform.OS === 'web'
-      ? { [KFGQPC_FONT_FAMILY]: require('@/assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf') }
-      : {},
-  );
+const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
+});
 
-  if (!fontsLoaded && Platform.OS === 'web') return null;
-
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <AuthGate>
-          <AppContent />
-        </AuthGate>
-      </ThemeProvider>
-    </GestureHandlerRootView>
-  );
-}
+// Wrap with Sentry error boundary for production error tracking
+// Wrap only when crash reporting is actually on. `withSentry` is `Sentry.wrap`, and wrapping
+// without a preceding `Sentry.init` logs "App Start Span could not be finished. `Sentry.wrap` was
+// called before `Sentry.init`" on EVERY launch — which, now that telemetry is opt-in and off by
+// default (see the gate at the top of this file), would be every user. Same condition, same
+// module scope, so the two cannot drift apart.
+export default isTelemetryEnabled() ? withSentry(RootLayout) : RootLayout;

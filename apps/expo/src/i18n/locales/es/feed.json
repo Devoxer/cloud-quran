@@ -1,0 +1,33 @@
+{
+  "strip": {
+    "sections": "Secciones",
+    "upNext": "A continuación"
+  },
+  "sections": {
+    "aboutBook": "Sobre este libro",
+    "summaryBrief": "Resumen breve",
+    "summaryCore": "Resumen principal",
+    "summaryInDepth": "Resumen detallado",
+    "keyTakeaways": "Puntos clave",
+    "notableQuotes": "Citas destacadas",
+    "faq": "Preguntas frecuentes"
+  },
+  "timeout": {
+    "title": "Demasiado tiempo",
+    "message": "No se pudo cargar el contenido. Comprueba tu conexión e inténtalo de nuevo."
+  },
+  "error": {
+    "title": "Algo salió mal",
+    "message": "No se pudo cargar tu feed. Toca abajo para reintentar."
+  },
+  "empty": {
+    "title": "Fin de la mezcla",
+    "description": "Prueba a cambiar de sección o vuelve más tarde.",
+    "cta": "Barajar de nuevo"
+  },
+  "a11y": {
+    "queueRow": "{{title}} de {{author}}, {{section}}",
+    "sectionsAndNewMix": "Secciones del feed y nueva mezcla",
+    "playFeed": "Reproducir el feed"
+  }
+}

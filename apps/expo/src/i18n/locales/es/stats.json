@@ -1,0 +1,126 @@
+{
+  "emptyState": {
+    "title": "Aún no hay estadísticas",
+    "body": "Empieza a escuchar para crear tu racha.",
+    "cta": "Descubrir libros"
+  },
+  "statGrid": {
+    "hoursSaved": "Horas ahorradas",
+    "longestStreak": "Racha más larga",
+    "booksFinished": "Libros terminados",
+    "sectionsDone": "Secciones completadas",
+    "daysActive": "Días de actividad",
+    "listenedTotal": "Total escuchado"
+  },
+  "streakHero": {
+    "encouragementActive": "Vas por buen camino: escucha o lee hoy para mantener tu racha.",
+    "encouragementInactive": "Escucha o lee hoy para empezar tu racha.",
+    "unit_one": "día",
+    "unit_many": "días",
+    "unit_other": "días"
+  },
+  "todaysGoal": {
+    "title": "Meta de hoy",
+    "reached": "Meta alcanzada — {{minutes}} min hoy",
+    "progress": "{{minutes}} de {{goal}} minutos escuchados"
+  },
+  "yearHeatmap": {
+    "title": "Este año",
+    "less": "Menos",
+    "more": "Más"
+  },
+  "topCategories": {
+    "title": "Categorías principales"
+  },
+  "topTopics": {
+    "title": "Temas principales"
+  },
+  "achievements": {
+    "title": "Logros",
+    "firstFinish": {
+      "name": "Primer libro terminado",
+      "description": "Termina tu primer libro"
+    },
+    "weekStreak": {
+      "name": "Racha semanal",
+      "description": "Una racha de 7 días"
+    },
+    "nightOwl": {
+      "name": "Búho nocturno",
+      "description": "Escucha después de las 22:00"
+    },
+    "explorer": {
+      "name": "Explorador",
+      "description": "Lee más de 5 categorías"
+    },
+    "books25": {
+      "name": "25 libros",
+      "description": "Termina 25 libros"
+    },
+    "monthStreak": {
+      "name": "Racha mensual",
+      "description": "Una racha de 30 días"
+    },
+    "powerHour": {
+      "name": "Hora de poder",
+      "description": "60 min en un día"
+    },
+    "dedicated": {
+      "name": "Dedicado",
+      "description": "30 días de actividad"
+    },
+    "bookworm": {
+      "name": "Ratón de biblioteca",
+      "description": "Termina 50 libros"
+    }
+  },
+  "recordBanner": {
+    "dayCount_one": "{{count}} día",
+    "dayCount_many": "{{count}} días",
+    "dayCount_other": "{{count}} días",
+    "atBest": "Estás en tu mejor racha",
+    "toRecord": "{{days}} para un nuevo récord",
+    "andCounting": "{{days}} y sumando.",
+    "longestIs": "Tu racha más larga es de {{days}}."
+  },
+  "quizEmptyState": {
+    "title": "Aún no hay estadísticas de cuestionarios",
+    "body": "Realiza un cuestionario para ver tus resultados aquí."
+  },
+  "overall": {
+    "title": "General"
+  },
+  "support": {
+    "quizzesTaken": "Cuestionarios realizados",
+    "avgScore": "Puntuación media",
+    "categories": "Categorías",
+    "booksQuizzed": "Libros con cuestionarios"
+  },
+  "scope": {
+    "byBook": "Por libro",
+    "byCategory": "Por categoría",
+    "wholeLibrary": "Toda la biblioteca"
+  },
+  "trailing": {
+    "best": "Mejor"
+  },
+  "bookSubline_one": "{{count}} libro · prom. {{avg}}%",
+  "bookSubline_many": "{{count}} libros · prom. {{avg}}%",
+  "bookSubline_other": "{{count}} libros · prom. {{avg}}%",
+  "scopeSubline_one": "{{count}} intento · prom. {{avg}}% · {{relative}}",
+  "scopeSubline_many": "{{count}} intentos · prom. {{avg}}% · {{relative}}",
+  "scopeSubline_other": "{{count}} intentos · prom. {{avg}}% · {{relative}}",
+  "insights": {
+    "title": "Análisis",
+    "coverage": "Exploraste {{explored}} de {{total}} categorías",
+    "strongest": "Más fuerte · {{name}}",
+    "needsWork": "Por mejorar · {{name}}"
+  },
+  "quizStatsCard": {
+    "title": "Cuestionarios",
+    "bestScore": "Mejor puntuación"
+  },
+  "a11y": {
+    "loadingQuizStats": "Cargando estadísticas de cuestionarios"
+  }
+}

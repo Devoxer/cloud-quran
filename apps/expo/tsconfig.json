@@ -2,10 +2,31 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // TS 6.0 (SDK 56) deprecates `baseUrl` (removed in 7.0). The @/* path-alias
+    // pattern (cheat-sheet canonical) + Metro/Jest resolution rely on it, so keep
+    // baseUrl and silence the 6.0 deprecation error. Story 16.9 (SDK 54→56).
+    "ignoreDeprecations": "6.0",
+    // TS 6.0 (SDK 56) stopped auto-including ambient @types from the hoisted monorepo-root
+    // node_modules/@types (pnpm `nodeLinker: hoisted` places them above apps/expo), so test
+    // files lost describe/it/expect/jest and .tsx lost the React global. Naming them
+    // explicitly restores resolution. (expo types still load via the expo-env.d.ts
+    // `/// <reference types="expo/types" />`; react-native ships its own types via imports.)
+    // Story 16.9 (SDK 54→56).
+    "types": ["jest", "node", "react"],
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@/assets/*": ["./assets/*"]
+      "@/*": ["src/*"],
+      // Story assets live at the app root (assets/), referenced by app.json
+      // (icon/splash/adaptive-icon) and require()'d as @/assets/images/* in 5 files.
+      // They can't move under src/ without native/app.json churn, so this specific
+      // mapping replaces the legacy catch-all `./*` fallback (dropped in Story 16.6)
+      // while keeping every existing @/assets/* require resolving. TS + Metro both
+      // prefer the more-specific pattern over @/*.
+      "@/assets/*": ["assets/*"],
+      "@cloudquran/shared": ["../../packages/shared/index.ts"],
+      "@cloudquran/shared/*": ["../../packages/shared/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
 }

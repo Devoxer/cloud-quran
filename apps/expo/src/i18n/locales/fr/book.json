@@ -1,0 +1,89 @@
+{
+  "byline": {
+    "by": "par"
+  },
+  "sectionTitles": {
+    "aboutBook": "À propos de ce livre",
+    "summaryBrief": "Résumé bref",
+    "summaryCore": "Résumé essentiel",
+    "summaryInDepth": "Résumé détaillé"
+  },
+  "sections": {
+    "categories": "Catégories",
+    "topics": "Sujets",
+    "keyTakeaways": "Points clés",
+    "notableQuotes": "Citations notables",
+    "faq": "FAQ",
+    "readMore": "Lire la suite",
+    "moreCount": "+{{moreCount}} de plus"
+  },
+  "actions": {
+    "quiz": "Quiz",
+    "note": "Note",
+    "save": "Enregistrer",
+    "favorite": "Favori",
+    "download": "Télécharger"
+  },
+  "favorites": {
+    "title": "Favoris",
+    "count_one": "{{count}} livre",
+    "count_many": "{{count}} livres",
+    "count_other": "{{count}} livres"
+  },
+  "quiz": {
+    "complete": "Quiz terminé",
+    "perfectScore": "Score parfait — vous maîtrisez le sujet.",
+    "goodScore": "Beau travail — recommencez pour viser plus haut.",
+    "lowScore": "À revoir — recommencez pour mieux mémoriser.",
+    "retake": "Recommencer",
+    "progress": "{{current}} sur {{total}}",
+    "next": "Suivant",
+    "seeResults": "Voir les résultats"
+  },
+  "share": {
+    "message": "Découvrez \"{{title}}\" de {{author}} sur Wisdom Fruits !"
+  },
+  "errors": {
+    "failedToLoad": "Échec du chargement du livre",
+    "quizFailed": "Impossible de charger le quiz. Veuillez réessayer plus tard.",
+    "contentUnavailable": "Ce contenu n’est pas disponible pour le moment. Veuillez réessayer plus tard."
+  },
+  "notFound": {
+    "title": "Livre introuvable",
+    "description": "Il a peut-être été supprimé ou le lien a expiré.",
+    "goBack": "Retour"
+  },
+  "navFallbackTitle": "Livre",
+  "a11y": {
+    "view": "Voir {{title}}",
+    "elapsed": "Temps écoulé : {{time}}",
+    "booksByAuthor": "Livres de {{name}}",
+    "titleByAuthor": "{{title}} par {{author}}",
+    "opensBookDetails": "Ouvre les détails du livre",
+    "listeningTime": "{{duration}} de temps d'écoute",
+    "percentComplete": "{{percent}} % terminé",
+    "seeMore": "Voir {{moreCount}} de plus",
+    "contentTapToReadMore": "Contenu de {{title}}. Appuyez pour en savoir plus.",
+    "tapToReadMore": "{{title}}. Appuyez pour en savoir plus.",
+    "availableOffline": " Disponible hors ligne.",
+    "showMore": "Afficher plus",
+    "shareThisBook": "Partager ce livre",
+    "takeQuiz": "Faire le quiz de ce livre",
+    "addNote": "Ajouter une note",
+    "addToCollection": "Ajouter à une collection",
+    "removeFromFavorites": "Retirer des favoris",
+    "addToFavorites": "Ajouter aux favoris",
+    "retryDownload": "Réessayer le téléchargement",
+    "downloadingPercent": "Téléchargement à {{percent}} %",
+    "removeOfflineDownload": "Supprimer le téléchargement hors ligne",
+    "downloadForOffline": "Télécharger pour une lecture hors ligne",
+    "retakeQuiz": "Recommencer le quiz",
+    "youScored": "Votre score : {{correct}} sur {{total}}",
+    "questionProgress": "Question {{current}} sur {{total}}, {{correct}} correctes",
+    "scoreAnswered": "Score : {{correct}} sur {{answered}} réponses",
+    "optionRevealed": "{{option}}. {{status}}",
+    "correctAnswer": "Bonne réponse",
+    "incorrect": "Incorrect",
+    "nextQuestion": "Question suivante"
+  }
+}

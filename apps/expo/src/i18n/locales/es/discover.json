@@ -1,0 +1,65 @@
+{
+  "search": {
+    "placeholder": "Buscar libros, autores",
+    "booksHeader": "Libros",
+    "authorsLabel": "Autores",
+    "noResults": {
+      "title": "Sin resultados para «{{query}}»",
+      "description": "Prueba con otro término de búsqueda"
+    },
+    "error": {
+      "title": "Algo salió mal",
+      "message": "No pudimos completar esa búsqueda."
+    }
+  },
+  "recentSearches": {
+    "title": "Búsquedas recientes",
+    "clear": "Borrar"
+  },
+  "filters": {
+    "searchPlaceholder": "Filtrar categorías y temas",
+    "showLess": "Mostrar menos",
+    "seeAllCount": "Ver todo ({{total}})"
+  },
+  "sections": {
+    "categories": "Categorías",
+    "topics": "Temas",
+    "popular": "Populares",
+    "newAdditions": "Novedades",
+    "shuffle": "Aleatorio",
+    "allBooks": "Todos los libros",
+    "filteredBooks": "Libros filtrados"
+  },
+  "empty": {
+    "noBooks": {
+      "title": "No hay libros disponibles",
+      "description": "Se añaden nuevos resúmenes con regularidad. Vuelve pronto."
+    },
+    "noMatches": {
+      "title": "No hay coincidencias con esos filtros",
+      "description": "Prueba a eliminar un filtro para ver más libros.",
+      "cta": "Borrar filtros"
+    }
+  },
+  "errors": {
+    "failedToLoad": "Error al cargar los libros"
+  },
+  "a11y": {
+    "viewMode": {
+      "compact": "Vista compacta",
+      "grid": "Vista de cuadrícula",
+      "hero": "Vista inmersiva"
+    },
+    "filters": "Filtros",
+    "applyFilters": "Aplicar filtros",
+    "showAll": "Mostrar todos los {{title}}",
+    "showFewer": "Mostrar menos {{title}}",
+    "clearAllRecent": "Borrar todas las búsquedas recientes",
+    "removeRecentSearch": "Eliminar búsqueda reciente: {{query}}",
+    "language": "Idioma del contenido: {{language}}",
+    "languageHint": "Abre los ajustes de idioma",
+    "filtersActive_one": "Filtros, {{count}} activo",
+    "filtersActive_many": "Filtros, {{count}} activos",
+    "filtersActive_other": "Filtros, {{count}} activos"
+  }
+}

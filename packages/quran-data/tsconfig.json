@@ -2,7 +2,19 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // ⚠️ EXPLICIT, BECAUSE THE AUTOMATIC WALK-UP DOES NOT REACH THE HOISTED ROOT FROM HERE.
+    // `typeRoots` is unset, so TypeScript is supposed to pick up every `node_modules/@types`
+    // from this directory upward — and `@types/jest` IS at the repo root under
+    // `nodeLinker: hoisted`. It is not found anyway, so `describe`/`test`/`expect` are
+    // undeclared and `preset: 'ts-jest'` fails all five suites before running one assertion.
+    //
+    // This passed on a developer machine for months only because a stale
+    // `packages/quran-data/node_modules` happened to sit here from an older, non-hoisted
+    // install. A clean checkout has no such directory, so the FIRST CI run this repo ever
+    // did went red on it — twice, mailing the owner each time. Naming the types is what makes
+    // the two trees agree.
+    "types": ["jest", "node"]
   },
   "include": ["src/**/*.ts"]
 }

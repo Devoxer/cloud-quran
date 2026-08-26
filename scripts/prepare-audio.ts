@@ -10,17 +10,26 @@
  * Phase 3: Upload all files to Cloudflare R2 via wrangler
  *
  * Usage:
- *   bun run scripts/prepare-audio.ts                          # Run full pipeline
- *   bun run scripts/prepare-audio.ts --skip-download          # Skip MP3 download (reuse local files)
- *   bun run scripts/prepare-audio.ts --skip-upload            # Skip R2 upload (local-only)
- *   bun run scripts/prepare-audio.ts --reciter abdulbasit     # Run pipeline for a single reciter
+ *   node scripts/prepare-audio.ts                          # Run full pipeline
+ *   node scripts/prepare-audio.ts --skip-download          # Skip MP3 download (reuse local files)
+ *   node scripts/prepare-audio.ts --skip-upload            # Skip R2 upload (local-only)
+ *   node scripts/prepare-audio.ts --reciter abdulbasit     # Run pipeline for a single reciter
  */
 
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
-import { resolve } from 'path';
-import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata';
+import { spawn } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { resolve } from 'node:path';
+import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata.ts';
 
-const ROOT = resolve(import.meta.dir, '..');
+const ROOT = resolve(import.meta.dirname, '..');
 const TMP_DIR = resolve(ROOT, 'tmp/audio');
 const BUCKET = 'gp-cdn';
 const TOTAL_SURAHS = 114;
@@ -357,6 +366,40 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Run a child process to completion and return its exit code and captured
+ * output. stdout/stderr are drained as they arrive: reading them only after
+ * the process exits (as the Bun version did) deadlocks once a chatty tool like
+ * ffmpeg fills the 64 KB pipe buffer.
+ */
+async function run(
+  argv: string[],
+  opts: { cwd?: string; timeoutMs?: number } = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const [command, ...args] = argv;
+  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], cwd: opts.cwd });
+
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+  child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+  child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+
+  const timer = opts.timeoutMs ? setTimeout(() => child.kill(), opts.timeoutMs) : undefined;
+  try {
+    const exitCode = await new Promise<number>((resolvePromise, rejectPromise) => {
+      child.once('error', rejectPromise);
+      child.once('close', (code, signal) => resolvePromise(code ?? (signal ? 1 : 0)));
+    });
+    return {
+      exitCode,
+      stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
+      stderr: Buffer.concat(stderrChunks).toString('utf-8'),
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function buildDownloadUrl(reciter: ReciterConfig, surah: number): string {
   if (reciter.downloadFormat === 'qdc') {
     return `${QDC_BASE}/${reciter.slug}/${surah}.mp3`;
@@ -381,7 +424,7 @@ async function downloadFile(url: string, destPath: string, retries = 3): Promise
         throw new Error(`HTTP ${response.status} ${response.statusText}`);
       }
       const buffer = await response.arrayBuffer();
-      await Bun.write(destPath, buffer);
+      writeFileSync(destPath, Buffer.from(buffer));
       return;
     } catch (err) {
       if (attempt === retries) {
@@ -432,7 +475,7 @@ async function downloadReciterAudio(reciter: ReciterConfig): Promise<void> {
 async function downloadEveryAyahVerses(
   reciter: ReciterConfig,
   surahNumber: number,
-  verseCount: number,
+  verseCount: number
 ): Promise<void> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   mkdirSync(versesDir, { recursive: true });
@@ -461,7 +504,7 @@ async function downloadEveryAyahVerses(
 
 // Probe duration of a single MP3 file using ffprobe (returns ms)
 async function probeVerseDuration(filePath: string): Promise<number> {
-  const proc = Bun.spawn(
+  const { stdout } = await run(
     [
       'ffprobe',
       '-v',
@@ -472,13 +515,9 @@ async function probeVerseDuration(filePath: string): Promise<number> {
       'default=noprint_wrappers=1:nokey=1',
       filePath,
     ],
-    { stdout: 'pipe', stderr: 'pipe' },
+    { timeoutMs: 30_000 }
   );
-  const timeout = setTimeout(() => proc.kill(), 30_000);
-  const output = await new Response(proc.stdout).text();
-  await proc.exited;
-  clearTimeout(timeout);
-  const durationMs = Math.round(parseFloat(output.trim()) * 1000);
+  const durationMs = Math.round(parseFloat(stdout.trim()) * 1000);
   if (Number.isNaN(durationMs)) {
     throw new Error(`ffprobe returned invalid duration for ${filePath}`);
   }
@@ -489,7 +528,7 @@ async function probeVerseDuration(filePath: string): Promise<number> {
 async function probeAllVerseDurations(
   reciter: ReciterConfig,
   surahNumber: number,
-  verseCount: number,
+  verseCount: number
 ): Promise<number[]> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   const sss = padSurah(surahNumber);
@@ -512,7 +551,7 @@ async function probeAllVerseDurations(
 // Generate manifest timing entries from probed durations (same schema as QuranCDN)
 function generateManifestFromDurations(
   surahNumber: number,
-  verseDurations: number[],
+  verseDurations: number[]
 ): ManifestVerseTiming[] {
   let cumulativeMs = 0;
   return verseDurations.map((durationMs, index) => {
@@ -530,7 +569,7 @@ function generateManifestFromDurations(
 async function concatSurah(
   reciter: ReciterConfig,
   surahNumber: number,
-  verseCount: number,
+  verseCount: number
 ): Promise<void> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   const sss = padSurah(surahNumber);
@@ -542,22 +581,13 @@ async function concatSurah(
     const vvv = padVerse(verse);
     lines.push(`file '${sss}${vvv}.mp3'`);
   }
-  await Bun.write(filelistPath, lines.join('\n'));
+  writeFileSync(filelistPath, lines.join('\n'), 'utf-8');
 
-  const proc = Bun.spawn(
+  const { exitCode, stderr } = await run(
     ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', filelistPath, '-c', 'copy', outputPath],
-    {
-      stdout: 'pipe',
-      stderr: 'pipe',
-      cwd: versesDir,
-    },
+    { cwd: versesDir, timeoutMs: 5 * 60_000 }
   );
-  const timeout = setTimeout(() => proc.kill(), 5 * 60_000);
-
-  const exitCode = await proc.exited;
-  clearTimeout(timeout);
   if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
     throw new Error(`ffmpeg concat failed for ${reciter.id} surah ${surahNumber}: ${stderr}`);
   }
 }
@@ -566,7 +596,7 @@ async function concatSurah(
 async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest> {
   if (!reciter.everyAyahFolder) {
     throw new Error(
-      `Reciter ${reciter.id} has downloadFormat 'everyayah' but no everyAyahFolder defined`,
+      `Reciter ${reciter.id} has downloadFormat 'everyayah' but no everyAyahFolder defined`
     );
   }
 
@@ -577,7 +607,7 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
   const existingManifestPath = resolve(dir, 'manifest.json');
   if (existsSync(existingManifestPath)) {
     try {
-      const existing = JSON.parse(await Bun.file(existingManifestPath).text()) as Manifest;
+      const existing = JSON.parse(readFileSync(existingManifestPath, 'utf-8')) as Manifest;
       const surahKeys = Object.keys(existing);
       const allConcatsExist =
         surahKeys.length === TOTAL_SURAHS &&
@@ -644,7 +674,7 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
 
   // Write manifest before cleanup so a crash doesn't lose both verses and manifest
   const manifestPath = resolve(dir, 'manifest.json');
-  await Bun.write(manifestPath, JSON.stringify(manifest, null, 2));
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 
   // 1d. Clean up verses directory
   if (existsSync(versesDir)) {
@@ -664,7 +694,7 @@ async function phase1Download(): Promise<void> {
       continue;
     }
     console.log(
-      `Downloading ${reciter.id} (${reciter.slug}, format: ${reciter.downloadFormat})...`,
+      `Downloading ${reciter.id} (${reciter.slug}, format: ${reciter.downloadFormat})...`
     );
     await downloadReciterAudio(reciter);
     console.log(`  ✅ ${reciter.id} complete`);
@@ -696,7 +726,7 @@ interface QuranCDNAudioFile {
 async function fetchSurahTimings(
   reciterQurancdnId: number,
   surahNumber: number,
-  retries = 3,
+  retries = 3
 ): Promise<ManifestVerseTiming[]> {
   const url = `${TIMING_API_BASE}/${reciterQurancdnId}/audio_files?chapter=${surahNumber}&segments=true`;
 
@@ -726,7 +756,7 @@ async function fetchSurahTimings(
     } catch (err) {
       if (attempt === retries) {
         console.error(
-          `  ⚠️ Timing API failed for surah ${surahNumber} after ${retries} attempts: ${err}`,
+          `  ⚠️ Timing API failed for surah ${surahNumber} after ${retries} attempts: ${err}`
         );
         return [];
       }
@@ -771,7 +801,7 @@ async function phase2Manifests(): Promise<void> {
 
       if (emptySurahs.length > 0) {
         console.warn(
-          `  ⚠️  ${reciter.id}: ${emptySurahs.length}/${totalSurahs} surahs have empty timing data`,
+          `  ⚠️  ${reciter.id}: ${emptySurahs.length}/${totalSurahs} surahs have empty timing data`
         );
       } else {
         console.log(`  ✅ All ${totalSurahs} surahs have timing data`);
@@ -797,14 +827,14 @@ async function phase2Manifests(): Promise<void> {
 
     if (emptySurahs.length > 0) {
       console.warn(
-        `  ⚠️  ${reciter.id}: ${emptySurahs.length}/${totalSurahs} surahs have empty timing data: [${emptySurahs.join(', ')}]`,
+        `  ⚠️  ${reciter.id}: ${emptySurahs.length}/${totalSurahs} surahs have empty timing data: [${emptySurahs.join(', ')}]`
       );
     } else {
       console.log(`  ✅ All ${totalSurahs} surahs have timing data`);
     }
 
     const manifestPath = resolve(TMP_DIR, reciter.id, 'manifest.json');
-    await Bun.write(manifestPath, JSON.stringify(manifest, null, 2));
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
     console.log(`  ✅ Wrote ${manifestPath}`);
   }
 }
@@ -813,28 +843,20 @@ async function phase2Manifests(): Promise<void> {
 
 async function uploadToR2(localPath: string, r2Key: string, retries = 3): Promise<void> {
   for (let attempt = 1; attempt <= retries; attempt++) {
-    const proc = Bun.spawn(
-      [
-        'npx',
-        'wrangler',
-        'r2',
-        'object',
-        'put',
-        `${BUCKET}/${r2Key}`,
-        '--file',
-        localPath,
-        '--remote',
-      ],
-      {
-        stdout: 'pipe',
-        stderr: 'pipe',
-      },
-    );
+    const { exitCode, stderr } = await run([
+      'npx',
+      'wrangler',
+      'r2',
+      'object',
+      'put',
+      `${BUCKET}/${r2Key}`,
+      '--file',
+      localPath,
+      '--remote',
+    ]);
 
-    const exitCode = await proc.exited;
     if (exitCode === 0) return;
 
-    const stderr = await new Response(proc.stderr).text();
     if (attempt === retries) {
       throw new Error(`Upload failed for ${r2Key} after ${retries} attempts: ${stderr}`);
     }

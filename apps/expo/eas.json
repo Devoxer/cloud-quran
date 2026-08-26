@@ -1,0 +1,102 @@
+// ⚠️ THIS FILE IS JSONC, NOT JSON, AND THAT IS A DELIBERATE CHOICE WITH ONE CONSEQUENCE.
+// `JSON.parse` on it FAILS. The alternative convention this repo uses elsewhere — a `_comment_*`
+// key, as in app.json — is not available here: EAS validates eas.json against a strict schema and
+// rejects unknown keys ("submit.production.ios._comment" is not allowed broke
+// `pnpm secrets:push:expo` outright on 2026-08-25), while it accepts comments. So the rule is per
+// FILE, decided by what the consumer accepts: eas.json takes `//` comments, app.json takes
+// `_comment_*` keys. `biome.json` turns `json.parser.allowComments` on for this path alone, which
+// is why lint stays green; anything else that reads this file must strip comments first, and
+// nothing in the repo does today.
+{
+  "cli": {
+    "version": ">= 15.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "node": "24.15.0",
+      "channel": "development",
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "development-device": {
+      "node": "24.15.0",
+      "channel": "development",
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "node": "24.15.0",
+      "channel": "preview",
+      "distribution": "internal",
+      "environment": "preview",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "node": "24.15.0",
+      "channel": "production",
+      "autoIncrement": true,
+      "environment": "production",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  // ⚠️ `ascAppId` IS DELIBERATELY ABSENT, AND MUST STAY ABSENT UNTIL CLOUD QURAN HAS ITS OWN
+  // App Store record. It previously held 6761335952 — which is wisdom-fruits' LIVE listing
+  // (Wisdom Fruits: Book Summaries, com.wisdomfruits.app), seeded verbatim by story 5-1. An
+  // `eas submit` with that value would upload a Cloud Quran build to another shipped product.
+  "submit": {
+    "production": {
+      "ios": {
+        "appleTeamId": "MA2HBUUNVP"
+      },
+      // ⚠️ ADDED BY STORY 5-7, AND IT IS NOT YET USABLE — the one thing missing is an OWNER
+      // ACTION. `eas submit --platform android` needs a Google Play service-account JSON key
+      // (Play Console → Setup → API access → grant "Release apps to testing tracks"), and that
+      // file is a CREDENTIAL: it must never be committed. Two ways to supply it, pick one:
+      //   • `EXPO_ANDROID_SERVICE_ACCOUNT_KEY_PATH` in the environment (what CI would use), or
+      //   • `"serviceAccountKeyPath": "../../secrets/play-service-account.json"` here, pointing
+      //     at a gitignored file.
+      // Neither is invented here: a wrong path fails at submit time with a clearer message than a
+      // wrong key would. Recorded in `deferred-work.md` as the 5-1 review left it.
+      //
+      // `track: internal` and `releaseStatus: draft` are the deliberately timid defaults — the
+      // first Android submission must land somewhere a human confirms it before any user sees it.
+      // A first-ever submission to Play has to be uploaded through the Console by hand anyway;
+      // `eas submit` takes over from the second one.
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

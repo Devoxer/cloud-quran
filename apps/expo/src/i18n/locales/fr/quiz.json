@@ -1,0 +1,34 @@
+{
+  "global": {
+    "title": "Quiz global",
+    "subtitle": "Questions issues de toute la bibliothèque"
+  },
+  "stats": {
+    "bestScore": "Meilleur score",
+    "quizzesTaken": "Quiz effectués",
+    "avgScore": "Score moyen"
+  },
+  "byCategory": "Par catégorie",
+  "pool": {
+    "empty": {
+      "title": "Aucun quiz disponible pour le moment",
+      "description": "Ce quiz ne contient pas encore de questions. Revenez plus tard."
+    }
+  },
+  "book": {
+    "empty": {
+      "title": "Aucun quiz disponible",
+      "description": "Ce livre n'a pas encore de quiz. Revenez plus tard."
+    }
+  },
+  "error": {
+    "quizTitle": "Impossible de charger le quiz",
+    "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
+    "loadQuiz": "Impossible de charger le quiz. Veuillez réessayer plus tard.",
+    "loadQuizzes": "Impossible de charger les quiz. Veuillez réessayer plus tard."
+  },
+  "a11y": {
+    "loadingQuiz": "Chargement du quiz",
+    "viewStats": "Voir les statistiques du quiz"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  // ⚠️ ADDED BY THE STORY 5-3 REVIEW, and it is the highest-leverage thing in the story.
+  //
+  // `scripts/` belonged to NO TypeScript project. `pnpm typecheck` fans out to apps/expo,
+  // apps/worker, packages/shared and packages/quran-data — none of whose `include` globs reach
+  // this directory. So the recorded "typecheck 0" for the Bun→Node port was green over zero of
+  // the five files the port changed.
+  //
+  // Every single trap this story hit is a COMPILE ERROR under this config:
+  //   db.run(sql)              TS2339   (DatabaseSync has no .run)
+  //   db.query(sql)            TS2339   (it is .prepare)
+  //   db.transaction(fn)       TS2551   "Did you mean 'isTransaction'?"
+  //   import.meta.dir          TS2339   (it is .dirname)
+  //   Bun.file(...)            TS2868   "Cannot find name 'Bun'"
+  //   { readonly: true }       TS2561   "Did you mean to write 'readOnly'?"   ← the big one
+  //   missing .ts extension    TS2835
+  //   main().catch() on sync   TS2339   ← the bug this story found BY HAND
+  //
+  // That last pair is the argument: the readonly trap hands the integrity gate a writable handle
+  // on the shipped Quran database, and the `.catch()` bug made a script exit 1 after every
+  // successful run for months. Both were caught by a human reading carefully. Neither needs to be.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    // Node 24 runs these .ts files directly via type stripping, so relative value imports carry
+    // an explicit .ts extension. Without this, that is an error rather than the requirement.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": ["**/*.ts", "**/*.mts"],
+  "exclude": ["__tests__/**"]
+}

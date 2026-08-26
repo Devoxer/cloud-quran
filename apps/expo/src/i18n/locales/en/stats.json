@@ -1,0 +1,122 @@
+{
+  "emptyState": {
+    "title": "No stats yet",
+    "body": "Start listening to build your streak.",
+    "cta": "Discover Books"
+  },
+  "statGrid": {
+    "hoursSaved": "Hours saved",
+    "longestStreak": "Longest streak",
+    "booksFinished": "Books finished",
+    "sectionsDone": "Sections done",
+    "daysActive": "Days active",
+    "listenedTotal": "Listened total"
+  },
+  "streakHero": {
+    "encouragementActive": "You're on a roll — listen or read today to keep your streak alive.",
+    "encouragementInactive": "Listen or read today to start your streak.",
+    "unit_one": "day",
+    "unit_other": "days"
+  },
+  "todaysGoal": {
+    "title": "Today's goal",
+    "reached": "Goal reached — {{minutes}} min today",
+    "progress": "{{minutes}} of {{goal}} minutes listened"
+  },
+  "yearHeatmap": {
+    "title": "This year",
+    "less": "Less",
+    "more": "More"
+  },
+  "topCategories": {
+    "title": "Top categories"
+  },
+  "topTopics": {
+    "title": "Top topics"
+  },
+  "achievements": {
+    "title": "Achievements",
+    "firstFinish": {
+      "name": "First Finish",
+      "description": "Finish your first book"
+    },
+    "weekStreak": {
+      "name": "Week Streak",
+      "description": "A 7-day streak"
+    },
+    "nightOwl": {
+      "name": "Night Owl",
+      "description": "Listen after 10pm"
+    },
+    "explorer": {
+      "name": "Explorer",
+      "description": "Read 5+ categories"
+    },
+    "books25": {
+      "name": "25 Books",
+      "description": "Finish 25 books"
+    },
+    "monthStreak": {
+      "name": "Month Streak",
+      "description": "A 30-day streak"
+    },
+    "powerHour": {
+      "name": "Power Hour",
+      "description": "60 min in a day"
+    },
+    "dedicated": {
+      "name": "Dedicated",
+      "description": "30 days active"
+    },
+    "bookworm": {
+      "name": "Bookworm",
+      "description": "Finish 50 books"
+    }
+  },
+  "recordBanner": {
+    "dayCount_one": "{{count}} day",
+    "dayCount_other": "{{count}} days",
+    "atBest": "You're at your best streak",
+    "toRecord": "{{days}} to a new record",
+    "andCounting": "{{days}} and counting.",
+    "longestIs": "Your longest streak is {{days}}."
+  },
+  "quizEmptyState": {
+    "title": "No quiz stats yet",
+    "body": "Take a quiz to see your scores here."
+  },
+  "overall": {
+    "title": "Overall"
+  },
+  "support": {
+    "quizzesTaken": "Quizzes taken",
+    "avgScore": "Avg score",
+    "categories": "Categories",
+    "booksQuizzed": "Books quizzed"
+  },
+  "scope": {
+    "byBook": "By book",
+    "byCategory": "By category",
+    "wholeLibrary": "Whole library"
+  },
+  "trailing": {
+    "best": "Best"
+  },
+  "bookSubline_one": "{{count}} book · avg {{avg}}%",
+  "bookSubline_other": "{{count}} books · avg {{avg}}%",
+  "scopeSubline_one": "{{count}} attempt · avg {{avg}}% · {{relative}}",
+  "scopeSubline_other": "{{count}} attempts · avg {{avg}}% · {{relative}}",
+  "insights": {
+    "title": "Insights",
+    "coverage": "Explored {{explored}} of {{total}} categories",
+    "strongest": "Strongest · {{name}}",
+    "needsWork": "Needs work · {{name}}"
+  },
+  "quizStatsCard": {
+    "title": "Quizzes",
+    "bestScore": "Best score"
+  },
+  "a11y": {
+    "loadingQuizStats": "Loading quiz stats"
+  }
+}

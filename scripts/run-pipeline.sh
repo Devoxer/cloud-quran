@@ -13,7 +13,7 @@ mkdir -p tmp
 echo "Starting pipeline at $(date)" | tee "$LOG_FILE"
 echo "Log file: $(pwd)/$LOG_FILE"
 
-if bun run scripts/prepare-audio.ts >> "$LOG_FILE" 2>&1; then
+if node scripts/prepare-audio.ts >> "$LOG_FILE" 2>&1; then
   echo "" >> "$LOG_FILE"
   echo "Pipeline finished successfully at $(date)" >> "$LOG_FILE"
   echo "Pipeline finished successfully at $(date)"

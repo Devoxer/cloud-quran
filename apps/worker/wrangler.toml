@@ -1,0 +1,145 @@
+# Cloud Quran API — Cloudflare Worker config (story 5-4).
+#
+# ⚠️ THE REMOTE DATABASE EXISTS (created 2026-08-24, region EEUR), AND CREATING IT IS AN ASK-FIRST ACTION.
+# `database_id` is the real remote database, created 2026-08-24 (region EEUR). `wrangler dev` is
+# local-by-default in v4 and
+# `wrangler d1 migrations apply cloud-quran --local` never contacts Cloudflare, so every
+# command in this story runs against `.wrangler/state/` (gitignored) against the LOCAL state only —
+# owner has approved spending the shared, account-wide daily write budget — which ERRORS when
+# exhausted rather than billing (see § "The write budget" in architecture.md).
+
+# ⚠️ The top-level name is deliberately `-dev`, and production is a NAMED environment.
+# Both blocks used to be called `cloud-quran-api`, so a bare `wrangler deploy` published this
+# top-level config straight over the production Worker, bound to the real production database.
+# Deploying production has to say so: `pnpm deploy` is `wrangler deploy --env production`.
+#
+# ⚠️ THERE IS NO `deploy:dev` SCRIPT, AND THE 5-4 SENTENCE HERE CLAIMING ONE WAS ALREADY WRONG
+# WHEN IT WAS WRITTEN — `identity.test.ts` asserts its absence in the same commit that added the
+# claim. The top-level block carries the LIVE `database_id`, so publishing it anywhere puts a
+# second Worker on production data. Local development is `wrangler dev`, which deploys nothing.
+name = "cloud-quran-api-dev"
+main = "src/index.ts"
+
+# ⚠️ NOT 2024-01-01 (what the reverted story 4-0 shipped). A stale compatibility date silently
+# opts the worker out of every runtime fix and API since. Pinned to the date the installed
+# workerd (1.20260804.1) actually implements — a date NEWER than the runtime is refused.
+compatibility_date = "2026-08-04"
+
+# ⚠️ REQUIRED BY BETTER AUTH, AND IT FAILS AT IMPORT TIME, NOT AT CALL TIME. `better-auth`
+# reaches `node:async_hooks` (AsyncLocalStorage) through `@better-auth/core`, so without this
+# flag the module graph throws while the isolate is starting and EVERY route — `/health`
+# included — 500s.
+#
+# ⚠️ IT IS REPEATED ON `[env.production]`, AND NOT BECAUSE IT HAS TO BE. `compatibility_flags` IS
+# an inheritable key in wrangler's config schema — unlike `vars`, `d1_databases` and `send_email`,
+# which the schema annotates as NOT inherited and which are therefore repeated below out of
+# necessity. This one is repeated so the production block states its own runtime contract instead
+# of depending on a rule three keys of its neighbours do not follow. Duplicating an inheritable
+# key is harmless; deleting either copy is also fine. (`identity.test.ts` asserts the flag is
+# present wherever it is declared, deliberately NOT that there are exactly two copies.)
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# ⚠️ DEVELOPMENT NEEDS THIS TOO, and its absence made local web development impossible rather
+# than merely awkward: `wrangler dev` served no `access-control-allow-origin`, so the Expo web
+# build could not reach a LOCAL worker at all — every call, including `/api/auth/get-session`,
+# died at the browser. The production block had it; this one did not, so the gap only appeared
+# to someone driving the web build against localhost. Same list, same reasons as production.
+ALLOWED_ORIGINS = "https://cloudquran.nobleachievements.com,http://localhost:8082,http://localhost:8081,http://localhost:19006"
+
+# The production marker. `[env.production]` overrides it; everything else (local `wrangler dev`,
+# preview) inherits "development". Read by `lib/mail.ts` (which refuses to fall back to a
+# console-logged OTP outside development) and by the OTP mailer gate — see BETTER_AUTH_SECRET below.
+ENVIRONMENT = "development"
+
+# ⚠️ BETTER_AUTH_SECRET IS DELIBERATELY DECLARED NOWHERE IN THIS FILE, AND NEITHER WAS ITS
+# PREDECESSOR. Story 5-4's DEV_AUTH_SECRET is gone — story 5-5 deleted the dev token issuer and
+# its verifier outright — but the rule it existed to enforce is unchanged and now guards a
+# secret that signs REAL sessions: it is supplied through `.dev.vars` (gitignored) locally and
+# `wrangler secret put BETTER_AUTH_SECRET --env production` in production, never through a
+# `[vars]` block, because `[vars]` is plaintext in this committed file.
+# `src/lib/identity.test.ts` PARSES THIS FILE — comment lines are stripped first, so this
+# paragraph cannot satisfy its own assertion — and fails if any DECLARATION of that key appears
+# in any env block. A signing key in source control is the failure that ships by accident, so
+# the absence is asserted rather than remembered.
+#
+# BETTER_AUTH_URL is likewise absent and OPTIONAL: unset, Better Auth derives its base URL from
+# the request, which is what a Worker behind an unknown `*.workers.dev` subdomain wants. Set it
+# in `.dev.vars` only when a fixed absolute base URL is needed.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cloud-quran"
+database_id = "66298492-a925-4c76-978f-1424e0551b67"
+# Local/preview runs use their own state under .wrangler/state/ and ignore the ids above.
+preview_database_id = "cloud-quran-local"
+migrations_dir = "drizzle/migrations"
+
+# Cloudflare Email Service's send binding — the email OTP's delivery path (story 5-5).
+#
+# ⚠️ `wrangler dev` SIMULATES this binding: mail is logged and written under .wrangler/, never
+# delivered, and no `remote = true` is set here on purpose. So the binding costs nothing locally
+# and nothing in the test suite. It is NOT restricted to a destination address, because the
+# recipient is whichever reader is signing in.
+#
+# ⚠️ THE SENDING DOMAIN EXISTS AS OF 2026-08-25. `cloudquran.nobleachievements.com` is onboarded
+# to Cloudflare Email Service with all six DNS records live (`status: ready`), so the From address
+# is `no-reply@cloudquran.nobleachievements.com`. It is NOT declared here: `MAIL_FROM` lives in
+# `secrets.sops.yaml` with the rest of the worker's configuration, so `pnpm secrets:push:worker`
+# populates it alongside the keys it must travel with, rather than half here and half there.
+# `src/lib/mail.ts` still refuses when it is unset, and logs the code in development instead —
+# which is the path the integration suite drives.
+[[send_email]]
+name = "EMAIL"
+
+[env.production]
+name = "cloud-quran-api"
+compatibility_date = "2026-08-04"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+# ⚠️ WITHOUT THIS THE WEB AND DESKTOP BUILDS CANNOT CALL THE API AT ALL, and the failure looks
+# like nothing: `app.ts`'s CORS origin callback answers only origins listed here, so an unset
+# value makes the preflight return 204 with NO `access-control-allow-origin` and the browser
+# drops every request before it is sent. Observed against production on 2026-08-25. Native is
+# unaffected (it sends no Origin the browser enforces), which is exactly why this can ship
+# looking fine. Comma-separated, exact origins — scheme and port included, no trailing slash.
+#
+# ⚠️ NO `localhost` HERE. THIS LIST IS NOT ONLY CORS. `lib/auth.ts` feeds it straight into Better
+# Auth's `trustedOrigins`, so every entry is an origin the LIVE worker will accept credentialed
+# cross-origin requests from — and will happily redirect an OAuth callback to. A `localhost` entry
+# means any page on any developer's machine, or anything else bound to that port, is trusted by
+# production. The three dev ports were added here for local convenience during story 5-5 and
+# belong in the top-level `[vars]` block, which `wrangler dev` reads and `wrangler deploy
+# --env production` does not. `identity.test.ts` asserts their absence.
+ALLOWED_ORIGINS = "https://cloudquran.nobleachievements.com"
+# ⚠️ PINNED IN PRODUCTION, DERIVED LOCALLY, AND THE REDIRECT LEG IS WHY (story 5-5 amendment).
+# Unset, Better Auth builds its base URL from the incoming request and warns that "callbacks and
+# redirects may not work correctly" — which was harmless while every sign-in was a native id
+# token and is not any more: the OAuth redirect URI the app sends to Apple and Google is built
+# from this, and it must match what is registered in their consoles EXACTLY. A request arriving
+# on a different host (a preview alias, a proxy) would otherwise mint a callback nobody
+# registered. Local `wrangler dev` deliberately leaves it unset so the origin follows whatever
+# port is in use. Not a secret — it is the public address of this worker.
+# ⚠️ THE CUSTOM DOMAIN, NOT workers.dev — and that is a hard requirement, not tidiness.
+# Apple's Services ID makes you verify the domain that hosts the return URL, and `workers.dev` is
+# Cloudflare's and sits on the public suffix list, so Apple will never verify it. Web Apple
+# sign-in is therefore impossible on the workers.dev host. Attached 2026-08-25 to the production
+# worker; `nobleachievements.com` already carries the `apple-domain=` TXT record.
+BETTER_AUTH_URL = "https://api.cloudquran.nobleachievements.com"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "cloud-quran"
+database_id = "66298492-a925-4c76-978f-1424e0551b67"
+migrations_dir = "drizzle/migrations"
+
+[[env.production.send_email]]
+name = "EMAIL"
+
+# Cron triggers: NONE — and the reason given here until 2026-08-24 was wrong twice. It read "a
+# scheduled-job trigger block alone flips the account onto the paid tier": Cron Triggers are
+# available on the free plan, and this account is on Workers Paid regardless (story 5-5). The rule
+# worth keeping is the plain one — a scheduled job runs forever once written, so it has to justify
+# a standing cost, and nothing here needs one.

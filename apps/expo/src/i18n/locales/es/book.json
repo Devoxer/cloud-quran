@@ -1,0 +1,89 @@
+{
+  "byline": {
+    "by": "por"
+  },
+  "sectionTitles": {
+    "aboutBook": "Sobre este libro",
+    "summaryBrief": "Resumen breve",
+    "summaryCore": "Resumen principal",
+    "summaryInDepth": "Resumen detallado"
+  },
+  "sections": {
+    "categories": "Categorías",
+    "topics": "Temas",
+    "keyTakeaways": "Puntos clave",
+    "notableQuotes": "Citas destacadas",
+    "faq": "Preguntas frecuentes",
+    "readMore": "Leer más",
+    "moreCount": "+{{moreCount}} más"
+  },
+  "actions": {
+    "quiz": "Cuestionario",
+    "note": "Nota",
+    "save": "Guardar",
+    "favorite": "Favorito",
+    "download": "Descargar"
+  },
+  "favorites": {
+    "title": "Favoritos",
+    "count_one": "{{count}} libro",
+    "count_many": "{{count}} libros",
+    "count_other": "{{count}} libros"
+  },
+  "quiz": {
+    "complete": "Cuestionario completado",
+    "perfectScore": "Puntuación perfecta. ¡Lo has dominado!",
+    "goodScore": "Buen trabajo. Repite para mejorar tu puntuación.",
+    "lowScore": "Vale la pena intentarlo de nuevo para reforzarlo.",
+    "retake": "Repetir",
+    "progress": "{{current}} de {{total}}",
+    "next": "Siguiente",
+    "seeResults": "Ver resultados"
+  },
+  "share": {
+    "message": "¡Echa un vistazo a «{{title}}» de {{author}} en Wisdom Fruits!"
+  },
+  "errors": {
+    "failedToLoad": "Error al cargar el libro",
+    "quizFailed": "No se pudo cargar el cuestionario. Inténtalo de nuevo más tarde.",
+    "contentUnavailable": "Este contenido no está disponible en este momento. Inténtalo de nuevo más tarde."
+  },
+  "notFound": {
+    "title": "Libro no encontrado",
+    "description": "Es posible que haya sido eliminado o que el enlace haya caducado.",
+    "goBack": "Volver"
+  },
+  "navFallbackTitle": "Libro",
+  "a11y": {
+    "view": "Ver {{title}}",
+    "elapsed": "Transcurrido {{time}}",
+    "booksByAuthor": "Libros de {{name}}",
+    "titleByAuthor": "{{title}} de {{author}}",
+    "opensBookDetails": "Abre los detalles del libro",
+    "listeningTime": "{{duration}} de tiempo de escucha",
+    "percentComplete": "{{percent}}% completado",
+    "seeMore": "Ver {{moreCount}} más",
+    "contentTapToReadMore": "Contenido de {{title}}. Toca para leer más.",
+    "tapToReadMore": "{{title}}. Toca para leer más.",
+    "availableOffline": " Disponible sin conexión.",
+    "showMore": "Mostrar más",
+    "shareThisBook": "Compartir este libro",
+    "takeQuiz": "Realizar el cuestionario de este libro",
+    "addNote": "Añadir una nota",
+    "addToCollection": "Añadir a una colección",
+    "removeFromFavorites": "Quitar de favoritos",
+    "addToFavorites": "Añadir a favoritos",
+    "retryDownload": "Reintentar descarga",
+    "downloadingPercent": "Descargando {{percent}} por ciento",
+    "removeOfflineDownload": "Eliminar descarga sin conexión",
+    "downloadForOffline": "Descargar para uso sin conexión",
+    "retakeQuiz": "Repetir cuestionario",
+    "youScored": "Puntuación: {{correct}} de {{total}}",
+    "questionProgress": "Pregunta {{current}} de {{total}}, {{correct}} correctas",
+    "scoreAnswered": "Puntuación {{correct}} de {{answered}} respondidas",
+    "optionRevealed": "{{option}}. {{status}}",
+    "correctAnswer": "Respuesta correcta",
+    "incorrect": "Incorrecto",
+    "nextQuestion": "Siguiente pregunta"
+  }
+}

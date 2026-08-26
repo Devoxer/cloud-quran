@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "ok": "Aceptar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "retry": "Reintentar",
+    "tryAgain": "Reintentar",
+    "done": "Listo",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "remove": "Quitar",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "seeAll": "Ver todo",
+    "clearAll": "Borrar todo",
+    "dismiss": "Descartar",
+    "signUp": "Registrarse",
+    "maybeLater": "Quizás más tarde",
+    "newMix": "Nueva mezcla",
+    "manageOfflineBooks": "Gestionar libros sin conexión"
+  },
+  "badge": {
+    "premium": "Premium",
+    "premiumCaps": "PREMIUM"
+  },
+  "search": {
+    "booksPlaceholder": "Buscar libros..."
+  },
+  "notFound": {
+    "title": "¡Ups!",
+    "message": "Esta pantalla no existe.",
+    "goHome": "¡Ir a la pantalla de inicio!"
+  },
+  "sectionPicker": {
+    "title": "Selector de secciones",
+    "sectionsPerBook": "Secciones por libro",
+    "hint": "Selecciona qué secciones reproducir para cada libro",
+    "apply": "Aplicar ({{selected}})"
+  },
+  "sections": {
+    "aboutBook": "Sobre el libro",
+    "summaryBrief": "Resumen breve",
+    "summaryCore": "Resumen principal",
+    "summaryInDepth": "Resumen detallado",
+    "keyTakeaways": "Puntos clave",
+    "notableQuotes": "Citas destacadas",
+    "faq": "Preguntas frecuentes"
+  },
+  "durationBadge": {
+    "1min": "1 min",
+    "5min": "5 min",
+    "15min": "15 min"
+  },
+  "moreCount": "+{{moreCount}} más",
+  "unknownTitle": "Título desconocido",
+  "unknownAuthor": "Autor desconocido",
+  "dialogs": {
+    "removeOffline": {
+      "title": "¿Eliminar descarga sin conexión?",
+      "message": "¿Quitar «{{title}}» de este dispositivo? Libera {{size}}. Puedes descargarlo de nuevo."
+    },
+    "offlineLimit": {
+      "title": "Límite de descarga alcanzado",
+      "message": "{{saved}}/{{limit}} libros guardados sin conexión. Elimina uno para guardar otro."
+    }
+  },
+  "errors": {
+    "network": "No se pudo conectar con el servidor. Comprueba tu conexión."
+  },
+  "signUpPrompt": {
+    "defaultMessage": "Regístrate para acceder a esta función"
+  },
+  "relativeTime": {
+    "justNow": "ahora mismo",
+    "minutesAgo": "hace {{minutes}} min",
+    "hoursAgo": "hace {{hours}} h",
+    "daysAgo": "hace {{days}} d",
+    "weeksAgo": "hace {{weeks}} sem."
+  },
+  "byteSize": "{{value}} {{unit}}",
+  "byteUnits": {
+    "b": "B",
+    "kb": "KB",
+    "mb": "MB",
+    "gb": "GB"
+  },
+  "placeholder": {
+    "appName": "Cloud Quran",
+    "readingModeSoon": "El modo de lectura llegará en el épico 6."
+  }
+}

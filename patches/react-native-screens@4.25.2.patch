@@ -1,0 +1,76 @@
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt
+index 7aee121f4bcf11495269a46951b276e96655cb1e..c238348ebcd34db0b8e60dfb4f210266d5ea0958 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt
+@@ -496,7 +496,35 @@ class ScreenStackFragment :
+ 
+     override fun canNavigateBack(): Boolean {
+         val container: ScreenContainer? = screen.container
+-        check(container is ScreenStack) { "ScreenStackFragment added into a non-stack container" }
++        // wisdom-fruits Story 20.8 — local patch for an upstream null-guard inconsistency.
++        //
++        // The caller and this callee disagree about whether "no stack" is a legal state.
++        // ScreenStackHeaderConfig.onUpdate() computes its top-of-stack test as
++        //     val isTop = stack == null || stack.topScreen == parent
++        // i.e. it treats a screen with NO stack as "is top" and proceeds — then calls this method
++        // (line 264, only to decide setDisplayHomeAsUpEnabled), whose check() forbids exactly that
++        // state. So a header-config prop update on a screen whose container is null (detached:
++        // ScreenContainer.removeScreenAt sets screen.container = null) or is a non-stack container
++        // walks past the caller's guard straight into a check() that cannot pass.
++        //
++        // A screen that is not in a stack genuinely cannot navigate back, so answer false rather
++        // than throw. This is the callee-side fix on purpose: tightening the CALLER's guard to
++        // `stack != null && ...` is wider, because `screenStack` there is
++        // `screen?.container as? ScreenStack` — null for a detached screen AND for a legitimately
++        // non-ScreenStack container — so it would silently stop configuring modal/non-stack
++        // headers too. This patch cannot reach those: screenFragment is
++        // `screen.fragment as? ScreenStackFragment`, and ScreenModalFragment overrides
++        // canNavigateBack() as `= true` separately.
++        //
++        // The `screenStack` GETTER above (line ~72) deliberately keeps throwing the identical
++        // message — dismissFromContainer() with no stack IS a programming error. Do not "fix" both.
++        //
++        // Symptom without this patch (Android only): switching the app language re-renders every
++        // useTranslation subscriber in one commit, so all five per-tab Stack layouts push header
++        // title updates at once — including non-active stacks. Release build: no FATAL EXCEPTION
++        // and no process death, but ReactHost.handleHostException tears the React instance down and
++        // the app is left permanently blank until force-stopped.
++        if (container !is ScreenStack) return false
+         return if (container.rootScreen == screen) {
+             // this screen is the root of the container, if it is nested we can check parent container
+             // if it is also a root or not
+diff --git a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
+index 3916fdc2ac05a87caf39dfa6c55e4a071a6aabf6..ab1e836a0e7d191122ad91eaf9be01a48de654ad 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
+@@ -378,7 +378,29 @@ class TabsContainer internal constructor(
+     // region TabsScreenDelegate impl
+ 
+     override fun onAppearanceChanged(tabsScreen: TabsScreen) {
+-        if (selectedTab.tabsScreen === tabsScreen) {
++        // wisdom-fruits Story 36.6 — local patch for the SECOND upstream `check()` in this library
++        // that forbids a state the library itself produces. (The first is in ScreenStackFragment,
++        // patched at Story 20.8; see the comment there.)
++        //
++        // `selectedTab` is `checkNotNull(getFragmentForScreenKey(navState.selectedScreenKey))`, so
++        // reading it throws whenever no fragment is registered for the selected key. That is a
++        // TRANSIENT state during a theme flip: changing Perfil → Apariencia re-themes the tabs,
++        // TabsScreen's `appearance` observable fires this delegate, and the nav state can still be
++        // empty at that moment. Measured on Pixel_9_Pro / versionCode 18: the flip threw
++        // `IllegalStateException: [RNScreens] No selected tab present` every time and escalated to
++        // an ANR. Per Story 20.8, a RELEASE build is worse rather than better — the exception is
++        // caught, so there is no crash dialog and no crash report, only a blank screen.
++        //
++        // The dereference exists ONLY to compare identity, so a nullable lookup answers the same
++        // question: with a selected tab the behaviour is byte-identical, and without one there is
++        // no navigation menu whose appearance could need invalidating, so doing nothing is correct
++        // rather than merely safe.
++        //
++        // ⚠️ `onMenuItemAttributesChange` just below reads `selectedTab` the same way and carries
++        // the same hazard. It is deliberately NOT patched: it has never been observed to throw
++        // (the crash trace names only this method), and a guard written from a guess is a claim
++        // about the future that the next upgrade has to re-verify. Fix it if it ever bites.
++        if (getFragmentForScreenKey(navState.selectedScreenKey)?.tabsScreen === tabsScreen) {
+             invalidationFlags.isNavigationMenuAppearanceInvalidated = true
+             post {
+                 this.flushPendingUpdates()

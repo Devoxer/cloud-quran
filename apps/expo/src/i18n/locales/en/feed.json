@@ -1,0 +1,33 @@
+{
+  "strip": {
+    "sections": "Sections",
+    "upNext": "Up next"
+  },
+  "sections": {
+    "aboutBook": "About This Book",
+    "summaryBrief": "Brief Summary",
+    "summaryCore": "Core Summary",
+    "summaryInDepth": "In-Depth Summary",
+    "keyTakeaways": "Key Takeaways",
+    "notableQuotes": "Notable Quotes",
+    "faq": "FAQ"
+  },
+  "timeout": {
+    "title": "Taking too long",
+    "message": "Feed content couldn't load. Check your connection and try again."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "message": "Couldn't load your feed. Tap below to try again."
+  },
+  "empty": {
+    "title": "End of the mix",
+    "description": "Try changing sections or check back later.",
+    "cta": "Shuffle Again"
+  },
+  "a11y": {
+    "queueRow": "{{title}} by {{author}}, {{section}}",
+    "sectionsAndNewMix": "Feed sections and new mix",
+    "playFeed": "Play the feed"
+  }
+}

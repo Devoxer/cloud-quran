@@ -1,0 +1,38 @@
+{
+  "tabs": {
+    "discover": "Discover",
+    "feed": "Feed",
+    "quizzes": "Quizzes",
+    "library": "Library",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "titles": {
+    "discover": "Discover",
+    "search": "Search",
+    "filters": "Filters",
+    "browse": "Browse",
+    "feed": "Feed",
+    "library": "Library",
+    "favorites": "Favorites",
+    "myNotes": "My Notes",
+    "history": "History",
+    "offline": "Offline",
+    "profile": "Profile",
+    "playback": "Playback",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "language": "Language",
+    "yourStats": "Your Stats",
+    "quizzes": "Quizzes",
+    "quizStats": "Quiz Stats",
+    "book": "Book",
+    "testYourself": "Test Yourself",
+    "quotes": "Quotes",
+    "nowPlaying": "Now Playing",
+    "feedback": "Feedback",
+    "signIn": "Sign In",
+    "account": "Settings",
+    "data": "Your Data"
+  }
+}

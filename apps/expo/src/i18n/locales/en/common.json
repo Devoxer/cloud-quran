@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "tryAgain": "Try Again",
+    "done": "Done",
+    "save": "Save",
+    "delete": "Delete",
+    "remove": "Remove",
+    "close": "Close",
+    "back": "Back",
+    "seeAll": "See All",
+    "clearAll": "Clear All",
+    "dismiss": "Dismiss",
+    "signUp": "Sign Up",
+    "maybeLater": "Maybe Later",
+    "newMix": "New mix",
+    "manageOfflineBooks": "Manage Offline Books"
+  },
+  "badge": {
+    "premium": "Premium",
+    "premiumCaps": "PREMIUM"
+  },
+  "search": {
+    "booksPlaceholder": "Search books..."
+  },
+  "notFound": {
+    "title": "Oops!",
+    "message": "This screen does not exist.",
+    "goHome": "Go to home screen!"
+  },
+  "sectionPicker": {
+    "title": "Section Picker",
+    "sectionsPerBook": "Sections per Book",
+    "hint": "Select which sections to play for each book",
+    "apply": "Apply ({{selected}})"
+  },
+  "sections": {
+    "aboutBook": "About Book",
+    "summaryBrief": "Brief Summary",
+    "summaryCore": "Core Summary",
+    "summaryInDepth": "In-Depth Summary",
+    "keyTakeaways": "Key Takeaways",
+    "notableQuotes": "Notable Quotes",
+    "faq": "FAQ"
+  },
+  "durationBadge": {
+    "1min": "1 min",
+    "5min": "5 min",
+    "15min": "15 min"
+  },
+  "moreCount": "+{{moreCount}} more",
+  "unknownTitle": "Unknown Title",
+  "unknownAuthor": "Unknown Author",
+  "dialogs": {
+    "removeOffline": {
+      "title": "Remove Offline Download?",
+      "message": "Remove \"{{title}}\" from this device? Frees {{size}}. You can download it again."
+    },
+    "offlineLimit": {
+      "title": "Offline Limit Reached",
+      "message": "{{saved}}/{{limit}} books saved offline. Remove one to save another."
+    }
+  },
+  "errors": {
+    "network": "Could not reach the server. Check your connection."
+  },
+  "signUpPrompt": {
+    "defaultMessage": "Sign up to access this feature"
+  },
+  "relativeTime": {
+    "justNow": "just now",
+    "minutesAgo": "{{minutes}}m ago",
+    "hoursAgo": "{{hours}}h ago",
+    "daysAgo": "{{days}}d ago",
+    "weeksAgo": "{{weeks}}w ago"
+  },
+  "byteSize": "{{value}} {{unit}}",
+  "byteUnits": {
+    "b": "B",
+    "kb": "KB",
+    "mb": "MB",
+    "gb": "GB"
+  },
+  "placeholder": {
+    "appName": "Cloud Quran",
+    "readingModeSoon": "Reading Mode arrives in epic 6."
+  }
+}

@@ -1,37 +1,53 @@
 {
-  "name": "cloud-quran",
+  "name": "cloud-quran-monorepo",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "dev:expo": "cd apps/expo && bun start",
-    "lint": "biome check .",
-    "format": "biome check --write .",
-    "typecheck": "tsc --noEmit -p packages/quran-data/tsconfig.json && tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p apps/expo/tsconfig.json",
-    "test": "bunx jest --projects packages/quran-data packages/shared apps/expo",
-    "prepare-data": "bun run scripts/prepare-data.ts",
-    "verify": "bun run scripts/verify-quran.ts",
-    "prepare-audio": "bun run scripts/prepare-audio.ts"
-  },
-  "resolutions": {
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-native": "0.83.2"
-  },
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.1.3",
   "devDependencies": {
-    "@biomejs/biome": "^2.0.0",
-    "@testing-library/react-native": "^13.3.3",
-    "@types/bun": "^1.3.10",
-    "@types/jest": "^29.5.0",
-    "@types/react": "~19.2.10",
-    "fast-xml-parser": "^5.4.2",
-    "jest": "^29.7.0",
-    "jest-expo": "^55.0.9",
-    "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
-    "typescript": "~5.9.2"
+    "@biomejs/biome": "^2.4.15",
+    "@types/node": "^24.13.3",
+    "fast-xml-parser": "^5.11.0",
+    "turbo": "^2.9.14",
+    "typescript": "~6.0.3"
   },
-  "version": "1.0.0"
+  "scripts": {
+    "start": "pnpm --filter cloud-quran-app start",
+    "ios": "pnpm --filter cloud-quran-app ios",
+    "android": "pnpm --filter cloud-quran-app android",
+    "web": "pnpm --filter cloud-quran-app web",
+    "build": "turbo build",
+    "test": "pnpm verify && pnpm test:gates && turbo test --concurrency=1",
+    "typecheck": "pnpm typecheck:scripts && turbo typecheck",
+    "lint": "biome check . && pnpm lint:layers && pnpm lint:style && pnpm lint:i18n && pnpm lint:native-patches && pnpm lint:header-controls",
+    "lint:layers": "node scripts/lint-layers.mjs",
+    "lint:style": "node scripts/lint-style.mjs",
+    "lint:i18n": "node scripts/lint-i18n.mjs",
+    "lint:native-patches": "node scripts/lint-native-patches.mjs",
+    "lint:header-controls": "node scripts/lint-header-controls.mjs",
+    "test:gates": "pnpm test:gate-lib && pnpm test:verify-gate && pnpm test:layers && pnpm test:style && pnpm test:i18n && pnpm test:native-patches && pnpm test:header-controls",
+    "test:gate-lib": "node --test scripts/__tests__/gate-lib.test.mjs",
+    "test:layers": "node --test scripts/__tests__/lint-layers.test.mjs",
+    "test:style": "node --test scripts/__tests__/lint-style.test.mjs",
+    "test:i18n": "node --test scripts/__tests__/lint-i18n.test.mjs",
+    "test:native-patches": "node --test scripts/__tests__/lint-native-patches.test.mjs",
+    "test:header-controls": "node --test scripts/__tests__/lint-header-controls.test.mjs",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "secrets:edit": "sh scripts/secrets.sh edit",
+    "secrets:push:worker": "sh scripts/secrets.sh push:worker",
+    "secrets:push:expo": "sh scripts/secrets.sh push:expo",
+    "secrets:push:local": "sh scripts/secrets.sh push:local",
+    "prepare-data": "node scripts/prepare-data.ts",
+    "verify": "node scripts/verify-quran.ts",
+    "prepare-audio": "node scripts/prepare-audio.ts",
+    "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
+    "test:verify-gate": "node --test scripts/__tests__/verify-quran.test.mjs"
+  },
+  "_comment_perms": "story 5-2 retired the FIFTH lint gate and the sixth gate self-test. `lint:perms` (scripts/lint-instant-perms.mjs) and `perms:verify` (scripts/perms-verify.sh) existed because authorization rules were pushed to a vendor and could drift from the committed file, invisibly to every other check. The vendor is gone and authorization becomes code in the worker, deployed atomically with the app that depends on it (sprint-change-proposal-2026-08-20), so the whole drift class disappears rather than moving. Do not resurrect these scripts for D1 \u2014 there is nothing to compare against.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "_comment_typecheck_scripts": "scripts/ belonged to no TypeScript project until the 5-3 review, so `turbo typecheck` was green over zero of the Bun->Node port. Every trap that port hit is a compile error under scripts/tsconfig.json \u2014 including `{ readonly: true }`, which node:sqlite silently ignores and which hands the integrity gate a WRITABLE handle on the shipped Quran database. ORDER MATTERS: typecheck:scripts runs FIRST so that pnpm forwards trailing args like --force to turbo, which understands them, rather than to tsc, which rejects them.",
+  "_comment_verify_in_test": "ADDED BY THE 5-3 REVIEW. `pnpm verify` is the SHA-256 per-ayah Quran integrity gate \u2014 the project's one stated non-negotiable \u2014 and until now it ran from no aggregate command, no git hook and no CI. It guarded the most important invariant in the repo by waiting for a human to type it. That is exactly how story 5-1 shipped a DEAD integrity gate for a whole story. It runs FIRST because a corrupted ayah makes every other result irrelevant, and it costs ~0.1s."
 }

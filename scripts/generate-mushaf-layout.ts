@@ -2,25 +2,27 @@
 //   - zonetecde/mushaf-layout → word data, line assignments, Arabic text, QPC glyph codes
 //   - quran.com-images database → verification against King Fahd Complex authoritative source
 //
-// Run: bun run scripts/generate-mushaf-layout.ts
+// Run: node scripts/generate-mushaf-layout.ts
 //
 // Prerequisites: Both repos are auto-cloned to /tmp if not present:
-//   git clone --depth 1 https://github.com/quran/quran.com-images.git /tmp/quran.com-images
-//   git clone --depth 1 https://github.com/zonetecde/mushaf-layout.git /tmp/mushaf-layout
+//   (cloned and PINNED automatically by ensureRepos() — do not clone by hand; an unpinned
+//    clone defeats the pin and makes the output incomparable to the committed layouts)
 
-import { Database } from 'bun:sqlite';
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { execSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
-import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata';
+import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata.ts';
 
-const ROOT = resolve(import.meta.dir, '..');
+const ROOT = resolve(import.meta.dirname, '..');
 const OUTPUT_DIR = resolve(ROOT, 'packages/quran-data/data/mushaf-layout');
 const BUNDLE_PATH = resolve(ROOT, 'apps/expo/src/data/mushaf-layouts.json');
 const TOTAL_PAGES = 604;
 
 // External data source paths
+const QCI_PIN = 'dbda5689'; // verified against, 5-3
+const ZT_PIN = '72116ce4'; // verified against, 5-3
 const QCI_REPO = '/tmp/quran.com-images';
 const ZT_REPO = '/tmp/mushaf-layout';
 const QCI_SQL_DUMP = resolve(QCI_REPO, 'sql/02-database.sql');
@@ -74,37 +76,102 @@ interface ZonePageData {
 // ─── Phase 0: Ensure data sources are available ──────────────────────────────
 
 function ensureRepos(): void {
-  if (!existsSync(QCI_SQL_DUMP)) {
-    console.log('Cloning quran/quran.com-images...');
-    try {
-      execSync(`git clone --depth 1 https://github.com/quran/quran.com-images.git ${QCI_REPO}`, {
-        stdio: 'inherit',
-      });
-    } catch {
-      console.error(
-        `Failed to clone quran.com-images to ${QCI_REPO}. Check network and disk space.`,
-      );
+  // Clone if absent, then ALWAYS enforce the pinned commit.
+  //
+  // ⚠️ The checkout used to sit INSIDE the "is it already cloned?" guard, which meant a
+  // pre-existing /tmp clone — including the one this story's own control run left behind — skipped
+  // it entirely. The reproducibility the pin exists to provide then held only on a machine that had
+  // never run the script, which is the one machine that does not need it.
+  //
+  // Why pinning at all: an unpinned clone takes whatever upstream HEAD is that day, so a later
+  // diff against the committed layouts is upstream drift wearing the costume of a port bug. These
+  // two SHAs are what the Bun→Node port was byte-compared against.
+  const ensureRepo = (
+    url: string,
+    dir: string,
+    marker: string,
+    pin: string,
+    name: string
+  ): void => {
+    if (!existsSync(marker)) {
+      console.log(`Cloning ${name}...`);
+      try {
+        // --filter=blob:none, NOT --depth 1: a shallow clone cannot check out an arbitrary
+        // earlier commit, which is exactly what the pin requires.
+        execSync(`git clone --filter=blob:none ${url} ${dir}`, { stdio: 'inherit' });
+      } catch {
+        console.error(`Failed to clone ${name} to ${dir}. Check network and disk space.`);
+        process.exit(1);
+      }
+    }
+    // Resolve the pin WITHOUT assuming the network, and without assuming the fetch works.
+    //
+    // ⚠️ `git fetch origin <sha>` does NOT work for an abbreviated SHA — it fails with
+    // "couldn't find remote ref", and most servers refuse a bare-SHA fetch even at full length.
+    // An earlier version of this ran that fetch unconditionally inside a try whose catch exits,
+    // which aborted the generator on EVERY run, including one whose clone was already at the pin.
+    // Check locally first; only reach for the network when the commit is genuinely absent.
+    const hasCommit = (): boolean => {
+      try {
+        execSync(`git -C ${dir} cat-file -e ${pin}^{commit}`, { stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (!hasCommit()) {
+      // A shallow clone from an older version of this script cannot reach an earlier commit.
+      // Deepen rather than telling the reader upstream force-pushed.
+      try {
+        execSync(`git -C ${dir} fetch --quiet --unshallow origin`, { stdio: 'ignore' });
+      } catch {
+        try {
+          execSync(`git -C ${dir} fetch --quiet origin`, { stdio: 'ignore' });
+        } catch {
+          // Offline. If the commit is still missing the checkout below reports it precisely.
+        }
+      }
+    }
+
+    if (!hasCommit()) {
+      console.error(`Pinned commit ${pin} is not in ${dir} (${name}) and could not be fetched.`);
+      console.error('Either the clone is stale and you are offline, or the SHA was force-pushed');
+      console.error(`away upstream. Do NOT fall back to HEAD: a layout regenerated from different`);
+      console.error('upstream data is not comparable to the committed artifacts. Simplest fix is');
+      console.error(`to delete ${dir} and re-run with a network connection.`);
       process.exit(1);
     }
-  }
-  if (!existsSync(ZT_PAGE_DIR)) {
-    console.log('Cloning zonetecde/mushaf-layout...');
+
     try {
-      execSync(`git clone --depth 1 https://github.com/zonetecde/mushaf-layout.git ${ZT_REPO}`, {
-        stdio: 'inherit',
-      });
+      execSync(`git -C ${dir} checkout --quiet ${pin}`, { stdio: 'inherit' });
     } catch {
-      console.error(`Failed to clone mushaf-layout to ${ZT_REPO}. Check network and disk space.`);
+      console.error(`Could not check out ${pin} in ${dir} (${name}) — is the clone dirty?`);
       process.exit(1);
     }
-  }
+  };
+
+  ensureRepo(
+    'https://github.com/quran/quran.com-images.git',
+    QCI_REPO,
+    QCI_SQL_DUMP,
+    QCI_PIN,
+    'quran/quran.com-images'
+  );
+  ensureRepo(
+    'https://github.com/zonetecde/mushaf-layout.git',
+    ZT_REPO,
+    ZT_PAGE_DIR,
+    ZT_PIN,
+    'zonetecde/mushaf-layout'
+  );
 }
 
 // ─── Phase 1: Build layouts from zonetecde data ─────────────────────────────
 
 function buildAllPages(
   qpcV1Map: Record<string, string>,
-  qpcV2Map: Record<string, string>,
+  qpcV2Map: Record<string, string>
 ): Map<number, OutputPage> {
   const pages = new Map<number, OutputPage>();
 
@@ -217,7 +284,7 @@ function buildAllPages(
           const v2 = qpcV2Map[w.location];
           if (!v1 || !v2) {
             console.warn(
-              `  ⚠️  Missing QPC glyph for word ${w.location} on page ${pageNum} (v1=${!!v1}, v2=${!!v2}) — skipping`,
+              `  ⚠️  Missing QPC glyph for word ${w.location} on page ${pageNum} (v1=${!!v1}, v2=${!!v2}) — skipping`
             );
             continue;
           }
@@ -320,17 +387,18 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
   console.log('\nPhase 3: Verifying against quran.com-images (King Fahd Complex)...');
 
   const sqlDump = readFileSync(QCI_SQL_DUMP, 'utf-8');
-  const db = new Database(':memory:');
+  const db = new DatabaseSync(':memory:');
 
-  db.run(`CREATE TABLE glyph (
+  // `DatabaseSync` has no `.run()` — that lives on prepared statements only.
+  db.exec(`CREATE TABLE glyph (
     glyph_id INTEGER PRIMARY KEY, font_file TEXT, glyph_code INTEGER,
     page_number INTEGER, glyph_type_id INTEGER, glyph_type_meta INTEGER, description TEXT
   )`);
-  db.run(`CREATE TABLE glyph_ayah (
+  db.exec(`CREATE TABLE glyph_ayah (
     glyph_ayah_id INTEGER PRIMARY KEY, glyph_id INTEGER,
     sura_number INTEGER, ayah_number INTEGER, position INTEGER
   )`);
-  db.run(`CREATE TABLE glyph_page_line (
+  db.exec(`CREATE TABLE glyph_page_line (
     glyph_page_line_id INTEGER PRIMARY KEY, glyph_id INTEGER,
     page_number INTEGER, line_number INTEGER, position INTEGER, line_type TEXT
   )`);
@@ -370,18 +438,24 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
     const colCount = table === 'glyph' ? 7 : table === 'glyph_ayah' ? 5 : 6;
     const placeholders = Array(colCount).fill('?').join(',');
     const stmt = db.prepare(`INSERT INTO ${table} VALUES (${placeholders})`);
-    db.transaction(() => {
+    // `DatabaseSync` has no `.transaction()` helper — drive it explicitly.
+    db.exec('BEGIN');
+    try {
       for (const r of rows) {
         stmt.run(...r.map((v) => (v === 'NULL' ? null : Number.isNaN(Number(v)) ? v : Number(v))));
       }
-    })();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   loadTable('glyph');
   loadTable('glyph_ayah');
   loadTable('glyph_page_line');
-  db.run('CREATE INDEX idx_gpl_page ON glyph_page_line(page_number)');
-  db.run('CREATE INDEX idx_ga_glyph ON glyph_ayah(glyph_id)');
+  db.exec('CREATE INDEX idx_gpl_page ON glyph_page_line(page_number)');
+  db.exec('CREATE INDEX idx_ga_glyph ON glyph_ayah(glyph_id)');
 
   // Verify: for each page, check that the verse locations on each line match
   let verifiedPages = 0;
@@ -392,7 +466,7 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
 
     // Get quran.com-images line structure (verse locations per line)
     const qciRows = db
-      .query(`
+      .prepare(`
       SELECT gpl.line_number, ga.sura_number, ga.ayah_number
       FROM glyph_page_line gpl
       JOIN glyph g ON gpl.glyph_id = g.glyph_id
@@ -400,7 +474,11 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
       WHERE gpl.page_number = ? AND gpl.line_type = 'ayah' AND ga.sura_number IS NOT NULL
       ORDER BY gpl.line_number, gpl.position
     `)
-      .all(pageNum) as { line_number: number; sura_number: number; ayah_number: number }[];
+      .all(pageNum) as unknown as {
+      line_number: number;
+      sura_number: number;
+      ayah_number: number;
+    }[];
 
     // Build set of unique verses per line (quran.com-images)
     const qciLineVerses = new Map<number, Set<string>>();
@@ -416,7 +494,7 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
 
     if (outTextLines.length !== qciTextLines.length) {
       mismatches.push(
-        `Page ${pageNum}: text line count differs: ours=${outTextLines.length}, qci=${qciTextLines.length}`,
+        `Page ${pageNum}: text line count differs: ours=${outTextLines.length}, qci=${qciTextLines.length}`
       );
       continue;
     }
@@ -456,7 +534,7 @@ function verifyAgainstAuthority(pages: Map<number, OutputPage>): number {
   db.close();
 
   console.log(
-    `  Verified ${verifiedPages}/${TOTAL_PAGES - 2} pages (3-604) match quran.com-images`,
+    `  Verified ${verifiedPages}/${TOTAL_PAGES - 2} pages (3-604) match quran.com-images`
   );
   if (mismatches.length > 0) {
     console.warn(`  ⚠️  ${mismatches.length} mismatches (showing first 10):`);
@@ -520,7 +598,7 @@ function main() {
 
   // Write bundle
   writeFileSync(BUNDLE_PATH, JSON.stringify(allLayouts), 'utf-8');
-  const bundleSize = (Bun.file(BUNDLE_PATH).size / 1024 / 1024).toFixed(2);
+  const bundleSize = (statSync(BUNDLE_PATH).size / 1024 / 1024).toFixed(2);
   console.log(`  Bundle: ${BUNDLE_PATH} (${bundleSize} MB)`);
 
   // Collect all unique verses
@@ -556,7 +634,7 @@ function main() {
   if (allVerses.size !== 6236) errors.push(`Expected 6236 verses, got ${allVerses.size}`);
   if (nonStandardPages.length > 0) {
     errors.push(
-      `Pages with non-15 line count: ${nonStandardPages.map((p) => `${p.page}(${p.lines})`).join(', ')}`,
+      `Pages with non-15 line count: ${nonStandardPages.map((p) => `${p.page}(${p.lines})`).join(', ')}`
     );
   }
 

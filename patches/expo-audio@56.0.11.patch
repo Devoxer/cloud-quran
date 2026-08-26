@@ -1,0 +1,1583 @@
+diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..4fa80f543be194365129de98053a9462771f5f85 100644
+--- a/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -18,6 +18,7 @@ import androidx.media3.common.C.CONTENT_TYPE_HLS
+ import androidx.media3.common.C.CONTENT_TYPE_OTHER
+ import androidx.media3.common.C.CONTENT_TYPE_SS
+ import androidx.media3.common.MediaItem
++import androidx.media3.common.MediaMetadata
+ import androidx.media3.common.Player
+ import androidx.media3.common.util.Util
+ import androidx.media3.datasource.DataSource
+@@ -674,13 +675,32 @@ class AudioModule : Module() {
+           playlist.setMediaItemCreator { source ->
+             source.uri?.let { uriString ->
+               val uri = uriString.toUri()
+-              when {
++              val baseItem = when {
+                 isRawResource(uri) -> {
+                   val file = getResourceName(uri, uriString)
+                   MediaItem.fromUri(getRawResourceURI(file))
+                 }
+                 else -> MediaItem.fromUri(uri)
+               }
++              // wisdom-fruits 22.10: carry source.name as the MediaItem title AND source.artworkUrl
++              // as the MediaMetadata.artworkUri so the multi-item playlist session shows
++              // "Book · Section" + the FULL-RES book cover natively on the lock-screen card, updated
++              // INSTANTLY on track change (Media3's BitmapLoader fetches the URI full-res — no JS
++              // round-trip, no downscaled notification large-icon).
++              val title = source.name
++              val artworkUri = source.artworkUrl?.toUri()
++              if (title != null || artworkUri != null) {
++                baseItem.buildUpon()
++                  .setMediaMetadata(
++                    MediaMetadata.Builder()
++                      .setTitle(title)
++                      .setArtworkUri(artworkUri)
++                      .build()
++                  )
++                  .build()
++              } else {
++                baseItem
++              }
+             }
+           }
+           playlist.loadInitialPlaylist()
+@@ -852,6 +872,26 @@ class AudioModule : Module() {
+         }
+       }
+ 
++      // wisdom-fruits 22.10 (spike): playlist lock-screen controls — attach the playlist's
++      // multi-item ExoPlayer to the AudioControlsService MediaSession (native transport + title).
++      Function("setActiveForLockScreen") { playlist: AudioPlaylist, active: Boolean, metadata: Metadata?, options: AudioLockScreenOptions? ->
++        runOnMain {
++          playlist.setActiveForLockScreen(active, metadata, options)
++        }
++      }
++
++      Function("updateLockScreenMetadata") { playlist: AudioPlaylist, metadata: Metadata ->
++        runOnMain {
++          playlist.updateLockScreenMetadata(metadata)
++        }
++      }
++
++      Function("clearLockScreenControls") { playlist: AudioPlaylist ->
++        runOnMain {
++          playlist.clearLockScreenControls()
++        }
++      }
++
+       Function("destroy") { playlist: AudioPlaylist ->
+         playlists.remove(playlist.id)
+       }
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+index c76a9fd2a53743a691782e0f67d0d71401df58f6..9f9a7b25c7a1714782afc701d84378d82d935265 100644
+--- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -24,6 +24,8 @@ import java.lang.ref.WeakReference
+ 
+ private const val PLAYBACK_STATUS_UPDATE = "playbackStatusUpdate"
+ private const val AUDIO_SAMPLE_UPDATE = "audioSampleUpdate"
++// wisdom-fruits 19.4: lock-screen next/previous-track remote command bridge.
++private const val REMOTE_COMMAND = "remoteCommand"
+ private const val SEEK_JUMP_INTERVAL_MS: Long = 10_000
+ 
+ @UnstableApi
+@@ -97,6 +99,12 @@ class AudioPlayer(
+     startUpdating()
+   }
+ 
++  // wisdom-fruits 19.4: emit a JS `remoteCommand` event ("next" | "previous")
++  // when the media-notification / lock-screen next/previous button is tapped.
++  fun emitRemoteCommand(command: String) {
++    emit(REMOTE_COMMAND, mapOf("command" to command))
++  }
++
+   fun setActiveForLockScreen(active: Boolean, metadata: Metadata? = null, options: AudioLockScreenOptions? = null) {
+     if (active) {
+       this.metadata = metadata
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt b/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
+index f3536d571535db7d6af57f568fce0d7c0b3fb674..1646af851fa232ab512045d1e892c489dfd4dd35 100644
+--- a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
+@@ -9,7 +9,10 @@ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.exoplayer.ExoPlayer
+ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+ import androidx.media3.datasource.DataSource
++import expo.modules.audio.service.AudioPlaylistServiceConnection
++import expo.modules.audio.service.ServiceBindingState
+ import expo.modules.kotlin.AppContext
++import java.lang.ref.WeakReference
+ 
+ private const val PLAYLIST_STATUS_UPDATE = "playlistStatusUpdate"
+ private const val TRACK_CHANGED = "trackChanged"
+@@ -40,11 +43,65 @@ class AudioPlaylist(
+ 
+   private var createMediaItemForSource: ((AudioSource) -> MediaItem?)? = null
+ 
++  // wisdom-fruits 22.10 (spike): lock-screen support, mirroring AudioPlayer's serviceConnection.
++  // The playlist's MULTI-ITEM ExoPlayer is attached to the AudioControlsService MediaSession so
++  // Media3 surfaces native transport (prev/next/seek) + per-MediaItem titles automatically.
++  var isActiveForLockScreen = false
++  internal var lockScreenMetadata: Metadata? = null
++  internal var lockScreenOptions: AudioLockScreenOptions? = null
++  val serviceConnection = AudioPlaylistServiceConnection(WeakReference(this), appContext)
++
+   init {
+     installPlayerListeners()
+     startUpdating()
+   }
+ 
++  fun setActiveForLockScreen(
++    active: Boolean,
++    metadata: Metadata? = null,
++    options: AudioLockScreenOptions? = null
++  ) {
++    if (active) {
++      this.lockScreenMetadata = metadata
++      this.lockScreenOptions = options
++      this.isActiveForLockScreen = true
++
++      if (serviceConnection.bindingState == ServiceBindingState.UNBOUND) {
++        serviceConnection.bindWithService()
++      }
++
++      val serviceBinder = serviceConnection.playbackServiceBinder
++      if (serviceBinder != null && serviceConnection.bindingState == ServiceBindingState.BOUND) {
++        serviceBinder.service.setActivePlaylist(this, metadata, options)
++      } else if (serviceConnection.bindingState == ServiceBindingState.BINDING) {
++        // The settings will be applied when the service connects.
++      } else {
++        appContext?.jsLogger?.error(
++          getPlaybackServiceErrorMessage("Failed to activate playlist lock screen controls - service binding failed")
++        )
++      }
++    } else if (isActiveForLockScreen) {
++      this.isActiveForLockScreen = false
++      serviceConnection.playbackServiceBinder?.service?.clearPlaylistSession()
++    }
++  }
++
++  fun updateLockScreenMetadata(metadata: Metadata) {
++    if (isActiveForLockScreen) {
++      this.lockScreenMetadata = metadata
++      val serviceBinder = serviceConnection.playbackServiceBinder
++      if (serviceBinder != null && serviceConnection.bindingState == ServiceBindingState.BOUND) {
++        serviceBinder.service.setPlaylistMetadata(this, metadata)
++      }
++    }
++  }
++
++  fun clearLockScreenControls() {
++    if (isActiveForLockScreen) {
++      serviceConnection.playbackServiceBinder?.service?.clearPlaylistSession()
++    }
++  }
++
+   fun setMediaItemCreator(creator: (AudioSource) -> MediaItem?) {
+     this.createMediaItemForSource = creator
+   }
+@@ -202,4 +259,18 @@ class AudioPlaylist(
+     )
+     sendStatusUpdate()
+   }
++
++  // wisdom-fruits 22.10 (spike): tear down the lock-screen service binding on release.
++  override fun sharedObjectDidRelease() {
++    serviceConnection.release()
++    super.sharedObjectDidRelease()
++  }
++
++  override fun releasePlayer() {
++    if (isActiveForLockScreen) {
++      serviceConnection.playbackServiceBinder?.service?.clearPlaylistSession()
++    }
++    serviceConnection.unbind()
++    super.releasePlayer()
++  }
+ }
+diff --git a/android/src/main/java/expo/modules/audio/AudioRecords.kt b/android/src/main/java/expo/modules/audio/AudioRecords.kt
+index 5157ef3b5f3a1c224cddf97cc46b174c675eacb9..66dde9ff3183c8a1fc80a5c08c90a9518ea2a3fa 100644
+--- a/android/src/main/java/expo/modules/audio/AudioRecords.kt
++++ b/android/src/main/java/expo/modules/audio/AudioRecords.kt
+@@ -12,7 +12,11 @@ import expo.modules.kotlin.types.OptimizedRecord
+ class AudioSource(
+   @Field val uri: String?,
+   @Field val headers: Map<String, String>?,
+-  @Field val name: String? = null
++  @Field val name: String? = null,
++  // wisdom-fruits 22.10: per-track lock-screen artwork (book cover) → set as the MediaItem's
++  // MediaMetadata.artworkUri so the system lock-screen card renders it FULL-RES (Media3 loads it)
++  // and updates INSTANTLY on track change — vs the downscaled notification large-icon + JS round-trip.
++  @Field val artworkUrl: String? = null
+ ) : Record
+ 
+ enum class LoopMode(val value: String) : Enumerable {
+@@ -104,6 +108,9 @@ enum class AndroidAudioEncoder(val value: String) : Enumerable {
+ class AudioLockScreenOptions(
+   @Field val showSeekForward: Boolean,
+   @Field val showSeekBackward: Boolean,
++  // wisdom-fruits 19.4: gate the lock-screen next/previous-track buttons.
++  @Field val showNextTrack: Boolean = false,
++  @Field val showPreviousTrack: Boolean = false,
+   @Field val isLiveStream: Boolean? = null
+ ) : Record
+ 
+diff --git a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d4838484b 100644
+--- a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
++++ b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+@@ -25,6 +25,7 @@ import androidx.media3.session.MediaStyleNotificationHelper
+ import androidx.media3.session.SessionCommand
+ import expo.modules.audio.AudioLockScreenOptions
+ import expo.modules.audio.AudioPlayer
++import expo.modules.audio.AudioPlaylist
+ import expo.modules.audio.Metadata
+ import expo.modules.audio.getPlaybackServiceErrorMessage
+ import expo.modules.kotlin.AppContext
+@@ -45,13 +46,16 @@ class AudioControlsService : MediaSessionService() {
+   private var sessionMetadataPlayer: MetadataInjectingPlayer? = null
+   private var currentMetadata: Metadata? = null
+   private var currentPlayer: AudioPlayer? = null
++  // wisdom-fruits 22.10 (spike): when set, the lock screen is driven by a multi-item playlist
++  // session (default callback → native transport) instead of the single-player custom path.
++  private var currentPlaylist: AudioPlaylist? = null
+   private var currentOptions: AudioLockScreenOptions? = null
+   private val scope = CoroutineScope(Dispatchers.IO)
+   private var currentArtworkUrl: URL? = null
+   private var currentArtwork: Bitmap? = null
+   private var artworkLoadJob: Job? = null
+   private val notificationId: Int
+-    get() = currentPlayer?.hashCode() ?: CHANNEL_ID.hashCode()
++    get() = currentPlayer?.hashCode() ?: currentPlaylist?.hashCode() ?: CHANNEL_ID.hashCode()
+ 
+   private var weakContext: WeakReference<AppContext>? = null
+   var appContext: AppContext?
+@@ -66,8 +70,16 @@ class AudioControlsService : MediaSessionService() {
+   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+     ensureForegroundNotification()
+ 
+-    val currentPlayerRef = currentPlayer?.ref
+     val context = appContext
++    // wisdom-fruits 22.10: playlist path — the foreground notification is owned by
++    // setActivePlaylist (a MediaStyle notification tied to the multi-item session → native
++    // transport). Keep the service foregrounded; do NOT stopForeground just because there's no
++    // single AudioPlayer. Transport for the playlist comes through the session, not these intents.
++    if (currentPlaylist != null && context != null) {
++      return super.onStartCommand(intent, flags, startId)
++    }
++
++    val currentPlayerRef = currentPlayer?.ref
+     if (currentPlayerRef == null || context == null) {
+       stopForeground(STOP_FOREGROUND_REMOVE)
+       return super.onStartCommand(intent, flags, startId)
+@@ -90,6 +102,10 @@ class AudioControlsService : MediaSessionService() {
+ 
+         ACTION_SEEK_FORWARD -> currentPlayerRef.seekTo(currentPlayerRef.currentPosition + SEEK_INTERVAL_MS)
+         ACTION_SEEK_BACKWARD -> currentPlayerRef.seekTo(currentPlayerRef.currentPosition - SEEK_INTERVAL_MS)
++        // wisdom-fruits 19.4: notification PendingIntent path (older Android) —
++        // emit to JS rather than seeking (no native media-item list to skip within).
++        ACTION_SKIP_TO_NEXT -> currentPlayer?.emitRemoteCommand("next")
++        ACTION_SKIP_TO_PREVIOUS -> currentPlayer?.emitRemoteCommand("previous")
+       }
+     }
+ 
+@@ -188,10 +204,38 @@ class AudioControlsService : MediaSessionService() {
+     val style = MediaStyleNotificationHelper.MediaStyle(session)
+ 
+     // Older Android system UI expects explicit notification actions for transport controls.
+-    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+-      val compactViewIndices = mutableListOf<Int>()
++    // wisdom-fruits 22.10: skip this legacy block for the playlist (currentPlayer == null) — its
++    // buttons are the single-player custom ACTION_SKIP PendingIntents (which emit to JS via the
++    // single player). The multi-item playlist relies on the session's native transport instead.
++    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 && currentPlayer != null) {
++      // wisdom-fruits 19.6: this legacy (<= Android 12L) notification path is RETAINED.
++      // The Samsung One-UI rendering failure was specific to custom session CommandButtons
++      // on MODERN Android; the legacy path uses plain notification addAction PendingIntents
++      // (ACTION_SKIP_TO_* -> onStartCommand -> emitRemoteCommand), which already work — so
++      // keeping it preserves prev/next on Android <= 12L while modern Android renders the
++      // standard transport commands intercepted in resolveSessionPlayer.
++      // wisdom-fruits 19.4: prefer prev/play/next in the compact (collapsed) view
++      // when next/previous are enabled; seek buttons stay available in the expanded
++      // view. Falls back to seekBack/play/seekFwd when next/prev are off.
++      val compactPrev = mutableListOf<Int>()
++      val compactNext = mutableListOf<Int>()
++      val compactSeekBack = mutableListOf<Int>()
++      val compactSeekFwd = mutableListOf<Int>()
++      var playIndex = 0
+       var currentIndex = 0
+ 
++      if (currentOptions?.showPreviousTrack == true) {
++        builder.addAction(
++          NotificationCompat.Action(
++            androidx.media3.session.R.drawable.media3_icon_previous,
++            "Previous",
++            buildActionPendingIntent(ACTION_SKIP_TO_PREVIOUS)
++          )
++        )
++        compactPrev.add(currentIndex)
++        currentIndex++
++      }
++
+       if (currentOptions?.showSeekBackward == true) {
+         builder.addAction(
+           NotificationCompat.Action(
+@@ -200,7 +244,7 @@ class AudioControlsService : MediaSessionService() {
+             buildActionPendingIntent(ACTION_SEEK_BACKWARD)
+           )
+         )
+-        compactViewIndices.add(currentIndex)
++        compactSeekBack.add(currentIndex)
+         currentIndex++
+       }
+ 
+@@ -215,7 +259,7 @@ class AudioControlsService : MediaSessionService() {
+           buildActionPendingIntent(if (session.player.isPlaying) ACTION_PAUSE else ACTION_PLAY)
+         )
+       )
+-      compactViewIndices.add(currentIndex)
++      playIndex = currentIndex
+       currentIndex++
+ 
+       if (currentOptions?.showSeekForward == true) {
+@@ -226,7 +270,30 @@ class AudioControlsService : MediaSessionService() {
+             buildActionPendingIntent(ACTION_SEEK_FORWARD)
+           )
+         )
+-        compactViewIndices.add(currentIndex)
++        compactSeekFwd.add(currentIndex)
++        currentIndex++
++      }
++
++      if (currentOptions?.showNextTrack == true) {
++        builder.addAction(
++          NotificationCompat.Action(
++            androidx.media3.session.R.drawable.media3_icon_next,
++            "Next",
++            buildActionPendingIntent(ACTION_SKIP_TO_NEXT)
++          )
++        )
++        compactNext.add(currentIndex)
++      }
++
++      val compactViewIndices = mutableListOf<Int>()
++      if (compactPrev.isNotEmpty() || compactNext.isNotEmpty()) {
++        compactViewIndices.addAll(compactPrev)
++        compactViewIndices.add(playIndex)
++        compactViewIndices.addAll(compactNext)
++      } else {
++        compactViewIndices.addAll(compactSeekBack)
++        compactViewIndices.add(playIndex)
++        compactViewIndices.addAll(compactSeekFwd)
+       }
+ 
+       style.setShowActionsInCompactView(*compactViewIndices.toIntArray())
+@@ -240,13 +307,19 @@ class AudioControlsService : MediaSessionService() {
+     val session = mediaSession ?: return
+     val mediaButtons = mutableListOf<CommandButton>()
+ 
+-    // Add seek backward button if enabled
+-    if (currentOptions?.showSeekBackward == true) {
++    // wisdom-fruits 19.6: prev/next are CUSTOM session-command buttons that emit to JS (the
++    // queue/sections live in JS — no native track list to skip within). One UI renders these
++    // exactly like the seek±10 custom buttons. Layout: prev·play·next own the compact transport
++    // row (SLOT_BACK / SLOT_CENTRAL / SLOT_FORWARD); seek±10 go to SLOT_OVERFLOW (expanded view)
++    // — AC-4: next/prev are the priority, skip is expand-only. (No standard ACTION_SKIP_* here,
++    // so the MediaSessionLegacyStub slot-stripping that bit the standard-command approach does
++    // not apply.)
++    if (currentOptions?.showPreviousTrack == true) {
+       mediaButtons.add(
+-        CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+-          .setDisplayName("Seek Backward")
++        CommandButton.Builder(CommandButton.ICON_PREVIOUS)
++          .setDisplayName("Previous")
+           .setEnabled(true)
+-          .setSessionCommand(SessionCommand(ACTION_SEEK_BACKWARD, Bundle.EMPTY))
++          .setSessionCommand(SessionCommand(ACTION_SKIP_TO_PREVIOUS, Bundle.EMPTY))
+           .setSlots(CommandButton.SLOT_BACK)
+           .build()
+       )
+@@ -262,14 +335,36 @@ class AudioControlsService : MediaSessionService() {
+         .build()
+     )
+ 
+-    // Add seek forward button if enabled
++    if (currentOptions?.showNextTrack == true) {
++      mediaButtons.add(
++        CommandButton.Builder(CommandButton.ICON_NEXT)
++          .setDisplayName("Next")
++          .setEnabled(true)
++          .setSessionCommand(SessionCommand(ACTION_SKIP_TO_NEXT, Bundle.EMPTY))
++          .setSlots(CommandButton.SLOT_FORWARD)
++          .build()
++      )
++    }
++
++    // seek±10 go in SLOT_OVERFLOW (expanded view).
++    if (currentOptions?.showSeekBackward == true) {
++      mediaButtons.add(
++        CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
++          .setDisplayName("Seek Backward")
++          .setEnabled(true)
++          .setSessionCommand(SessionCommand(ACTION_SEEK_BACKWARD, Bundle.EMPTY))
++          .setSlots(CommandButton.SLOT_OVERFLOW)
++          .build()
++      )
++    }
++
+     if (currentOptions?.showSeekForward == true) {
+       mediaButtons.add(
+         CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10)
+           .setDisplayName("Seek Forward")
+           .setEnabled(true)
+           .setSessionCommand(SessionCommand(ACTION_SEEK_FORWARD, Bundle.EMPTY))
+-          .setSlots(CommandButton.SLOT_FORWARD)
++          .setSlots(CommandButton.SLOT_OVERFLOW)
+           .build()
+       )
+     }
+@@ -317,9 +412,17 @@ class AudioControlsService : MediaSessionService() {
+   }
+ 
+   override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
++    // wisdom-fruits 22.10: both the single-player and the playlist use the custom MediaStyle
++    // notification (tied to the session). For the playlist the session wraps the multi-item
++    // ExoPlayer, so the system lock screen renders native prev/next/seek from the session.
+     postOrStartForegroundNotification(startInForegroundRequired)
+   }
+ 
++  // wisdom-fruits 19.6: prev/next are CUSTOM session-command buttons (see
++  // updateSessionCustomLayout + AudioMediaSessionCallback), so the session player stays the
++  // RAW ExoPlayer — no wrapper. Wrapping it (the briefly-tried ForwardingSimpleBasePlayer)
++  // desynced the lock-screen state/scrubber from the real player. The non-live audiobook
++  // returns player.ref directly; the live branch keeps only the scrubber-hiding override.
+   private fun resolveSessionPlayer(player: AudioPlayer, options: AudioLockScreenOptions?): Player {
+     val isLive = options?.isLiveStream ?: player.isLive
+     if (!isLive) {
+@@ -371,7 +474,11 @@ class AudioControlsService : MediaSessionService() {
+           updateMetadata(metadata)
+         }
+         val session = MediaSession.Builder(context, sessionPlayer)
+-          .setCallback(AudioMediaSessionCallback())
++          .setCallback(
++            // wisdom-fruits 19.6: emit next/previous to JS (custom session commands; no
++            // native track list). seek±10 are handled in the callback directly.
++            AudioMediaSessionCallback { command -> currentPlayer?.emitRemoteCommand(command) }
++          )
+           .build()
+ 
+         // Replace the basic media session with a session connected to our playback service.
+@@ -435,14 +542,44 @@ class AudioControlsService : MediaSessionService() {
+     updateMetadataInternal(player, metadata)
+   }
+ 
++  // wisdom-fruits 19.6: structural equality for lock-screen options (the Expo Record is
++  // not a data class, so `==` is reference equality and every JS call is a fresh instance).
++  // Used to skip the expensive session rebuild on an options-unchanged metadata refresh.
++  private fun sameLockScreenOptions(
++    a: AudioLockScreenOptions?,
++    b: AudioLockScreenOptions?
++  ): Boolean {
++    if (a === b) return true
++    if (a == null || b == null) return false
++    return a.isLiveStream == b.isLiveStream &&
++      a.showNextTrack == b.showNextTrack &&
++      a.showPreviousTrack == b.showPreviousTrack &&
++      a.showSeekForward == b.showSeekForward &&
++      a.showSeekBackward == b.showSeekBackward
++  }
++
+   fun setPlayerOptions(
+     player: AudioPlayer,
+     metadata: Metadata?,
+     options: AudioLockScreenOptions?
+   ) {
+     if (player == currentPlayer) {
+-      currentMetadata = metadata
++      // wisdom-fruits 19.6: only REBUILD the MediaSession when the lock-screen OPTIONS
++      // actually change (they configure the session player's available commands + the
++      // live-stream scrubber). Every section change / queue-item change calls
++      // setActiveForLockScreen with the SAME options, and the old code released +
++      // recreated the whole session each time — so the lock-screen card visibly tore
++      // down and reappeared (the "disappears/reappears + slow" symptom) and the
++      // transport controls were dead during the gap. For an options-unchanged refresh,
++      // update the metadata IN PLACE (no release) so the card + controls stay live.
++      val optionsChanged = !sameLockScreenOptions(currentOptions, options)
+       currentOptions = options
++      if (!optionsChanged && mediaSession != null) {
++        updateMetadataInternal(player, metadata)
++        return
++      }
++
++      currentMetadata = metadata
+ 
+       mediaSession?.release()
+       sessionMetadataPlayer = null
+@@ -452,7 +589,11 @@ class AudioControlsService : MediaSessionService() {
+           updateMetadata(metadata)
+         }
+         val session = MediaSession.Builder(context, sessionPlayer)
+-          .setCallback(AudioMediaSessionCallback())
++          .setCallback(
++            // wisdom-fruits 19.6: emit next/previous to JS (custom session commands; no
++            // native track list). seek±10 are handled in the callback directly.
++            AudioMediaSessionCallback { command -> currentPlayer?.emitRemoteCommand(command) }
++          )
+           .build()
+ 
+         player.mediaSession.release()
+@@ -482,6 +623,92 @@ class AudioControlsService : MediaSessionService() {
+     clearSessionInternal()
+   }
+ 
++  // wisdom-fruits 22.10 (spike): attach an AudioPlaylist's MULTI-ITEM ExoPlayer to a MediaSession
++  // with the DEFAULT callback, so Media3 surfaces native transport (prev/next/seek) + per-item
++  // titles on the lock screen with no JS bridge. Mutually exclusive with the single-player path.
++  fun setActivePlaylist(
++    playlist: AudioPlaylist,
++    metadata: Metadata?,
++    options: AudioLockScreenOptions?
++  ) {
++    appContext?.mainQueue?.launch {
++      val context = appContext?.reactContext ?: return@launch
++
++      // Tear down any single-player session first.
++      playbackListener?.let { listener -> currentPlayer?.ref?.removeListener(listener) }
++      playbackListener = null
++      currentPlayer?.isActiveForLockScreen = false
++      currentPlayer = null
++
++      mediaSession?.release()
++      sessionMetadataPlayer = null
++
++      currentPlaylist = playlist
++      currentMetadata = metadata
++      currentOptions = options
++      // Drop any prior book's cover so the notification doesn't show a stale image while the
++      // new one loads.
++      currentArtwork = null
++
++      val session = MediaSession.Builder(context, playlist.ref)
++        .setId("expo-audio-playlist-${playlist.id}")
++        .build()
++
++      addSession(session)
++      mediaSession = session
++
++      // Custom MediaStyle notification tied to the session (the PROVEN single-player path). For
++      // the multi-item playlist the system lock screen reads transport from the session player
++      // → native prev/next/seek; the title comes from the current MediaItem's metadata.
++      postOrStartForegroundNotification(startInForeground = true)
++
++      // wisdom-fruits 22.10 (Task 3): load the book cover → notification large icon (the
++      // lock-screen media card's album art), then re-post. Mirrors the single-player path.
++      // Keep the last-good cover if a load fails (don't wipe to null — offline/transient).
++      metadata?.artworkUrl?.let {
++        loadArtworkFromUrl(it) { bitmap ->
++          if (bitmap != null) {
++            currentArtwork = bitmap
++            postOrStartForegroundNotification(startInForeground = false)
++          }
++        }
++      }
++    }
++  }
++
++  fun setPlaylistMetadata(playlist: AudioPlaylist, metadata: Metadata?) {
++    if (playlist != currentPlaylist) {
++      return
++    }
++    currentMetadata = metadata
++    // wisdom-fruits 22.10 (Task 3): refresh the book cover on each track change (the JS engine
++    // calls updateLockScreenMetadata on trackChanged). Per-MediaItem titles already update the
++    // lock screen natively; the cover comes from the notification large icon, so re-load + re-post.
++    appContext?.mainQueue?.launch {
++      currentMetadata?.artworkUrl?.let {
++        loadArtworkFromUrl(it) { bitmap ->
++          // Keep the last-good cover on a failed (offline/transient) load; only swap on success.
++          if (bitmap != null) currentArtwork = bitmap
++          postOrStartForegroundNotification(startInForeground = false)
++        }
++      } ?: run {
++        currentArtwork = null
++        postOrStartForegroundNotification(startInForeground = false)
++      }
++    }
++  }
++
++  fun clearPlaylistSession() {
++    appContext?.mainQueue?.launch {
++      currentPlaylist = null
++      currentMetadata = null
++      currentOptions = null
++      mediaSession?.release()
++      mediaSession = null
++      stopForeground(STOP_FOREGROUND_REMOVE)
++    }
++  }
++
+   private fun loadArtworkFromUrl(url: URL, callback: (Bitmap?) -> Unit) {
+     if (url != currentArtworkUrl) {
+       currentArtworkUrl = url
+@@ -493,10 +720,16 @@ class AudioControlsService : MediaSessionService() {
+           val bitmap = BitmapFactory.decodeStream(inputStream)
+ 
+           if (isActive) {
++            // wisdom-fruits 22.10: a failed decode (e.g. offline) must NOT latch this url as
++            // "current" — else the online retry of the SAME url is skipped (url ==
++            // currentArtworkUrl) and the cover never loads. Reset so a retry re-attempts.
++            if (bitmap == null) currentArtworkUrl = null
+             callback(bitmap)
+           }
+         } catch (e: Exception) {
+           if (isActive) {
++            // Offline / network error — reset so a later online load of this url retries.
++            currentArtworkUrl = null
+             callback(null)
+           }
+         }
+@@ -558,6 +791,9 @@ class AudioControlsService : MediaSessionService() {
+ 
+     const val ACTION_SEEK_FORWARD = "expo.modules.audio.action.SEEK_FORWARD"
+     const val ACTION_SEEK_BACKWARD = "expo.modules.audio.action.SEEK_BACKWARD"
++    // wisdom-fruits 19.4: next/previous-track session + notification actions.
++    const val ACTION_SKIP_TO_NEXT = "expo.modules.audio.action.SKIP_TO_NEXT"
++    const val ACTION_SKIP_TO_PREVIOUS = "expo.modules.audio.action.SKIP_TO_PREVIOUS"
+ 
+     const val SEEK_INTERVAL_MS = 10000L
+   }
+diff --git a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+index 839aaef12d7699ea1a89037b31849775daa079f4..1eda9247e19f732cab3159fb163e0200502f06a7 100644
+--- a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
++++ b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+@@ -10,7 +10,21 @@ import androidx.media3.common.util.UnstableApi
+ import com.google.common.util.concurrent.ListenableFuture
+ 
+ @OptIn(UnstableApi::class)
+-class AudioMediaSessionCallback : MediaSession.Callback {
++// wisdom-fruits: next/previous are CUSTOM session-command buttons that emit a JS
++// `remoteCommand` event ("next"|"previous") — there is no native media-item list to skip
++// within (the queue/sections live in JS), so the engine routes to nextInQueue/nextSection.
++// Contrast the SEEK_* custom commands, which act on session.player directly.
++//
++// wisdom-fruits 19.6: we briefly tried STANDARD transport commands via a
++// ForwardingSimpleBasePlayer wrapper, but wrapping the live ExoPlayer in SimpleBasePlayer's
++// pull-based state model made the lock-screen scrubber + playback state lag/desync (stuck or
++// phantom-advancing bar, a spinner during steady playback). The raw-player custom-button
++// approach has none of that AND renders fine on Samsung One UI — the 19.4 belief that One UI
++// "doesn't render custom buttons" was an artifact of the precompiled-AAR bug (the patch never
++// compiled), not the mechanism. So we keep custom buttons + the raw player.
++class AudioMediaSessionCallback(
++  private val onRemoteCommand: ((String) -> Unit)? = null
++) : MediaSession.Callback {
+   override fun onConnect(
+     session: MediaSession,
+     controller: MediaSession.ControllerInfo
+@@ -24,7 +38,9 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+             .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+             .add(Player.COMMAND_SEEK_FORWARD)
+             .add(Player.COMMAND_SEEK_BACK)
+-            // Remove track navigation commands
++            // Remove the standard track-navigation commands — prev/next are provided as
++            // CUSTOM session-command buttons (below), so a single-item player advertising
++            // standard COMMAND_SEEK_TO_* would only confuse the system media UI.
+             .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+             .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+             .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+@@ -35,6 +51,9 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+           MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+             .add(SessionCommand(AudioControlsService.ACTION_SEEK_BACKWARD, Bundle.EMPTY))
+             .add(SessionCommand(AudioControlsService.ACTION_SEEK_FORWARD, Bundle.EMPTY))
++            // Custom next/previous-track session commands (emit to JS via onRemoteCommand).
++            .add(SessionCommand(AudioControlsService.ACTION_SKIP_TO_NEXT, Bundle.EMPTY))
++            .add(SessionCommand(AudioControlsService.ACTION_SKIP_TO_PREVIOUS, Bundle.EMPTY))
+             .build()
+         )
+         .build()
+@@ -56,6 +75,8 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+       AudioControlsService.ACTION_SEEK_BACKWARD -> {
+         session.player.seekTo(session.player.currentPosition - AudioControlsService.SEEK_INTERVAL_MS)
+       }
++      AudioControlsService.ACTION_SKIP_TO_NEXT -> onRemoteCommand?.invoke("next")
++      AudioControlsService.ACTION_SKIP_TO_PREVIOUS -> onRemoteCommand?.invoke("previous")
+     }
+     return super.onCustomCommand(session, controller, command, args)
+   }
+diff --git a/android/src/main/java/expo/modules/audio/service/AudioPlaylistServiceConnection.kt b/android/src/main/java/expo/modules/audio/service/AudioPlaylistServiceConnection.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf55d3e387d36fb874c0cb245d9f78975aa85571
+--- /dev/null
++++ b/android/src/main/java/expo/modules/audio/service/AudioPlaylistServiceConnection.kt
+@@ -0,0 +1,95 @@
++package expo.modules.audio.service
++
++import android.content.ComponentName
++import android.os.IBinder
++import androidx.annotation.OptIn
++import androidx.media3.common.util.UnstableApi
++import androidx.media3.session.MediaSessionService.SERVICE_INTERFACE
++import expo.modules.audio.AudioPlaylist
++import expo.modules.audio.getPlaybackServiceErrorMessage
++import expo.modules.kotlin.AppContext
++import java.lang.ref.WeakReference
++
++// wisdom-fruits 22.10 (spike): service connection for an AudioPlaylist lock screen. Mirrors
++// AudioPlaybackServiceConnection (single AudioPlayer) but binds the SAME AudioControlsService
++// and, on connect, attaches the playlist's multi-item ExoPlayer to the MediaSession via
++// `setActivePlaylist`. Media3 then surfaces native transport + per-MediaItem titles.
++@OptIn(UnstableApi::class)
++class AudioPlaylistServiceConnection(
++  val playlist: WeakReference<AudioPlaylist>,
++  appContext: AppContext
++) : BaseServiceConnection<AudioPlaybackServiceBinder>(appContext) {
++  var playbackServiceBinder: AudioPlaybackServiceBinder? = null
++    private set
++
++  var playsInSilentMode: Boolean = true
++
++  @Volatile
++  private var isReleased = false
++
++  fun release() {
++    isReleased = true
++  }
++
++  fun bindWithService() {
++    if (bindingState == ServiceBindingState.BOUND || bindingState == ServiceBindingState.BINDING || bindingState == ServiceBindingState.UNBINDING) {
++      return
++    }
++
++    if (bindingState == ServiceBindingState.UNBOUND || bindingState == ServiceBindingState.FAILED) {
++      val reactContext = appContext.reactContext ?: run {
++        onBindingFailed("Binding with the expo-audio playback service failed: React context lost")
++        return
++      }
++      val serviceStarted = startServiceAndBind(appContext, reactContext, this, AudioControlsService::class.java, SERVICE_INTERFACE)
++
++      if (!serviceStarted) {
++        onBindingFailed("Failed to start the expo-audio playback service.")
++        return
++      }
++
++      transitionToState(ServiceBindingState.BINDING)
++    }
++  }
++
++  override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
++    val playlist = playlist.get()
++    if (playlist == null || isReleased) {
++      transitionToState(ServiceBindingState.FAILED)
++      return
++    }
++
++    val serviceBinder: AudioPlaybackServiceBinder = binder as? AudioPlaybackServiceBinder ?: run {
++      onBindingFailed("Could not bind to the playback service - invalid binder type")
++      transitionToState(ServiceBindingState.FAILED)
++      return
++    }
++
++    transitionToState(ServiceBindingState.BOUND)
++
++    playbackServiceBinder = serviceBinder
++    serviceBinder.service.appContext = appContext
++    serviceBinder.service.playsInSilentMode = playsInSilentMode
++
++    if (playlist.isActiveForLockScreen) {
++      serviceBinder.service.setActivePlaylist(playlist, playlist.lockScreenMetadata, playlist.lockScreenOptions)
++    }
++  }
++
++  override fun onServiceDisconnected(componentName: ComponentName) {
++    playbackServiceBinder = null
++    super.onServiceDisconnected(componentName)
++  }
++
++  override fun onServiceDied() {
++    super.onServiceDied()
++  }
++
++  override fun onServiceConnectedInternal(binder: AudioPlaybackServiceBinder) {
++    // NOOP
++  }
++
++  override fun getServiceErrorMessage(message: String): String {
++    return getPlaybackServiceErrorMessage(message)
++  }
++}
+diff --git a/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt b/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
+index 18203a364d17dcf3de95d22a20175308e3363889..4b11edd08e9a5cca92f17fbab3975323a820eb2f 100644
+--- a/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
++++ b/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
+@@ -3,6 +3,7 @@ package expo.modules.audio.service
+ import android.os.Handler
+ import android.os.Looper
+ import androidx.core.net.toUri
++import androidx.media3.common.C
+ import androidx.media3.common.FlagSet
+ import androidx.media3.common.ForwardingPlayer
+ import androidx.media3.common.MediaMetadata
+@@ -38,14 +39,21 @@ internal class MetadataInjectingPlayer(
+ 
+   override fun getMediaMetadata(): MediaMetadata {
+     val metadata = injectedMetadata
+-    return super.getMediaMetadata()
++    val builder = super.getMediaMetadata()
+       .buildUpon()
+       .setTitle(metadata?.title)
+       .setArtist(metadata?.artist)
+       .setAlbumTitle(metadata?.albumTitle)
+       .setArtworkUri(metadata?.artworkUrl?.toString()?.toUri())
+       .setArtworkData(null, null)
+-      .build()
++    // wisdom-fruits 19.6: the lock-screen scrubber renders only when the published metadata
++    // carries a positive duration. expo-audio never set it, so the progress bar never appeared.
++    // Inject the real content duration so Media3 publishes METADATA_KEY_DURATION.
++    val durationMs = duration
++    if (durationMs != C.TIME_UNSET && durationMs > 0) {
++      builder.setDurationMs(durationMs)
++    }
++    return builder.build()
+   }
+ 
+   fun updateMetadata(metadata: Metadata?) {
+@@ -82,11 +90,23 @@ internal class MetadataInjectingPlayer(
+   private inner class MetadataForwardingListener(
+     private val listener: Player.Listener
+   ) : Player.Listener by listener {
++    private var lastDurationMs: Long = C.TIME_UNSET
++
+     override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+       listener.onMediaMetadataChanged(this@MetadataInjectingPlayer.mediaMetadata)
+     }
+ 
+     override fun onEvents(player: Player, events: Player.Events) {
++      // wisdom-fruits 19.6: content duration is TIME_UNSET when the session is first built
++      // (media not prepared yet) and a same-book section change doesn't alter the injected
++      // title/artist — so nothing re-emits metadata once the real duration lands, and the
++      // scrubber never appears. Re-emit metadata whenever the underlying duration changes so
++      // Media3 republishes METADATA_KEY_DURATION (the injected duration from getMediaMetadata).
++      val durationMs = this@MetadataInjectingPlayer.duration
++      if (durationMs != lastDurationMs) {
++        lastDurationMs = durationMs
++        listener.onMediaMetadataChanged(this@MetadataInjectingPlayer.mediaMetadata)
++      }
+       listener.onEvents(this@MetadataInjectingPlayer, events)
+     }
+   }
+diff --git a/build/Audio.types.d.ts b/build/Audio.types.d.ts
+index 6f481e7265b7b3ef5508b48a8fb0604fe4f6a570..8554590298ebd40bc83928c4e42c1661a9aad7b4 100644
+--- a/build/Audio.types.d.ts
++++ b/build/Audio.types.d.ts
+@@ -34,6 +34,13 @@ export type AudioSource = string | number | null | {
+      * Useful for showing track names in a queue or playlist UI.
+      */
+     name?: string;
++    /**
++     * wisdom-fruits 22.10: optional per-track lock-screen artwork URL (e.g. a book cover).
++     * On Android it is set as the MediaItem's `MediaMetadata.artworkUri` (full-res, system-loaded);
++     * on iOS it drives the now-playing artwork for the current track. Updates the lock-screen
++     * cover instantly on a track change without a JS round-trip.
++     */
++    artworkUrl?: string;
+ };
+ /**
+  * Options for configuring audio player behavior.
+diff --git a/build/AudioConstants.d.ts b/build/AudioConstants.d.ts
+index cfd92ad0ff5765254c4e6db974fe44bce34aad06..4bdf3a25c6b25e23b91578f8cf8a2e40f73adf55 100644
+--- a/build/AudioConstants.d.ts
++++ b/build/AudioConstants.d.ts
+@@ -10,6 +10,14 @@ export type AudioLockScreenOptions = {
+      * Whether the seek backward button should be displayed on the lock screen.
+      */
+     showSeekBackward?: boolean;
++    /**
++     * wisdom-fruits 19.4: whether the next-track button should be displayed on the lock screen.
++     */
++    showNextTrack?: boolean;
++    /**
++     * wisdom-fruits 19.4: whether the previous-track button should be displayed on the lock screen.
++     */
++    showPreviousTrack?: boolean;
+     /**
+      * Whether the audio is a live stream. When `true`, the lock screen will hide the duration
+      * and scrub bar, and disable seek controls.
+diff --git a/build/AudioEventKeys.d.ts b/build/AudioEventKeys.d.ts
+index 7c717a156698d27ea185d0e3eedb53bccc97c4fc..892b261f1f995a101564ea0ebeb0edcaf0984cd1 100644
+--- a/build/AudioEventKeys.d.ts
++++ b/build/AudioEventKeys.d.ts
+@@ -5,4 +5,5 @@ export declare const PLAYLIST_STATUS_UPDATE = "playlistStatusUpdate";
+ export declare const TRACK_CHANGED = "trackChanged";
+ export declare const AUDIO_STREAM_BUFFER = "audioStreamBuffer";
+ export declare const AUDIO_STREAM_STATUS = "audioStreamStatus";
++export declare const REMOTE_COMMAND = "remoteCommand";
+ //# sourceMappingURL=AudioEventKeys.d.ts.map
+\ No newline at end of file
+diff --git a/build/AudioEventKeys.js b/build/AudioEventKeys.js
+index 856d15853d98edfda43be025922c7efb27f7ced4..19022c74e98362226f7b55fa15a812a9dc7f9e82 100644
+--- a/build/AudioEventKeys.js
++++ b/build/AudioEventKeys.js
+@@ -5,4 +5,6 @@ export const PLAYLIST_STATUS_UPDATE = 'playlistStatusUpdate';
+ export const TRACK_CHANGED = 'trackChanged';
+ export const AUDIO_STREAM_BUFFER = 'audioStreamBuffer';
+ export const AUDIO_STREAM_STATUS = 'audioStreamStatus';
++// wisdom-fruits 19.4: lock-screen next/previous-track remote command event.
++export const REMOTE_COMMAND = 'remoteCommand';
+ //# sourceMappingURL=AudioEventKeys.js.map
+\ No newline at end of file
+diff --git a/build/AudioModule.types.d.ts b/build/AudioModule.types.d.ts
+index f3ae4ee4044d86032cd5c6dbcfee6f905d1ce99f..f276bb6ae663fc5d0924b43b400588c6bef9456f 100644
+--- a/build/AudioModule.types.d.ts
++++ b/build/AudioModule.types.d.ts
+@@ -222,6 +222,13 @@ export type AudioEvents = {
+     playbackStatusUpdate(status: AudioStatus): void;
+     /** Fired when audio sampling is enabled and new sample data is available. */
+     audioSampleUpdate(data: AudioSample): void;
++    /**
++     * wisdom-fruits 19.4: fired when the lock-screen / Control-Center next or
++     * previous-track button is tapped (for a manually-managed queue).
++     */
++    remoteCommand(payload: {
++        command: "next" | "previous";
++    }): void;
+ };
+ export declare class AudioRecorder extends SharedObject<RecordingEvents> {
+     /**
+@@ -433,6 +440,22 @@ export declare class AudioPlaylist extends SharedObject<AudioPlaylistEvents> {
+      * Clear all tracks from the playlist.
+      */
+     clear(): void;
++    /**
++     * wisdom-fruits 22.10: enable lock-screen / now-playing controls for the playlist. The
++     * playlist's native multi-item player drives transport (prev/next/seek) and the per-track
++     * title ("Book · Section" via each source's `name`). `metadata` is accepted for API symmetry
++     * with `AudioPlayer` but is unused for the playlist (title comes from the source name).
++     */
++    setActiveForLockScreen(active: boolean, metadata?: AudioMetadata, options?: AudioLockScreenOptions): void;
++    /**
++     * wisdom-fruits 22.10: refresh the lock-screen now-playing for the current track (call on
++     * `trackChanged`, e.g. native auto-advance). On Android per-item titles update automatically.
++     */
++    updateLockScreenMetadata(metadata?: AudioMetadata): void;
++    /**
++     * wisdom-fruits 22.10: tear down the playlist's lock-screen controls.
++     */
++    clearLockScreenControls(): void;
+     /**
+      * Destroy the playlist and free up resources.
+      */
+diff --git a/build/AudioPlaylist.web.d.ts b/build/AudioPlaylist.web.d.ts
+index ea488cafd58302ab37ed7815177a77d99f6914d5..1a1fd748163606e983e30c4f1f3d4c84e07a9db3 100644
+--- a/build/AudioPlaylist.web.d.ts
++++ b/build/AudioPlaylist.web.d.ts
+@@ -1,4 +1,5 @@
+-import type { AudioPlaylistLoopMode, AudioPlaylistStatus, AudioSource, AudioSourceInfo } from './Audio.types';
++import type { AudioMetadata, AudioPlaylistLoopMode, AudioPlaylistStatus, AudioSource, AudioSourceInfo } from './Audio.types';
++import type { AudioLockScreenOptions } from './AudioConstants';
+ import type { AudioPlaylist, AudioPlaylistEvents } from './AudioModule.types';
+ export declare class AudioPlaylistWeb extends globalThis.expo.SharedObject<AudioPlaylistEvents> implements AudioPlaylist {
+     constructor(initialSources?: AudioSource[], updateInterval?: number, loopMode?: AudioPlaylistLoopMode, crossOrigin?: 'anonymous' | 'use-credentials');
+@@ -45,6 +46,9 @@ export declare class AudioPlaylistWeb extends globalThis.expo.SharedObject<Audio
+     insert(source: AudioSource, index: number): void;
+     remove(index: number): void;
+     clear(): void;
++    setActiveForLockScreen(active: boolean, metadata?: AudioMetadata, options?: AudioLockScreenOptions): void;
++    updateLockScreenMetadata(metadata?: AudioMetadata): void;
++    clearLockScreenControls(): void;
+     destroy(): void;
+     private _transitionToTrack;
+     private _preloadNext;
+diff --git a/build/AudioPlaylist.web.js b/build/AudioPlaylist.web.js
+index 5bc4eaeebcc4f076f995e1500a951424a8005f26..8643f5f775484561bb3ed584ccb0e9a3604de256 100644
+--- a/build/AudioPlaylist.web.js
++++ b/build/AudioPlaylist.web.js
+@@ -251,6 +251,10 @@ export class AudioPlaylistWeb extends globalThis.expo.SharedObject {
+     destroy() {
+         this.clear();
+     }
++    // wisdom-fruits 22.10: lock-screen controls are native-only (iOS/Android); no-ops on web.
++    setActiveForLockScreen() { }
++    updateLockScreenMetadata() { }
++    clearLockScreenControls() { }
+     _transitionToTrack(newIndex, previousIndex) {
+         const wasPlaying = this._isPlaying;
+         if (this._currentMedia) {
+diff --git a/ios/AudioModule.swift b/ios/AudioModule.swift
+index cd5720d501007378aad73eb704e913ff4c10a092..9e7bed5e2fa44c7e2dc3f9de3b3a6d9a9b99390b 100644
+--- a/ios/AudioModule.swift
++++ b/ios/AudioModule.swift
+@@ -401,6 +401,26 @@ public class AudioModule: Module {
+         playlist.clear()
+       }
+ 
++      // wisdom-fruits 22.10: lock-screen / now-playing for the playlist. Title ("Book ·
++      // Section") + the book cover (`metadata.artworkUrl`, Task 3); next/previous on the lock
++      // screen call playlist.next()/previous() NATIVELY (see MediaController). The metadata is
++      // threaded through so the cover art + title render (the source `name` is the fallback).
++      Function("setActiveForLockScreen") { (playlist: AudioPlaylist, active: Bool, metadata: Metadata?, options: LockScreenOptions?) in
++        if active {
++          MediaController.shared.setActivePlaylist(playlist, metadata: metadata, options: options)
++        } else {
++          MediaController.shared.setActivePlaylist(nil)
++        }
++      }
++
++      Function("updateLockScreenMetadata") { (playlist: AudioPlaylist, metadata: Metadata?) in
++        MediaController.shared.updateNowPlayingInfo(forPlaylist: playlist, metadata: metadata)
++      }
++
++      Function("clearLockScreenControls") { (_: AudioPlaylist) in
++        MediaController.shared.setActivePlaylist(nil)
++      }
++
+       Function("destroy") { playlist in
+         self.registry.remove(playlist)
+       }
+diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
+index 074294321e872bb53c0b2d41044dac3c612f14f0..7d01636331d28d044b973858965c737c09c259f4 100644
+--- a/ios/AudioPlayer.swift
++++ b/ios/AudioPlayer.swift
+@@ -4,6 +4,8 @@ import Combine
+ private enum AudioConstants {
+   static let playbackStatus = "playbackStatusUpdate"
+   static let audioSample = "audioSampleUpdate"
++  // wisdom-fruits 19.4: lock-screen next/previous-track remote command bridge.
++  static let remoteCommand = "remoteCommand"
+ }
+ 
+ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+@@ -164,6 +166,13 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+     }
+   }
+ 
++  // wisdom-fruits 19.4: emit a JS `remoteCommand` event ("next" | "previous")
++  // when the lock-screen next/previous-track button is tapped. Kept on AudioPlayer
++  // so the emit stays inside the SharedRef (the MediaController holds activePlayer).
++  func emitRemoteCommand(_ command: String) {
++    self.emit(event: AudioConstants.remoteCommand, payload: ["command": command])
++  }
++
+   func updateStatus(with dict: [String: Any]) {
+     var arguments = currentStatus()
+     arguments.merge(dict) { _, new in
+diff --git a/ios/AudioRecords.swift b/ios/AudioRecords.swift
+index a0519ed632d260df8bece0a384da0df3dddc053c..2d748785bf7d7e21455daa0bf671400311d9c4bc 100644
+--- a/ios/AudioRecords.swift
++++ b/ios/AudioRecords.swift
+@@ -63,6 +63,9 @@ struct Metadata: Record {
+ struct LockScreenOptions: Record {
+   @Field var showSeekForward: Bool = false
+   @Field var showSeekBackward: Bool = false
++  // wisdom-fruits 19.4: gate the lock-screen next/previous-track buttons.
++  @Field var showNextTrack: Bool = false
++  @Field var showPreviousTrack: Bool = false
+   @Field var isLiveStream: Bool? = false
+ }
+ 
+diff --git a/ios/AudioSource.swift b/ios/AudioSource.swift
+index 0c8c2fede4b079f6d71217bafe07b5de55438821..69ca311b59d646475e72db5aed111063a6fc452d 100644
+--- a/ios/AudioSource.swift
++++ b/ios/AudioSource.swift
+@@ -10,4 +10,10 @@ struct AudioSource: Record {
+ 
+   @Field
+   var name: String?
++
++  // wisdom-fruits 22.10: per-track lock-screen artwork (book cover). Carried on the source so
++  // the native now-playing / MediaItem metadata can show the right cover INSTANTLY on a track
++  // change, without a JS round-trip (the audio is natively pre-buffered; the metadata should be too).
++  @Field
++  var artworkUrl: URL?
+ }
+diff --git a/ios/MediaController.swift b/ios/MediaController.swift
+index e977f577cd2e16b194b56537ad76b423f40d2496..56f324e47f0d1717adb836855092b6236664f853 100644
+--- a/ios/MediaController.swift
++++ b/ios/MediaController.swift
+@@ -1,5 +1,6 @@
+ import MediaPlayer
+ import AVFoundation
++import Combine
+ import ExpoModulesCore
+ 
+ class MediaController {
+@@ -15,6 +16,66 @@ class MediaController {
+   private var currentArtworkItemIdentifier: ObjectIdentifier?
+   private var isLiveStream = false
+ 
++  // wisdom-fruits 22.10: a PER-URL artwork cache + in-flight set for the playlist path. The old
++  // single-entry cache re-fetched the cover on every track change (slow) and LEFT the previous
++  // cover in now-playing while the new one loaded (a "new book title + old cover" mismatch, made
++  // visible once the title went instant). With a per-URL cache covers load once (instant on revisit
++  // / prev-next / feed loop), the NEXT track's cover is pre-loaded so a sequential transition shows
++  // it immediately, and a cache-miss CLEARS the stale art (never the wrong cover).
++  private var artworkCache: [URL: MPMediaItemArtwork] = [:]
++  private var artworkInFlight: Set<URL> = []
++  private static let artworkCacheLimit = 32
++  // Bounded-timeout session so a flaky cover load fails fast (URLSession.shared defaults to 60s →
++  // the cover could appear "stuck" on the previous one) and frees the in-flight slot to retry.
++  private lazy var artworkSession: URLSession = {
++    let config = URLSessionConfiguration.default
++    config.timeoutIntervalForRequest = 15
++    config.timeoutIntervalForResource = 20
++    return URLSession(configuration: config)
++  }()
++
++  // wisdom-fruits 19.4: hold the next/previous-track command target tokens so
++  // registration is IDEMPOTENT. `enableRemoteCommands` is called on every
++  // setActiveForLockScreen (i.e. every play()/section change), and iOS
++  // closure-based command targets are NOT removed by `removeTarget(self)`
++  // (they aren't registered under `self`). Without removing the prior token,
++  // each play() adds ANOTHER emitting target → one lock-screen tap fires N times
++  // → skips N items / racing play() calls / a post-close stray fire. We remove the
++  // stored token before re-adding so exactly one target exists at any time.
++  private var nextTrackTarget: Any?
++  private var previousTrackTarget: Any?
++
++  // wisdom-fruits 22.10 (spike): the lock screen can be driven by an AudioPlaylist
++  // (native AVQueuePlayer queue) INSTEAD of a single AudioPlayer. When set, now-playing +
++  // the remote commands operate on the playlist NATIVELY (next/previous call
++  // playlist.next()/previous() — no JS round-trip) and the title comes from the current
++  // track's source `name`. activePlayer and activePlaylist are mutually exclusive.
++  private var activePlaylist: AudioPlaylist?
++  // wisdom-fruits 22.10 (Task 3): the JS-supplied now-playing metadata for the active playlist
++  // track — title ("Book · Section"), artist (author), and the book cover `artworkUrl`. Stored
++  // here so the async KVO / periodic-time refreshes (which carry no metadata) re-apply the SAME
++  // title + artwork. Updated on setActiveForLockScreen + every updateLockScreenMetadata (the JS
++  // engine calls the latter on each trackChanged).
++  private var playlistMetadata: Metadata?
++  // wisdom-fruits 22.10: KVO subscriptions that refresh now-playing when the playlist's current
++  // item changes / becomes ready (its duration loads async — see setActivePlaylistOnMain).
++  private var playlistCancellables = Set<AnyCancellable>()
++  // wisdom-fruits 22.10: a periodic time observer that re-anchors now-playing's elapsed/rate
++  // every second WHILE PLAYING. iOS extrapolates the lock-screen scrubber from
++  // (elapsed + rate × wall-clock-since-set); without a continuous fresh anchor it drifts and
++  // visibly "reverts" on the next discrete update. The observer fires only while playing, so a
++  // paused position (set with rate 0 by the pause handler) is never overwritten.
++  private var playlistTimeObserver: Any?
++  private weak var observedPlaylistPlayer: AVQueuePlayer?
++
++  private func removePlaylistTimeObserver() {
++    if let token = playlistTimeObserver {
++      observedPlaylistPlayer?.removeTimeObserver(token)
++    }
++    playlistTimeObserver = nil
++    observedPlaylistPlayer = nil
++  }
++
+   func setActivePlayer(_ player: AudioPlayer?, options: LockScreenOptions? = nil) {
+     performOnMain {
+       self.setActivePlayerOnMain(player, options: options)
+@@ -27,7 +88,206 @@ class MediaController {
+     }
+   }
+ 
++  // MARK: - Playlist lock-screen (wisdom-fruits 22.10 spike)
++
++  func setActivePlaylist(_ playlist: AudioPlaylist?, metadata: Metadata? = nil, options: LockScreenOptions? = nil) {
++    performOnMain {
++      self.setActivePlaylistOnMain(playlist, metadata: metadata, options: options)
++    }
++  }
++
++  func updateNowPlayingInfo(forPlaylist playlist: AudioPlaylist, metadata: Metadata? = nil) {
++    performOnMain {
++      if let metadata {
++        self.playlistMetadata = metadata
++      }
++      self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++    }
++  }
++
++  private func setActivePlaylistOnMain(_ playlist: AudioPlaylist?, metadata: Metadata? = nil, options: LockScreenOptions? = nil) {
++    // Switching to a playlist deactivates any single-player lock screen.
++    if let previous = activePlayer {
++      previous.isActiveForLockScreen = false
++    }
++    activePlayer = nil
++    resetArtworkState()
++    currentArtworkItemIdentifier = nil
++
++    activePlaylist = playlist
++    playlistMetadata = metadata
++    isLiveStream = options?.isLiveStream ?? false
++    playlistCancellables.removeAll()
++    removePlaylistTimeObserver()
++
++    if let playlist {
++      // Re-anchor now-playing elapsed/rate every second while playing (see field comment).
++      let interval = CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
++      observedPlaylistPlayer = playlist.ref
++      playlistTimeObserver = playlist.ref.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak playlist] _ in
++        guard let self, let playlist, playlist.id == self.activePlaylist?.id else {
++          return
++        }
++        self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++      }
++
++      // wisdom-fruits 22.10: the first track's duration loads ASYNC (AVPlayerItem), so at
++      // activation now-playing has duration 0 → the lock-screen scrubber shows "--:--" until a
++      // track change. Refresh now-playing when the current item changes AND when it becomes
++      // ready (duration available), mirroring AudioPlaylist's own status publisher.
++      playlist.ref.publisher(for: \.currentItem)
++        .sink { [weak self, weak playlist] _ in
++          guard let self, let playlist, playlist.id == self.activePlaylist?.id else {
++            return
++          }
++          self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        }
++        .store(in: &playlistCancellables)
++      playlist.ref.publisher(for: \.currentItem?.status)
++        .sink { [weak self, weak playlist] _ in
++          guard let self, let playlist, playlist.id == self.activePlaylist?.id else {
++            return
++          }
++          self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        }
++        .store(in: &playlistCancellables)
++
++      enableRemoteCommands(options: options)
++      updateNowPlayingInfoForPlaylistOnMain(playlist)
++    } else {
++      disableRemoteCommands()
++      clearNowPlayingInfoOnMain()
++    }
++  }
++
++  private func updateNowPlayingInfoForPlaylistOnMain(_ playlist: AudioPlaylist) {
++    guard playlist.id == activePlaylist?.id else {
++      return
++    }
++
++    var nowPlayingInfo = nowPlayingInfoCenter.nowPlayingInfo ?? [String: Any]()
++
++    if isLiveStream {
++      nowPlayingInfo[MPNowPlayingInfoPropertyIsLiveStream] = true
++      nowPlayingInfo.removeValue(forKey: MPMediaItemPropertyPlaybackDuration)
++      nowPlayingInfo.removeValue(forKey: MPNowPlayingInfoPropertyElapsedPlaybackTime)
++    } else {
++      nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = playlist.duration
++      nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = playlist.currentTime
++    }
++    nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = playlist.isPlaying ? playlist.ref.rate : 0.0
++    nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
++
++    // wisdom-fruits 22.10: title + book-cover artwork. PREFER the current track's own source
++    // (`name` + `artworkUrl`) so the native `currentItem` observer updates now-playing INSTANTLY
++    // on a track change — the audio is natively pre-buffered, so the metadata must come from the
++    // per-track source too, not wait for the JS `updateLockScreenMetadata` round-trip (which was
++    // the 0.5–1s title/cover lag on next). The JS-pushed `playlistMetadata` is the fallback (and
++    // still the source of `artist`, which the AudioSource doesn't carry).
++    let sources = playlist.getSourceInfo()
++    let index = playlist.currentTrackIndex
++    let currentSource = (index >= 0 && index < sources.count) ? sources[index] : nil
++    if let title = currentSource?.name ?? playlistMetadata?.title {
++      nowPlayingInfo[MPMediaItemPropertyTitle] = title
++    } else {
++      nowPlayingInfo.removeValue(forKey: MPMediaItemPropertyTitle)
++    }
++    if let artist = playlistMetadata?.artist {
++      nowPlayingInfo[MPMediaItemPropertyArtist] = artist
++    } else {
++      nowPlayingInfo.removeValue(forKey: MPMediaItemPropertyArtist)
++    }
++    nowPlayingInfo.removeValue(forKey: MPMediaItemPropertyAlbumTitle)
++    // Book cover art — prefer the per-track source artwork (instant on transition), fall back to
++    // the JS-pushed metadata. Reuses the same async-load + cache machinery as the single player,
++    // guarded on the active playlist id (see applyPlaylistArtwork).
++    applyPlaylistArtwork(
++      &nowPlayingInfo,
++      artworkUrl: currentSource?.artworkUrl ?? playlistMetadata?.artworkUrl,
++      playlistId: playlist.id
++    )
++
++    nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
++
++    // Pre-warm the NEXT track's cover so a sequential advance shows it instantly (no load gap /
++    // no brief blank). Cheap: no-op if already cached or in flight.
++    if index >= 0, index + 1 < sources.count, let nextUrl = sources[index + 1].artworkUrl {
++      preloadPlaylistArtwork(nextUrl, playlistId: playlist.id)
++    }
++  }
++
++  // wisdom-fruits 22.10: apply the book cover for the active playlist track via the per-URL cache.
++  // A cache HIT sets it instantly (correct). A MISS CLEARS the artwork (never shows the previous
++  // book's cover — the mismatch fix) and kicks off a dedup'd load that publishes only if it's still
++  // the current track's URL when it finishes.
++  private func applyPlaylistArtwork(_ info: inout [String: Any], artworkUrl: URL?, playlistId: String) {
++    guard let artworkUrl else {
++      currentArtworkUrl = nil
++      info.removeValue(forKey: MPMediaItemPropertyArtwork)
++      return
++    }
++    currentArtworkUrl = artworkUrl
++    if let cached = artworkCache[artworkUrl] {
++      info[MPMediaItemPropertyArtwork] = cached
++      return
++    }
++    // No cover cached yet → DO NOT leave the previous track's cover in place (the mismatch).
++    info.removeValue(forKey: MPMediaItemPropertyArtwork)
++    loadArtworkIntoCache(artworkUrl, playlistId: playlistId)
++  }
++
++  // Publish a now-cached cover ONLY if it's still the current playlist track's URL.
++  private func publishPlaylistArtworkIfCurrent(_ url: URL, playlistId: String) {
++    guard activePlaylist?.id == playlistId,
++          currentArtworkUrl == url,
++          let artwork = artworkCache[url] else {
++      return
++    }
++    var latest = nowPlayingInfoCenter.nowPlayingInfo ?? [String: Any]()
++    latest[MPMediaItemPropertyArtwork] = artwork
++    nowPlayingInfoCenter.nowPlayingInfo = latest
++  }
++
++  // Pre-warm an upcoming track's cover so the NEXT transition shows it instantly (no load gap, no
++  // mismatch). Same load path; publish-if-current is a no-op until that track is actually current.
++  private func preloadPlaylistArtwork(_ url: URL, playlistId: String) {
++    loadArtworkIntoCache(url, playlistId: playlistId)
++  }
++
++  // Load a cover into the per-URL cache, deduping concurrent loads of the same URL. On completion it
++  // ALWAYS publish-if-currents — so whether the load was kicked off by the current track or a
++  // preload of the next, the cover lands in now-playing the moment that track is current (no extra
++  // ~1s wait for the next status tick). In-flight dedupe means a preload + the subsequent advance
++  // share one fetch, and that one fetch's completion does the publish.
++  private func loadArtworkIntoCache(_ url: URL, playlistId: String) {
++    if artworkCache[url] != nil {
++      publishPlaylistArtworkIfCurrent(url, playlistId: playlistId)
++      return
++    }
++    if artworkInFlight.contains(url) {
++      return // a load is already running; its completion will publish-if-current
++    }
++    artworkInFlight.insert(url)
++    loadArtworkFromURL(url: url) { [weak self] artwork in
++      guard let self else { return }
++      self.artworkInFlight.remove(url)
++      if let artwork {
++        if self.artworkCache.count >= MediaController.artworkCacheLimit {
++          self.artworkCache.removeAll()
++        }
++        self.artworkCache[url] = artwork
++      }
++      self.publishPlaylistArtworkIfCurrent(url, playlistId: playlistId)
++    }
++  }
++
+   private func setActivePlayerOnMain(_ player: AudioPlayer?, options: LockScreenOptions? = nil) {
++    // wisdom-fruits 22.10: switching to a single player deactivates any playlist lock screen.
++    activePlaylist = nil
++    playlistMetadata = nil
++    playlistCancellables.removeAll()
++    removePlaylistTimeObserver()
++
+     if let previous = activePlayer, previous.id != player?.id {
+       previous.isActiveForLockScreen = false
+       resetArtworkState()
+@@ -188,6 +448,10 @@ class MediaController {
+   private func clearNowPlayingInfoOnMain() {
+     nowPlayingInfoCenter.nowPlayingInfo = nil
+     activePlayer = nil
++    activePlaylist = nil
++    playlistMetadata = nil
++    playlistCancellables.removeAll()
++    removePlaylistTimeObserver()
+     isLiveStream = false
+     resetArtworkState()
+     currentArtworkItemIdentifier = nil
+@@ -208,7 +472,22 @@ class MediaController {
+   }
+ 
+   private func loadArtworkFromURL(url: URL, completion: @escaping (MPMediaItemArtwork?) -> Void) {
+-    URLSession.shared.dataTask(with: url) { data, _, error in
++    // wisdom-fruits 22.19 §A: a DOWNLOADED offline cover is a file:// URL, and URLSession's
++    // dataTask does NOT support file URLs (it fails "unsupported URL"), leaving the lock-screen
++    // cover BLANK offline even though the in-app cover (expo-image) loads it fine. Load a local
++    // file directly off disk instead of the network session.
++    if url.isFileURL {
++      DispatchQueue.global(qos: .userInitiated).async {
++        let artwork: MPMediaItemArtwork? = UIImage(contentsOfFile: url.path).map { image in
++          MPMediaItemArtwork(boundsSize: image.size) { _ in image }
++        }
++        self.performOnMain {
++          completion(artwork)
++        }
++      }
++      return
++    }
++    artworkSession.dataTask(with: url) { data, _, error in
+       if error != nil {
+         self.performOnMain {
+           completion(nil)
+@@ -233,7 +512,16 @@ class MediaController {
+ 
+   private func enableRemoteCommands(options: LockScreenOptions?) {
+     remoteCommandCenter.playCommand.addTarget { [weak self] _ in
+-      guard let player = self?.activePlayer else {
++      guard let self else {
++        return .commandFailed
++      }
++      // wisdom-fruits 22.10: operate on the active playlist (native AVQueuePlayer) when set.
++      if let playlist = self.activePlaylist {
++        playlist.play(at: playlist.currentRate > 0 ? playlist.currentRate : 1.0)
++        self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        return .success
++      }
++      guard let player = self.activePlayer else {
+         return .commandFailed
+       }
+ 
+@@ -242,7 +530,15 @@ class MediaController {
+     }
+ 
+     remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
+-      guard let player = self?.activePlayer else {
++      guard let self else {
++        return .commandFailed
++      }
++      if let playlist = self.activePlaylist {
++        playlist.pause()
++        self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        return .success
++      }
++      guard let player = self.activePlayer else {
+         return .commandFailed
+       }
+ 
+@@ -251,7 +547,19 @@ class MediaController {
+     }
+ 
+     remoteCommandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+-      guard let player = self?.activePlayer else {
++      guard let self else {
++        return .commandFailed
++      }
++      if let playlist = self.activePlaylist {
++        if playlist.isPlaying {
++          playlist.pause()
++        } else {
++          playlist.play(at: playlist.currentRate > 0 ? playlist.currentRate : 1.0)
++        }
++        self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        return .success
++      }
++      guard let player = self.activePlayer else {
+         return .commandFailed
+       }
+ 
+@@ -264,12 +572,26 @@ class MediaController {
+     }
+ 
+     remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+-      guard let player = self?.activePlayer,
++      guard let self,
+       let event = event as? MPChangePlaybackPositionCommandEvent else {
+         return .commandFailed
+       }
+ 
+       let seekTime = CMTime(seconds: event.positionTime, preferredTimescale: 1)
++      if let playlist = self.activePlaylist {
++        // Refresh now-playing AFTER the seek lands (currentTime is stale until then), else the
++        // scrubber briefly snaps back to the pre-seek position.
++        playlist.ref.seek(to: seekTime) { [weak self, weak playlist] _ in
++          guard let self, let playlist, playlist.id == self.activePlaylist?.id else {
++            return
++          }
++          self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        }
++        return .success
++      }
++      guard let player = self.activePlayer else {
++        return .commandFailed
++      }
+       player.ref.seek(to: seekTime)
+ 
+       return .success
+@@ -303,12 +625,61 @@ class MediaController {
+       return .success
+     }
+ 
++    // wisdom-fruits 19.4: register the next/previous-track remote commands so the
++    // lock screen / Control Center next & previous buttons are tappable for a
++    // manually-managed queue (expo-audio only wires these for its native
++    // AudioPlaylist, which we don't use). They emit a JS `remoteCommand` event;
++    // the engine subscribes and routes to nextInQueue / nextSection.
++    // IDEMPOTENT: remove the prior token first so re-registration (every play())
++    // never stacks duplicate emitting targets (the multi-fire bug).
++    if let token = nextTrackTarget {
++      remoteCommandCenter.nextTrackCommand.removeTarget(token)
++    }
++    nextTrackTarget = remoteCommandCenter.nextTrackCommand.addTarget { [weak self] _ in
++      guard let self else {
++        return .commandFailed
++      }
++      // wisdom-fruits 22.10: native playlist advance (no JS round-trip) when a playlist drives
++      // the lock screen; otherwise emit to JS for the single-player manual queue.
++      if let playlist = self.activePlaylist {
++        playlist.next()
++        self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        return .success
++      }
++      guard let player = self.activePlayer else {
++        return .commandFailed
++      }
++      player.emitRemoteCommand("next")
++      return .success
++    }
++
++    if let token = previousTrackTarget {
++      remoteCommandCenter.previousTrackCommand.removeTarget(token)
++    }
++    previousTrackTarget = remoteCommandCenter.previousTrackCommand.addTarget { [weak self] _ in
++      guard let self else {
++        return .commandFailed
++      }
++      if let playlist = self.activePlaylist {
++        playlist.previous()
++        self.updateNowPlayingInfoForPlaylistOnMain(playlist)
++        return .success
++      }
++      guard let player = self.activePlayer else {
++        return .commandFailed
++      }
++      player.emitRemoteCommand("previous")
++      return .success
++    }
++
+     remoteCommandCenter.playCommand.isEnabled = true
+     remoteCommandCenter.pauseCommand.isEnabled = true
+     remoteCommandCenter.togglePlayPauseCommand.isEnabled = true
+     remoteCommandCenter.changePlaybackPositionCommand.isEnabled = !isLiveStream
+     remoteCommandCenter.skipForwardCommand.isEnabled = options?.showSeekForward ?? false
+     remoteCommandCenter.skipBackwardCommand.isEnabled = options?.showSeekBackward ?? false
++    remoteCommandCenter.nextTrackCommand.isEnabled = options?.showNextTrack ?? false
++    remoteCommandCenter.previousTrackCommand.isEnabled = options?.showPreviousTrack ?? false
+   }
+ 
+   private func disableRemoteCommands() {
+@@ -318,6 +689,8 @@ class MediaController {
+     remoteCommandCenter.changePlaybackPositionCommand.isEnabled = false
+     remoteCommandCenter.skipForwardCommand.isEnabled = false
+     remoteCommandCenter.skipBackwardCommand.isEnabled = false
++    remoteCommandCenter.nextTrackCommand.isEnabled = false
++    remoteCommandCenter.previousTrackCommand.isEnabled = false
+ 
+     // Remove event targets
+     remoteCommandCenter.playCommand.removeTarget(self)
+@@ -326,5 +699,15 @@ class MediaController {
+     remoteCommandCenter.changePlaybackPositionCommand.removeTarget(self)
+     remoteCommandCenter.skipForwardCommand.removeTarget(self)
+     remoteCommandCenter.skipBackwardCommand.removeTarget(self)
++    // wisdom-fruits 19.4: closure targets are removed by their stored token, not
++    // by `self`. Clear them so a stopped player can't fire a stray next/previous.
++    if let token = nextTrackTarget {
++      remoteCommandCenter.nextTrackCommand.removeTarget(token)
++      nextTrackTarget = nil
++    }
++    if let token = previousTrackTarget {
++      remoteCommandCenter.previousTrackCommand.removeTarget(token)
++      previousTrackTarget = nil
++    }
+   }
+ }

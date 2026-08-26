@@ -1,0 +1,126 @@
+{
+  "emptyState": {
+    "title": "Aucune statistique",
+    "body": "Commencez à écouter pour créer votre série.",
+    "cta": "Découvrir les livres"
+  },
+  "statGrid": {
+    "hoursSaved": "Heures économisées",
+    "longestStreak": "Plus longue série",
+    "booksFinished": "Livres terminés",
+    "sectionsDone": "Sections terminées",
+    "daysActive": "Jours d'activité",
+    "listenedTotal": "Total écouté"
+  },
+  "streakHero": {
+    "encouragementActive": "Vous êtes lancé — écoutez ou lisez aujourd'hui pour maintenir votre série.",
+    "encouragementInactive": "Écoutez ou lisez aujourd'hui pour commencer votre série.",
+    "unit_one": "jour",
+    "unit_many": "jours",
+    "unit_other": "jours"
+  },
+  "todaysGoal": {
+    "title": "Objectif du jour",
+    "reached": "Objectif atteint — {{minutes}} min aujourd'hui",
+    "progress": "{{minutes}} de {{goal}} minutes écoutées"
+  },
+  "yearHeatmap": {
+    "title": "Cette année",
+    "less": "Moins",
+    "more": "Plus"
+  },
+  "topCategories": {
+    "title": "Meilleures catégories"
+  },
+  "topTopics": {
+    "title": "Meilleurs sujets"
+  },
+  "achievements": {
+    "title": "Succès",
+    "firstFinish": {
+      "name": "Premier livre terminé",
+      "description": "Terminez votre premier livre"
+    },
+    "weekStreak": {
+      "name": "Série hebdomadaire",
+      "description": "Une série de 7 jours"
+    },
+    "nightOwl": {
+      "name": "Oiseau de nuit",
+      "description": "Écoutez après 22h"
+    },
+    "explorer": {
+      "name": "Explorateur",
+      "description": "Lisez plus de 5 catégories"
+    },
+    "books25": {
+      "name": "25 livres",
+      "description": "Terminez 25 livres"
+    },
+    "monthStreak": {
+      "name": "Série mensuelle",
+      "description": "Une série de 30 jours"
+    },
+    "powerHour": {
+      "name": "Heure de puissance",
+      "description": "60 min en une journée"
+    },
+    "dedicated": {
+      "name": "Dévoué",
+      "description": "30 jours d'activité"
+    },
+    "bookworm": {
+      "name": "Rat de bibliothèque",
+      "description": "Terminez 50 livres"
+    }
+  },
+  "recordBanner": {
+    "dayCount_one": "{{count}} jour",
+    "dayCount_many": "{{count}} jours",
+    "dayCount_other": "{{count}} jours",
+    "atBest": "Vous avez atteint votre meilleure série",
+    "toRecord": "{{days}} avant un nouveau record",
+    "andCounting": "{{days}} et ça continue.",
+    "longestIs": "Votre série la plus longue est de {{days}} jours."
+  },
+  "quizEmptyState": {
+    "title": "Aucune statistique de quiz",
+    "body": "Répondez à un quiz pour voir vos scores ici."
+  },
+  "overall": {
+    "title": "Global"
+  },
+  "support": {
+    "quizzesTaken": "Quiz effectués",
+    "avgScore": "Score moyen",
+    "categories": "Catégories",
+    "booksQuizzed": "Livres quizés"
+  },
+  "scope": {
+    "byBook": "Par livre",
+    "byCategory": "Par catégorie",
+    "wholeLibrary": "Toute la bibliothèque"
+  },
+  "trailing": {
+    "best": "Meilleur"
+  },
+  "bookSubline_one": "{{count}} livre · moy. {{avg}}%",
+  "bookSubline_many": "{{count}} livres · moy. {{avg}}%",
+  "bookSubline_other": "{{count}} livres · moy. {{avg}}%",
+  "scopeSubline_one": "{{count}} tentative · moy. {{avg}}% · {{relative}}",
+  "scopeSubline_many": "{{count}} tentatives · moy. {{avg}}% · {{relative}}",
+  "scopeSubline_other": "{{count}} tentatives · moy. {{avg}}% · {{relative}}",
+  "insights": {
+    "title": "Analyses",
+    "coverage": "{{explored}} de {{total}} catégories explorées",
+    "strongest": "Point fort · {{name}}",
+    "needsWork": "À travailler · {{name}}"
+  },
+  "quizStatsCard": {
+    "title": "Quiz",
+    "bestScore": "Meilleur score"
+  },
+  "a11y": {
+    "loadingQuizStats": "Chargement des statistiques de quiz"
+  }
+}

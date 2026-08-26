@@ -1,0 +1,191 @@
+{
+  "hero": {
+    "guestName": "Invité",
+    "guestSubtitle": "Synchronisez votre progression sur tous vos appareils",
+    "noName": "Aucun nom défini",
+    "edit": "Modifier",
+    "stats": {
+      "dayStreak": "Série de jours",
+      "hoursSaved": "Heures économisées",
+      "finished": "Terminé"
+    }
+  },
+  "appearance": {
+    "label": "Apparence",
+    "light": "Clair",
+    "dark": "Sombre",
+    "auto": "Auto"
+  },
+  "palette": {
+    "label": "Couleur"
+  },
+  "groups": {
+    "preferences": "PRÉFÉRENCES",
+    "support": "SUPPORT",
+    "about": "À PROPOS",
+    "account": "COMPTE"
+  },
+  "rows": {
+    "playback": "Lecture",
+    "language": "Langue",
+    "notifications": "Notifications",
+    "privacy": "Confidentialité",
+    "sendFeedback": "Envoyer un commentaire",
+    "restorePurchases": "Restaurer les achats",
+    "signOut": "Se déconnecter",
+    "privacyPolicy": "Politique de confidentialité",
+    "termsOfService": "Conditions d'utilisation",
+    "refundPolicy": "Politique de remboursement",
+    "contactUs": "Contactez-nous",
+    "version": "Version",
+    "signIn": "Se connecter",
+    "yourData": "Vos données"
+  },
+  "signOutDialog": {
+    "title": "Se déconnecter",
+    "message": "Êtes-vous sûr de vouloir vous déconnecter ?",
+    "confirm": "Se déconnecter"
+  },
+  "restore": {
+    "restoredTitle": "Achats restaurés",
+    "restoredMessage": "Votre abonnement a été restauré sur ce compte.",
+    "noneTitle": "Aucun achat trouvé",
+    "noneMessage": "Aucun achat précédent à restaurer.",
+    "failedTitle": "Échec de la restauration"
+  },
+  "editProfile": {
+    "title": "Modifier le profil",
+    "nameLabel": "Nom d'affichage",
+    "namePlaceholder": "Entrez votre nom",
+    "updateFailed": "Impossible d'enregistrer votre profil. Veuillez réessayer."
+  },
+  "feedback": {
+    "title": "Envoyer un commentaire",
+    "categoryLabel": "Catégorie",
+    "category": {
+      "bug": "Bug",
+      "suggestion": "Suggestion",
+      "general": "Général"
+    },
+    "messageLabel": "Message",
+    "messagePlaceholder": "Dites-nous ce que vous en pensez...",
+    "submit": "Envoyer",
+    "unavailable": "L'envoi n'est pas encore disponible. Rien n'a été envoyé, votre message est là."
+  },
+  "playback": {
+    "audioGroup": "AUDIO",
+    "readingGroup": "LECTURE",
+    "speed": "Vitesse de lecture",
+    "voice": "Voix de narration",
+    "deviceFootnote": "Ces préférences s'appliquent uniquement à cet appareil.",
+    "pauseOnRead": "Mettre l'audio en pause à la lecture",
+    "autoScroll": "Défilement auto",
+    "highlight": "Surligner le texte"
+  },
+  "privacySettings": {
+    "crashReportsLabel": "Envoyer les rapports de plantage",
+    "crashReportsDescription": "Partagez des rapports de plantage nettoyés pour que les bugs soient corrigés.",
+    "crashReportsFootnote": "Les rapports sont expurgés des données personnelles. Aucune analyse, aucune publicité. Actif au prochain lancement.",
+    "updateError": "Échec de la mise à jour du réglage. Veuillez réessayer."
+  },
+  "a11y": {
+    "editProfile": "Modifier le profil",
+    "viewStats": "Voir vos statistiques",
+    "playbackSettings": "Paramètres de lecture",
+    "privacy": "Paramètres de confidentialité",
+    "restorePurchases": "Restaurer les achats",
+    "signOut": "Se déconnecter",
+    "deleteAccount": "Supprimer le compte",
+    "feedbackMessage": "Message de commentaire",
+    "submitFeedback": "Envoyer le commentaire",
+    "displayName": "Nom d'affichage",
+    "displayNameHint": "Entrez votre nom d'affichage, maximum {{max}} caractères",
+    "legal": {
+      "privacyPolicyHint": "Ouvre la politique de confidentialité dans votre navigateur",
+      "termsOfServiceHint": "Ouvre les conditions d'utilisation dans votre navigateur",
+      "refundPolicyHint": "Ouvre la politique de remboursement dans votre navigateur",
+      "contactUsHint": "Ouvre la page de contact dans votre navigateur"
+    },
+    "palette": {
+      "terracotta": "Terre cuite",
+      "cobalt": "Cobalt",
+      "forest": "Forêt",
+      "plum": "Prune",
+      "honey": "Miel",
+      "slate": "Ardoise"
+    },
+    "language": "Langue",
+    "signIn": "Se connecter",
+    "copyEmail": "Copier l'adresse e-mail de votre compte",
+    "yourData": "Vos données",
+    "exportData": "Exporter mes données",
+    "purgeData": "Supprimer mes données synchronisées",
+    "syncToggle": "Synchroniser avec mon compte"
+  },
+  "language": {
+    "footnote": "Définit menus et narration sur cet appareil. Les téléchargements gardent leur langue d'origine.",
+    "switchFailedTitle": "Changement de langue impossible",
+    "switchFailedMessage": "Votre langue n’a pas changé. Vérifiez votre connexion et réessayez."
+  },
+  "auth": {
+    "intro": "Cloud Quran fonctionne sans compte. La connexion synchronise position de lecture, signets et préférences.",
+    "syncDetailsLink": "Ce qui se synchronise et qui le voit",
+    "apple": "Continuer avec Apple",
+    "google": "Continuer avec Google",
+    "emailLabel": "Adresse e-mail",
+    "emailPlaceholder": "vous@exemple.com",
+    "sendCode": "Envoyez-moi un code",
+    "sending": "Envoi...",
+    "codeSentTo": "Saisissez le code à 6 chiffres envoyé à {{email}}.",
+    "useAnotherEmail": "Utiliser une autre adresse",
+    "or": "ou",
+    "cancelled": "Connexion annulée. Rien n'a changé.",
+    "failed": "La connexion a échoué. Veuillez réessayer.",
+    "sendFailed": "Nous n'avons pas pu envoyer de code à cette adresse. Vérifiez-la et réessayez.",
+    "codeFailed": "Ce code est incorrect ou a expiré. Demandez-en un nouveau.",
+    "emailInvalid": "Saisissez une adresse e-mail valide.",
+    "unavailable": "Cette méthode n'est pas disponible dans cette version. Utilisez votre e-mail."
+  },
+  "account": {
+    "signedIn": "Connecté",
+    "syncFootnote": "Facultatif. La connexion emporte position de lecture, signets et préférences sur vos autres appareils.",
+    "othersGroup": "APPLICATION",
+    "emailPending": "Aucune adresse partagée pour l'instant — reconnectez-vous sur cet appareil pour en partager une.",
+    "emailFootnote": "L'adresse de ce compte. Une adresse de relais privé Apple fonctionne pareil.",
+    "copyEmail": "Copier l'adresse",
+    "emailCopied": "Adresse copiée"
+  },
+  "data": {
+    "syncGroup": "SYNCHRONISATION",
+    "syncToggle": "Synchroniser avec mon compte",
+    "syncToggleDescription": "Emporte position de lecture, signets et préférences sur vos autres appareils.",
+    "syncFootnote": "Désactivé, cet appareil n'envoie ni ne reçoit rien. Rien n'est supprimé. Vaut aussi avant la connexion.",
+    "syncProcessors": "Cloudflare le stocke, jamais vendu ni publicitaire. Votre fournisseur voit la connexion, pas ce que vous lisez.",
+    "syncToggleFailed": "Nous n'avons pas pu enregistrer ce réglage sur cet appareil. Veuillez réessayer.",
+    "group": "VOS DONNÉES",
+    "footnote": "Ne concernent que les données synchronisées. Téléchargements et réglages de l'appareil restent intacts.",
+    "export": "Exporter mes données",
+    "exportDescription": "Un fichier JSON avec tout ce qui est synchronisé sur votre compte.",
+    "exportFailed": "Nous n'avons pas pu préparer votre export. Vérifiez votre connexion et réessayez.",
+    "exportUnavailable": "Cet appareil n'a nulle part où enregistrer le fichier. Essayez l'export depuis l'application mobile.",
+    "purge": "Supprimer mes données synchronisées",
+    "purgeDescription": "Vide tout ce qui est synchronisé sur votre compte. Votre compte reste.",
+    "purgeDone": "Vos données synchronisées ont disparu. Votre compte est intact.",
+    "purgeFailed": "Rien n'a été supprimé. Vérifiez votre connexion et réessayez.",
+    "purgeDialog": {
+      "title": "Supprimer mes données synchronisées",
+      "message": "Supprime vos données synchronisées de tous vos appareils. Votre compte reste. C'est irréversible.",
+      "confirm": "Supprimer les données"
+    },
+    "deleteAccount": "Supprimer mon compte",
+    "deleteAccountDescription": "Supprime le compte, ses données et vos moyens de connexion. Vous continuez en invité.",
+    "deleteAccountDone": "Votre compte et ses données ont disparu. Vous naviguez de nouveau en invité.",
+    "deleteAccountFailed": "Votre compte n'a pas été supprimé et rien n'a été modifié. Veuillez réessayer.",
+    "deleteAccountOffline": "Une connexion est nécessaire pour supprimer votre compte. Rien n'a été modifié.",
+    "deleteAccountDialog": {
+      "title": "Supprimer mon compte",
+      "message": "Supprime votre compte, ses données synchronisées et vos moyens de connexion. C'est irréversible.",
+      "confirm": "Supprimer le compte"
+    }
+  }
+}

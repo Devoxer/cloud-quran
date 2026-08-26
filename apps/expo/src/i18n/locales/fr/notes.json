@@ -1,0 +1,75 @@
+{
+  "sections": {
+    "myNotes": "Mes notes",
+    "addButton": "Ajouter"
+  },
+  "counts": {
+    "noteCount_one": "{{count}} note",
+    "noteCount_many": "{{count}} notes",
+    "noteCount_other": "{{count}} notes",
+    "bookCount_one": "{{count}} livre",
+    "bookCount_many": "{{count}} livres",
+    "bookCount_other": "{{count}} livres",
+    "summary": "{{notes}} · {{books}}"
+  },
+  "editor": {
+    "addTitle": "Ajouter une note",
+    "editTitle": "Modifier la note",
+    "placeholder": "Écrivez votre note...",
+    "deleteButton": "Supprimer la note",
+    "notFound": "Cette note est introuvable."
+  },
+  "discardDialog": {
+    "title": "Abandonner les modifications ?",
+    "message": "Vous avez des modifications non enregistrées. Voulez-vous vraiment les abandonner ?",
+    "confirm": "Abandonner",
+    "cancel": "Continuer l'édition"
+  },
+  "deleteDialog": {
+    "title": "Supprimer la note ?",
+    "message": "Cette action est irréversible."
+  },
+  "emptyState": {
+    "title": "Aucune note pour le moment",
+    "bookDescription": "Appuyez sur Ajouter pour noter votre première impression sur ce livre.",
+    "allNotesDescription": "Ajoutez des notes depuis les détails d'un livre pour les voir ici",
+    "discoverCta": "Découvrir des livres"
+  },
+  "errorState": {
+    "title": "Impossible de charger les notes",
+    "description": "Veuillez réessayer plus tard"
+  },
+  "search": {
+    "placeholder": "Rechercher des notes",
+    "noResultsTitle": "Aucun résultat pour \"{{query}}\"",
+    "noResultsDescription": "Essayez un autre terme de recherche"
+  },
+  "signUpPrompt": {
+    "message": "Conservez vos notes et synchronisez-les sur tous vos appareils"
+  },
+  "errors": {
+    "mustSignInCreate": "Vous devez être connecté pour créer des notes",
+    "mustSignInUpdate": "Vous devez être connecté pour modifier des notes",
+    "mustSignInDelete": "Vous devez être connecté pour supprimer des notes",
+    "noBookSelected": "Aucun livre sélectionné",
+    "contentEmpty": "Le contenu de la note ne peut pas être vide",
+    "noteIdRequired": "L'ID de la note est requis",
+    "createFailed": "Échec de la création de la note",
+    "updateFailed": "Échec de la mise à jour de la note",
+    "deleteFailed": "Échec de la suppression de la note"
+  },
+  "a11y": {
+    "notePreview": "Note sur {{book}} : {{preview}}",
+    "notePreviewShort": "Note : {{preview}}",
+    "unknownBook": "livre inconnu",
+    "editNote": "Modifier la note",
+    "editNoteHint": "Appuyez pour modifier cette note",
+    "bookCover": "Couverture de {{title}}",
+    "viewBook": "Voir {{title}} de {{author}}",
+    "viewBookHint": "Appuyez pour ouvrir les détails du livre",
+    "addNote": "Ajouter une note",
+    "saveNote": "Enregistrer la note",
+    "noteContent": "Contenu de la note",
+    "noteContentHint": "Saisissez le texte de votre note"
+  }
+}

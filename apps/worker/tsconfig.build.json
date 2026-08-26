@@ -1,0 +1,31 @@
+{
+  // Story 17.1 — declaration-only build. Entry is `src/app.ts` (see `include` below), so
+  // this emits `dist/app.d.ts` carrying the Hono RPC `AppType`; consumers (app + pre-gen
+  // scripts) import that PRE-COMPILED type from the `wisdomfruits-api` package (its
+  // `types`/`exports` point at dist/app.d.ts) instead of recompiling the worker source.
+  // `skipLibCheck` on the
+  // consumers then skips the emitted .d.ts entirely → no Cloudflare-ambient / gemini
+  // type bleed. Tests are excluded so the emit stays clean. wrangler still bundles the
+  // runtime JS itself; this build is types-only (consumed at typecheck time).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  // Entry = app.ts only. tsc still pulls in its transitive imports (routes/services)
+  // and emits their .d.ts, but app.ts deliberately does NOT import index.ts.
+  // ⚠️ THERE ARE NO CRON HANDLERS (Story 35.7 round 3). This comment described them in the present
+  // tense — "the cron handlers", "index.ts's Sentry wrapper + cron/admin-SDK graph" — three
+  // sentences the epic-20 boundary's retirement invalidated. `index.ts` exports
+  // `{ fetch: app.fetch }` and nothing else; `wrangler.toml` § "Cron triggers: NONE" is the
+  // authority. (It survived Story 35.7's cron sweep because that sweep's grep predicate covered
+  // `.ts` and `.toml` — a JSON file with comments is neither, which is the same lesson as the rest
+  // of that AC: the exit criterion has to name the POPULATION, not the file extension.)
+  // What remains true, and is the reason for the single entry: keeping app.ts as the sole entry
+  // keeps index.ts's Sentry wrapper and admin-SDK graph out of the emitted AppType .d.ts.
+  "include": ["src/app.ts"],
+  "exclude": ["node_modules", "src/**/*.test.ts", "src/**/__tests__/**"]
+}

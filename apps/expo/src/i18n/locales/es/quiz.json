@@ -1,0 +1,34 @@
+{
+  "global": {
+    "title": "Cuestionario global",
+    "subtitle": "Preguntas de toda la biblioteca"
+  },
+  "stats": {
+    "bestScore": "Mejor puntuación",
+    "quizzesTaken": "Cuestionarios realizados",
+    "avgScore": "Puntuación media"
+  },
+  "byCategory": "Por categoría",
+  "pool": {
+    "empty": {
+      "title": "No hay cuestionarios disponibles todavía",
+      "description": "Este cuestionario aún no tiene preguntas. Vuelve a consultarlo más tarde."
+    }
+  },
+  "book": {
+    "empty": {
+      "title": "No hay cuestionarios disponibles",
+      "description": "Este libro aún no tiene un cuestionario. Vuelve a consultarlo más tarde."
+    }
+  },
+  "error": {
+    "quizTitle": "No se pudo cargar el cuestionario",
+    "network": "No se pudo conectar con el servidor. Comprueba tu conexión.",
+    "loadQuiz": "No se pudo cargar el cuestionario. Inténtalo de nuevo más tarde.",
+    "loadQuizzes": "No se pudieron cargar los cuestionarios. Inténtalo de nuevo más tarde."
+  },
+  "a11y": {
+    "loadingQuiz": "Cargando cuestionario",
+    "viewStats": "Ver estadísticas del cuestionario"
+  }
+}

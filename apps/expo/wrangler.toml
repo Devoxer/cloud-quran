@@ -1,0 +1,26 @@
+# Cloud Quran — the WEB build, served as a static-assets Worker (story 5-5).
+#
+# ⚠️ THE HOSTNAME IS LOAD-BEARING, AND IT IS WHY THIS FILE EXISTS AT ALL. Serving the web app from
+# any other registrable domain than the API's makes every auth cookie THIRD-PARTY, and browsers now
+# drop those outright — `SameSite=None` does not rescue them. Measured against production on
+# 2026-08-25 from `localhost`: the OAuth `state` cookie never came back (`state_mismatch`), and once
+# that was worked around the SESSION cookie was dropped too, so a completed Google sign-in was
+# followed immediately by the app minting a fresh guest. Nothing was wrong with the code.
+#
+# `cloudquran.nobleachievements.com` and `api.cloudquran.nobleachievements.com` share a registrable
+# domain, so every cookie is first-party and `SameSite=Lax` is enough. Moving either host off
+# `nobleachievements.com` re-breaks web sign-in, and the failure will not look like a cookie problem.
+#
+# Mirrors `~/Ship/wisdom-fruits/apps/expo/wrangler.toml`, deliberately — same shape, same reasons.
+name = "cloud-quran-app"
+compatibility_date = "2026-08-04"
+workers_dev = false
+
+[[routes]]
+pattern = "cloudquran.nobleachievements.com"
+custom_domain = true
+
+[assets]
+directory = "./dist"
+# Expo Router's web export is a single-page app: every route must serve index.html rather than 404.
+not_found_handling = "single-page-application"

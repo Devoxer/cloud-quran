@@ -1,10 +1,28 @@
-import { Database } from 'bun:sqlite';
-import { existsSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+// Quran text integrity gate. Re-derives SHA-256 per ayah from the bundled
+// database and compares against the committed baseline in packages/quran-data.
+// Run: node scripts/verify-quran.ts   (pnpm verify)
 
-const ROOT = resolve(import.meta.dir, '..');
-const DB_PATH = resolve(ROOT, 'apps/expo/src/data/quran.db');
-const HASHES_PATH = resolve(ROOT, 'packages/quran-data/src/hashes.ts');
+import { createHash } from 'node:crypto';
+import { existsSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
+// The canonical count, not a literal: `TOTAL_VERSES` is the same constant the app ships, so a
+// disagreement between the gate and the data model is impossible by construction.
+import { TOTAL_VERSES } from '../packages/quran-data/src/constants.ts';
+
+const ROOT = resolve(import.meta.dirname, '..');
+// Overridable ONLY so this gate's own exit codes can be tested against a fixture database.
+// Nothing in the pipeline sets them; `pnpm verify` always runs against the committed artifacts.
+// Without a seam the four outcomes below are verifiable only by a human deleting the real
+// baseline and reading an exit code — which is how the fail-open survived in the first place.
+const DB_PATH = process.env.CQ_VERIFY_DB ?? resolve(ROOT, 'apps/expo/src/data/quran.db');
+const HASHES_PATH =
+  process.env.CQ_VERIFY_HASHES ?? resolve(ROOT, 'packages/quran-data/src/hashes.ts');
+
+// The stored hashes ARE the baseline. Minting a new one verifies the database
+// against itself, so it has to be asked for explicitly.
+const ALLOW_GENERATE = process.argv.includes('--generate-hashes');
 
 interface VerseRow {
   surah_number: number;
@@ -13,17 +31,15 @@ interface VerseRow {
 }
 
 function hashAyah(surah: number, verse: number, text: string): string {
-  const hasher = new Bun.CryptoHasher('sha256');
-  hasher.update(`${surah}:${verse}:${text}`);
-  return hasher.digest('hex');
+  return createHash('sha256').update(`${surah}:${verse}:${text}`).digest('hex');
 }
 
-function generateHashes(db: Database): Record<string, string> {
+function generateHashes(db: DatabaseSync): Record<string, string> {
   const verses = db
-    .query(
-      'SELECT surah_number, verse_number, uthmani_text FROM verses ORDER BY surah_number, verse_number',
+    .prepare(
+      'SELECT surah_number, verse_number, uthmani_text FROM verses ORDER BY surah_number, verse_number'
     )
-    .all() as VerseRow[];
+    .all() as unknown as VerseRow[];
   const hashes: Record<string, string> = {};
 
   for (const verse of verses) {
@@ -56,11 +72,14 @@ async function main() {
 
   if (!existsSync(DB_PATH)) {
     console.error('❌ Database not found at:', DB_PATH);
-    console.error('   Run "bun run prepare-data" first.');
+    console.error('   Run "pnpm prepare-data" first.');
     process.exit(1);
   }
 
-  const db = new Database(DB_PATH, { readonly: true });
+  // ⚠️ camelCase `readOnly`. node:sqlite silently IGNORES unknown constructor
+  // options, so Bun's `{ readonly: true }` would open the shipped Quran
+  // database read-WRITE without an error.
+  const db = new DatabaseSync(DB_PATH, { readOnly: true });
 
   // Generate current hashes from database
   console.log('Computing SHA-256 hashes for all verses...');
@@ -70,20 +89,56 @@ async function main() {
 
   db.close();
 
-  // Check if stored hashes exist
+  // Check if stored hashes exist. A missing baseline is NOT a pass: generating
+  // one here would compare the database against itself and report success on a
+  // corrupt file. Generation is a separate, opt-in outcome.
   if (!existsSync(HASHES_PATH)) {
-    // First run: generate and save hashes
-    console.log('\nFirst run — generating hashes file...');
+    if (!ALLOW_GENERATE) {
+      console.error(`\n❌ Verification FAILED — no stored hashes to verify against.`);
+      console.error(`   Expected: ${HASHES_PATH}`);
+      console.error('   Restore it from git. If a new baseline is genuinely intended,');
+      console.error('   re-run with --generate-hashes; that generates, it does not verify.');
+      process.exit(1);
+    }
+
+    // ⚠️ A baseline minted from an empty or truncated database is worse than no baseline:
+    // every later run then reports PASSED against nothing. The Quran has a fixed, known length,
+    // so there is an exact number to insist on rather than a heuristic.
+    if (totalVerses !== TOTAL_VERSES) {
+      console.error(`\n❌ Refusing to mint a baseline from ${totalVerses} verses.`);
+      console.error(`   The Quran has exactly ${TOTAL_VERSES}. A short database means the build`);
+      console.error('   is broken — minting here would bake that in and pass forever after.');
+      process.exit(1);
+    }
+
+    console.log('\n--generate-hashes — minting a NEW baseline (nothing is verified)...');
     writeHashesFile(currentHashes);
     console.log(`  Written to: ${HASHES_PATH}`);
-    console.log(`\n✅ Verification PASSED (initial hash generation)`);
-    console.log(`   Total verses checked: ${totalVerses}`);
+    console.log(`\n⚠️  Baseline GENERATED for ${totalVerses} verses. NOT a verification.`);
     process.exit(0);
+  }
+
+  // ⚠️ VERIFY-TIME COUNT CHECK. Hash comparison alone cannot catch a truncated Quran: if the
+  // database AND the baseline are both short, every hash present agrees and the gate reports
+  // PASSED over a Quran missing verses. The mint path already refuses a short database, but a
+  // baseline minted before that guard existed — or hand-edited — slips through here.
+  if (totalVerses !== TOTAL_VERSES) {
+    console.error(`\n❌ Verification FAILED — the database holds ${totalVerses} verses.`);
+    console.error(`   The Quran has exactly ${TOTAL_VERSES}. Hash comparison cannot see missing`);
+    console.error('   rows: a short database and a short baseline agree with each other.');
+    process.exit(1);
+  }
+
+  if (ALLOW_GENERATE) {
+    console.error(`\n❌ --generate-hashes refused: ${HASHES_PATH} already exists.`);
+    console.error('   Overwriting it would turn the integrity gate into a rubber stamp.');
+    console.error('   Delete it deliberately first if a new baseline is really intended.');
+    process.exit(1);
   }
 
   // Subsequent runs: compare against stored hashes
   console.log('\nComparing against stored hashes...');
-  const storedModule = await import(HASHES_PATH);
+  const storedModule = await import(pathToFileURL(HASHES_PATH).href);
   if (!storedModule.VERSE_HASHES || typeof storedModule.VERSE_HASHES !== 'object') {
     throw new Error(`Invalid hashes file: VERSE_HASHES export not found in ${HASHES_PATH}`);
   }

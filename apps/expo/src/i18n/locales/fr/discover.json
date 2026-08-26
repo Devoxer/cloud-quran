@@ -1,0 +1,65 @@
+{
+  "search": {
+    "placeholder": "Rechercher des livres, des auteurs",
+    "booksHeader": "Livres",
+    "authorsLabel": "Auteurs",
+    "noResults": {
+      "title": "Aucun résultat pour \"{{query}}\"",
+      "description": "Essayez un autre terme de recherche"
+    },
+    "error": {
+      "title": "Une erreur est survenue",
+      "message": "Nous n'avons pas pu terminer cette recherche."
+    }
+  },
+  "recentSearches": {
+    "title": "Recherches récentes",
+    "clear": "Effacer"
+  },
+  "filters": {
+    "searchPlaceholder": "Filtrer par catégories et sujets",
+    "showLess": "Afficher moins",
+    "seeAllCount": "Tout voir ({{total}})"
+  },
+  "sections": {
+    "categories": "Catégories",
+    "topics": "Sujets",
+    "popular": "Populaires",
+    "newAdditions": "Nouveautés",
+    "shuffle": "Aléatoire",
+    "allBooks": "Tous les livres",
+    "filteredBooks": "Livres filtrés"
+  },
+  "empty": {
+    "noBooks": {
+      "title": "Aucun livre disponible",
+      "description": "De nouveaux résumés sont ajoutés régulièrement — revenez bientôt."
+    },
+    "noMatches": {
+      "title": "Aucun résultat pour ces filtres",
+      "description": "Essayez de supprimer un filtre pour voir plus de livres.",
+      "cta": "Effacer les filtres"
+    }
+  },
+  "errors": {
+    "failedToLoad": "Échec du chargement des livres"
+  },
+  "a11y": {
+    "viewMode": {
+      "compact": "Vue compacte",
+      "grid": "Vue en grille",
+      "hero": "Vue immersive"
+    },
+    "filters": "Filtres",
+    "applyFilters": "Appliquer les filtres",
+    "showAll": "Afficher tous les {{title}}",
+    "showFewer": "Afficher moins de {{title}}",
+    "clearAllRecent": "Effacer toutes les recherches récentes",
+    "removeRecentSearch": "Supprimer la recherche récente : {{query}}",
+    "language": "Langue du contenu : {{language}}",
+    "languageHint": "Ouvre les réglages de langue",
+    "filtersActive_one": "{{count}} filtre actif",
+    "filtersActive_many": "{{count}} filtres actifs",
+    "filtersActive_other": "{{count}} filtres actifs"
+  }
+}

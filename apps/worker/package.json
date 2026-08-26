@@ -1,0 +1,36 @@
+{
+  "name": "cloud-quran-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "types": "./dist/app.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --env production",
+    "generate": "drizzle-kit generate",
+    "migrate:local": "wrangler d1 migrations apply cloud-quran --local"
+  },
+  "_comment_migrate_remote": "ASK FIRST. `wrangler d1 migrations apply cloud-quran --remote` writes to the LIVE database. The remote database exists (created 2026-08-24, region EEUR) with migrations 0000-0002 applied, so this is not a no-op. It also spends the account-wide write budget — which BILLS rather than errors: this comment said the opposite until story 5-5, on a free-tier premise that stopped being true around 2026-07. Deliberately not a script: it should be typed on purpose, not tab-completed.",
+  "dependencies": {
+    "@better-auth/expo": "1.7.1",
+    "better-auth": "1.7.1",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.13.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260524.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "~6.0.3",
+    "vitest": "~3.0.3",
+    "wrangler": "^4.121.0"
+  },
+  "_comment_deploy": "`deploy` is `wrangler deploy --env production`, explicitly. There is deliberately NO `deploy:dev`: the top-level wrangler.toml block is marked ENVIRONMENT=development (which ENABLES the dev token issuer) and shares the real production database_id, so publishing it anywhere would put a dev-marked worker on live data. Local development is `wrangler dev`, which deploys nothing."
+}

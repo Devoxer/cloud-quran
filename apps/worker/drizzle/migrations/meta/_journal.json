@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787591987723,
+      "tag": "0000_windy_the_professor",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787603491862,
+      "tag": "0001_square_natasha_romanoff",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787607057130,
+      "tag": "0002_needy_imperial_guard",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Inert shared Wrangler base — apps/worker is wired to inherit shared defaults
+# from here in Story 17.1. Nothing references it yet (Story 16.5 placeholder).
+# Kept minimal and valid so a later config merge resolves cleanly.
+compatibility_date = "2026-05-23"
+compatibility_flags = ["nodejs_compat"]

@@ -2,5 +2,19 @@
   "name": "desktop",
   "version": "0.0.1",
   "private": true,
-  "description": "Cloud Quran desktop app (Electrobun - placeholder)"
+  "description": "Cloud Quran desktop app (Electron). Shell is Epic 6; story 5-5 landed the OAuth return path.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "_comment_no_electron": "There is deliberately NO `electron` dependency yet. The shell is Epic 6, and adding electron is an ask-first dependency story 5-5 does not have. `src/authCallback.ts` therefore takes every Electron API it needs as an injected interface, so the OAuth return path \u2014 the part with logic worth getting right \u2014 compiles, is unit-tested and is ready to wire, with nothing installed. `scripts/build-desktop.mjs` (inherited from wisdom-fruits) expects src/main.ts and src/preload.ts; both arrive with the shell.",
+  "engines": {
+    "node": ">=24"
+  },
+  "_comment_engines": "`test` runs `node --test src/*.test.ts` \u2014 Node's own TYPE STRIPPING, which did not stabilise before 22.6 and is only unflagged from 23.6. The repo root already pins >=24 and every other package inherits that by convention; this one runs a .ts entry point DIRECTLY, so a mismatched Node here fails with a bare syntax error that names neither TypeScript nor the version.",
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  },
+  "_comment_devDependencies": "`typecheck` runs `tsc`, which resolved only through the hoisted root store \u2014 invisible until someone installs this workspace alone, or the root drops the dependency. `nodeLinker: hoisted` means the declaration costs no extra install; it states what this package actually runs. `electron` is deliberately still absent: the shell is Epic 6 and adding it is ask-first, which is why `src/authCallback.ts` takes its Electron surface as an injected interface."
 }

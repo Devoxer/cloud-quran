@@ -8,14 +8,16 @@
     "scheme": "cloud-quran",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.devoxer.cloud-quran",
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nobleachievements.cloudquran",
       "appleTeamId": "MA2HBUUNVP",
       "infoPlist": {
-        "UIBackgroundModes": [
-          "audio"
-        ]
-      }
+        "UIBackgroundModes": ["audio"]
+      },
+      "usesAppleSignIn": true,
+      "_comment_appleSignIn": "Sign In with Apple IS registered on com.nobleachievements.cloudquran (capability APPLE_ID_AUTH with PRIMARY_APP_CONSENT, registered via the App Store Connect API on 2026-08-25, bundle resource FW5LPX65S4). RENAMED from com.devoxer.cloud-quran that same day, before any App Store submission existed — the LLC prefix matches com.nobleachievements.ambience/.caffeinetracker/.decisiontime, and iOS and Android now share ONE string because the hyphen the old iOS id carried is illegal in an Android package. ios/ and android/ on disk still hold the OLD id: they are gitignored CNG output, so the next build needs `expo prebuild --clean`, not an incremental run. If a build fails with 'Entitlements file defines the value com.apple.developer.applesignin which is not registered', the bundle id is fine — the locally CACHED provisioning profile is stale and predates the capability. Delete the cached profile and let automatic signing regenerate it; do not remove this flag, and do not re-register anything.",
+      "_comment_signing": "⚠️ SIGNING FAILURES HERE LIE ABOUT THEIR CAUSE — three builds were lost to this on 2026-08-25. `plugins/withAutoSigning.js` forces ProvisioningStyle=Automatic, and automatic signing needs an Apple ID signed into Xcode (Settings → Accounts) to mint anything. With NO account, xcodebuild does not say so first: it silently falls back to the wildcard profile 'iOS Team Provisioning Profile: *', which matches any bundle id in the team but carries neither aps-environment nor com.apple.developer.applesignin — so the error reads 'Provisioning Profile does not support the Push Notifications capability', pointing at the App ID's capabilities, which are fine. Check for an Xcode account BEFORE adding capabilities. Only once the wildcard was removed did the real message appear: 'No Accounts: Add a new account in Accounts settings.' Second trap: automatic signing will NOT adopt a profile created through the App Store Connect API — it only uses ones it manages itself ('iOS Team Provisioning Profile: <bundle id>'), so hand-minting one unblocks a manual-signing xcodebuild and changes nothing for `expo run:ios`. Third: bare `xcodebuild` needs -allowProvisioningUpdates to create a profile at all; Xcode.app and `expo run:ios` pass it themselves.",
+      "_comment_icon": "ios.icon deliberately unset — the top-level `icon` PNG is used instead. Cloud Quran previously pointed ios.icon at ./assets/expo.icon (an Icon Composer .icon bundle). Under SDK 56 prebuild emits an AppIcon.appiconset whose Contents.json declares a 1024x1024 image but writes no file, and actool then dies with 'attempt to insert nil object from objects[0]' — a crash that names neither the icon nor the asset. Revisit the layered icon in epic 10 (polish), with a build to prove it."
     },
     "android": {
       "adaptiveIcon": {
@@ -25,13 +27,37 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.devoxer.cloudquran"
+      "package": "com.nobleachievements.cloudquran",
+      "_comment_androidSigningSha1": "⚠️ THE SHA-1 GOOGLE NEEDS IS `apps/expo/android/app/debug.keystore`, NOT `~/.android/debug.keystore` — five hours were lost to that on 2026-08-25. `android/app/build.gradle` sets `storeFile file('debug.keystore')`, relative to android/app/, so Expo's project-local keystore signs every debug build; the user-level one signs nothing here. Read it with: keytool -list -v -keystore android/app/debug.keystore -alias androiddebugkey -storepass android. It is React Native's fixed template keystore, so the fingerprint is stable across `prebuild --clean` and across machines: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25. A wrong fingerprint fails at sign-in time inside the native SDK, so there is NO request in `wrangler tail` and NO server error — it looks like a broken app, not a mismatched key. ⚠️ RELEASE IS A DIFFERENT KEY: EAS generates its own keystore, so a production build needs a SECOND Android OAuth client with that fingerprint (Play Console → Play Store protection → Manage Play app signing). Google allows several clients per package.",
+      "permissions": ["android.permission.MODIFY_AUDIO_SETTINGS"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
+      "_comment_blockedPermissions": "Story 5-1 review: expo-audio's config plugin injects RECORD_AUDIO because it also ships a recording API. Cloud Quran only plays recitation and never records, so a microphone permission on the Play listing would be unexplainable. Removing it from `permissions` is not enough — the plugin re-adds it at prebuild — so it is blocked from the merged manifest here. Delete this if a story ever adds recording."
     },
     "web": {
+      "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "_comment_googleSignIn": "story 5-5 amendment: the Google config plugin IS registered now. `iosUrlScheme` is the REVERSED iOS OAuth client id and the plugin throws at prebuild without one, which is why it was absent until the id existed. It is NOT a secret — it ships inside every build of the app, exactly like a bundle identifier — so it lives here in plaintext while the CLIENT SECRET stays in apps/worker/secrets.sops.yaml and never reaches the client at all. Keep it in step with EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID in apps/expo/secrets.sops.yaml: the scheme is that id with `.apps.googleusercontent.com` moved to the front. WEB and DESKTOP need none of this — they use the OAuth redirect, whose credentials are the worker's. Anything native that changes here is a REBUILD, not a reload.",
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4",
+            "extraPods": [
+              {
+                "name": "GoogleUtilities",
+                "modular_headers": true
+              },
+              {
+                "name": "RecaptchaInterop",
+                "modular_headers": true
+              }
+            ]
+          }
+        }
+      ],
       [
         "expo-router",
         {
@@ -44,42 +70,62 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFBF7",
+          "dark": {
+            "backgroundColor": "#1A1612"
           }
         }
       ],
-      "expo-sqlite",
       [
         "expo-audio",
         {
-          "enableBackgroundPlayback": true
-        }
-      ],
-      [
-        "expo-font",
-        {
-          "fonts": [
-            "./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf"
-          ]
+          "enableBackgroundPlayback": true,
+          "androidForegroundServiceConfig": {
+            "notificationTitle": "Cloud Quran",
+            "notificationText": "Recitation is playing",
+            "notificationColor": "#000000"
+          }
         }
       ],
       [
         "expo-asset",
         {
-          "assets": [
-            "./src/data/quran.db"
-          ]
+          "assets": ["./src/data/quran.db"]
         }
       ],
-      "./plugins/withAutoSigning",
-      "expo-secure-store"
+      "expo-image",
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.929745924239-tfjhe28tfuha9jjsn5duuoqgu1sqffca"
+        }
+      ],
+      "expo-localization",
+      "expo-sharing",
+      [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf"]
+        }
+      ],
+      "expo-sqlite",
+      "./plugins/withAutoSigning"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "_comment_easProjectAndUpdates": "OTA and the EAS project id are BLOCKED on an owner action; the checklist lives in deferred-work.md under story 5-7. Kept to one line because `extra` is embedded verbatim in the runtime manifest and readable as Constants.expoConfig.extra — internal process notes must not ship in every build."
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

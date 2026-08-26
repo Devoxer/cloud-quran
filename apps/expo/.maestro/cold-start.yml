@@ -1,0 +1,42 @@
+appId: com.nobleachievements.cloudquran
+---
+# Cold-start smoke — does the app launch and reach its own UI?
+#
+# ⚠️ REWRITTEN BY THE STORY 5-2 CODE REVIEW. Everything here belonged to wisdom-fruits: the
+# appId was `com.wisdomfruits.app`, the flow asserted a 'Discover Wisdom' onboarding screen, then
+# tapped 'Skip' into `app/(welcome)/*` to assert 'Wisdom Fruits', 'Send Magic Code' and
+# 'Continue with Google'. Story 5-2 deleted that whole auth surface with InstantDB (`db.auth`
+# WAS the auth provider), and 5-1 deleted the onboarding. A trailing note explained a RevenueCat
+# BILLING_UNAVAILABLE overlay; RevenueCat is gone too.
+#
+# This mattered more than the stale prose the same story swept, because it is EXECUTABLE — it
+# would have failed on the first run against screens that no longer exist. The story's acceptance
+# grep could not see it: that grep is scoped to .ts/.tsx/.json and this is .yml. Worth
+# remembering the next time a sweep is called complete on the strength of a grep.
+#
+# What this proves now: the app launches, the route-group `_layout` tree resolves, the `@/…`
+# import graph and font assets load, and the tab shell renders — the same things the auth screen
+# used to prove, without an identity the app no longer has.
+- launchApp
+
+# The dev build opens the dev-launcher menu first; a release build goes straight to the app.
+- extendedWaitUntil:
+    visible:
+      text: 'Continue|Cloud Quran|Send Feedback'
+    timeout: 40000
+- runFlow:
+    when:
+      visible: 'Continue'
+    commands:
+      - tapOn: 'Continue' # advance past the dev-menu intro -> full menu
+      - back # close the full dev menu -> reveals the app
+
+# The done-gate: the app reached its OWN surface with no sign-in step and no loading gate.
+# That last part is the point — story 5-2 removed the auth boot gate, and its own Boundaries
+# call that "the edit that can brick it". A spinner that never resolves fails here.
+- assertVisible: 'Send Feedback'
+- takeScreenshot: cold-start-1-tabs
+
+# Story 5-5 adds a sign-in leg when Better Auth lands, and epic 6 replaces the placeholder home
+# with the reading surface. Until then there is no auth surface to smoke, and asserting one
+# would be asserting a screen this story deliberately removed.

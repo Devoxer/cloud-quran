@@ -1,0 +1,29 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  // ⚠️ apps/marketing's cross-app locale-parity test (`src/i18n/locales.test.ts`, Story 24.26 AC-2)
+  // reaches OUTSIDE its own package to import the app's `EXPOSED_LANGUAGES`. Turbo hashes a
+  // package's own directory plus its topological dependencies, and marketing declares no dependency
+  // on apps/expo — so editing that constant left marketing's `test` a FULL TURBO cache hit and the
+  // guard reported green precisely when the two lists had drifted apart, which is the only failure
+  // it exists to catch. Listing it globally is the one-line fix; the file is a deliberately
+  // dependency-free leaf that changes only when a language is added or removed.
+  // scripts/build-desktop.mjs bundles apps/desktop but lives OUTSIDE it, so turbo would
+  // cache-hit the desktop build after a bundler fix and never re-bundle — which is exactly how
+  // a Windows path bug once shipped without a rebuild.
+  "globalDependencies": ["apps/expo/src/constants/language.ts", "scripts/build-desktop.mjs"],
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".expo/**", ".dist/**"] },
+    "dev": { "cache": false, "persistent": true },
+    // `test` depends on the package's OWN `build` as well as `^build`. `^build` is TOPOLOGICAL — it
+    // builds upstream workspace dependencies, not this package — so apps/marketing's output-based
+    // suites used to run against whatever `dist/` happened to be lying around, or none at all.
+    // Blast radius: apps/expo and packages/shared declare no `build` script (turbo no-ops a missing
+    // task), so marketing was long the only package this added work to. (Story 24.26)
+    // Story 38.4 gave apps/desktop a `test` (the update-check version comparison, `node --test`),
+    // so its `build` — a `tsc --noEmit` plus an esbuild bundle, both seconds — now runs ahead of
+    // it too. The dependency is not load-bearing there (the tests import source, not `.dist`), but
+    // it is also not worth a per-package exception.
+    "test": { "dependsOn": ["^build", "build"] },
+    "typecheck": { "dependsOn": ["^build"] }
+  }
+}

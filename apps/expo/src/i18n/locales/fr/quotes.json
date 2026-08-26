@@ -1,0 +1,24 @@
+{
+  "sectionTitle": "Citations",
+  "quoteCount_one": "{{count}} citation",
+  "quoteCount_many": "{{count}} citations",
+  "quoteCount_other": "{{count}} citations",
+  "dailyQuoteTitle": "Citation du jour",
+  "segments": {
+    "all": "Tout",
+    "favorites": "Favoris"
+  },
+  "emptyFavorites": {
+    "title": "Aucun favori pour le moment",
+    "description": "Appuyez sur le cœur d'une citation pour l'enregistrer ici."
+  },
+  "a11y": {
+    "quoteFrom": "Citation de {{title}} par {{author}}",
+    "openBook": "Ouvrir {{title}} de {{author}}",
+    "addFavorite": "Ajouter aux favoris",
+    "removeFavorite": "Retirer des favoris",
+    "previousPage": "Page précédente",
+    "nextPage": "Page suivante",
+    "page": "Page {{pageNumber}}"
+  }
+}

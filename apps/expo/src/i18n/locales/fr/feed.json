@@ -1,0 +1,33 @@
+{
+  "strip": {
+    "sections": "Sections",
+    "upNext": "À suivre"
+  },
+  "sections": {
+    "aboutBook": "À propos de ce livre",
+    "summaryBrief": "Résumé rapide",
+    "summaryCore": "Résumé essentiel",
+    "summaryInDepth": "Résumé détaillé",
+    "keyTakeaways": "Points clés",
+    "notableQuotes": "Citations marquantes",
+    "faq": "FAQ"
+  },
+  "timeout": {
+    "title": "Délai dépassé",
+    "message": "Le contenu du flux n'a pas pu être chargé. Vérifiez votre connexion et réessayez."
+  },
+  "error": {
+    "title": "Une erreur est survenue",
+    "message": "Impossible de charger votre flux. Appuyez ci-dessous pour réessayer."
+  },
+  "empty": {
+    "title": "Fin du mix",
+    "description": "Essayez de changer de section ou revenez plus tard.",
+    "cta": "Relancer le mix"
+  },
+  "a11y": {
+    "queueRow": "{{title}} de {{author}}, {{section}}",
+    "sectionsAndNewMix": "Sections du flux et nouveau mix",
+    "playFeed": "Lire le flux"
+  }
+}

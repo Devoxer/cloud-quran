@@ -1,0 +1,164 @@
+{
+  "sections": {
+    "continueReading": "Continuar leyendo",
+    "collections": "Colecciones",
+    "offline": "Sin conexión"
+  },
+  "counts": {
+    "books_one": "{{count}} libro",
+    "books_many": "{{count}} libros",
+    "books_other": "{{count}} libros",
+    "sections_one": "{{count}} sección",
+    "sections_many": "{{count}} secciones",
+    "sections_other": "{{count}} secciones"
+  },
+  "actions": {
+    "create": "Crear",
+    "deleteAll_one": "Eliminar",
+    "deleteAll_many": "Eliminar todo",
+    "deleteAll_other": "Eliminar todo",
+    "goBack": "Volver",
+    "renew": "Renovar",
+    "upgrade": "Mejorar plan",
+    "browseBooks": "Explorar libros",
+    "discoverBooks": "Descubrir libros"
+  },
+  "form": {
+    "collectionName": "Nombre de la colección",
+    "collectionNamePlaceholder": "Introduce el nombre de la colección"
+  },
+  "continueReading": {
+    "emptyTitle": "Empieza a escuchar para ver tu progreso aquí"
+  },
+  "collections": {
+    "createCollection": "Crear colección",
+    "organizeHint": "Crea una colección para organizar tus libros"
+  },
+  "picker": {
+    "title": "Añadir a la colección",
+    "emptyTitle": "Aún no hay colecciones"
+  },
+  "createModal": {
+    "limitReached": "Has alcanzado el máximo de {{max}} colecciones"
+  },
+  "renameModal": {
+    "title": "Renombrar colección"
+  },
+  "deleteDialog": {
+    "title": "¿Eliminar colección?",
+    "message": "Se eliminará «{{name}}». Tus libros no se verán afectados."
+  },
+  "offline": {
+    "webOnly": "Las descargas sin conexión están disponibles en la app móvil",
+    "premiumTitle": "Las descargas sin conexión son una función premium",
+    "errorTitle": "No se pudieron cargar las descargas",
+    "errorDescription": "Por favor, inténtalo de nuevo más tarde",
+    "emptyTitle": "No hay libros guardados sin conexión",
+    "emptyDescription": "Descarga libros para acceder a ellos sin internet",
+    "countSummary_one": "{{count}} libro · {{size}}",
+    "countSummary_many": "{{count}} libros · {{size}}",
+    "countSummary_other": "{{count}} libros · {{size}}",
+    "expiredTitle": "Suscripción caducada",
+    "expiredSubtitle": "Renueva para acceder a tus libros descargados",
+    "deleteAllTitle_one": "¿Eliminar descarga?",
+    "deleteAllTitle_many": "¿Eliminar todas las descargas?",
+    "deleteAllTitle_other": "¿Eliminar todas las descargas?",
+    "removeFailed": "Error al eliminar. Por favor, inténtalo de nuevo.",
+    "deleteAllMessage_one": "¿Quitar {{count}} libro de este dispositivo? Libera {{size}}. Puedes descargarlo de nuevo.",
+    "deleteAllMessage_many": "¿Quitar los {{count}} libros de este dispositivo? Libera {{size}}. Puedes descargarlos de nuevo.",
+    "deleteAllMessage_other": "¿Quitar los {{count}} libros de este dispositivo? Libera {{size}}. Puedes descargarlos de nuevo."
+  },
+  "history": {
+    "emptyTitle": "Aún no hay historial de lectura",
+    "emptyDescription": "Los libros que escuches aparecerán aquí",
+    "clearDialogTitle": "¿Borrar todo el historial?",
+    "clearDialogMessage": "Esto eliminará todos los libros de tu historial.",
+    "removeFailed": "Error al eliminar. Inténtalo de nuevo.",
+    "clearFailed": "Error al borrar el historial."
+  },
+  "favorites": {
+    "errorTitle": "No se pudieron cargar los favoritos",
+    "errorDescription": "Por favor, inténtalo de nuevo más tarde",
+    "emptyTitle": "Aún no hay favoritos",
+    "emptyDescription": "Toca el corazón en un libro para guardarlo aquí."
+  },
+  "collectionDetail": {
+    "emptyTitle": "Esta colección está vacía",
+    "emptyDescription": "Añade libros desde la pantalla de detalles del libro",
+    "notFound": "Colección no encontrada",
+    "savePreferenceFailed": "Error al guardar la preferencia.",
+    "deleteFailed": "Error al eliminar la colección.",
+    "removeBookFailed": "Error al eliminar el libro.",
+    "allDownloaded": "Todos los libros ya están descargados.",
+    "downloadCancelled_one": "Descarga cancelada. {{count}} libro guardado.",
+    "downloadCancelled_many": "Descarga cancelada. {{count}} libros guardados.",
+    "downloadCancelled_other": "Descarga cancelada. {{count}} libros guardados.",
+    "downloadPartialFailed": "Descargados {{completed}} de {{total}} libros. {{failed}} fallidos.",
+    "downloadLimitReached": "Descargados {{completed}} de {{total}}. Límite sin conexión alcanzado.",
+    "downloadFailed": "Error en la descarga. Inténtalo de nuevo."
+  },
+  "playlist": {
+    "errorTitle": "Error al cargar la colección"
+  },
+  "sectionLabels": {
+    "aboutBook": "Sobre el libro",
+    "brief": "Resumen",
+    "core": "Esencial",
+    "inDepth": "En profundidad",
+    "takeaways": "Puntos clave",
+    "quotes": "Citas",
+    "faq": "FAQ"
+  },
+  "signUpPrompt": {
+    "library": "Mantén tu biblioteca y sincronízala en tus dispositivos",
+    "history": "Mantén tu historial de lectura y sincronízalo en tus dispositivos"
+  },
+  "errors": {
+    "downloadWebUnavailable": "Las descargas sin conexión no están disponibles en la web",
+    "signInToDownload": "Debes iniciar sesión para descargar libros",
+    "offlineLimitReached": "Límite sin conexión alcanzado ({{limit}} libros)",
+    "bookNotFound": "Libro no encontrado",
+    "downloadFailedConnection": "Error en la descarga. Comprueba tu conexión.",
+    "noContentAvailable": "No hay contenido disponible para descargar",
+    "languageNotAvailable": "Este libro aún no está disponible en tu idioma",
+    "notEnoughStorage": "No hay suficiente espacio de almacenamiento.",
+    "signInToSaveOffline": "Debes iniciar sesión para guardar libros sin conexión",
+    "invalidOfflineData": "Datos de libro sin conexión no válidos",
+    "saveOfflineFailed": "Error al guardar el registro sin conexión",
+    "signInToRemoveOffline": "Debes iniciar sesión para eliminar libros sin conexión",
+    "bookIdRequired": "Se requiere el ID del libro",
+    "removeOfflineFailed": "Error al eliminar el libro sin conexión",
+    "removeOfflineBooksFailed": "Error al eliminar los libros sin conexión",
+    "removeItemFailed": "Error al eliminar el elemento",
+    "clearHistoryFailed": "Error al borrar el historial",
+    "addBookFailed": "Error al añadir el libro a la colección",
+    "removeBookFromCollectionFailed": "Error al eliminar el libro de la colección",
+    "createCollectionFailed": "Error al crear la colección",
+    "nameLength": "El nombre debe tener entre 1 y {{max}} caracteres",
+    "renameCollectionFailed": "Error al renombrar la colección",
+    "deleteCollectionFailed": "Error al eliminar la colección"
+  },
+  "a11y": {
+    "collectionWithCount": "{{name}}, {{bookCount}} libros",
+    "createNewCollection": "Crear nueva colección",
+    "collectionNameInput": "Nombre de la colección",
+    "collectionNameHintCreate": "Introduce el nombre de la colección, máximo {{max}} caracteres",
+    "collectionNameHintRename": "Introduce el nuevo nombre de la colección, máximo {{max}} caracteres",
+    "historyItem": "{{title}} de {{author}}, reproducido {{time}}",
+    "removeFromHistory": "Eliminar {{title}} del historial",
+    "bookWithSize": "{{title}} de {{author}}, {{size}}",
+    "removeFromOffline": "Eliminar {{title}} de las descargas",
+    "clearAllHistory": "Borrar todo el historial",
+    "deleteAllDownloads": "Eliminar todas las descargas",
+    "renewSubscription": "Renovar suscripción",
+    "sectionsChange": "Secciones: {{sections}}. Toca para cambiar.",
+    "renameCollection": "Renombrar colección",
+    "downloadingProgress": "Descargando {{current}} de {{total}}. Toca para cancelar.",
+    "allBooksDownloaded": "Todos los libros descargados",
+    "downloadAllBooks": "Descargar todos los libros para uso sin conexión",
+    "playCollection": "Reproducir colección",
+    "deleteCollection": "Eliminar colección",
+    "downloadBookOffline": "Descargar {{title}} para uso sin conexión",
+    "removeFromCollection": "Eliminar {{title}} de la colección"
+  }
+}

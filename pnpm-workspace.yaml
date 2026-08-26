@@ -1,0 +1,158 @@
+# CRITICAL for React Native / Metro / EAS: a flat npm/yarn-like node_modules
+# (no symlinked .pnpm virtual store). Native modules (nitro-modules, mmkv,
+# reanimated, purchases, worklets), Metro symlink resolution, and CocoaPods/
+# autolinking all expect a flat tree. pnpm's default is `isolated` (symlinked).
+# NOTE: pnpm v11 reads this ONLY from pnpm-workspace.yaml — `.npmrc`'s
+# `node-linker` is ignored (v11 reads only auth/registry from .npmrc).
+# See Story 16.2 (node-linker decision).
+nodeLinker: hoisted
+
+packages:
+  - 'apps/*' # expo, worker, marketing, desktop (all relocated as of Story 16.5)
+  - 'packages/*' # shared (@cloudquran/shared), config (@cloudquran/config), quran-data
+  # No 'tools/*' glob: wisdom-fruits' content-pipeline was not inherited. Cloud Quran's
+  # build-time data pipeline lives in scripts/ and is not a workspace package.
+
+# Dependency overrides (pnpm v11 reads these from pnpm-workspace.yaml).
+#   @electron/node-gyp: @electron/rebuild (transitive via @electron-forge/cli)
+#   pins it to a git URL, which pnpm v11 blocks by default (blockExoticSubdeps).
+#   Redirect to the published registry build so the Forge toolchain installs.
+#   Safe: the desktop shell has no native modules, so node-gyp never runs — it
+#   is only pulled into the tree by @electron/rebuild for `forge make/package`
+#   (wired but not run in 16.5).
+overrides:
+  '@electron/node-gyp': '10.2.0-electron.2'
+  # @expo/dom-webview: expo@56 declares ~56.0.5, but the incremental SDK 54→55→56 bumps
+  # left an invalid stale transitive pin at 55.0.6 in the lockfile (pnpm install/update
+  # wouldn't re-resolve it). The 55.0.6 Android native module crashes against the expo-56
+  # modules-core ABI (NoClassDefFoundError in DomWebViewModule on launch). Force it to the
+  # SDK-56 version expo itself wants. Story 16.9. (Safe to drop after a clean lockfile regen.)
+  '@expo/dom-webview': '~56.0.5'
+  # @expo/metro-runtime: force 56.0.15. Added Story 17.4 to defeat a sticky LOWER lockfile
+  # pin — pnpm reuses the locked metro-runtime version even after it stops satisfying a
+  # dependent's range, and a plain install/dedupe does NOT dislodge it (verified in 22.21:
+  # dropping the override left it stuck at 56.0.13). The 22.21 SDK-56 patch-align bumped
+  # expo-router to 56.2.11, which now requires ^56.0.15 (expo itself accepts *), so the prior
+  # 56.0.13 pin INVERTED into a too-LOW pin that tripped expo-doctor's "overridden
+  # dependencies" check. 56.0.15 is the latest published 56.0.x and the lowest that satisfies
+  # expo-router — force it. Story 22.21, 2026-06-19. (Safe to drop once expo bundles ≥56.0.15.)
+  '@expo/metro-runtime': '56.0.15'
+  # @expo/ui: HOLD at 56.0.16. The app's @/components/ui/BottomSheet wraps
+  # @expo/ui/community/bottom-sheet; the 56.0.18 community bottom-sheet regresses how its
+  # RN children mount under jest-expo (RNTL `fireEvent.press` on a child button no longer
+  # reaches the handler → 0 calls), red-failing all 12 BottomSheet-backed component suites
+  # (44 tests: collection/profile/subscription modals + sheets/menus). HEAD shipped 56.0.16
+  # (only); the epic-21 version-check `pnpm install` floated BOTH the app's `~56.0.16` tilde
+  # AND expo-router@56.2.8's transitive @expo/ui range up to 56.0.18 — an override (not a
+  # manifest pin) is required because it must also pin the expo-router transitive copy. Force
+  # 56.0.16 tree-wide. Epic-21 boundary, 2026-06-17. (Revisit when a newer @expo/ui restores
+  # jest child-press behaviour; verify the 12 suites stay green before lifting.)
+  '@expo/ui': '56.0.16'
+
+# Build-script allowlist. pnpm v11 uses the `allowBuilds` map (package → boolean);
+# the v10 `onlyBuiltDependencies` array was removed, and the package.json "pnpm"
+# field is no longer read. Migrated from bun's trustedDependencies, adjusted to the
+# actual pnpm-resolved tree:
+#   - dropped 'unrs-resolver' (not present in the pnpm tree)
+#   - 'sharp: false' — Story 16.9: with sharp's build script ALLOWED, the EAS
+#     macOS/arm64 iOS builder ran sharp's `install/check.js || build`, the check
+#     failed to resolve the prebuilt (hoisted tree carries TWO sharp versions
+#     0.33.5 + 0.34.5, so the top-level sharp@0.34.5's `@img/sharp-darwin-arm64`
+#     isn't co-located), and it fell back to a node-gyp source build that fails
+#     on the EAS image (no libvips) → whole monorepo install fails → iOS build
+#     red. DENY the script: sharp 0.33+ loads its `@img/sharp-{platform}` prebuilt
+#     directly at require-time without the install script, so marketing's Astro
+#     image optimization still works (prebuilt present on its Linux builder), and
+#     the iOS app build (which never uses sharp) stops failing. Android was green
+#     because Linux found the prebuilt; this makes iOS deterministic too.
+#   - '@seontechnologies/playwright-utils: false' — its only postinstall is an
+#     irrelevant `git submodule update … || true`; deny it so the gate stays clear
+allowBuilds:
+  '@sentry/cli': true
+  esbuild: true
+  workerd: true
+  sharp: false
+  '@seontechnologies/playwright-utils': false
+  # electron-winstaller's install script picks the host-arch 7-Zip binary the
+  # Windows/Squirrel maker shells out to; without it `forge make` fails on missing
+  # vendor binaries. Allowed as of Story 38.3, which builds the .exe on a Windows CI
+  # runner. It runs on every platform (a plain file copy inside the package) and is
+  # harmless where Squirrel never runs. The neighbouring `fs-xattr` and `macos-alias`
+  # entries went with MakerDMG — macOS is not an Electron target.
+  electron-winstaller: true
+  # Optional native msgpack accelerator pulled in by @expo/metro-config@56 (SDK 56)
+  # for Metro cache serialization. msgpackr has a pure-JS fallback, so denying the
+  # native build is safe — only affects Metro cache encode speed, not correctness.
+  # Story 16.9 (SDK 54→56 upgrade).
+  msgpackr-extract: false
+
+# Force-install optional native prebuilt binaries for EVERY builder platform, not
+# just the host. Story 16.9: the EAS iOS builder (macOS/arm64) was NOT installing
+# sharp's `@img/sharp-darwin-arm64` prebuilt under `nodeLinker: hoisted`, so sharp
+# (pulled in by the marketing/worker workspaces during EAS's monorepo-wide
+# `pnpm install --frozen-lockfile`) fell back to a node-gyp source build — which
+# fails on the EAS macOS image (no libvips). Android (Linux/x64) found its prebuilt
+# and stayed green. Listing both builder targets here makes pnpm extract the
+# matching `@img/sharp-*` prebuilt on each, so sharp never source-builds. The iOS
+# app never USES sharp; this just keeps the workspace install from failing.
+supportedArchitectures:
+  os:
+    - darwin
+    - linux
+    # An explicit `os` list REPLACES the host default — it does not extend it, which is
+    # why pnpm has a `current` token at all. That was invisible while every builder was
+    # darwin or linux; Story 38.3 added a windows-latest runner, where the list above
+    # would otherwise install ZERO win32 prebuilts (sharp, esbuild, biome). `current`
+    # keeps the host covered wherever the host is, and costs nothing on darwin/linux
+    # because both are already named.
+    - current
+  cpu:
+    - arm64
+    - x64
+  libc:
+    - glibc
+
+# Supply-chain cooldown: refuse packages younger than this many MINUTES (pnpm v11
+# defaults to 1440 = 24h). Reduced to 60 (1h) — keeps the guard against a freshly
+# compromised npm publish (the worst-case window where a hijacked version is newest
+# and not yet yanked) while removing the friction of same-day official patch releases
+# (e.g. Expo SDK patch bumps land hours after publish). The Exclude list below is kept
+# for versions that must bypass even the 1h window. (wisdom-fruits chore, 2026-05-29.)
+minimumReleaseAge: 60
+
+# Pruned to versions currently resolved in the tree (Story 22.21 dep-currency
+# refresh): the SDK-56 patch-align bump (expo install --fix) replaced ~17 prior
+# pins (expo@56.0.4, expo-router@56.2.6, expo-asset@56.0.14, … now stale, no
+# longer in the lockfile) and triggered NO minimumReleaseAge violation, so no new
+# same-day-patch entry was needed. Remaining entries are all in-tree.
+minimumReleaseAgeExclude:
+  - '@expo/config-plugins@56.0.8'
+  - '@expo/config@56.0.9'
+  - '@expo/image-utils@0.10.1'
+  - '@expo/require-utils@56.1.3'
+  - expo-audio@56.0.11 # held + patched (lock-screen patch, Story 19.4)
+  - expo-splash-screen@56.0.10 # not part of the 22.21 bump set
+  - '@cloudflare/workers-types@4.20260524.1' # worker dep, unrelated to expo SDK
+
+patchedDependencies:
+  expo-audio@56.0.11: patches/expo-audio@56.0.11.patch
+  # Story 20.8 — Android language-switch blank-screen fix. The dep is pinned EXACT in
+  # apps/expo/package.json (a `~` range would make this key stop matching and the patch would
+  # detach silently) and listed in `expo.install.exclude`.
+  #
+  # ⚠️ THE EXCLUDE MUTES A WARNING THAT FIRES TODAY — it is a deliberate HOLD-BACK, not agreement
+  # with the SDK. `expo install --check` reads Expo's LIVE endpoint, which for SDK 56 now says
+  # `react-native-screens@~4.26.0` (api.expo.dev/v2/sdks/56.0.0/native-modules, verified
+  # 2026-07-28); only the locally vendored expo/bundledNativeModules.json still says 4.25.2.
+  # Remove the exclude and you get: `react-native-screens@4.25.2 - expected version: ~4.26.0`.
+  # We hold at 4.25.2 anyway because Story 20.8 unpacked 4.26.2 AND 4.27.0-nightly and both carry
+  # the identical unfixed defect — bumping does not fix it, it only detaches the patch. The
+  # exclude exists so `expo install --fix` cannot silently do that.
+  #
+  # LIFT THIS PIN WHEN: upstream fixes the ScreenStackHeaderConfig/canNavigateBack null-guard
+  # disagreement (not filed yet — filing it is an owner action), OR the app migrates to the
+  # `rnscreens/gamma` stack, whose header path never calls canNavigateBack. At every SDK bump,
+  # re-check the NEW SDK's recommendation against this key by hand — no gate can see it, because
+  # lint:native-patches only compares this key to the INSTALLED version (both 4.25.2), so it stays
+  # green no matter how far the SDK's recommendation moves ahead.
+  react-native-screens@4.25.2: patches/react-native-screens@4.25.2.patch

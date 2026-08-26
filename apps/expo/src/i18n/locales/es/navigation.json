@@ -1,0 +1,38 @@
+{
+  "tabs": {
+    "discover": "Descubrir",
+    "feed": "Feed",
+    "quizzes": "Cuestionarios",
+    "library": "Biblioteca",
+    "profile": "Perfil",
+    "settings": "Ajustes"
+  },
+  "titles": {
+    "discover": "Descubrir",
+    "search": "Buscar",
+    "filters": "Filtros",
+    "browse": "Explorar",
+    "feed": "Feed",
+    "library": "Biblioteca",
+    "favorites": "Favoritos",
+    "myNotes": "Mis notas",
+    "history": "Historial",
+    "offline": "Sin conexión",
+    "profile": "Perfil",
+    "playback": "Reproducción",
+    "notifications": "Notificaciones",
+    "privacy": "Privacidad",
+    "language": "Idioma",
+    "yourStats": "Tus estadísticas",
+    "quizzes": "Cuestionarios",
+    "quizStats": "Estadísticas de cuestionarios",
+    "book": "Libro",
+    "testYourself": "Ponte a prueba",
+    "quotes": "Citas",
+    "nowPlaying": "Reproduciendo",
+    "feedback": "Comentarios",
+    "signIn": "Iniciar sesión",
+    "account": "Ajustes",
+    "data": "Tus datos"
+  }
+}

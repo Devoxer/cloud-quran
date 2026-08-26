@@ -1,0 +1,157 @@
+{
+  "sections": {
+    "continueReading": "Continue Reading",
+    "collections": "Collections",
+    "offline": "Offline"
+  },
+  "counts": {
+    "books_one": "{{count}} book",
+    "books_other": "{{count}} books",
+    "sections_one": "{{count}} section",
+    "sections_other": "{{count}} sections"
+  },
+  "actions": {
+    "create": "Create",
+    "deleteAll_one": "Delete",
+    "deleteAll_other": "Delete All",
+    "goBack": "Go Back",
+    "renew": "Renew",
+    "upgrade": "Upgrade",
+    "browseBooks": "Browse Books",
+    "discoverBooks": "Discover Books"
+  },
+  "form": {
+    "collectionName": "Collection Name",
+    "collectionNamePlaceholder": "Enter collection name"
+  },
+  "continueReading": {
+    "emptyTitle": "Start listening to see your progress here"
+  },
+  "collections": {
+    "createCollection": "Create Collection",
+    "organizeHint": "Create a collection to organize your books"
+  },
+  "picker": {
+    "title": "Add to Collection",
+    "emptyTitle": "No collections yet"
+  },
+  "createModal": {
+    "limitReached": "You've reached the maximum of {{max}} collections"
+  },
+  "renameModal": {
+    "title": "Rename Collection"
+  },
+  "deleteDialog": {
+    "title": "Delete Collection?",
+    "message": "\"{{name}}\" will be deleted. Your books will not be affected."
+  },
+  "offline": {
+    "webOnly": "Offline downloads are available on the mobile app",
+    "premiumTitle": "Offline downloads are a premium feature",
+    "errorTitle": "Unable to load downloads",
+    "errorDescription": "Please try again later",
+    "emptyTitle": "No books saved for offline",
+    "emptyDescription": "Download books to access them without internet",
+    "countSummary_one": "{{count}} book · {{size}}",
+    "countSummary_other": "{{count}} books · {{size}}",
+    "expiredTitle": "Subscription expired",
+    "expiredSubtitle": "Renew to access your downloaded books",
+    "deleteAllTitle_one": "Delete Download?",
+    "deleteAllTitle_other": "Delete All Downloads?",
+    "removeFailed": "Failed to remove. Please try again.",
+    "deleteAllMessage_one": "Remove {{count}} book from this device? Frees {{size}}. You can download it again.",
+    "deleteAllMessage_other": "Remove all {{count}} books from this device? Frees {{size}}. You can download them again."
+  },
+  "history": {
+    "emptyTitle": "No reading history yet",
+    "emptyDescription": "Books you listen to will appear here",
+    "clearDialogTitle": "Clear All History?",
+    "clearDialogMessage": "This will remove all books from your history.",
+    "removeFailed": "Failed to remove. Try again.",
+    "clearFailed": "Failed to clear history."
+  },
+  "favorites": {
+    "errorTitle": "Unable to load favorites",
+    "errorDescription": "Please try again later",
+    "emptyTitle": "No favorites yet",
+    "emptyDescription": "Tap the heart on a book to save it here."
+  },
+  "collectionDetail": {
+    "emptyTitle": "This collection is empty",
+    "emptyDescription": "Add books from the book detail screen",
+    "notFound": "Collection not found",
+    "savePreferenceFailed": "Failed to save preference.",
+    "deleteFailed": "Failed to delete collection.",
+    "removeBookFailed": "Failed to remove book.",
+    "allDownloaded": "All books are already downloaded.",
+    "downloadCancelled_one": "Download cancelled. {{count}} book saved.",
+    "downloadCancelled_other": "Download cancelled. {{count}} books saved.",
+    "downloadPartialFailed": "Downloaded {{completed}} of {{total}} books. {{failed}} failed.",
+    "downloadLimitReached": "Downloaded {{completed}} of {{total}}. Offline limit reached.",
+    "downloadFailed": "Download failed. Please try again."
+  },
+  "playlist": {
+    "errorTitle": "Failed to load collection"
+  },
+  "sectionLabels": {
+    "aboutBook": "About Book",
+    "brief": "Brief",
+    "core": "Core",
+    "inDepth": "In-Depth",
+    "takeaways": "Takeaways",
+    "quotes": "Quotes",
+    "faq": "FAQ"
+  },
+  "signUpPrompt": {
+    "library": "Keep your library and sync it across devices",
+    "history": "Keep your reading history and sync it across devices"
+  },
+  "errors": {
+    "downloadWebUnavailable": "Offline downloads are not available on web",
+    "signInToDownload": "You must be signed in to download books",
+    "offlineLimitReached": "Offline limit reached ({{limit}} books)",
+    "bookNotFound": "Book not found",
+    "downloadFailedConnection": "Download failed. Check your connection.",
+    "noContentAvailable": "No content available for download",
+    "languageNotAvailable": "This book isn't available in your language yet",
+    "notEnoughStorage": "Not enough storage space.",
+    "signInToSaveOffline": "You must be signed in to save books offline",
+    "invalidOfflineData": "Invalid offline book data",
+    "saveOfflineFailed": "Failed to save offline record",
+    "signInToRemoveOffline": "You must be signed in to remove offline books",
+    "bookIdRequired": "Book ID is required",
+    "removeOfflineFailed": "Failed to remove offline book",
+    "removeOfflineBooksFailed": "Failed to remove offline books",
+    "removeItemFailed": "Failed to remove item",
+    "clearHistoryFailed": "Failed to clear history",
+    "addBookFailed": "Failed to add book to collection",
+    "removeBookFromCollectionFailed": "Failed to remove book from collection",
+    "createCollectionFailed": "Failed to create collection",
+    "nameLength": "Name must be 1-{{max}} characters",
+    "renameCollectionFailed": "Failed to rename collection",
+    "deleteCollectionFailed": "Failed to delete collection"
+  },
+  "a11y": {
+    "collectionWithCount": "{{name}}, {{bookCount}} books",
+    "createNewCollection": "Create new collection",
+    "collectionNameInput": "Collection name",
+    "collectionNameHintCreate": "Enter collection name, maximum {{max}} characters",
+    "collectionNameHintRename": "Enter new name for collection, maximum {{max}} characters",
+    "historyItem": "{{title}} by {{author}}, played {{time}}",
+    "removeFromHistory": "Remove {{title}} from history",
+    "bookWithSize": "{{title}} by {{author}}, {{size}}",
+    "removeFromOffline": "Remove {{title}} from offline",
+    "clearAllHistory": "Clear all history",
+    "deleteAllDownloads": "Delete all downloads",
+    "renewSubscription": "Renew subscription",
+    "sectionsChange": "Sections: {{sections}}. Tap to change.",
+    "renameCollection": "Rename collection",
+    "downloadingProgress": "Downloading {{current}} of {{total}}. Tap to cancel.",
+    "allBooksDownloaded": "All books downloaded",
+    "downloadAllBooks": "Download all books for offline",
+    "playCollection": "Play collection",
+    "deleteCollection": "Delete collection",
+    "downloadBookOffline": "Download {{title}} for offline",
+    "removeFromCollection": "Remove {{title}} from collection"
+  }
+}

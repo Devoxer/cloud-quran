@@ -1,0 +1,164 @@
+{
+  "sections": {
+    "continueReading": "Lecture en cours",
+    "collections": "Collections",
+    "offline": "Hors ligne"
+  },
+  "counts": {
+    "books_one": "{{count}} livre",
+    "books_many": "{{count}} livres",
+    "books_other": "{{count}} livres",
+    "sections_one": "{{count}} section",
+    "sections_many": "{{count}} sections",
+    "sections_other": "{{count}} sections"
+  },
+  "actions": {
+    "create": "Créer",
+    "deleteAll_one": "Supprimer",
+    "deleteAll_many": "Tout supprimer",
+    "deleteAll_other": "Tout supprimer",
+    "goBack": "Retour",
+    "renew": "Renouveler",
+    "upgrade": "Passer à la version supérieure",
+    "browseBooks": "Parcourir les livres",
+    "discoverBooks": "Découvrir des livres"
+  },
+  "form": {
+    "collectionName": "Nom de la collection",
+    "collectionNamePlaceholder": "Entrez le nom de la collection"
+  },
+  "continueReading": {
+    "emptyTitle": "Commencez à écouter pour voir votre progression ici"
+  },
+  "collections": {
+    "createCollection": "Créer une collection",
+    "organizeHint": "Créez une collection pour organiser vos livres"
+  },
+  "picker": {
+    "title": "Ajouter à une collection",
+    "emptyTitle": "Aucune collection pour le moment"
+  },
+  "createModal": {
+    "limitReached": "Vous avez atteint le maximum de {{max}} collections"
+  },
+  "renameModal": {
+    "title": "Renommer la collection"
+  },
+  "deleteDialog": {
+    "title": "Supprimer la collection ?",
+    "message": "\"{{name}}\" sera supprimée. Vos livres ne seront pas affectés."
+  },
+  "offline": {
+    "webOnly": "Les téléchargements hors ligne sont disponibles sur l'application mobile",
+    "premiumTitle": "Les téléchargements hors ligne sont une fonctionnalité premium",
+    "errorTitle": "Impossible de charger les téléchargements",
+    "errorDescription": "Veuillez réessayer plus tard",
+    "emptyTitle": "Aucun livre enregistré pour le mode hors ligne",
+    "emptyDescription": "Téléchargez des livres pour y accéder sans internet",
+    "countSummary_one": "{{count}} livre · {{size}}",
+    "countSummary_many": "{{count}} livres · {{size}}",
+    "countSummary_other": "{{count}} livres · {{size}}",
+    "expiredTitle": "Abonnement expiré",
+    "expiredSubtitle": "Renouvelez votre abonnement pour accéder à vos livres téléchargés",
+    "deleteAllTitle_one": "Supprimer le téléchargement ?",
+    "deleteAllTitle_many": "Supprimer tous les téléchargements ?",
+    "deleteAllTitle_other": "Supprimer tous les téléchargements ?",
+    "removeFailed": "Échec du retrait. Veuillez réessayer.",
+    "deleteAllMessage_one": "Retirer {{count}} livre de cet appareil ? Libère {{size}}. Vous pourrez le retélécharger.",
+    "deleteAllMessage_many": "Retirer les {{count}} livres de cet appareil ? Libère {{size}}. Vous pourrez les retélécharger.",
+    "deleteAllMessage_other": "Retirer les {{count}} livres de cet appareil ? Libère {{size}}. Vous pourrez les retélécharger."
+  },
+  "history": {
+    "emptyTitle": "Aucun historique de lecture pour le moment",
+    "emptyDescription": "Les livres que vous écoutez apparaîtront ici",
+    "clearDialogTitle": "Effacer tout l'historique ?",
+    "clearDialogMessage": "Cela supprimera tous les livres de votre historique.",
+    "removeFailed": "Échec du retrait. Réessayez.",
+    "clearFailed": "Échec de l'effacement de l'historique."
+  },
+  "favorites": {
+    "errorTitle": "Impossible de charger les favoris",
+    "errorDescription": "Veuillez réessayer plus tard",
+    "emptyTitle": "Aucun favori pour le moment",
+    "emptyDescription": "Appuyez sur le cœur d'un livre pour l'enregistrer ici."
+  },
+  "collectionDetail": {
+    "emptyTitle": "Cette collection est vide",
+    "emptyDescription": "Ajoutez des livres depuis l'écran de détails du livre",
+    "notFound": "Collection introuvable",
+    "savePreferenceFailed": "Échec de l'enregistrement de la préférence.",
+    "deleteFailed": "Échec de la suppression de la collection.",
+    "removeBookFailed": "Échec du retrait du livre.",
+    "allDownloaded": "Tous les livres sont déjà téléchargés.",
+    "downloadCancelled_one": "Téléchargement annulé. {{count}} livre enregistré.",
+    "downloadCancelled_many": "Téléchargement annulé. {{count}} livres enregistrés.",
+    "downloadCancelled_other": "Téléchargement annulé. {{count}} livres enregistrés.",
+    "downloadPartialFailed": "Téléchargement de {{completed}} sur {{total}} livres. {{failed}} ont échoué.",
+    "downloadLimitReached": "Téléchargement de {{completed}} sur {{total}}. Limite hors ligne atteinte.",
+    "downloadFailed": "Échec du téléchargement. Veuillez réessayer."
+  },
+  "playlist": {
+    "errorTitle": "Échec du chargement de la collection"
+  },
+  "sectionLabels": {
+    "aboutBook": "À propos du livre",
+    "brief": "Résumé",
+    "core": "Essentiel",
+    "inDepth": "Approfondissement",
+    "takeaways": "Points clés",
+    "quotes": "Citations",
+    "faq": "FAQ"
+  },
+  "signUpPrompt": {
+    "library": "Conservez votre bibliothèque et synchronisez-la sur tous vos appareils",
+    "history": "Conservez votre historique de lecture et synchronisez-le sur tous vos appareils"
+  },
+  "errors": {
+    "downloadWebUnavailable": "Les téléchargements hors ligne ne sont pas disponibles sur le web",
+    "signInToDownload": "Vous devez être connecté pour télécharger des livres",
+    "offlineLimitReached": "Limite hors ligne atteinte ({{limit}} livres)",
+    "bookNotFound": "Livre introuvable",
+    "downloadFailedConnection": "Échec du téléchargement. Vérifiez votre connexion.",
+    "noContentAvailable": "Aucun contenu disponible au téléchargement",
+    "languageNotAvailable": "Ce livre n'est pas encore disponible dans votre langue",
+    "notEnoughStorage": "Espace de stockage insuffisant.",
+    "signInToSaveOffline": "Vous devez être connecté pour enregistrer des livres hors ligne",
+    "invalidOfflineData": "Données de livre hors ligne invalides",
+    "saveOfflineFailed": "Échec de l'enregistrement de l'enregistrement hors ligne",
+    "signInToRemoveOffline": "Vous devez être connecté pour retirer les livres hors ligne",
+    "bookIdRequired": "L'ID du livre est requis",
+    "removeOfflineFailed": "Échec du retrait du livre hors ligne",
+    "removeOfflineBooksFailed": "Échec du retrait des livres hors ligne",
+    "removeItemFailed": "Échec du retrait de l'élément",
+    "clearHistoryFailed": "Échec de l'effacement de l'historique",
+    "addBookFailed": "Échec de l'ajout du livre à la collection",
+    "removeBookFromCollectionFailed": "Échec du retrait du livre de la collection",
+    "createCollectionFailed": "Échec de la création de la collection",
+    "nameLength": "Le nom doit contenir entre 1 et {{max}} caractères",
+    "renameCollectionFailed": "Échec du renommage de la collection",
+    "deleteCollectionFailed": "Échec de la suppression de la collection"
+  },
+  "a11y": {
+    "collectionWithCount": "{{name}}, {{bookCount}} livres",
+    "createNewCollection": "Créer une nouvelle collection",
+    "collectionNameInput": "Nom de la collection",
+    "collectionNameHintCreate": "Entrez le nom de la collection, maximum {{max}} caractères",
+    "collectionNameHintRename": "Entrez le nouveau nom de la collection, maximum {{max}} caractères",
+    "historyItem": "{{title}} par {{author}}, lu {{time}}",
+    "removeFromHistory": "Retirer {{title}} de l'historique",
+    "bookWithSize": "{{title}} par {{author}}, {{size}}",
+    "removeFromOffline": "Retirer {{title}} du mode hors ligne",
+    "clearAllHistory": "Effacer tout l'historique",
+    "deleteAllDownloads": "Supprimer tous les téléchargements",
+    "renewSubscription": "Renouveler l'abonnement",
+    "sectionsChange": "Sections : {{sections}}. Appuyez pour modifier.",
+    "renameCollection": "Renommer la collection",
+    "downloadingProgress": "Téléchargement de {{current}} sur {{total}}. Appuyez pour annuler.",
+    "allBooksDownloaded": "Tous les livres sont téléchargés",
+    "downloadAllBooks": "Télécharger tous les livres pour une lecture hors ligne",
+    "playCollection": "Lire la collection",
+    "deleteCollection": "Supprimer la collection",
+    "downloadBookOffline": "Télécharger {{title}} pour une lecture hors ligne",
+    "removeFromCollection": "Retirer {{title}} de la collection"
+  }
+}

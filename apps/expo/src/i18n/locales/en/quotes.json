@@ -1,0 +1,23 @@
+{
+  "sectionTitle": "Quotes",
+  "quoteCount_one": "{{count}} quote",
+  "quoteCount_other": "{{count}} quotes",
+  "dailyQuoteTitle": "Daily Quote",
+  "segments": {
+    "all": "All",
+    "favorites": "Favorites"
+  },
+  "emptyFavorites": {
+    "title": "No favorites yet",
+    "description": "Tap the heart on a quote to save it here."
+  },
+  "a11y": {
+    "quoteFrom": "Quote from {{title}} by {{author}}",
+    "openBook": "Open {{title}} by {{author}}",
+    "addFavorite": "Add to favorites",
+    "removeFavorite": "Remove from favorites",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "page": "Page {{pageNumber}}"
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "byline": {
+    "by": "by"
+  },
+  "sectionTitles": {
+    "aboutBook": "About This Book",
+    "summaryBrief": "Brief Summary",
+    "summaryCore": "Core Summary",
+    "summaryInDepth": "In-Depth Summary"
+  },
+  "sections": {
+    "categories": "Categories",
+    "topics": "Topics",
+    "keyTakeaways": "Key Takeaways",
+    "notableQuotes": "Notable Quotes",
+    "faq": "FAQ",
+    "readMore": "Read more",
+    "moreCount": "+{{moreCount}} more"
+  },
+  "actions": {
+    "quiz": "Quiz",
+    "note": "Note",
+    "save": "Save",
+    "favorite": "Favorite",
+    "download": "Download"
+  },
+  "favorites": {
+    "title": "Favorites",
+    "count_one": "{{count}} book",
+    "count_other": "{{count}} books"
+  },
+  "quiz": {
+    "complete": "Quiz complete",
+    "perfectScore": "Perfect score — you mastered this.",
+    "goodScore": "Nice work — retake to push it higher.",
+    "lowScore": "Worth another pass — retake to reinforce it.",
+    "retake": "Retake",
+    "progress": "{{current}} of {{total}}",
+    "next": "Next",
+    "seeResults": "See results"
+  },
+  "share": {
+    "message": "Check out \"{{title}}\" by {{author}} on Wisdom Fruits!"
+  },
+  "errors": {
+    "failedToLoad": "Failed to load book",
+    "quizFailed": "Could not load the quiz. Please try again later.",
+    "contentUnavailable": "This content is not available right now. Please try again later."
+  },
+  "notFound": {
+    "title": "Book not found",
+    "description": "It may have been removed, or the link has expired.",
+    "goBack": "Go Back"
+  },
+  "navFallbackTitle": "Book",
+  "a11y": {
+    "view": "View {{title}}",
+    "elapsed": "Elapsed {{time}}",
+    "booksByAuthor": "Books by {{name}}",
+    "titleByAuthor": "{{title}} by {{author}}",
+    "opensBookDetails": "Opens book details",
+    "listeningTime": "{{duration}} listening time",
+    "percentComplete": "{{percent}}% complete",
+    "seeMore": "See {{moreCount}} more",
+    "contentTapToReadMore": "{{title}} content. Tap to read more.",
+    "tapToReadMore": "{{title}}. Tap to read more.",
+    "availableOffline": " Available offline.",
+    "showMore": "Show more",
+    "shareThisBook": "Share this book",
+    "takeQuiz": "Take the quiz for this book",
+    "addNote": "Add a note",
+    "addToCollection": "Add to a collection",
+    "removeFromFavorites": "Remove from favorites",
+    "addToFavorites": "Add to favorites",
+    "retryDownload": "Retry download",
+    "downloadingPercent": "Downloading {{percent}} percent",
+    "removeOfflineDownload": "Remove offline download",
+    "downloadForOffline": "Download for offline",
+    "retakeQuiz": "Retake quiz",
+    "youScored": "You scored {{correct}} out of {{total}}",
+    "questionProgress": "Question {{current}} of {{total}}, {{correct}} correct",
+    "scoreAnswered": "Score {{correct}} of {{answered}} answered",
+    "optionRevealed": "{{option}}. {{status}}",
+    "correctAnswer": "Correct answer",
+    "incorrect": "Incorrect",
+    "nextQuestion": "Next question"
+  }
+}

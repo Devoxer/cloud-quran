@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "ok": "OK",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "retry": "Réessayer",
+    "tryAgain": "Réessayer",
+    "done": "Terminé",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "remove": "Retirer",
+    "close": "Fermer",
+    "back": "Retour",
+    "seeAll": "Tout voir",
+    "clearAll": "Tout effacer",
+    "dismiss": "Ignorer",
+    "signUp": "S'inscrire",
+    "maybeLater": "Plus tard",
+    "newMix": "Nouveau mix",
+    "manageOfflineBooks": "Gérer les livres hors ligne"
+  },
+  "badge": {
+    "premium": "Premium",
+    "premiumCaps": "PREMIUM"
+  },
+  "search": {
+    "booksPlaceholder": "Rechercher des livres..."
+  },
+  "notFound": {
+    "title": "Oups !",
+    "message": "Cet écran n'existe pas.",
+    "goHome": "Retour à l'accueil !"
+  },
+  "sectionPicker": {
+    "title": "Sélecteur de sections",
+    "sectionsPerBook": "Sections par livre",
+    "hint": "Sélectionnez les sections à lire pour chaque livre",
+    "apply": "Appliquer ({{selected}})"
+  },
+  "sections": {
+    "aboutBook": "À propos du livre",
+    "summaryBrief": "Résumé court",
+    "summaryCore": "Résumé essentiel",
+    "summaryInDepth": "Résumé détaillé",
+    "keyTakeaways": "Points clés",
+    "notableQuotes": "Citations marquantes",
+    "faq": "FAQ"
+  },
+  "durationBadge": {
+    "1min": "1 min",
+    "5min": "5 min",
+    "15min": "15 min"
+  },
+  "moreCount": "+{{moreCount}} autres",
+  "unknownTitle": "Titre inconnu",
+  "unknownAuthor": "Auteur inconnu",
+  "dialogs": {
+    "removeOffline": {
+      "title": "Supprimer le téléchargement ?",
+      "message": "Retirer \"{{title}}\" de cet appareil ? Libère {{size}}. Vous pourrez le retélécharger."
+    },
+    "offlineLimit": {
+      "title": "Limite hors ligne atteinte",
+      "message": "{{saved}}/{{limit}} livres enregistrés hors ligne. Supprimez-en un pour en ajouter un autre."
+    }
+  },
+  "errors": {
+    "network": "Impossible de joindre le serveur. Vérifiez votre connexion."
+  },
+  "signUpPrompt": {
+    "defaultMessage": "Inscrivez-vous pour accéder à cette fonctionnalité"
+  },
+  "relativeTime": {
+    "justNow": "à l'instant",
+    "minutesAgo": "{{minutes}} min",
+    "hoursAgo": "{{hours}} h",
+    "daysAgo": "{{days}} j",
+    "weeksAgo": "{{weeks}} sem."
+  },
+  "byteSize": "{{value}} {{unit}}",
+  "byteUnits": {
+    "b": "o",
+    "kb": "Ko",
+    "mb": "Mo",
+    "gb": "Go"
+  },
+  "placeholder": {
+    "appName": "Cloud Quran",
+    "readingModeSoon": "Le mode lecture arrivera à l’épopée 6."
+  }
+}

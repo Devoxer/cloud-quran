@@ -1,56 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { MushafModeScreen } from '@/features/reading/MushafMode/MushafModeScreen';
-import { ReadingModeScreen } from '@/features/reading/ReadingModeScreen';
-import { animation } from '@/theme/tokens';
-import { useUIStore } from '@/theme/useUIStore';
+import { SPACING } from '@/constants/spacing';
+import { useThemedStyles } from '@/lib/useThemedStyles';
 
-const HALF_FADE = animation.fade / 2; // 125ms
-
-export default function ReadingTab() {
-  const currentMode = useUIStore((s) => s.currentMode);
-  const [renderedMode, setRenderedMode] = useState(currentMode);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (currentMode !== renderedMode) {
-      // Stop any in-progress animation before starting new one
-      fadeAnim.stopAnimation();
-      // Fade out → swap → fade in
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: HALF_FADE,
-        useNativeDriver: true,
-      }).start(() => {
-        setRenderedMode(currentMode);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: HALF_FADE,
-          useNativeDriver: true,
-        }).start();
-      });
-    }
-  }, [currentMode, renderedMode, fadeAnim]);
+/**
+ * Placeholder home (story 5-1).
+ *
+ * The seed deleted wisdom-fruits' `(discover)` group, and this route used to `<Redirect>` into
+ * it — which typechecked only because `.expo/types/router.d.ts` still held the old route union,
+ * and which stopped `expo export` producing a bundle at all once it regenerated.
+ *
+ * Epic 6 replaces this with Reading Mode. It renders rather than redirects on purpose: a route
+ * that redirects somewhere non-existent fails at build time, and a route that renders nothing
+ * hides that the shell is incomplete.
+ */
+export default function Home() {
+  const { t } = useTranslation('common');
+  const styles = useThemedStyles((t) => ({
+    screen: {
+      flex: 1,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      padding: SPACING.lg,
+      backgroundColor: t.colors.background.primary,
+    },
+    title: { color: t.colors.text.primary, marginBottom: SPACING.xs },
+    body: { color: t.colors.text.secondary, textAlign: 'center' as const },
+  }));
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {renderedMode === 'mushaf' ? (
-        <ErrorBoundary screenName="Mushaf">
-          <MushafModeScreen />
-        </ErrorBoundary>
-      ) : (
-        <ErrorBoundary screenName="Reading">
-          <ReadingModeScreen />
-        </ErrorBoundary>
-      )}
-    </Animated.View>
+    <View style={styles.screen}>
+      <Text style={styles.title}>{t('placeholder.appName')}</Text>
+      <Text style={styles.body}>{t('placeholder.readingModeSoon')}</Text>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});

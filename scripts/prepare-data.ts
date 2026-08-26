@@ -1,12 +1,30 @@
-import { Database } from 'bun:sqlite';
+// Builds apps/expo/src/data/quran.db from the tracked Tanzil XML sources.
+// Run: node scripts/prepare-data.ts   (pnpm prepare-data)
+
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { XMLParser } from 'fast-xml-parser';
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
 
-import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata';
+import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata.ts';
 
-const ROOT = resolve(import.meta.dir, '..');
+const ROOT = resolve(import.meta.dirname, '..');
 const DATA_DIR = resolve(ROOT, 'packages/quran-data/data');
+// ⚠️ DECIDED 2026-08-24 (owner): A REBUILD WILL DIRTY quran.db BY EXACTLY ONE BYTE. LEAVE IT.
+//
+// Offset 99 of the SQLite header is the writing library's version stamp. The committed file was
+// built by Bun's SQLite 3.51.0; Node 24 bundles 3.51.3, so the stamp differs by 3 and the file
+// hash changes. Nothing else does — `.dump` output is identical, and regenerating hashes.ts from
+// a Node-built database reproduces the committed baseline byte-for-byte, so `pnpm verify` cannot
+// see the difference at all.
+//
+// The owner chose to accept the permanent diff rather than re-commit the Quran database. So:
+//   • `git status` showing ONLY quran.db modified after `pnpm prepare-data` is EXPECTED.
+//   • Do NOT commit it to "clean up" — that is churn on a hash-verified artifact for one byte.
+//   • Do NOT go looking for a corruption. `pnpm verify` is the authority; if it passes, the text
+//     is intact. `git checkout -- apps/expo/src/data/quran.db` puts the file back.
+// If a rebuild ever changes MORE than that one byte, that IS worth investigating.
+
 const DB_PATH = resolve(ROOT, 'apps/expo/src/data/quran.db');
 
 // Tanzil.net URLs
@@ -36,7 +54,7 @@ async function downloadFile(url: string, filename: string): Promise<string> {
   const filepath = resolve(DATA_DIR, filename);
   if (existsSync(filepath)) {
     console.log(`  Using cached: ${filename}`);
-    return Bun.file(filepath).text();
+    return readFileSync(filepath, 'utf-8');
   }
 
   console.log(`  Downloading: ${filename}...`);
@@ -99,10 +117,17 @@ async function main() {
     unlinkSync(DB_PATH);
   }
 
-  const db = new Database(DB_PATH);
+  const db = new DatabaseSync(DB_PATH);
 
   // Enable WAL mode for better performance during writes
   db.exec('PRAGMA journal_mode = WAL');
+  // Zero out freed page space. Bun's bundled SQLite was compiled with
+  // secure_delete=FAST; Node's is 0, which leaves ~33 KB of stale bytes in the
+  // free space of a shipped, hash-verified file and makes the build
+  // non-deterministic. With this on, the Node build reproduces the Bun-era
+  // quran.db to within a single byte (the SQLite version stamp at header
+  // offset 96-99).
+  db.exec('PRAGMA secure_delete = FAST');
 
   // Create tables
   db.exec(`
@@ -135,13 +160,13 @@ async function main() {
 
   // Prepare insert statements
   const insertVerse = db.prepare(
-    'INSERT INTO verses (surah_number, verse_number, uthmani_text, simple_text) VALUES (?, ?, ?, ?)',
+    'INSERT INTO verses (surah_number, verse_number, uthmani_text, simple_text) VALUES (?, ?, ?, ?)'
   );
   const insertTranslation = db.prepare(
-    'INSERT INTO translations (surah_number, verse_number, language, text) VALUES (?, ?, ?, ?)',
+    'INSERT INTO translations (surah_number, verse_number, language, text) VALUES (?, ?, ?, ?)'
   );
   const insertMetadata = db.prepare(
-    'INSERT INTO surah_metadata (surah_number, name_arabic, name_english, name_transliteration, verse_count, revelation_type, revelation_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO surah_metadata (surah_number, name_arabic, name_english, name_transliteration, verse_count, revelation_type, revelation_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
 
   // Insert data in a transaction for performance
@@ -159,12 +184,12 @@ async function main() {
     // Validate per-sura verse counts match across all three XML sources
     if (simpleAyas.length !== uthmaniAyas.length) {
       throw new Error(
-        `Sura ${surahNum}: Simple has ${simpleAyas.length} ayas but Uthmani has ${uthmaniAyas.length}`,
+        `Sura ${surahNum}: Simple has ${simpleAyas.length} ayas but Uthmani has ${uthmaniAyas.length}`
       );
     }
     if (translationAyas.length !== uthmaniAyas.length) {
       throw new Error(
-        `Sura ${surahNum}: Translation has ${translationAyas.length} ayas but Uthmani has ${uthmaniAyas.length}`,
+        `Sura ${surahNum}: Translation has ${translationAyas.length} ayas but Uthmani has ${uthmaniAyas.length}`
       );
     }
 
@@ -192,7 +217,7 @@ async function main() {
       metadata.nameTransliteration,
       uthmaniAyas.length,
       metadata.revelationType,
-      metadata.order,
+      metadata.order
     );
   }
   db.exec('COMMIT');
@@ -207,28 +232,35 @@ async function main() {
 
   // Step 4: Validate
   console.log('\nStep 4: Validating database...');
-  const validateDb = new Database(DB_PATH, { readonly: true });
+  // ⚠️ camelCase `readOnly`. node:sqlite silently IGNORES unknown constructor
+  // options, so Bun's `{ readonly: true }` would open the freshly built Quran
+  // database read-WRITE without an error.
+  const validateDb = new DatabaseSync(DB_PATH, { readOnly: true });
 
-  const verseCount = validateDb.query('SELECT COUNT(*) as count FROM verses').get() as {
+  const verseCount = validateDb.prepare('SELECT COUNT(*) as count FROM verses').get() as {
     count: number;
   };
   const surahCount = validateDb
-    .query('SELECT COUNT(DISTINCT surah_number) as count FROM verses')
+    .prepare('SELECT COUNT(DISTINCT surah_number) as count FROM verses')
     .get() as { count: number };
-  const translationCount = validateDb.query('SELECT COUNT(*) as count FROM translations').get() as {
+  const translationCount = validateDb
+    .prepare('SELECT COUNT(*) as count FROM translations')
+    .get() as {
     count: number;
   };
-  const metadataCount = validateDb.query('SELECT COUNT(*) as count FROM surah_metadata').get() as {
+  const metadataCount = validateDb
+    .prepare('SELECT COUNT(*) as count FROM surah_metadata')
+    .get() as {
     count: number;
   };
   const emptyUthmani = validateDb
-    .query("SELECT COUNT(*) as count FROM verses WHERE uthmani_text = ''")
+    .prepare("SELECT COUNT(*) as count FROM verses WHERE uthmani_text = ''")
     .get() as { count: number };
   const emptySimple = validateDb
-    .query("SELECT COUNT(*) as count FROM verses WHERE simple_text = ''")
+    .prepare("SELECT COUNT(*) as count FROM verses WHERE simple_text = ''")
     .get() as { count: number };
   const emptyTranslation = validateDb
-    .query("SELECT COUNT(*) as count FROM translations WHERE text = ''")
+    .prepare("SELECT COUNT(*) as count FROM translations WHERE text = ''")
     .get() as { count: number };
 
   validateDb.close();
@@ -253,7 +285,7 @@ async function main() {
     throw new Error(`Validation FAILED:\n${errors.map((e) => `  - ${e}`).join('\n')}`);
   }
 
-  const dbSize = Bun.file(DB_PATH).size;
+  const dbSize = statSync(DB_PATH).size;
   console.log(`\n✅ Database created successfully at: ${DB_PATH}`);
   console.log(`   Size: ${(dbSize / 1024 / 1024).toFixed(2)} MB`);
   console.log(`   Verses: ${verseCount.count} across ${surahCount.count} surahs`);

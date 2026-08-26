@@ -1,0 +1,24 @@
+{
+  "sectionTitle": "Citas",
+  "quoteCount_one": "{{count}} cita",
+  "quoteCount_many": "{{count}} citas",
+  "quoteCount_other": "{{count}} citas",
+  "dailyQuoteTitle": "Cita del día",
+  "segments": {
+    "all": "Todas",
+    "favorites": "Favoritos"
+  },
+  "emptyFavorites": {
+    "title": "Aún no hay favoritos",
+    "description": "Toca el corazón en una cita para guardarla aquí."
+  },
+  "a11y": {
+    "quoteFrom": "Cita de {{title}} de {{author}}",
+    "openBook": "Abrir {{title}} de {{author}}",
+    "addFavorite": "Añadir a favoritos",
+    "removeFavorite": "Quitar de favoritos",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "page": "Página {{pageNumber}}"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "master": {
+    "label": "All Notifications",
+    "description": "Turn reminders on or off for the whole app"
+  },
+  "remindersSection": "Reminders",
+  "reminderTime": {
+    "label": "Reminder time",
+    "description": "When your daily reminder is sent"
+  },
+  "permissionBanner": {
+    "body": "Notifications are turned off in your device settings. Turn them on to receive reminders.",
+    "openSettings": "Open Settings"
+  },
+  "types": {
+    "streakReminders": {
+      "label": "Streak Reminders",
+      "description": "Daily reminders to maintain your learning streak"
+    }
+  },
+  "error": {
+    "loadTitle": "Failed to load settings",
+    "updateMaster": "Failed to update settings. Please try again.",
+    "updatePreference": "Failed to update setting. Please try again.",
+    "requestPermission": "Failed to request permission"
+  },
+  "channels": {
+    "streaks": {
+      "name": "Streak Reminders",
+      "description": "Daily learning streak reminders"
+    }
+  },
+  "reminders": {
+    "streak": {
+      "title": "Keep your streak alive",
+      "body": "Just 5 minutes can make a difference in your day"
+    },
+    "summary": {
+      "title": "Your next summary is ready",
+      "body": "Browse a quick summary to keep learning"
+    }
+  }
+}

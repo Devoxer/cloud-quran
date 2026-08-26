@@ -1,0 +1,43 @@
+{
+  "master": {
+    "label": "Toutes les notifications",
+    "description": "Activez ou désactivez les rappels pour toute l'application"
+  },
+  "remindersSection": "Rappels",
+  "reminderTime": {
+    "label": "Heure du rappel",
+    "description": "Heure à laquelle votre rappel quotidien est envoyé"
+  },
+  "permissionBanner": {
+    "body": "Les notifications sont désactivées dans les réglages de votre appareil. Activez-les pour recevoir vos rappels.",
+    "openSettings": "Ouvrir les réglages"
+  },
+  "types": {
+    "streakReminders": {
+      "label": "Rappels de série",
+      "description": "Rappels quotidiens pour maintenir votre série d'apprentissage"
+    }
+  },
+  "error": {
+    "loadTitle": "Échec du chargement des paramètres",
+    "updateMaster": "Échec de la mise à jour des paramètres. Veuillez réessayer.",
+    "updatePreference": "Échec de la mise à jour du paramètre. Veuillez réessayer.",
+    "requestPermission": "Échec de la demande d'autorisation"
+  },
+  "channels": {
+    "streaks": {
+      "name": "Rappels de série",
+      "description": "Rappels quotidiens de votre série d'apprentissage"
+    }
+  },
+  "reminders": {
+    "streak": {
+      "title": "Maintenez votre série",
+      "body": "Seulement 5 minutes peuvent faire la différence dans votre journée"
+    },
+    "summary": {
+      "title": "Votre prochain résumé est prêt",
+      "body": "Consultez un résumé rapide pour continuer à apprendre"
+    }
+  }
+}

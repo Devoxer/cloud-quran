@@ -1,0 +1,109 @@
+{
+  "sections": {
+    "aboutBook": "About This Book",
+    "summaryBrief": "Brief Summary",
+    "summaryCore": "Core Summary",
+    "summaryInDepth": "In-Depth Summary",
+    "keyTakeaways": "Key Takeaways",
+    "notableQuotes": "Notable Quotes",
+    "faq": "FAQ"
+  },
+  "headerSections": {
+    "aboutBook": "About",
+    "summaryBrief": "Brief",
+    "summaryCore": "Core",
+    "summaryInDepth": "In-Depth",
+    "keyTakeaways": "Takeaways",
+    "notableQuotes": "Quotes",
+    "faq": "FAQ"
+  },
+  "loadingBook": "Loading...",
+  "bookFallback": "book",
+  "noText": {
+    "title": "No text available for this section.",
+    "syncedHint": "Switch to Listen mode for audio playback.",
+    "readHint": "Tap play to start audio playback."
+  },
+  "overflow": {
+    "saveToCollection": "Save to Collection",
+    "share": "Share",
+    "sleepTimer": "Sleep Timer",
+    "set": "Set",
+    "endOfSection": "End of section",
+    "turnOff": "Turn Off",
+    "playbackSpeed": "Playback Speed",
+    "narrationVoice": "Narration Voice",
+    "volume": "Volume",
+    "autoScroll": "Auto-scroll",
+    "highlightText": "Highlight Text",
+    "shuffle": "Shuffle",
+    "repeat": "Repeat",
+    "repeatOne": "Repeat One",
+    "repeatAll": "Repeat All",
+    "on": "On",
+    "off": "Off",
+    "downloading": "Downloading...",
+    "retryDownload": "Retry Download",
+    "removeDownload": "Remove Download",
+    "downloadForOffline": "Download for Offline"
+  },
+  "offline": {
+    "connectionLost": "Connection lost - No offline version available",
+    "licenseExpired": "Reconnect to keep listening to your downloads."
+  },
+  "lockScreen": {
+    "unknownTitle": "Unknown Title",
+    "unknownAuthor": "Unknown Author"
+  },
+  "errors": {
+    "noAudioAvailable": "No audio available to play.",
+    "playFailed": "Failed to play audio",
+    "pauseFailed": "Failed to pause audio",
+    "resumeFailed": "Failed to resume audio",
+    "stopFailed": "Failed to stop audio",
+    "seekFailed": "Failed to seek",
+    "setRateFailed": "Failed to set playback rate",
+    "switchOfflineFailed": "Failed to switch to offline source",
+    "setSpeedFailed": "Failed to set playback speed"
+  },
+  "a11y": {
+    "closePlayer": "Close player",
+    "minimizePlayer": "Minimize player",
+    "moreOptions": "More options",
+    "viewBookDetails": "View {{title}} details",
+    "sleepTimer": "Sleep timer",
+    "sleepTimerActive": "Sleep timer {{label}}. Tap to adjust.",
+    "sleepTimerLabel": "Sleep timer {{label}}",
+    "playbackSpeed": "Playback speed {{speed}}x. Tap to adjust.",
+    "previousInQueue": "Previous in queue",
+    "previousSection": "Previous section",
+    "nextInQueue": "Next in queue",
+    "nextSection": "Next section",
+    "skipBackward15": "Skip backward 15 seconds",
+    "skipForward15": "Skip forward 15 seconds",
+    "pauseAudio": "Pause audio",
+    "playAudio": "Play audio",
+    "pause": "Pause",
+    "play": "Play",
+    "miniPlayer": "Mini player",
+    "nowPlaying": "Now playing: {{title}}. Tap to expand.",
+    "unknownBook": "Unknown",
+    "showPlayerControls": "Show player controls",
+    "showPlayerControlsHint": "Restores the header and playback controls",
+    "setSleepTimer": "Set sleep timer",
+    "sleepEndOfSection": "Sleep at end of section",
+    "turnOffSleepTimer": "Turn off sleep timer",
+    "tapToJump": "Tap to jump to this part",
+    "disableShuffle": "Disable shuffle",
+    "enableShuffle": "Enable shuffle",
+    "repeatModeOff": "Repeat mode: off. Tap to enable repeat all",
+    "repeatModeAll": "Repeat mode: all. Tap to enable repeat one",
+    "repeatModeOne": "Repeat mode: one. Tap to disable repeat"
+  },
+  "sleep": {
+    "end": "End",
+    "hoursMinutes": "{{hours}}h {{minutes}}m",
+    "minutes": "{{minutes}}m",
+    "seconds": "{{seconds}}s"
+  }
+}

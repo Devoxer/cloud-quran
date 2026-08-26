@@ -1,0 +1,34 @@
+{
+  "global": {
+    "title": "Global quiz",
+    "subtitle": "Questions from across the whole library"
+  },
+  "stats": {
+    "bestScore": "Best score",
+    "quizzesTaken": "Quizzes taken",
+    "avgScore": "Avg score"
+  },
+  "byCategory": "By category",
+  "pool": {
+    "empty": {
+      "title": "No quiz available yet",
+      "description": "This quiz doesn't have questions yet. Check back later."
+    }
+  },
+  "book": {
+    "empty": {
+      "title": "No quiz available",
+      "description": "This book doesn't have a quiz yet. Check back later."
+    }
+  },
+  "error": {
+    "quizTitle": "Couldn't load the quiz",
+    "network": "Could not reach the server. Check your connection.",
+    "loadQuiz": "Could not load the quiz. Please try again later.",
+    "loadQuizzes": "Could not load quizzes. Please try again later."
+  },
+  "a11y": {
+    "loadingQuiz": "Loading quiz",
+    "viewStats": "View quiz stats"
+  }
+}

@@ -1,12 +1,12 @@
 // Generates verse-page-map.ts from mushaf-layout JSON files
-// Run: bun run scripts/generate-verse-page-map.ts
+// Run: node scripts/generate-verse-page-map.ts
 
-import { readdirSync, readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-import type { MushafPageLayout } from '../packages/quran-data/src/mushaf-layout';
+import type { MushafPageLayout } from '../packages/quran-data/src/mushaf-layout.ts';
 
-const ROOT = resolve(import.meta.dir, '..');
+const ROOT = resolve(import.meta.dirname, '..');
 const LAYOUT_DIR = resolve(ROOT, 'packages/quran-data/data/mushaf-layout');
 const OUTPUT_PATH = resolve(ROOT, 'packages/quran-data/src/verse-page-map.ts');
 
@@ -125,7 +125,7 @@ function main() {
   lines.push(' * @returns { surah, verse } or { surah: 0, verse: 0 } if invalid page');
   lines.push(' */');
   lines.push(
-    'export function getFirstVerseForPage(page: number): { surah: number; verse: number } {',
+    'export function getFirstVerseForPage(page: number): { surah: number; verse: number } {'
   );
   lines.push('  if (page < 1 || page > TOTAL_PAGES) {');
   lines.push('    return { surah: 0, verse: 0 };');
@@ -142,7 +142,12 @@ function main() {
   console.log(`   Page entries: ${pageFirstVerse.size}`);
 }
 
-main().catch((err) => {
+// `main` is synchronous — call it inside try/catch, not `.catch()` on its
+// (undefined) return value, which threw a TypeError after a successful run and
+// made the script exit 1 on success.
+try {
+  main();
+} catch (err) {
   console.error('❌ Generation failed:', err);
   process.exit(1);
-});
+}

@@ -1,0 +1,56 @@
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  # Cross-origin isolation. app.json's expo-router `headers` covers the dev server and the
+  # Expo-served output; this file is what the DEPLOYED build gets, because apps/expo/wrangler.toml
+  # serves ./dist through Workers `[assets]`. Both must agree or expo-sqlite's wasm build — the
+  # reason metro.config.js pushes `wasm` into assetExts — loses SharedArrayBuffer on web only.
+  Cross-Origin-Embedder-Policy: credentialless
+  Cross-Origin-Opener-Policy: same-origin
+  # CSP Note: 'unsafe-eval' is required for Expo/Metro's JavaScript execution and React Native
+  # Web's runtime. Known limitation of the Expo web build.
+  # See: https://docs.expo.dev/guides/web/#security-considerations
+  #
+  # ⚠️ Story 5-1 seeded wisdom-fruits' CSP verbatim. It allow-listed posthog, paddle, revenuecat
+  # and cloudflareinsights, and pointed media-src/connect-src at content.wisdomfruits.com and
+  # *.wisdomfruits.com. All of that is removed: Cloud Quran ships zero third-party analytics,
+  # advertising or tracking SDKs (PRD NFR8/NFR28) and has no monetization surface. Do not
+  # re-add an origin here because a dependency asked for it — the dependency is the bug.
+  #
+  # ⚠️ story 5-2 removed the last two third-party groups. `connect-src` now names exactly one
+  # off-origin host: opt-in Sentry, the single sanctioned telemetry exception. Removed were —
+  #   • https://*.instantdb.com + wss://*.instantdb.com — the retired sync vendor. Story 5-4 adds
+  #     the Cloudflare worker's own origin in their place, and NOT before the app calls it.
+  #   • the four Apple Sign-In entries (appleid.cdn-apple.com in script-src; appleid.apple.com in
+  #     connect-src, frame-src and form-action). The web sign-in flow they served went with
+  #     InstantDB auth. Story 5-5 re-adds exactly what Better Auth needs — `frame-src` and
+  #     `form-action` included, or "Continue with Apple" is blocked before the popup opens.
+  # ⚠️ STORY 5-5 ADDS THE WORKER'S OWN ORIGIN TO `connect-src`, AND ITS ABSENCE IS INVISIBLE
+  # EVERYWHERE EXCEPT A DEPLOYED BROWSER. Native builds do not run a CSP at all, and a same-origin
+  # dev server never leaves `'self'` — so the app worked on iOS, on Android and against a local
+  # worker while every request from the DEPLOYED web build was refused before it was sent. There is
+  # no request to find in `wrangler tail`, because the browser blocks it: "Refused to connect
+  # because it violates the document's Content Security Policy". The paragraph above predicted this
+  # ("story 5-4 adds the Cloudflare worker's own origin in their place") and it was still missed.
+  #
+  # Apple's origin is deliberately NOT added. The old InstantDB flow used a popup and an iframe,
+  # which is what the removed `frame-src`/`form-action` entries served; Better Auth's web flow is a
+  # top-level redirect out to `appleid.apple.com` and a POST from APPLE'S page back to the worker.
+  # Neither is governed by this document's CSP. Add nothing here until something is actually
+  # refused — an origin nobody needs is a permanent widening.
+  #
+  # `frame-src` is now absent and falls back to `default-src 'self'`. `form-action` does NOT
+  # fall back to default-src in CSP — it is unrestricted when omitted — so it stays written out
+  # explicitly as `form-action 'self'` above. (An earlier draft of this comment claimed both fall
+  # back; that was wrong, and the mistake is the kind that reads as a tightening while leaving a
+  # directive open.)
+  #
+  # media-src carries no audio CDN yet: the recitation bucket is provisioned in story 5-7, and
+  # wisdom-fruits' bucket was deliberately NOT inherited. Epic 7 adds the real origin.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self'; connect-src 'self' https://api.cloudquran.nobleachievements.com https://*.sentry.io; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

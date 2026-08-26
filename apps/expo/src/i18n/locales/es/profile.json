@@ -1,0 +1,191 @@
+{
+  "hero": {
+    "guestName": "Invitado",
+    "guestSubtitle": "Sincroniza tu progreso en todos tus dispositivos",
+    "noName": "Sin nombre",
+    "edit": "Editar",
+    "stats": {
+      "dayStreak": "Racha de días",
+      "hoursSaved": "Horas ahorradas",
+      "finished": "Terminado"
+    }
+  },
+  "appearance": {
+    "label": "Apariencia",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "auto": "Auto"
+  },
+  "palette": {
+    "label": "Color"
+  },
+  "groups": {
+    "preferences": "PREFERENCIAS",
+    "support": "SOPORTE",
+    "about": "ACERCA DE",
+    "account": "CUENTA"
+  },
+  "rows": {
+    "playback": "Reproducción",
+    "language": "Idioma",
+    "notifications": "Notificaciones",
+    "privacy": "Privacidad",
+    "sendFeedback": "Enviar comentarios",
+    "restorePurchases": "Restaurar compras",
+    "signOut": "Cerrar sesión",
+    "privacyPolicy": "Política de privacidad",
+    "termsOfService": "Términos de servicio",
+    "refundPolicy": "Política de reembolsos",
+    "contactUs": "Contáctanos",
+    "version": "Versión",
+    "signIn": "Iniciar sesión",
+    "yourData": "Tus datos"
+  },
+  "signOutDialog": {
+    "title": "Cerrar sesión",
+    "message": "¿Estás seguro de que quieres cerrar sesión?",
+    "confirm": "Cerrar sesión"
+  },
+  "restore": {
+    "restoredTitle": "Compras restauradas",
+    "restoredMessage": "Tu suscripción ha sido restaurada en esta cuenta.",
+    "noneTitle": "No se encontraron compras",
+    "noneMessage": "No había compras previas para restaurar.",
+    "failedTitle": "Error al restaurar"
+  },
+  "editProfile": {
+    "title": "Editar perfil",
+    "nameLabel": "Nombre para mostrar",
+    "namePlaceholder": "Introduce tu nombre",
+    "updateFailed": "No se pudo guardar tu perfil. Inténtalo de nuevo."
+  },
+  "feedback": {
+    "title": "Enviar comentarios",
+    "categoryLabel": "Categoría",
+    "category": {
+      "bug": "Error",
+      "suggestion": "Sugerencia",
+      "general": "General"
+    },
+    "messageLabel": "Mensaje",
+    "messagePlaceholder": "Cuéntanos qué tienes en mente...",
+    "submit": "Enviar",
+    "unavailable": "El envío aún no está disponible. No se envió nada y tu mensaje sigue aquí."
+  },
+  "playback": {
+    "audioGroup": "AUDIO",
+    "readingGroup": "LECTURA",
+    "speed": "Velocidad de reproducción",
+    "voice": "Voz de narración",
+    "deviceFootnote": "Estos ajustes se aplican solo a este dispositivo.",
+    "pauseOnRead": "Pausar audio al leer",
+    "autoScroll": "Desplazamiento automático",
+    "highlight": "Resaltar texto"
+  },
+  "privacySettings": {
+    "crashReportsLabel": "Enviar informes de errores",
+    "crashReportsDescription": "Comparte informes de fallos depurados para que se corrijan los errores.",
+    "crashReportsFootnote": "Los informes se depuran de datos personales. Sin análisis ni anuncios. Activarlo surte efecto al próximo inicio.",
+    "updateError": "No se pudo actualizar el ajuste. Inténtalo de nuevo."
+  },
+  "a11y": {
+    "editProfile": "Editar perfil",
+    "viewStats": "Ver tus estadísticas",
+    "playbackSettings": "Ajustes de reproducción",
+    "privacy": "Ajustes de privacidad",
+    "restorePurchases": "Restaurar compras",
+    "signOut": "Cerrar sesión",
+    "deleteAccount": "Eliminar cuenta",
+    "feedbackMessage": "Mensaje de comentarios",
+    "submitFeedback": "Enviar comentarios",
+    "displayName": "Nombre para mostrar",
+    "displayNameHint": "Introduce tu nombre para mostrar, máximo {{max}} caracteres",
+    "legal": {
+      "privacyPolicyHint": "Abre la política de privacidad en tu navegador",
+      "termsOfServiceHint": "Abre los términos de servicio en tu navegador",
+      "refundPolicyHint": "Abre la política de reembolsos en tu navegador",
+      "contactUsHint": "Abre la página de contacto en tu navegador"
+    },
+    "palette": {
+      "terracotta": "Terracota",
+      "cobalt": "Cobalto",
+      "forest": "Bosque",
+      "plum": "Ciruela",
+      "honey": "Miel",
+      "slate": "Pizarra"
+    },
+    "language": "Idioma",
+    "signIn": "Iniciar sesión",
+    "copyEmail": "Copiar la dirección de correo de tu cuenta",
+    "yourData": "Tus datos",
+    "exportData": "Exportar mis datos",
+    "purgeData": "Borrar mis datos sincronizados",
+    "syncToggle": "Sincronizar con mi cuenta"
+  },
+  "language": {
+    "footnote": "Define menús y narración en este dispositivo. Las descargas mantienen su idioma original.",
+    "switchFailedTitle": "No se pudo cambiar el idioma",
+    "switchFailedMessage": "Tu idioma no ha cambiado. Comprueba tu conexión e inténtalo de nuevo."
+  },
+  "auth": {
+    "intro": "Cloud Quran funciona sin cuenta. Iniciar sesión sincroniza tu posición de lectura, marcadores y preferencias.",
+    "syncDetailsLink": "Qué se sincroniza y quién lo ve",
+    "apple": "Continuar con Apple",
+    "google": "Continuar con Google",
+    "emailLabel": "Correo electrónico",
+    "emailPlaceholder": "tu@ejemplo.com",
+    "sendCode": "Enviarme un código",
+    "sending": "Enviando...",
+    "codeSentTo": "Introduce el código de 6 dígitos enviado a {{email}}.",
+    "useAnotherEmail": "Usar otra dirección",
+    "or": "o",
+    "cancelled": "Se canceló el inicio de sesión. No ha cambiado nada.",
+    "failed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+    "sendFailed": "No pudimos enviar un código a esa dirección. Compruébala e inténtalo de nuevo.",
+    "codeFailed": "Ese código no es correcto o ha caducado. Pide uno nuevo.",
+    "emailInvalid": "Introduce un correo electrónico válido.",
+    "unavailable": "Este método no está disponible en esta versión. Usa tu correo electrónico."
+  },
+  "account": {
+    "signedIn": "Sesión iniciada",
+    "syncFootnote": "Opcional. Iniciar sesión lleva tu posición de lectura, marcadores y preferencias a tus otros dispositivos.",
+    "othersGroup": "APLICACIÓN",
+    "emailPending": "Aún no se ha compartido ninguna dirección: vuelve a iniciar sesión en este dispositivo para compartir una.",
+    "emailFootnote": "La dirección de esta cuenta. Una dirección de relevo privado de Apple funciona igual.",
+    "copyEmail": "Copiar dirección",
+    "emailCopied": "Dirección copiada"
+  },
+  "data": {
+    "syncGroup": "SINCRONIZACIÓN",
+    "syncToggle": "Sincronizar con mi cuenta",
+    "syncToggleDescription": "Lleva tu posición de lectura, marcadores y preferencias a tus otros dispositivos.",
+    "syncFootnote": "Desactivado, este dispositivo no envía ni recibe nada. No se elimina nada. También antes de iniciar sesión.",
+    "syncProcessors": "Cloudflare lo almacena: nunca se vende ni se usa para anuncios. Tu proveedor de acceso ve el acceso, no lo que lees.",
+    "syncToggleFailed": "No hemos podido guardar ese ajuste en este dispositivo. Inténtalo de nuevo.",
+    "group": "TUS DATOS",
+    "footnote": "Solo afectan a los datos sincronizados. Las descargas y los ajustes del dispositivo no se tocan.",
+    "export": "Exportar mis datos",
+    "exportDescription": "Un archivo JSON con todo lo sincronizado con tu cuenta.",
+    "exportFailed": "No hemos podido preparar tu exportación. Revisa tu conexión e inténtalo de nuevo.",
+    "exportUnavailable": "Este dispositivo no tiene dónde guardar el archivo. Prueba a exportar desde la aplicación del móvil.",
+    "purge": "Borrar mis datos sincronizados",
+    "purgeDescription": "Vacía todo lo sincronizado con tu cuenta. Tu cuenta se mantiene.",
+    "purgeDone": "Tus datos sincronizados ya no están. Tu cuenta sigue intacta.",
+    "purgeFailed": "No se ha borrado nada. Revisa tu conexión e inténtalo de nuevo.",
+    "purgeDialog": {
+      "title": "Borrar mis datos sincronizados",
+      "message": "Elimina tus datos sincronizados de todos los dispositivos. Tu cuenta se mantiene. No se puede deshacer.",
+      "confirm": "Borrar datos"
+    },
+    "deleteAccount": "Borrar mi cuenta",
+    "deleteAccountDescription": "Elimina la cuenta, sus datos y tus métodos de acceso. Sigues leyendo como invitado.",
+    "deleteAccountDone": "Tu cuenta y sus datos ya no están. Vuelves a navegar como invitado.",
+    "deleteAccountFailed": "Tu cuenta no se ha borrado y no se ha cambiado nada. Inténtalo de nuevo.",
+    "deleteAccountOffline": "Necesitas conexión para borrar tu cuenta. No se ha cambiado nada.",
+    "deleteAccountDialog": {
+      "title": "Borrar mi cuenta",
+      "message": "Elimina tu cuenta, sus datos sincronizados y tus métodos de acceso. No se puede deshacer.",
+      "confirm": "Borrar cuenta"
+    }
+  }
+}

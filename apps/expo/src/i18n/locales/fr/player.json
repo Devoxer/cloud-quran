@@ -1,0 +1,109 @@
+{
+  "sections": {
+    "aboutBook": "À propos de ce livre",
+    "summaryBrief": "Résumé bref",
+    "summaryCore": "Résumé essentiel",
+    "summaryInDepth": "Résumé détaillé",
+    "keyTakeaways": "Points clés",
+    "notableQuotes": "Citations notables",
+    "faq": "FAQ"
+  },
+  "headerSections": {
+    "aboutBook": "À propos",
+    "summaryBrief": "Bref",
+    "summaryCore": "Essentiel",
+    "summaryInDepth": "Détaillé",
+    "keyTakeaways": "Points clés",
+    "notableQuotes": "Citations",
+    "faq": "FAQ"
+  },
+  "loadingBook": "Chargement...",
+  "bookFallback": "livre",
+  "noText": {
+    "title": "Aucun texte disponible pour cette section.",
+    "syncedHint": "Passez en mode Écoute pour la lecture audio.",
+    "readHint": "Appuyez sur lecture pour lancer l'audio."
+  },
+  "overflow": {
+    "saveToCollection": "Enregistrer dans la collection",
+    "share": "Partager",
+    "sleepTimer": "Minuterie de veille",
+    "set": "Régler",
+    "endOfSection": "Fin de section",
+    "turnOff": "Désactiver",
+    "playbackSpeed": "Vitesse de lecture",
+    "narrationVoice": "Voix de narration",
+    "volume": "Volume",
+    "autoScroll": "Défilement auto",
+    "highlightText": "Surligner le texte",
+    "shuffle": "Aléatoire",
+    "repeat": "Répéter",
+    "repeatOne": "Répéter un seul",
+    "repeatAll": "Tout répéter",
+    "on": "Activé",
+    "off": "Désactivé",
+    "downloading": "Téléchargement...",
+    "retryDownload": "Réessayer le téléchargement",
+    "removeDownload": "Supprimer le téléchargement",
+    "downloadForOffline": "Télécharger pour une utilisation hors ligne"
+  },
+  "offline": {
+    "connectionLost": "Connexion perdue - Aucune version hors ligne disponible",
+    "licenseExpired": "Reconnectez-vous pour continuer à écouter vos téléchargements."
+  },
+  "lockScreen": {
+    "unknownTitle": "Titre inconnu",
+    "unknownAuthor": "Auteur inconnu"
+  },
+  "errors": {
+    "noAudioAvailable": "Aucun audio disponible pour la lecture.",
+    "playFailed": "Échec de la lecture de l'audio",
+    "pauseFailed": "Échec de la mise en pause de l'audio",
+    "resumeFailed": "Échec de la reprise de l'audio",
+    "stopFailed": "Échec de l'arrêt de l'audio",
+    "seekFailed": "Échec de la recherche",
+    "setRateFailed": "Échec du réglage de la vitesse de lecture",
+    "switchOfflineFailed": "Échec du passage à la source hors ligne",
+    "setSpeedFailed": "Échec du réglage de la vitesse de lecture"
+  },
+  "a11y": {
+    "closePlayer": "Fermer le lecteur",
+    "minimizePlayer": "Réduire le lecteur",
+    "moreOptions": "Plus d'options",
+    "viewBookDetails": "Voir les détails de {{title}}",
+    "sleepTimer": "Minuterie de veille",
+    "sleepTimerActive": "Minuterie de veille {{label}}. Appuyez pour ajuster.",
+    "sleepTimerLabel": "Minuterie de veille {{label}}",
+    "playbackSpeed": "Vitesse de lecture {{speed}}x. Appuyez pour ajuster.",
+    "previousInQueue": "Précédent dans la file",
+    "previousSection": "Section précédente",
+    "nextInQueue": "Suivant dans la file",
+    "nextSection": "Section suivante",
+    "skipBackward15": "Reculer de 15 secondes",
+    "skipForward15": "Avancer de 15 secondes",
+    "pauseAudio": "Mettre l'audio en pause",
+    "playAudio": "Lire l'audio",
+    "pause": "Pause",
+    "play": "Lecture",
+    "miniPlayer": "Mini lecteur",
+    "nowPlaying": "Lecture en cours : {{title}}. Appuyez pour agrandir.",
+    "unknownBook": "Inconnu",
+    "showPlayerControls": "Afficher les commandes du lecteur",
+    "showPlayerControlsHint": "Rétablit l'en-tête et les commandes de lecture",
+    "setSleepTimer": "Régler la minuterie de veille",
+    "sleepEndOfSection": "Veille à la fin de la section",
+    "turnOffSleepTimer": "Désactiver la minuterie de veille",
+    "tapToJump": "Appuyez pour accéder à cette partie",
+    "disableShuffle": "Désactiver le mode aléatoire",
+    "enableShuffle": "Activer le mode aléatoire",
+    "repeatModeOff": "Mode répétition : désactivé. Appuyez pour tout répéter",
+    "repeatModeAll": "Mode répétition : tout. Appuyez pour répéter un seul.",
+    "repeatModeOne": "Mode répétition : un seul. Appuyez pour désactiver la répétition"
+  },
+  "sleep": {
+    "end": "Fin",
+    "hoursMinutes": "{{hours}} h {{minutes}} min",
+    "minutes": "{{minutes}} min",
+    "seconds": "{{seconds}} s"
+  }
+}

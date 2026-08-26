@@ -1,0 +1,64 @@
+{
+  "search": {
+    "placeholder": "Search books, authors",
+    "booksHeader": "Books",
+    "authorsLabel": "Authors",
+    "noResults": {
+      "title": "No results for \"{{query}}\"",
+      "description": "Try a different search term"
+    },
+    "error": {
+      "title": "Something went wrong",
+      "message": "We couldn't finish that search."
+    }
+  },
+  "recentSearches": {
+    "title": "Recent Searches",
+    "clear": "Clear"
+  },
+  "filters": {
+    "searchPlaceholder": "Filter categories & topics",
+    "showLess": "Show less",
+    "seeAllCount": "See all ({{total}})"
+  },
+  "sections": {
+    "categories": "Categories",
+    "topics": "Topics",
+    "popular": "Popular",
+    "newAdditions": "New Additions",
+    "shuffle": "Shuffle",
+    "allBooks": "All Books",
+    "filteredBooks": "Filtered Books"
+  },
+  "empty": {
+    "noBooks": {
+      "title": "No books available",
+      "description": "New summaries are added regularly — check back soon."
+    },
+    "noMatches": {
+      "title": "Nothing matches those filters",
+      "description": "Try removing a filter to see more books.",
+      "cta": "Clear filters"
+    }
+  },
+  "errors": {
+    "failedToLoad": "Failed to load books"
+  },
+  "a11y": {
+    "viewMode": {
+      "compact": "Compact view",
+      "grid": "Grid view",
+      "hero": "Immersive view"
+    },
+    "filters": "Filters",
+    "applyFilters": "Apply filters",
+    "showAll": "Show all {{title}}",
+    "showFewer": "Show fewer {{title}}",
+    "clearAllRecent": "Clear all recent searches",
+    "removeRecentSearch": "Remove recent search: {{query}}",
+    "language": "Content language: {{language}}",
+    "languageHint": "Opens language settings",
+    "filtersActive_one": "Filters, {{count}} active",
+    "filtersActive_other": "Filters, {{count}} active"
+  }
+}

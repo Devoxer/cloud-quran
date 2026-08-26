@@ -1,0 +1,43 @@
+{
+  "master": {
+    "label": "Todas las notificaciones",
+    "description": "Activa o desactiva los recordatorios en toda la app"
+  },
+  "remindersSection": "Recordatorios",
+  "reminderTime": {
+    "label": "Hora del recordatorio",
+    "description": "Cuándo se envía tu recordatorio diario"
+  },
+  "permissionBanner": {
+    "body": "Las notificaciones están desactivadas en los ajustes de tu dispositivo. Actívalas para recibir recordatorios.",
+    "openSettings": "Abrir ajustes"
+  },
+  "types": {
+    "streakReminders": {
+      "label": "Recordatorios de racha",
+      "description": "Recordatorios diarios para mantener tu racha de aprendizaje"
+    }
+  },
+  "error": {
+    "loadTitle": "Error al cargar los ajustes",
+    "updateMaster": "Error al actualizar los ajustes. Inténtalo de nuevo.",
+    "updatePreference": "Error al actualizar el ajuste. Inténtalo de nuevo.",
+    "requestPermission": "Error al solicitar permiso"
+  },
+  "channels": {
+    "streaks": {
+      "name": "Recordatorios de racha",
+      "description": "Recordatorios diarios de tu racha de aprendizaje"
+    }
+  },
+  "reminders": {
+    "streak": {
+      "title": "Mantén viva tu racha",
+      "body": "Solo 5 minutos pueden marcar la diferencia en tu día"
+    },
+    "summary": {
+      "title": "Tu próximo resumen está listo",
+      "body": "Echa un vistazo a un resumen rápido para seguir aprendiendo"
+    }
+  }
+}
