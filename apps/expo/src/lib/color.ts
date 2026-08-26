@@ -100,11 +100,18 @@ export function meetsContrast(fg: string, bg: string, min: number): boolean {
  * compositor does, and deliberately NOT gamma-correct, because the platforms blend this way too.
  * An unparseable input returns `base` unchanged (mirroring `withAlpha`'s pass-through fallback);
  * `alpha` is clamped to 0–1.
+ *
+ * ⚠️ THE ALPHA GUARD IS `Number.isFinite`, NOT THE CLAMP — `Math.min`/`Math.max` DO NOT CLAMP
+ * `NaN`. `Math.max(0, NaN)` is `NaN`, `NaN.toString(16)` is the string `'NaN'`, and the result is
+ * the literal `#NaNNaNNaN` — which `contrastRatio` then rejects as unparseable and reports as the
+ * neutral `1`, i.e. "identical colours". A contrast gate fed that reads as PASSING on the pairs
+ * measured against the bare surface and as failing nothing at all. A non-finite alpha therefore
+ * takes the same exit as an unparseable colour: `base`, unchanged.
  */
 export function blendOver(overlay: string, base: string, alpha: number): string {
   const o = hexToRgb(overlay);
   const b = hexToRgb(base);
-  if (!o || !b) return base;
+  if (!o || !b || !Number.isFinite(alpha)) return base;
   const a = Math.min(1, Math.max(0, alpha));
   const mix = (x: number, y: number): string =>
     Math.round(x * a + y * (1 - a))

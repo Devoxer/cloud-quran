@@ -23,7 +23,7 @@ export { default as Colors } from './Colors';
 export { LIBRARY_PREVIEW_CAP } from './library';
 // Navigation
 export type { TabConfig, TabIconMapping } from './navigation';
-export { TABS } from './navigation';
+export { HOME_HREF, TABS } from './navigation';
 // Opacity
 export type { OpacityToken, OpacityValue } from './opacity';
 export { OPACITY } from './opacity';

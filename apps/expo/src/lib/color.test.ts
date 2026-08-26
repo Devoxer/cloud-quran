@@ -7,7 +7,7 @@
  * `.startsWith` throws and crashes any render that composites a tint.
  */
 
-import { contrastRatio, meetsContrast, withAlpha } from './color';
+import { blendOver, contrastRatio, meetsContrast, withAlpha } from './color';
 
 describe('withAlpha', () => {
   it('composites a 6-digit #rrggbb hex at the given alpha', () => {
@@ -37,6 +37,63 @@ describe('withAlpha', () => {
   it('passes through a malformed-length hex unchanged (no partial parse)', () => {
     // 5-char hex isn't #rgb or #rrggbb → must not produce NaN channels.
     expect(withAlpha('#12345', 0.5)).toBe('#12345');
+  });
+});
+
+/**
+ * ⚠️ THIS BLOCK EXISTS BECAUSE `blendOver` HAD NO TEST AND NO RUNTIME CONSUMER — its only caller
+ * is the contrast gate, so it FAILED OPEN in the one place it is load-bearing. Demonstrated:
+ * making the function `return base` unconditionally — the exact shape of its own documented
+ * fallback — left the whole app suite green, because both new navigation-chrome cases degenerated
+ * into duplicates of the header-title and header-tint cases beside them. The 3.07:1 floor the
+ * selected-label prop was added to clear then went unmeasured on all twelve palette × scheme
+ * combinations, with every gate reporting OK.
+ *
+ * So the endpoints are pinned here, and `palettes.contrast.test.ts` additionally asserts that the
+ * composited indicator is NOT `background.secondary` — the anti-vacuity half, which is what turns
+ * a degenerate blend back into a red gate rather than a quieter pass.
+ */
+describe('blendOver', () => {
+  it('returns the base at alpha 0 and the overlay at alpha 1 (the endpoints)', () => {
+    expect(blendOver('#C65D3B', '#F5EFE9', 0)).toBe('#f5efe9');
+    expect(blendOver('#C65D3B', '#F5EFE9', 1)).toBe('#c65d3b');
+  });
+
+  it('composites the real selection indicator — accent at 15% over the bar', () => {
+    // The pair the tab layout actually ships: `withAlpha(accent.primary, 0.15)` over
+    // `background.secondary`, terracotta · light. 198×0.15 + 245×0.85 = 237.95 → 0xee, and so on.
+    expect(blendOver('#C65D3B', '#F5EFE9', 0.15)).toBe('#eed9cf');
+  });
+
+  it('midpoints on the sRGB channel values, not in linear light', () => {
+    // Deliberately NOT gamma-correct: the platforms composite this way, so the gate must too.
+    expect(blendOver('#000000', '#FFFFFF', 0.5)).toBe('#808080');
+  });
+
+  it('expands #rgb shorthand on both inputs', () => {
+    expect(blendOver('#000', '#fff', 1)).toBe('#000000');
+  });
+
+  it('returns the base unchanged for an unparseable input (documented pass-through)', () => {
+    expect(blendOver('rgba(198, 93, 59, 0.15)', '#F5EFE9', 0.15)).toBe('#F5EFE9');
+    expect(blendOver('#C65D3B', 'transparent', 0.15)).toBe('transparent');
+    expect(blendOver(undefined as unknown as string, '#F5EFE9', 0.15)).toBe('#F5EFE9');
+  });
+
+  it('clamps an out-of-range alpha to the 0–1 endpoints', () => {
+    expect(blendOver('#C65D3B', '#F5EFE9', -1)).toBe('#f5efe9');
+    expect(blendOver('#C65D3B', '#F5EFE9', 2)).toBe('#c65d3b');
+  });
+
+  it('refuses a non-finite alpha rather than emitting `#NaNNaNNaN`', () => {
+    // ⚠️ `Math.min`/`Math.max` do NOT clamp NaN, and the malformed hex that falls out is read by
+    // `contrastRatio` as the neutral 1 — a silent "these colours are identical", not an error.
+    for (const alpha of [Number.NaN, Number.POSITIVE_INFINITY, undefined as unknown as number]) {
+      expect(blendOver('#C65D3B', '#F5EFE9', alpha)).toBe('#F5EFE9');
+    }
+    expect(contrastRatio(blendOver('#C65D3B', '#F5EFE9', Number.NaN), '#1A1612')).toBeGreaterThan(
+      1
+    );
   });
 });
 

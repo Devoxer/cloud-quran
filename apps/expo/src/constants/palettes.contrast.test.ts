@@ -108,6 +108,17 @@ describe('navigation chrome contrast (story 6-0)', () => {
       const indicator = blendOver(s.accent.primary, s.background.secondary, INDICATOR_ALPHA);
 
       describe(`${name} · ${scheme}`, () => {
+        it('the indicator is a DISTINCT surface from the bar (blendOver is not a no-op)', () => {
+          // ⚠️ THE ANTI-VACUITY CASE FOR THE HELPER EVERY CASE BELOW STANDS ON. `blendOver` has no
+          // runtime consumer — this file is its only caller — so it fails OPEN: making it
+          // `return base` unconditionally (the shape of its own documented unparseable-input
+          // fallback) collapses the two indicator cases into duplicates of the header-title and
+          // header-tint cases, and every one of them stays green while the 3.07 floor goes
+          // unmeasured. Demonstrated, not supposed. Compared case-insensitively because the
+          // palettes are authored in upper-case hex and `toString(16)` emits lower-case.
+          expect(indicator.toLowerCase()).not.toBe(s.background.secondary.toLowerCase());
+        });
+
         it('unselected tab label on the bar ≥ 4.5 (AA body)', () => {
           expect(contrastRatio(s.text.secondary, s.background.secondary)).toBeGreaterThanOrEqual(
             AA_BODY

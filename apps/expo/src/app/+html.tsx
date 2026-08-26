@@ -81,9 +81,33 @@ body {
 // 1.06:1 on a dark pill, i.e. worse than the `#444444` this replaces. The fallbacks repeat the
 // library's own defaults so a future upstream rename degrades to today's behaviour rather than to
 // `invalid at computed-value time`.
+//
+// ⚠️ story 6-0's THIRD RULE — the `border` — IS A REGRESSION FIX FOR STORY 6-0 ITSELF, and it is
+// the price of theming the pill at all. Widening the SURFACE group to web
+// (`(tabs)/_layout.tsx`) replaced the library's hardcoded `#272727` with `background.secondary`.
+// That is correct — the old grey ignored every palette — but `#272727` was also carrying the pill
+// visually: it measured ~14:1 against a light page, and `.navigationMenuRoot` ships NO border and
+// NO shadow. `background.secondary` against `background.primary` measures **1.11–1.24:1** across
+// all six palettes × both schemes (terracotta·light 1.11), so the themed pill is very nearly
+// invisible against the page it floats over. A surface that quiet needs an edge.
+//
+// The edge takes the LABEL colour for the same reason the outline does: `--expo-router-tabs-text-
+// color` is `labelStyle.default.color`, i.e. `text.secondary`, which is already held at ≥4.5:1
+// against BOTH `background.primary` and `background.secondary` in `palettes.contrast.test.ts` —
+// comfortably past the 3:1 WCAG 1.4.11 asks of a non-text boundary, in every palette × scheme, and
+// it cannot drift from the labels inside the pill because it IS their value. `box-sizing:
+// border-box` is already on the rule, so the pill stays 40px tall.
+//
+// ⚠️ THIS FILE'S DEPENDENCE ON UPSTREAM IS INVISIBLE FROM UPSTREAM. Three custom-property names
+// and the `[role="tablist"][aria-label="Main"]` selector are all read out of
+// `expo-router/assets/native-tabs.module.css` and `NativeTabsView.web.js`; a rename there degrades
+// every rule below to its hardcoded fallback with no error anywhere. `__tests__/app/
+// web-nav-pill.test.ts` reads both this file and the installed stylesheet and fails when they stop
+// agreeing.
 const webNavPillPolish = `
 [role="tablist"][aria-label="Main"] {
   top: 12px;
+  border: 1px solid var(--expo-router-tabs-text-color, #8b8b8b);
   --expo-router-tabs-tab-outline-color: var(--expo-router-tabs-text-color, #8b8b8b);
 }
 [role="tablist"][aria-label="Main"] [data-state="active"] {

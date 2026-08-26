@@ -11,7 +11,6 @@ import {
   SpacingValue,
   screenContentStyle,
   spacing,
-  TAB_BAR_HEIGHT,
 } from './spacing';
 
 describe('SPACING', () => {
@@ -110,24 +109,6 @@ describe('screenContentStyle() — wide-screen cap helper (Story 23.25)', () => 
     const s = screenContentStyle('main');
     expect(s.width).toBe('100%');
     expect(s.alignSelf).toBe('center');
-  });
-});
-
-describe('TAB_BAR_HEIGHT (story 6-0)', () => {
-  // jest-expo runs the iPhone iOS preset (`Platform.OS === 'ios'`, `Platform.isPad` falsy), so the
-  // constant resolves to its iPhone branch at import. The Android (80dp), iPad (0 on iPadOS 18+,
-  // 49 below it) and web (0) branches are not import-time-observable under this preset — resetting
-  // modules and mocking `Platform` to read them back is the pattern the sibling blocks deliberately
-  // avoided — so they are exercised by the platform smokes and argued in the docblock's provenance.
-  //
-  // ⚠️ The constant is a bare NUMBER rather than a hook on purpose: `useBottomTabBarHeight()`
-  // belongs to the JS bottom-tabs navigator and THROWS under `<NativeTabs>`, which mounts no
-  // `BottomTabBarHeightContext`. That reasoning lives in the docblock, where it is read; asserting
-  // `typeof … === 'number'` here pinned nothing the case below does not already pin.
-  it('is the 49pt iOS UITabBar height — NOT 84, which double-counts the home indicator', () => {
-    // 84 ≈ 49 + ~34: the previous value summed the home indicator that `insets.bottom` already
-    // supplies, so a consumer adding `TAB_BAR_HEIGHT + insets.bottom` floated ~34pt too high.
-    expect(TAB_BAR_HEIGHT).toBe(49);
   });
 });
 

@@ -87,3 +87,20 @@ export const TABS: TabConfig[] = [
     },
   },
 ];
+
+/**
+ * Where "open the app" goes — the first tab's home, read from the table above rather than written
+ * anywhere as a path (story 6-0).
+ *
+ * ⚠️ THREE FILES NEED THIS ANSWER AND THEY MUST NOT EACH HOLD THEIR OWN COPY. `app/index.tsx` (the
+ * `/` front door), `app/read.tsx` (the immersive route's no-history exit) and `app/+not-found.tsx`
+ * ("go home") all mean the same destination; when the front door alone knew it, the other two
+ * spelled it `'/'` and inherited the front door's behaviour — including popping the ROOT stack
+ * while leaving the tab stack drilled into a pushed settings screen, so "go home" landed on
+ * whatever screen the reader had been on.
+ *
+ * `TABS` is a non-empty literal, but its TYPE is not, so the fallback keeps a future empty table
+ * pointing at a real route rather than at `undefined`. When epic 6.1 adds the Read tab this
+ * follows it automatically — that is the whole reason it reads the table.
+ */
+export const HOME_HREF: TabRoute = TABS[0]?.href ?? '/account';

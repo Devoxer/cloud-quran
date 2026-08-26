@@ -62,59 +62,26 @@ export type LayoutMaxWidthToken = keyof typeof LAYOUT.maxWidth;
 export type LayoutMaxWidthValue = (typeof LAYOUT.maxWidth)[LayoutMaxWidthToken];
 
 /**
- * iPadOS major version from which `<NativeTabs sidebarAdaptable>` actually moves the tabs off the
- * bottom. The prop is documented "iOS 18+"; the app's deployment target is **16.4**
- * (`app.json` → `expo-build-properties`), so iPadOS 16.4–17 is a real, shipping window in which an
- * iPad still renders a BOTTOM bar.
- */
-const IPAD_TOP_TABS_MIN_MAJOR = 18;
-
-/** True only where the tabs genuinely leave the bottom edge: an iPad on iPadOS 18 or later. */
-const HAS_TOP_OR_SIDEBAR_TABS =
-  Platform.OS === 'ios' &&
-  Platform.isPad &&
-  Number.parseInt(String(Platform.Version), 10) >= IPAD_TOP_TABS_MIN_MAJOR;
-
-/**
- * The height of the native tab bar's own chrome, in points/dp — the ONE number any screen that
- * must sit above it consumes, as `TAB_BAR_HEIGHT + insets.bottom`.
- *
- * ⚠️ IT IS A CONSTANT AND NOT A HOOK, AND THAT IS THE WHOLE POINT. `useBottomTabBarHeight()` is
- * expo-router's re-export of the **JS bottom-tabs navigator's** hook: it reads
- * `BottomTabBarHeightContext`, which only that navigator's `BottomTabView` mounts, and it THROWS
- * where no provider exists. This app renders `<NativeTabs>`, which mounts none — so the obvious
- * call is a crash, not a wrong number. wisdom-fruits ships `NativeTabs` in production and has zero
- * call sites for that hook.
- *
- * Every value below was paid for on a device, and each replaced a plausible wrong one:
- * - **iOS 49.** iOS 18–25 UITabBar visible content is 49pt, and `insets.bottom` already supplies
- *   the home indicator. A previous `ios: 84` double-counted it (84 ≈ 49 + ~34) and floated the
- *   element far too high.
- * - **Android 80.** Material-3 `NavigationBar` — what `NativeTabs` renders there — is 80dp, NOT
- *   Material-2's 56dp. At 56 the element overlapped the bar in an Android smoke.
- * - **iPad 0 — but only on iPadOS 18+.** `sidebarAdaptable` moves the tabs to the TOP or a sidebar
- *   there, so there is no bottom bar to clear, and reserving 49pt anyway floated the element too
- *   high in an owner iPad smoke. ⚠️ The prop needs iPadOS **18**, and this app deploys to **16.4**:
- *   on iPadOS 16.4–17 the tabs are still at the bottom, so a flat `Platform.isPad → 0` would
- *   UNDER-reserve there and cover the last verse — the exact defect this constant exists to
- *   prevent, reintroduced by the fix for its sibling. The version check is why
- *   `HAS_TOP_OR_SIDEBAR_TABS` exists rather than a bare `Platform.isPad`.
- * - **Web 0**, for the same reason as the modern iPad: its chrome is a top pill.
- *
- * ⚠️ story 6-0 shipped this WITHOUT a consumer, and says so rather than implying otherwise. The
- * first screen that reserves space above the bar is story 6.1's reading surface. That is a real
- * gap, and it is the exact shape of the `tab-bar-covers-last-verse` defect: `MINI_PLAYER_HEIGHT`
- * was exported and correct and had zero consumers, and the last verse was still covered. An
- * exported number is not a fix — it is only the end of the argument about which number to use.
+ * ⚠️ THE TAB-BAR OFFSET IS NOT HERE ANY MORE — it is `useTabBarHeight()` in
+ * `lib/useTabBarHeight.ts`, and it stopped being a constant in story 6-0's review round.
+ * `TAB_BAR_HEIGHT` answered 0 on any iPad running iPadOS 18+, because `<NativeTabs
+ * sidebarAdaptable>` moves the tabs to the top or a sidebar there — but only at REGULAR horizontal
+ * width. In Slide Over and in a compact-width Split View the bottom bar comes back, and no
+ * module-scope value can see that: the width changes at runtime when the reader resizes the split.
+ * The numbers, and the device smoke behind each, moved with it.
  *
  * ⚠️ story 6-0 also deleted `FLOATING_PILL_CLEARANCE`, which reserved 88px at the bottom of five
- * profile screens to clear a floating mini-player that went with the audio feature in story 5-1 —
- * the call sites were live, the reason was not, and on web and iPad (its only non-zero branches)
- * nothing sits at the bottom at all.
+ * profile screens (`account`, `data`, `feedback`, `privacy-settings`, `sign-in`) to clear the
+ * floating mini-player pill. ⚠️ ITS DELETION RATIONALE WAS FIRST WRITTEN DOWN WRONG, as "on web and
+ * iPad nothing sits at the bottom at all" — the flat `Platform.isPad` premise `useTabBarHeight`
+ * rejects at length, and an inversion of the constant's own reason. Web and iPad were its only
+ * NON-zero branches precisely because something DID sit at the bottom there, unreserved: on
+ * iPhone and Android the native bar auto-insets the content and the pill floats above it, while on
+ * web and iPad nothing insets, so the 88px had to be reserved by hand. What actually made the
+ * constant dead is simpler and platform-independent: the mini-player it cleared went with the audio
+ * feature in story 5-1, so all five call sites were reserving space for an element that no longer
+ * exists. Epic 7 rebuilds the player; it does not inherit this constant.
  */
-export const TAB_BAR_HEIGHT = HAS_TOP_OR_SIDEBAR_TABS
-  ? 0
-  : (Platform.select({ ios: 49, android: 80, default: 0 }) ?? 0);
 
 /**
  * Cross-platform TOP breathing room below the header for a scroll screen whose content otherwise

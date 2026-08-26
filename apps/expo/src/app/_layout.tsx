@@ -243,7 +243,12 @@ function RootLayoutNav() {
     <NavigationThemeProvider value={navigationTheme}>
       <Stack>
         {/* story 6-0: `/` is a redirect into the tab shell (see `app/index.tsx`). Registered with
-            no header so the hop is invisible — it renders a `<Redirect>` and nothing else. */}
+            no header so the hop is invisible. ⚠️ It does NOT render a `<Redirect>`, and an earlier
+            version of this comment said it did — `<Redirect>` is a `router.replace` in a focus
+            effect and leaves the destination with `canGoBack() === true`, i.e. a phantom back
+            chevron on the app's most common entry. The screen renders NOTHING and pops the root
+            stack from a mount effect; the file's own docblock lists the three measured-wrong
+            spellings, and this one was among them. */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         {/* ⚠️ story 6-0: THE IMMERSIVE SLOT. Two independent properties, and they do DIFFERENT

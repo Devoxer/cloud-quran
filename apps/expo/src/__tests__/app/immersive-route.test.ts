@@ -42,6 +42,48 @@ function code(...segments: string[]): string {
 }
 
 /**
+ * Every `<Stack.Screen …>` OPENING TAG in the source, comments already gone.
+ *
+ * ⚠️ THE TAG BOUNDARY IS SCANNED, NOT PATTERN-MATCHED, AND THE PATTERN THAT USED TO BE HERE WAS
+ * WRONG IN A WAY THAT GREW WITH THE FILE. `/<Stack\.Screen\b[\s\S]*?\/>/` matches SELF-CLOSING
+ * tags only, so one `<Stack.Screen …>…</Stack.Screen>` earlier in the layout — a perfectly normal
+ * shape, and the one a screen with children takes — makes the lazy scan run past it to the NEXT
+ * self-closing tag's `/>`. The capture then spans two screens, carries two `name=` attributes, and
+ * `options={{` finds the FIRST one, which belongs to the other screen. Every assertion below would
+ * then be measuring a route nobody asked about, and passing.
+ *
+ * So: find each `<Stack.Screen`, then walk to the first `>` that is outside a string and outside a
+ * `{…}` expression. That terminates a self-closing tag and a container tag identically, and it
+ * cannot be fooled by a `>` inside a JSX expression (`options={{ x: a > b }}`).
+ */
+function screenTags(source: string): string[] {
+  const tags: string[] = [];
+  const re = /<Stack\.Screen\b/g;
+  let match: RegExpExecArray | null = re.exec(source);
+  while (match !== null) {
+    let depth = 0;
+    let quote: string | null = null;
+    for (let i = match.index + match[0].length; i < source.length; i++) {
+      const ch = source[i];
+      if (quote) {
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') quote = ch;
+      else if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      else if (ch === '>' && depth === 0) {
+        tags.push(source.slice(match.index, i + 1));
+        re.lastIndex = i + 1;
+        break;
+      }
+    }
+    match = re.exec(source);
+  }
+  return tags;
+}
+
+/**
  * The `options={{ … }}` object of ONE `<Stack.Screen name="…">`, comments already gone.
  *
  * ⚠️ TAG FIRST, THEN THE OPTIONS INSIDE IT — both halves close a real hole. Searching forward from
@@ -52,9 +94,7 @@ function code(...segments: string[]): string {
  * Brace-count instead of pattern-match.
  */
 function screenOptions(source: string, name: string): string {
-  const tag = [...source.matchAll(/<Stack\.Screen\b[\s\S]*?\/>/g)]
-    .map((m) => m[0])
-    .find((t) => t.includes(`name="${name}"`));
+  const tag = screenTags(source).find((t) => t.includes(`name="${name}"`));
   expect(tag).toBeDefined();
   const text = tag as string;
   const open = text.indexOf('options={{');
@@ -86,6 +126,16 @@ describe('the immersive route is a ROOT SIBLING of (tabs)', () => {
     const root = code('_layout.tsx');
     expect(root).toMatch(new RegExp(`name="${IMMERSIVE_ROUTE}"`));
     expect(root).toMatch(/name="\(tabs\)"/);
+  });
+
+  it('and the options below are read from THAT registration alone', () => {
+    // The self-check for `screenTags` — see its docblock. A tag that spans two `<Stack.Screen>`s
+    // carries two `name=` attributes and hands every case below the wrong screen's options, while
+    // passing. Anti-vacuity: there must be more than one registration for the scan to get wrong.
+    const tags = screenTags(code('_layout.tsx'));
+    expect(tags.length).toBeGreaterThan(1);
+    const tag = tags.find((t) => t.includes(`name="${IMMERSIVE_ROUTE}"`)) ?? '';
+    expect(tag.match(/name="/g)).toHaveLength(1);
   });
 });
 

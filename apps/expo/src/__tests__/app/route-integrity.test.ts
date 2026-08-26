@@ -122,8 +122,12 @@ describe('route tree integrity', () => {
     // `(tabs)` deleted the route that served `/`, and nothing said so: tsc had no complaint (the
     // generated route union is not part of `pnpm typecheck` — see this file's header), every
     // suite stayed green, and the app served `+not-found` at its own front door on web while a
-    // native cold launch, which also starts at `/`, landed there too. `+not-found.tsx` even links
-    // "go home" to `/`. One line, over the URL set this file already builds.
+    // native cold launch, which also starts at `/`, landed there too. One line, over the URL set
+    // this file already builds. ⚠️ `+not-found.tsx` used to link "go home" to `/` and no longer
+    // does — it goes to `HOME_HREF` directly, because bouncing through the redirect popped the
+    // ROOT stack and left the tab stack on whatever pushed screen the reader had been on. That
+    // removes the LAST in-app link to `/` and makes this case the only thing standing between a
+    // future refactor and a 404 at the app's own front door.
     expect(new Set(routeUrls(APP_DIR, ''))).toContain('/');
   });
 
@@ -138,11 +142,20 @@ describe('route tree integrity', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
     expect(redirect).not.toMatch(/['"`]\/read['"`]/);
-    // …and the target it DOES use resolves to a real URL. It is read from `TABS`, so this also
-    // fails if 6.1 repoints the tab table at a route that does not exist yet.
+    // …and the target it DOES use resolves to a real URL. ⚠️ THE DERIVATION MOVED IN STORY 6-0's
+    // REVIEW ROUND, so this no longer looks for `TABS[0]` in this file: three screens needed the
+    // same answer — the front door, the immersive route's no-history exit and `+not-found`'s "go
+    // home" — and each had grown its own spelling, which is how "go home" came to mean "pop the
+    // root stack and leave the tab stack drilled into settings". It is one exported `HOME_HREF`
+    // now, still read from the tab table rather than written as a path.
+    expect(redirect).toMatch(/HOME_HREF/);
+    const navigation = readFileSync(
+      join(__dirname, '..', '..', 'constants', 'navigation.ts'),
+      'utf8'
+    );
+    expect(navigation).toMatch(/HOME_HREF[^=]*=\s*TABS\[0\]/);
     const urls = new Set(routeUrls(APP_DIR, ''));
     for (const tab of TABS) expect(urls).toContain(tab.href);
-    expect(redirect).toMatch(/TABS\[0\]/);
   });
 
   it('keeps test files out of the route tree', () => {

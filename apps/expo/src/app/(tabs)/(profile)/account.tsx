@@ -160,6 +160,21 @@ export default function AccountScreen() {
       </SettingsGroup>
 
       <SettingsGroup label={t('profile:account.othersGroup')} testID="app-section">
+        {/* ⚠️ TEMPORARY, AND STORY 6.1 DELETES IT. `app/read.tsx` is a root-level route with no
+            in-app entry point — no `Link`, no `push`, no `href` anywhere — because the Read tab
+            that will own it arrives with 6.1. Without this row the immersive route is reachable
+            only by typing a URL, and two of the story's own acceptance rows ("opened from a tab as
+            a root modal", "returns to the tab, chrome restored, tab state intact") cannot be
+            exercised at all: a typed URL is a different history and leaves no tab state to
+            preserve. A smoke that cannot be run is not a smoke that passed. Remove this row when
+            the Read tab lands — the reader's real door is a tab, not a settings entry. */}
+        <SettingsRow
+          icon="book-outline"
+          label={t('profile:rows.readingMode')}
+          trailing="chevron"
+          onPress={() => router.push('/read')}
+          testID="reading-mode-row"
+        />
         <SettingsRow
           icon="lock-closed-outline"
           label={t('profile:rows.privacy')}
