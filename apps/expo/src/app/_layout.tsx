@@ -4,12 +4,13 @@ import { useFonts } from 'expo-font';
 import { ThemeProvider as NavigationThemeProvider, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-reanimated';
 
 import { AlertHost } from '@/components/ui/AlertHost';
+import { UTHMANI_FONT_FAMILY_IOS } from '@/constants/arabic';
 import { initI18n } from '@/i18n';
 import { ensureAnonymousSession, useSession } from '@/lib/auth';
 import { validateConfig } from '@/lib/config';
@@ -80,6 +81,26 @@ SplashScreen.preventAutoHideAsync();
 function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../../assets/fonts/SpaceMono-Regular.ttf'),
+    // ⚠️ story 6-1: THE UTHMANI FACE, ON WEB ONLY, AND THE PLATFORM GUARD IS THE WHOLE POINT.
+    // The face is installed by the **expo-font config plugin** (`app.json`), which is NATIVE-ONLY
+    // — it edits the Xcode target's `UIAppFonts` and copies into Android's assets, and does
+    // nothing at all for `expo export --platform web`. Without this line the face is silently
+    // absent on web, which is the platform the Electron desktop shell wraps: Arabic still renders,
+    // in a fallback face, with no error anywhere. (`epic-1-retro-2026-03-20.md:118` recorded the
+    // trap; nothing in the tree acted on it until a screen actually set the family.)
+    //
+    // ⚠️ NATIVE MUST NOT TAKE THIS BRANCH. `useFonts` gates the first frame (`if (!loaded) return
+    // null` below), so adding a ~1 MB Arabic face to the boot wait would slow every native cold
+    // launch to load something the plugin has already installed. On web the bundle is fetched
+    // over HTTP anyway and the wait is the honest cost of having the face at all.
+    //
+    // The KEY is the family name a style asks for, which is why it is the shared constant rather
+    // than a literal — see `constants/arabic.ts` for why that name differs per platform.
+    ...(Platform.OS === 'web'
+      ? {
+          [UTHMANI_FONT_FAMILY_IOS]: require('../../assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf'),
+        }
+      : {}),
   });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.

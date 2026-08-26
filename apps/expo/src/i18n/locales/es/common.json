@@ -84,8 +84,10 @@
     "mb": "MB",
     "gb": "GB"
   },
-  "placeholder": {
-    "appName": "Cloud Quran",
-    "readingModeSoon": "El modo de lectura llegará en el épico 6."
+  "reading": {
+    "nextSurah": "Siguiente: {{name}}",
+    "footnote": "Página {{page}} · {{surah}}:{{verse}}",
+    "unreadableTitle": "No se pudo abrir el texto del Corán",
+    "unreadableBody": "El texto incluido falta o no se puede leer en este dispositivo."
   }
 }

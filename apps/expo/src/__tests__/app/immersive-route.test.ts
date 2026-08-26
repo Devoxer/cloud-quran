@@ -34,6 +34,21 @@ const APP_DIR = join(__dirname, '..', '..', 'app');
 /** The route file's basename, without extension — the name the root layout registers. */
 const IMMERSIVE_ROUTE = 'read';
 
+/**
+ * Where the reader's chrome — and therefore the route's only exit — lives since story 6-1.
+ * `existsSync` is asserted below rather than assumed: a moved or renamed module would otherwise
+ * make `readFileSync` throw with a filesystem error instead of the reason.
+ */
+const CHROME_SOURCE = join(
+  __dirname,
+  '..',
+  '..',
+  'features',
+  'reading',
+  'components',
+  'ReadingChrome.tsx'
+);
+
 /** Comment-stripped source, so a docblock that NAMES an option is not read as setting one. */
 function code(...segments: string[]): string {
   return readFileSync(join(APP_DIR, ...segments), 'utf8')
@@ -113,6 +128,9 @@ function screenOptions(source: string, name: string): string {
 describe('the immersive route is a ROOT SIBLING of (tabs)', () => {
   it('lives at the root of the route tree', () => {
     expect(existsSync(join(APP_DIR, `${IMMERSIVE_ROUTE}.tsx`))).toBe(true);
+    // The chrome module the exit cases below read. Fail-closed: without this a rename turns those
+    // cases into an ENOENT whose message says nothing about the door.
+    expect(existsSync(CHROME_SOURCE)).toBe(true);
   });
 
   it('does NOT live inside the tab group', () => {
@@ -181,12 +199,38 @@ describe('…presented as a modal, with no header', () => {
 
   it('gives the reader a way out, and it lives in CONTENT', () => {
     // `fullScreenModal` has no dismiss gesture, and web never had one — a reader who arrives by
-    // URL or deep link would otherwise be stuck with no way out on any platform. The empty room is
-    // this story's point; a room with no door is not. `canGoBack()` is checked because a direct
-    // load has no history to pop.
-    const source = code(`${IMMERSIVE_ROUTE}.tsx`);
-    expect(source).toMatch(/canGoBack\(\)/);
-    expect(source).toMatch(/accessibilityRole="button"/);
+    // URL or deep link would otherwise be stuck with no way out on any platform. A room with no
+    // door is not an acceptable empty room. `canGoBack()` is checked because a direct load has no
+    // history to pop.
+    //
+    // ⚠️ THE DOOR MOVED IN STORY 6-1, AND THE GREP MOVED WITH IT — READ WHY BEFORE TRUSTING IT.
+    // The placeholder's close control lived in `read.tsx`; the real reader's chrome owns it now,
+    // so this scans the CHROME's source instead. That is still a grep, and the header of
+    // `read-screen.test.tsx` records exactly how little a grep proves here: story 6-0's third
+    // review pass changed the no-history branch to `router.replace('/read')` — a mirror, not a
+    // door — and both substrings still matched, 7 suites and 91 tests stayed green. So this case
+    // is the WEAKER of the two checks and is kept only to pin the door's ADDRESS. What actually
+    // presses it, and asserts both `canGoBack()` answers and that the target is never `/read`,
+    // is `features/reading/components/ReadingChrome.test.tsx` and `read-screen.test.tsx`.
+    const chrome = readFileSync(CHROME_SOURCE, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(chrome).toMatch(/canGoBack\(\)/);
+    expect(chrome).toMatch(/accessibilityRole="button"/);
+    // …and it is genuinely part of THIS route's tree, not an orphan module some other screen owns.
+    expect(code(`${IMMERSIVE_ROUTE}.tsx`)).toMatch(/ReadingChrome/);
+  });
+
+  it('installs no control into a native header slot from the CHROME either', () => {
+    // The temptation followed the door. `lint:header-controls` owns this tree-wide; asserted here
+    // because the chrome is now where a close button would be written, and both wisdom-fruits
+    // root modals put theirs in a native header slot.
+    const chrome = readFileSync(CHROME_SOURCE, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(chrome).not.toMatch(/header(?:Left|Right)/);
+    expect(chrome).not.toMatch(/setOptions/);
+    expect(chrome).not.toMatch(/headerShown/);
   });
 });
 

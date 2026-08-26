@@ -9,6 +9,15 @@
 // Animation
 export type { DurationToken, DurationValue, EasingToken, EasingValue } from './animation';
 export { DURATIONS, EASINGS } from './animation';
+// Arabic rendering — the Uthmani face + its own scale (story 6-1)
+export {
+  ARABIC_FONT_SIZE,
+  ARABIC_LINE_HEIGHT,
+  clampArabicFontSize,
+  UTHMANI_FONT_FAMILY,
+  UTHMANI_FONT_FAMILY_ANDROID,
+  UTHMANI_FONT_FAMILY_IOS,
+} from './arabic';
 // Colors
 export type {
   AccentColor,

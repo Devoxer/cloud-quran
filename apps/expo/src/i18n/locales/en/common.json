@@ -84,8 +84,10 @@
     "mb": "MB",
     "gb": "GB"
   },
-  "placeholder": {
-    "appName": "Cloud Quran",
-    "readingModeSoon": "Reading Mode arrives in epic 6."
+  "reading": {
+    "nextSurah": "Next: {{name}}",
+    "footnote": "Page {{page}} · {{surah}}:{{verse}}",
+    "unreadableTitle": "The Quran text could not be opened",
+    "unreadableBody": "The bundled text is missing or unreadable on this device."
   }
 }
