@@ -60,7 +60,32 @@ body {
 // top ≈ 12px). The wholesale web-chrome rework (suppress/restyle the header, sidebar) is
 // the gated sidebar follow-up — NOT done here. Tune this one value in the web smoke if the
 // header height differs.
+//
+// ⚠️ story 6-0 added the SECOND AND THIRD rules, and they are an accessibility fix rather than
+// polish. The library CSS gives the keyboard focus ring `outline-color:
+// var(--expo-router-tabs-tab-outline-color, #444444)`, and NOTHING in the app can reach that
+// variable — `<NativeTabs>` exposes no prop that maps to it — so the hardcoded `#444444` shipped on
+// every palette. Against our dark bars that is roughly 1.6:1: a keyboard user could not see which
+// tab they were on.
+//
+// This file is static CSS rendered before hydration and has no access to the RN theme, so no token
+// can be written here. It does not need to be: expo-router already publishes the LABEL colours as
+// custom properties on the tabs root (from `labelStyle` — see `(tabs)/_layout.tsx`), and a custom
+// property may be defined in terms of another. Pointing the outline at those makes the ring take
+// the same colour as the label beside it, in every palette x scheme, and it cannot drift from that
+// label because it IS that label's value. Both are already held against the bar in
+// `palettes.contrast.test.ts`.
+//
+// ⚠️ NOT `currentColor`, which was the first attempt and measured BLACK. The library styles the
+// label on an inner `<span>`, so the trigger's own `color` is whatever `<body>` inherits — about
+// 1.06:1 on a dark pill, i.e. worse than the `#444444` this replaces. The fallbacks repeat the
+// library's own defaults so a future upstream rename degrades to today's behaviour rather than to
+// `invalid at computed-value time`.
 const webNavPillPolish = `
 [role="tablist"][aria-label="Main"] {
   top: 12px;
+  --expo-router-tabs-tab-outline-color: var(--expo-router-tabs-text-color, #8b8b8b);
+}
+[role="tablist"][aria-label="Main"] [data-state="active"] {
+  --expo-router-tabs-tab-outline-color: var(--expo-router-tabs-active-text-color, #ffffff);
 }`;

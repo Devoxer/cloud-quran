@@ -1,7 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 // SDK 56: expo-router no longer depends on react-navigation; it re-exports ThemeProvider.
-// The Theme type is the global `ReactNavigation.Theme` (expo-router augments that namespace).
 import { ThemeProvider as NavigationThemeProvider, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useRef } from 'react';
@@ -11,12 +10,12 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-reanimated';
 
 import { AlertHost } from '@/components/ui/AlertHost';
-import { ColorTokens } from '@/constants/Colors';
 import { initI18n } from '@/i18n';
 import { ensureAnonymousSession, useSession } from '@/lib/auth';
 import { validateConfig } from '@/lib/config';
 import { addBreadcrumb, initErrorTracking, setSentryDeviceContext, withSentry } from '@/lib/errors';
 import { initLocalization } from '@/lib/localization';
+import { createNavigationTheme } from '@/lib/nav-theme';
 // Side-effect import: keeps the present-but-unwired baseline native-module
 // wrappers (secure-store / clipboard / sharing) in the bundle graph. Story 17.9.
 import '@/lib/nativeBaseline';
@@ -77,29 +76,6 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
-
-/**
- * Creates a React Navigation theme using our Cozy Warmth design tokens
- */
-function createNavigationTheme(colors: ColorTokens, isDark: boolean): ReactNavigation.Theme {
-  return {
-    dark: isDark,
-    colors: {
-      primary: colors.accent.primary,
-      background: colors.background.primary,
-      card: colors.background.secondary,
-      text: colors.text.primary,
-      border: colors.border,
-      notification: colors.accent.primary,
-    },
-    fonts: {
-      regular: { fontFamily: 'System', fontWeight: '400' },
-      medium: { fontFamily: 'System', fontWeight: '500' },
-      bold: { fontFamily: 'System', fontWeight: '700' },
-      heavy: { fontFamily: 'System', fontWeight: '900' },
-    },
-  };
-}
 
 function RootLayout() {
   const [loaded, error] = useFonts({
@@ -266,7 +242,49 @@ function RootLayoutNav() {
   return (
     <NavigationThemeProvider value={navigationTheme}>
       <Stack>
+        {/* story 6-0: `/` is a redirect into the tab shell (see `app/index.tsx`). Registered with
+            no header so the hop is invisible — it renders a `<Redirect>` and nothing else. */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* ⚠️ story 6-0: THE IMMERSIVE SLOT. Two independent properties, and they do DIFFERENT
+            jobs — an earlier draft of this comment credited both to the presentation, which is
+            wrong on Android and was never isolated anywhere.
+
+            **The POSITION is what removes the tab bar.** `read` is a sibling of `(tabs)`, so it
+            is not inside the tab navigator at all and the bar is not part of its layout. A route
+            pushed INSIDE the navigator deliberately keeps the bar and the iPad sidebar — that is
+            the navigator working as designed, and a native tab bar has no supported
+            `display: none` to style around. ⚠️ On Android `presentation: 'modal'` is documented
+            as equivalent to `push`, so the presentation CANNOT be what covers the Material
+            NavigationBar there; only the position can be.
+
+            **The PRESENTATION is what makes it immersive rather than a push.** `fullScreenModal`
+            covers the whole screen with no page-sheet inset, no rounded card, no parent visible
+            behind it and no back-chevron or edge-swipe affordance. ⚠️ It is NOT `modal`: on
+            iOS 13+ react-native-screens maps `modal` to `UIModalPresentationAutomatic`, which is
+            an inset card with the tab screen showing behind — that satisfies "no chrome in
+            layout" and fails "immersive", which is not what a Quran reader wants.
+
+            ⚠️ **wisdom-fruits' measurement does not separate the two.** Hoisting its `player`
+            from an in-tab modal to a root modal changed position AND stayed a modal at once, and
+            neither they nor we have run the isolating experiment. What is measured here is that
+            the pair works on both platforms; the split above is read from the navigator's own
+            documented behaviour, not from a device.
+
+            `headerShown: false`: hidden PER ROUTE, never globally. There is no app-wide
+            `headerShown` flip and no story owns one — the profile stack's native headers stay.
+
+            And NO header controls, deliberately. Both wisdom-fruits root modals put their close
+            button into a native header slot — one by the reserved left-slot prop, one through
+            setOptions — and `lint:header-controls` forbids both outright here, for the
+            Apple-silicon-Mac click defect. The way out lives in the screen's own CONTENT
+            instead. Story 6.1 still owns the real answer for the reader's chrome; it may use
+            content, or bring `HeaderControlSlots` across with an `EXCEPTIONS` entry arguing it —
+            never by copying. */}
+        <Stack.Screen
+          name="read"
+          options={{ presentation: 'fullScreenModal', headerShown: false }}
+        />
         {/* Story 5-1 review: `subscription` and `player` Stack.Screen registrations were
             removed. Both route files went with the domain deletion, so expo-router logged
             `[Layout children]: No route named "…" exists` and dropped them on every boot.

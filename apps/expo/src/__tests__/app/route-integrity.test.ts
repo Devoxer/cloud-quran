@@ -117,6 +117,34 @@ describe('route tree integrity', () => {
     }
   });
 
+  it('serves `/` at all — the regression story 6-0 caused and then fixed', () => {
+    // ⚠️ THE ONLY GUARD OVER THE THING THAT ACTUALLY BROKE. Moving the reading placeholder out of
+    // `(tabs)` deleted the route that served `/`, and nothing said so: tsc had no complaint (the
+    // generated route union is not part of `pnpm typecheck` — see this file's header), every
+    // suite stayed green, and the app served `+not-found` at its own front door on web while a
+    // native cold launch, which also starts at `/`, landed there too. `+not-found.tsx` even links
+    // "go home" to `/`. One line, over the URL set this file already builds.
+    expect(new Set(routeUrls(APP_DIR, ''))).toContain('/');
+  });
+
+  it('never points `/` at the immersive route', () => {
+    // `/` is a redirect into the tab shell, and its target is the one thing about it that can go
+    // wrong silently: repointing it at the immersive route — which its own docblock forbids by
+    // name — passed all 96 suites. Launching straight into a screen presented OVER the tabs, with
+    // nothing beneath it, is the "cold launch restores an empty player sheet" defect the source
+    // app already shipped once. Read the file rather than the URL set, because the target is a
+    // value in the redirect, not a route registration.
+    const redirect = readFileSync(join(APP_DIR, 'index.tsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(redirect).not.toMatch(/['"`]\/read['"`]/);
+    // …and the target it DOES use resolves to a real URL. It is read from `TABS`, so this also
+    // fails if 6.1 repoints the tab table at a route that does not exist yet.
+    const urls = new Set(routeUrls(APP_DIR, ''));
+    for (const tab of TABS) expect(urls).toContain(tab.href);
+    expect(redirect).toMatch(/TABS\[0\]/);
+  });
+
   it('keeps test files out of the route tree', () => {
     // web.output "static" filesystem-scans src/app; Metro's blockList does not filter that scan,
     // so a co-located test becomes a phantom route. Both configs warn about this at length.

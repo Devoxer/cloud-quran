@@ -1,38 +1,12 @@
 {
   "tabs": {
-    "discover": "Découvrir",
-    "feed": "Flux",
-    "quizzes": "Quiz",
-    "library": "Bibliothèque",
-    "profile": "Profil",
     "settings": "Réglages"
   },
   "titles": {
-    "discover": "Découvrir",
-    "search": "Rechercher",
-    "filters": "Filtres",
-    "browse": "Parcourir",
-    "feed": "Flux",
-    "library": "Bibliothèque",
-    "favorites": "Favoris",
-    "myNotes": "Mes notes",
-    "history": "Historique",
-    "offline": "Hors ligne",
-    "profile": "Profil",
-    "playback": "Lecture",
-    "notifications": "Notifications",
-    "privacy": "Confidentialité",
-    "language": "Langue",
-    "yourStats": "Vos statistiques",
-    "quizzes": "Quiz",
-    "quizStats": "Stats des quiz",
-    "book": "Livre",
-    "testYourself": "Se tester",
-    "quotes": "Citations",
-    "nowPlaying": "Lecture en cours",
-    "feedback": "Commentaires",
-    "signIn": "Se connecter",
     "account": "Réglages",
-    "data": "Vos données"
+    "signIn": "Se connecter",
+    "data": "Vos données",
+    "feedback": "Commentaires",
+    "privacy": "Confidentialité"
   }
 }

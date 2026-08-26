@@ -62,65 +62,88 @@ export type LayoutMaxWidthToken = keyof typeof LAYOUT.maxWidth;
 export type LayoutMaxWidthValue = (typeof LAYOUT.maxWidth)[LayoutMaxWidthToken];
 
 /**
- * Bottom space a scroll screen must reserve so its last row clears the FLOATING
- * mini-player pill — on platforms where the tab bar is NOT at the bottom, so the
- * pill floats over content with nothing auto-insetting it (Story 23.25, AC-5).
- *
- * Applies on **web** (pill is `position:fixed`, nav is a top pill) AND **iPad**
- * (`<NativeTabs sidebarAdaptable>` moves the tabs to the TOP / a sidebar, so the
- * JS-overlay pill floats over the bottom of the content). On **iPhone / Android**
- * the bottom UITabBar / Material nav auto-insets the content and the pill floats
- * above it, so no extra reservation is needed → 0.
- *
- * = pill height (56 — mirrors `MiniPlayer.PILL_HEIGHT`; duplicated as a literal
- * because a `constants/` module must NOT import a `features/` one — wrong layer)
- * + the pill's bottom offset (~24) + an 8pt breathing gap = 88. Reserved
- * **unconditionally** (NOT audio-gated) for simplicity + robustness — an ~88px
- * bottom gap is a conventional, unobtrusive cost, and avoids coupling every
- * scroll route to the audio store. (`Platform.isPad` is iOS-only; the `||` order
- * keeps it safe on web/Android where the property is absent.)
+ * iPadOS major version from which `<NativeTabs sidebarAdaptable>` actually moves the tabs off the
+ * bottom. The prop is documented "iOS 18+"; the app's deployment target is **16.4**
+ * (`app.json` → `expo-build-properties`), so iPadOS 16.4–17 is a real, shipping window in which an
+ * iPad still renders a BOTTOM bar.
  */
-export const FLOATING_PILL_CLEARANCE =
-  Platform.OS === 'web' || (Platform.OS === 'ios' && Platform.isPad) ? 56 + 24 + 8 : 0;
+const IPAD_TOP_TABS_MIN_MAJOR = 18;
+
+/** True only where the tabs genuinely leave the bottom edge: an iPad on iPadOS 18 or later. */
+const HAS_TOP_OR_SIDEBAR_TABS =
+  Platform.OS === 'ios' &&
+  Platform.isPad &&
+  Number.parseInt(String(Platform.Version), 10) >= IPAD_TOP_TABS_MIN_MAJOR;
 
 /**
- * Cross-platform TOP breathing room below the header for a scroll screen whose
- * content otherwise butts the header (Story 23.27 — unifies the web-only
- * `WEB_HEADER_CLEARANCE` from 23.25 with the Android half disproved by the 23.26
- * Android smoke).
+ * The height of the native tab bar's own chrome, in points/dp — the ONE number any screen that
+ * must sit above it consumes, as `TAB_BAR_HEIGHT + insets.bottom`.
  *
- * Resolved **independently per platform** (they MAY differ — see below):
- * - **iOS → 0.** The floating large-title header (`headerTransparent: true`) does
- *   NOT consume layout; `contentInsetAdjustmentBehavior="automatic"` already insets
- *   scroll content generously below it. Adding a positive gap here would
- *   *double-space*, so iOS MUST stay 0. Summing 0 into a `paddingTop` is a
- *   guaranteed no-op (the story's load-bearing invariant).
- * - **Web → `SPACING.xl`.** The solid JS header is space-consuming but leaves no
- *   margin, so the first card butts it. Pinned at the 23.25 value (web is a
- *   guaranteed no-op regression) — kept independent from Android so Android can
- *   diverge without touching web.
- * - **Android → `SPACING.xl`.** The opaque Material header consumes layout (content
- *   starts below it) but leaves ZERO breathing gap, so the first row reads cramped
- *   across every header route (23.26 Android smoke). Value confirmed by the 23.27
+ * ⚠️ IT IS A CONSTANT AND NOT A HOOK, AND THAT IS THE WHOLE POINT. `useBottomTabBarHeight()` is
+ * expo-router's re-export of the **JS bottom-tabs navigator's** hook: it reads
+ * `BottomTabBarHeightContext`, which only that navigator's `BottomTabView` mounts, and it THROWS
+ * where no provider exists. This app renders `<NativeTabs>`, which mounts none — so the obvious
+ * call is a crash, not a wrong number. wisdom-fruits ships `NativeTabs` in production and has zero
+ * call sites for that hook.
+ *
+ * Every value below was paid for on a device, and each replaced a plausible wrong one:
+ * - **iOS 49.** iOS 18–25 UITabBar visible content is 49pt, and `insets.bottom` already supplies
+ *   the home indicator. A previous `ios: 84` double-counted it (84 ≈ 49 + ~34) and floated the
+ *   element far too high.
+ * - **Android 80.** Material-3 `NavigationBar` — what `NativeTabs` renders there — is 80dp, NOT
+ *   Material-2's 56dp. At 56 the element overlapped the bar in an Android smoke.
+ * - **iPad 0 — but only on iPadOS 18+.** `sidebarAdaptable` moves the tabs to the TOP or a sidebar
+ *   there, so there is no bottom bar to clear, and reserving 49pt anyway floated the element too
+ *   high in an owner iPad smoke. ⚠️ The prop needs iPadOS **18**, and this app deploys to **16.4**:
+ *   on iPadOS 16.4–17 the tabs are still at the bottom, so a flat `Platform.isPad → 0` would
+ *   UNDER-reserve there and cover the last verse — the exact defect this constant exists to
+ *   prevent, reintroduced by the fix for its sibling. The version check is why
+ *   `HAS_TOP_OR_SIDEBAR_TABS` exists rather than a bare `Platform.isPad`.
+ * - **Web 0**, for the same reason as the modern iPad: its chrome is a top pill.
+ *
+ * ⚠️ story 6-0 shipped this WITHOUT a consumer, and says so rather than implying otherwise. The
+ * first screen that reserves space above the bar is story 6.1's reading surface. That is a real
+ * gap, and it is the exact shape of the `tab-bar-covers-last-verse` defect: `MINI_PLAYER_HEIGHT`
+ * was exported and correct and had zero consumers, and the last verse was still covered. An
+ * exported number is not a fix — it is only the end of the argument about which number to use.
+ *
+ * ⚠️ story 6-0 also deleted `FLOATING_PILL_CLEARANCE`, which reserved 88px at the bottom of five
+ * profile screens to clear a floating mini-player that went with the audio feature in story 5-1 —
+ * the call sites were live, the reason was not, and on web and iPad (its only non-zero branches)
+ * nothing sits at the bottom at all.
+ */
+export const TAB_BAR_HEIGHT = HAS_TOP_OR_SIDEBAR_TABS
+  ? 0
+  : (Platform.select({ ios: 49, android: 80, default: 0 }) ?? 0);
+
+/**
+ * Cross-platform TOP breathing room below the header for a scroll screen whose content otherwise
+ * butts the header.
+ *
+ * ⚠️ story 6-0 DELETED THIS AND THEN PUT IT BACK, which is worth recording because the delete
+ * looked obviously right: zero consumers, and the story's own task list named it. What that missed
+ * is that its premise had just been REINSTATED. The 2026-08-26 chrome reversal keeps the native
+ * header on every pushed screen, and an opaque Material/web header is exactly the condition these
+ * branches were measured against — story 6.1's reading surfaces are the first screens to meet it.
+ * The story told us to ASK before deleting `useLiquidGlassHeaderInset` for precisely this reason,
+ * and this constant is the same case; deleting it would have left three device-measured values
+ * surviving only in git history, where nobody looks.
+ *
+ * Resolved **independently per platform** (they MAY differ):
+ * - **iOS → 0.** The floating large-title header (`headerTransparent: true`) does NOT consume
+ *   layout; `contentInsetAdjustmentBehavior="automatic"` already insets scroll content generously
+ *   below it. A positive value here would *double-space*, so iOS MUST stay 0. Summing 0 into a
+ *   `paddingTop` is a guaranteed no-op — the load-bearing invariant, pinned by its test.
+ * - **Web → `SPACING.xl`.** The solid JS header is space-consuming but leaves no margin, so the
+ *   first card butts it.
+ * - **Android → `SPACING.xl`.** The opaque Material header consumes layout but leaves ZERO
+ *   breathing gap, so the first row reads cramped across every header route. Confirmed on an
  *   Android emulator smoke.
  *
- * MUST be summed into a scroll view's `contentContainerStyle.paddingTop` — NEVER a
- * wrapping `<View>` or root scroll wrapper, which re-breaks the iOS large-title
- * shrink-on-scroll (STACK-CHEAT-SHEET § "maxWidth wrapper breaks iOS large-title").
- * Routes that already set an explicit `padding`/`paddingTop` (settings forms) or a
- * fixed `useLiquidGlassHeaderInset`-offset field already have a cross-platform gap
- * → do NOT add this (would stack into double-spacing).
- *
- * ⚠️ TWO KNOWN VIOLATIONS OF THE "NEVER a wrapping `<View>`" RULE, both temporary
- * (Story 24.15 § D1 → 24.16 AC-7): `discover.tsx`'s `emptyLanguageRow` sums this
- * into a non-scroll `<View>` on the two empty branches. It does not re-break the
- * iOS large-title (the banned consequence) only because the value is 0 on iOS —
- * but that same 0 is why the chip renders UNDER iOS's transparent header there
- * (review-log H3). The rule is right and the call site is wrong; 24.16 moves the
- * row inside the scroll container, which fixes iOS and deletes both usages. Do not
- * copy the pattern in the meantime — for a fixed element above a scroll, use
- * `useLiquidGlassHeaderInset()` (`insets.top + 44`), which is what the five other
- * screens with this shape do.
+ * MUST be summed into a scroll view's `contentContainerStyle.paddingTop` — NEVER a wrapping
+ * `<View>` or root scroll wrapper, which re-breaks the iOS large-title shrink-on-scroll. Routes
+ * that already set an explicit `padding`/`paddingTop` (the settings forms do) already have a
+ * cross-platform gap → do NOT add this, it would stack into double-spacing.
  */
 export const HEADER_CONTENT_CLEARANCE =
   Platform.OS === 'web' ? SPACING.xl : Platform.OS === 'android' ? SPACING.xl : 0;

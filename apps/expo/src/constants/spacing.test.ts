@@ -4,7 +4,6 @@
  */
 
 import {
-  FLOATING_PILL_CLEARANCE,
   HEADER_CONTENT_CLEARANCE,
   LAYOUT,
   SPACING,
@@ -12,6 +11,7 @@ import {
   SpacingValue,
   screenContentStyle,
   spacing,
+  TAB_BAR_HEIGHT,
 } from './spacing';
 
 describe('SPACING', () => {
@@ -113,26 +113,34 @@ describe('screenContentStyle() — wide-screen cap helper (Story 23.25)', () => 
   });
 });
 
-describe('FLOATING_PILL_CLEARANCE (Story 23.25)', () => {
-  // jest-expo runs the iPhone iOS preset (Platform.OS === 'ios', Platform.isPad
-  // falsy), so the constant resolves to 0 here — iPhone/Android have a bottom tab
-  // bar that auto-insets content, so NO extra reservation. The 88px branch (web +
-  // iPad, where the pill floats with no bottom bar) is exercised by those smokes.
-  it('is 0 on iPhone/Android (bottom tab bar auto-insets)', () => {
-    expect(FLOATING_PILL_CLEARANCE).toBe(0);
+describe('TAB_BAR_HEIGHT (story 6-0)', () => {
+  // jest-expo runs the iPhone iOS preset (`Platform.OS === 'ios'`, `Platform.isPad` falsy), so the
+  // constant resolves to its iPhone branch at import. The Android (80dp), iPad (0 on iPadOS 18+,
+  // 49 below it) and web (0) branches are not import-time-observable under this preset — resetting
+  // modules and mocking `Platform` to read them back is the pattern the sibling blocks deliberately
+  // avoided — so they are exercised by the platform smokes and argued in the docblock's provenance.
+  //
+  // ⚠️ The constant is a bare NUMBER rather than a hook on purpose: `useBottomTabBarHeight()`
+  // belongs to the JS bottom-tabs navigator and THROWS under `<NativeTabs>`, which mounts no
+  // `BottomTabBarHeightContext`. That reasoning lives in the docblock, where it is read; asserting
+  // `typeof … === 'number'` here pinned nothing the case below does not already pin.
+  it('is the 49pt iOS UITabBar height — NOT 84, which double-counts the home indicator', () => {
+    // 84 ≈ 49 + ~34: the previous value summed the home indicator that `insets.bottom` already
+    // supplies, so a consumer adding `TAB_BAR_HEIGHT + insets.bottom` floated ~34pt too high.
+    expect(TAB_BAR_HEIGHT).toBe(49);
   });
 });
 
-describe('HEADER_CONTENT_CLEARANCE (Story 23.27)', () => {
-  // jest-expo runs the iPhone iOS preset (Platform.OS === 'ios'), so the constant
-  // resolves to its iOS branch — 0 — at import. This is the load-bearing invariant:
-  // iOS already gets its top breathing room from the large-title inset
-  // (contentInsetAdjustmentBehavior), so the constant MUST be 0 there or summing it
-  // into a paddingTop would double-space. The web=SPACING.xl and Android=SPACING.xl
-  // branches are not import-time-observable under the iOS preset (would need
-  // jest.resetModules + a Platform.OS mock-and-reimport, which the sibling
-  // FLOATING_PILL_CLEARANCE / WEB_HEADER_CLEARANCE blocks deliberately avoided) — they
-  // are exercised by the web (Playwright) and Android (emulator) platform smokes.
+describe('HEADER_CONTENT_CLEARANCE', () => {
+  // jest-expo runs the iPhone iOS preset, so the constant resolves to its iOS branch — 0 — at
+  // import. This is the load-bearing invariant: iOS already gets its top breathing room from the
+  // large-title inset (`contentInsetAdjustmentBehavior`), so it MUST be 0 there or summing it into
+  // a paddingTop double-spaces. The web and Android `SPACING.xl` branches are not
+  // import-time-observable under this preset and are exercised by those platform smokes.
+  //
+  // ⚠️ story 6-0 deleted this constant and its test, then restored both: the 2026-08-26 chrome
+  // reversal makes an opaque native header live again on every pushed screen, which is the exact
+  // condition the non-zero branches were measured against, and 6.1 is the first screen to meet it.
   it('is 0 on iOS (large-title inset provides the top room — no double-spacing)', () => {
     expect(HEADER_CONTENT_CLEARANCE).toBe(0);
   });

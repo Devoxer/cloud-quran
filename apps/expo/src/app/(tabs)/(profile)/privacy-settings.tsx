@@ -20,7 +20,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
-import { FLOATING_PILL_CLEARANCE, SPACING, screenContentStyle } from '@/constants/spacing';
+import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { haptics } from '@/lib/haptics';
 import { useTelemetryEnabled } from '@/lib/privacyPrefs';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -33,11 +33,12 @@ export default function PrivacySettingsScreen() {
       backgroundColor: t.colors.background.primary,
     },
     scrollContent: {
-      // Story 23.25: wide-screen cap (settings column → content:640, matching
-      // profile) + web mini-player bottom clearance.
+      // Story 23.25: wide-screen cap (settings column → content:640, matching profile).
+      // story 6-0: "+ web mini-player bottom clearance" stood here, and the clearance it named
+      // (`FLOATING_PILL_CLEARANCE`) went with the mini-player in story 5-1 — the comment outlived
+      // the code by two stories.
       ...screenContentStyle('content'),
       padding: SPACING.xl,
-      paddingBottom: SPACING.xl + FLOATING_PILL_CLEARANCE,
     },
     error: {
       marginTop: SPACING.lg,

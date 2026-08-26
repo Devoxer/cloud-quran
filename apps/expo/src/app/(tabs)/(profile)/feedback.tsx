@@ -20,7 +20,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Icon, Text } from '@/components/ui';
 import type { IconName } from '@/components/ui/icon-registry';
 import { RADII } from '@/constants/radii';
-import { FLOATING_PILL_CLEARANCE, SPACING, screenContentStyle } from '@/constants/spacing';
+import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { feedbackMessageSchema } from '@/lib/forms/schemas';
 import { haptics } from '@/lib/haptics';
@@ -193,11 +193,12 @@ const useStyles = () =>
       backgroundColor: t.colors.background.primary,
     },
     scrollContent: {
-      // Story 23.25: wide-screen cap (form column → content:640) + web
-      // mini-player bottom clearance.
+      // Story 23.25: wide-screen cap (form column → content:640). story 6-0 dropped "+ web
+      // mini-player bottom clearance" from this line: that clearance went with the mini-player in
+      // story 5-1. The generous `xxxl` bottom is for the keyboard, and stays.
       ...screenContentStyle('content'),
       padding: SPACING.xl,
-      paddingBottom: SPACING.xxxl + FLOATING_PILL_CLEARANCE,
+      paddingBottom: SPACING.xxxl,
     },
     // Story 23.2: unified to the SettingsGroup label treatment (caption tokens) so the
     // form's section labels match the other settings screens. The form fields stay form

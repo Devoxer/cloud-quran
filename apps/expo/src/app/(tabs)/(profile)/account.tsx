@@ -24,7 +24,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
-import { FLOATING_PILL_CLEARANCE, SPACING, screenContentStyle } from '@/constants/spacing';
+import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { isPlaceholderEmail, signOut, useSession } from '@/lib/auth';
 import { setString } from '@/lib/clipboard';
 import { haptics } from '@/lib/haptics';
@@ -212,7 +212,6 @@ const useStyles = () =>
       ...screenContentStyle('content'),
       padding: SPACING.xl,
       gap: SPACING.xl,
-      paddingBottom: SPACING.xl + FLOATING_PILL_CLEARANCE,
     },
     error: {
       marginTop: SPACING.lg,

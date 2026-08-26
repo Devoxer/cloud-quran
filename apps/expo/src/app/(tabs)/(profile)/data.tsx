@@ -38,7 +38,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow, Text } from '@/components/ui';
-import { FLOATING_PILL_CLEARANCE, SPACING, screenContentStyle } from '@/constants/spacing';
+import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, LINE_HEIGHT } from '@/constants/typography';
 import { deleteAccount } from '@/lib/auth';
 import { captureException } from '@/lib/errors';
@@ -269,7 +269,6 @@ const useStyles = () =>
       ...screenContentStyle('content'),
       padding: SPACING.xl,
       gap: SPACING.xl,
-      paddingBottom: SPACING.xl + FLOATING_PILL_CLEARANCE,
     },
     // The scroll container's `gap` separates GROUPS; this paragraph belongs to the sync group, so
     // it is wrapped with it and sits a footnote's distance below rather than a group's.

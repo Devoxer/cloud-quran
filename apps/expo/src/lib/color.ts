@@ -84,3 +84,31 @@ export function contrastRatio(fg: string, bg: string): number {
 export function meetsContrast(fg: string, bg: string, min: number): boolean {
   return contrastRatio(fg, bg) >= min;
 }
+
+/**
+ * The opaque colour an alpha overlay actually PRODUCES over a known background — `overlay` at
+ * `alpha` composited onto `base`, returned as `#rrggbb`.
+ *
+ * ⚠️ IT EXISTS BECAUSE `contrastRatio` CANNOT MEASURE WHAT `withAlpha` RETURNS. `withAlpha` is
+ * what the UI passes (an `rgba(…)` string); this is what the eye receives. Measuring a label
+ * against the surface UNDER a translucent pill answers the wrong question — the selected tab
+ * label sits on `withAlpha(accent, 0.15)` over `background.secondary`, not on the bar itself, and
+ * on a light palette the blend is the darker of the two. `contrastRatio` returns a neutral `1`
+ * for an `rgba(…)` input, so feeding it one reads as "identical colours" rather than as an error.
+ *
+ * Straight source-over compositing on the sRGB channel values — the same arithmetic the
+ * compositor does, and deliberately NOT gamma-correct, because the platforms blend this way too.
+ * An unparseable input returns `base` unchanged (mirroring `withAlpha`'s pass-through fallback);
+ * `alpha` is clamped to 0–1.
+ */
+export function blendOver(overlay: string, base: string, alpha: number): string {
+  const o = hexToRgb(overlay);
+  const b = hexToRgb(base);
+  if (!o || !b) return base;
+  const a = Math.min(1, Math.max(0, alpha));
+  const mix = (x: number, y: number): string =>
+    Math.round(x * a + y * (1 - a))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${mix(o.r, b.r)}${mix(o.g, b.g)}${mix(o.b, b.b)}`;
+}

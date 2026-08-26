@@ -37,6 +37,8 @@
 
 import { Platform } from 'react-native';
 
+import type { ColorTokens } from '@/constants/Colors';
+
 // Intentionally NO explicit `NativeStackNavigationOptions` annotation —
 // that type lives at `expo-router/build/react-navigation/native-stack/types`
 // (deep internal path, no clean re-export) and tying this util to it
@@ -61,124 +63,52 @@ export const LIQUID_GLASS_STACK_OPTIONS = Platform.select({
  */
 
 /**
- * Story 17.17 — `book/[id]` is an Expo Router **shared route** (array-group
- * `(discover,feed,library,profile)/`), so it materializes once into EACH tab
- * group's Stack. Every group layout registers it with these identical options,
- * so the chrome is uniform whichever tab the user opened the book from.
- * Self-contained (carries `headerShown` + `headerBackButtonDisplayMode`) so it
- * renders the same regardless of a group Stack's own `screenOptions`.
- *
- * The nested book Stack (`book/[id]`) renders `headerShown: false`, so this
- * parent registration owns the visible Liquid Glass header + back chevron; book
- * detail overrides title/headerRight at mount via
- * `navigation.getParent()?.setOptions`. The non-empty placeholder title (the
- * translated `navigation:titles.book`, set by each consumer — see below) keeps the
- * iOS 26 header from collapsing during the paint window.
- *
- * i18n (Story 20.2): the placeholder `title` is NOT baked here — this const is
- * module-load-evaluated BEFORE `initI18n()` runs, so a `t()`/`i18n.t()` at this
- * scope would resolve to the raw key. Every consumer spreads this and sets
- * `title: t('navigation:titles.book')` at render (where i18n is initialized), so
- * even the paint-window placeholder localizes in every shipped language (Story 20.4 added the
- * first non-English one).
+ * ⚠️ story 6-0 deleted FIVE presets from this file — `SHARED_BOOK_STACK_OPTIONS`,
+ * `SHARED_NOTE_STACK_OPTIONS`, `SHARED_QUIZ_STACK_OPTIONS`, `SHARED_QUOTES_STACK_OPTIONS` and
+ * `PLAYER_STACK_OPTIONS`. Every one of them configured the chrome of a route that went with the
+ * wisdom-fruits domain deletion in story 5-1, so each had zero importers and each was a
+ * confident, detailed, WRONG answer waiting for whoever greps this file for a modal or a shared
+ * route. `PLAYER_STACK_OPTIONS` in particular described the root-modal pattern story 6-0 is
+ * built on — including the two native header controls `lint:header-controls` forbids here.
+ * Epic 7 rebuilds the player; it should read the gate and the story, not a dead const.
  */
-export const SHARED_BOOK_STACK_OPTIONS = {
-  ...LIQUID_GLASS_STACK_OPTIONS,
-  headerShown: true,
-  headerBackButtonDisplayMode: 'minimal' as const,
-};
 
 /**
- * Story 23.14 — `note/[id]` + `note/new` is an Expo Router **shared route**
- * (array-group `(discover,feed,library,profile)/note/`), so it materializes once
- * into EACH tab group's Stack (reachable from book detail, which is itself
- * cross-tab). Every group layout registers it with these identical options.
+ * The React Navigation theme — the ONE place our palette tokens reach the native navigator.
  *
- * INVERSE of `book/`'s header ownership (deliberate — Story 23.14 Step C): the
- * note inner Stack (`note/_layout.tsx`) OWNS its native header, so the parent
- * group registration hides its own header (`headerShown: false`) — no double
- * header. Each note screen sets title + Cancel/Save/delete on the NEAREST Stack
- * via `useNavigation().setOptions` (NOT `getParent()` — that idiom is only for
- * `book/`, whose inner Stack is `headerShown:false` so the PARENT owns the header).
+ * ⚠️ IT PAINTS MORE THAN THE HEADER, WHICH IS WHY IT LIVES IN A MODULE WITH A TEST. React
+ * Navigation's `theme.colors.background` is the default `contentStyle` background for every
+ * native-stack SCENE, `card` is the header/tab-bar surface, `text` the header title and `border`
+ * the hairline under it. So a token missing here is not a header bug — it is a scene that stops
+ * following the palette three screens down, which is exactly the shape of defect that gets found
+ * on one screen and assumed everywhere else.
+ *
+ * ⚠️ IT MOVED OUT OF `app/_layout.tsx` IN STORY 6-0 FOR ONE REASON: a function defined inside a
+ * route file cannot be unit-tested without dragging the whole boot path (better-auth's
+ * module-scope listeners included) into the suite. `nav-theme.test.ts` now walks all six palettes
+ * × both schemes against `composeColors`, so "the chrome is themed" is measured rather than
+ * asserted on the one screen somebody looked at.
+ *
+ * The `fonts` group is required by the `ReactNavigation.Theme` contract and is deliberately the
+ * system face — Cloud Quran ships no custom UI typeface, and the Quran faces are content, not
+ * chrome.
  */
-export const SHARED_NOTE_STACK_OPTIONS = {
-  headerShown: false,
-};
-
-/**
- * Story 33.1 — both quiz runners (`quiz/[bookId]` per-book + `quizzes/[scope]` pool) play IN-TAB
- * (owner call 2026-07-18: keep the tab bar + mini-player visible so the user can navigate away and
- * back mid-quiz, rather than being forced to dismiss a full-screen modal). Standard pushed screens
- * in the tab navigator → the native **back chevron** dismisses (plus swipe-back + the tab bar); no
- * modal, no explicit close button. Both are SINGLE-FILE routes (no inner `quiz/_layout.tsx`) so the
- * screen's nearest navigator (the group / `(quizzes)` Stack) owns the header. The book identity is
- * an in-CONTENT card (`QuizRunner`), NOT stuffed into the header; the only dynamic header piece is a
- * small elapsed timer wired as `headerRight` via `useNavigation().setOptions`. Fallback title
- * `navigation:titles.testYourself` (per-book) / per-scope (pool, overridden by the host
- * `<Stack.Screen>`).
- *
- * TRANSPARENT Liquid Glass header (like every other route). `QuizRunner`'s scroll clears it with the
- * app-standard `contentInsetAdjustmentBehavior="automatic"` (the framework computes the real inset
- * per device — iPad/web top tab bar included). The Next scroll-reset is a REMOUNT (keyed ScrollView),
- * NOT `scrollTo({y:0})` — under `automatic` the resting top is `y = -inset`, so `y:0` would tuck
- * content under the header (the old "Next tucks under" bug). Story 33.1 briefly stuffed the book
- * title + timer into the header as a TALL custom title; combined with the top tab bar that overlapped
- * the quiz body on iPad and crowded it on narrow web. A standard-height header + the in-body card + a
- * header-only timer removes all of that.
- *
- * The bottom of the scroll pads by `MINI_PLAYER_HEIGHT + insets.bottom` to clear the floating
- * mini-player + tab bar; the Next CTA scrolls WITH the answers (no pinned bar).
- *
- * i18n (Story 20.2): the fallback `title` is set by each consumer via
- * `t('navigation:titles.testYourself')` — see `SHARED_BOOK_STACK_OPTIONS` for why it is not baked here.
- */
-export const SHARED_QUIZ_STACK_OPTIONS = {
-  ...LIQUID_GLASS_STACK_OPTIONS,
-  headerShown: true,
-  headerBackButtonDisplayMode: 'minimal' as const,
-};
-
-/**
- * Story 30.1 — `/quotes` became an Expo Router **shared route** (array-group
- * `(discover,feed,library,profile)/quotes.tsx`) so it opens IN the current tab from
- * BOTH launch points: the Discover daily-quote card's "See all quotes" AND the
- * Library Quotes section's "See All" (`?tab=favorites`). Before, `/quotes` lived only
- * under `(discover)`, so the Library See-All jumped the user out of the Library tab.
- * A single-file screen (no inner Stack), so the PARENT group registration owns the
- * visible Liquid Glass header + title. Unlike `book`/`quiz`, the screen never overrides
- * this title, so `navigation:titles.quotes` is the SETTLED header the user sees.
- *
- * i18n (Story 20.2): the `title` is set by each consumer via `t('navigation:titles.quotes')`
- * — see `SHARED_BOOK_STACK_OPTIONS` for why it is not baked here.
- */
-export const SHARED_QUOTES_STACK_OPTIONS = {
-  ...LIQUID_GLASS_STACK_OPTIONS,
-  headerShown: true,
-  headerBackButtonDisplayMode: 'minimal' as const,
-};
-
-/**
- * Story 19.6 — the full player is now a ROOT-LEVEL modal route (`app/player.tsx`,
- * sibling of `(tabs)` / `subscription`), NOT a per-tab shared route. Hoisting it
- * out of the 17.17 in-tab design is what lets the modal cover the native NativeTabs
- * bottom bar on **Android** (a stack modal renders inside the activity, so an
- * in-tab modal left the bar visible; a root-level modal covers it on both
- * platforms — the Apple-Music / Spotify "now-playing is a root modal" pattern).
- * iOS already covered the tab bar via the UIKit modal; this keeps that and fixes
- * Android. Registered ONCE in `app/_layout.tsx` (mirroring `subscription`).
- *
- * `presentation: 'modal'` page sheet (Story 17.20): swipe-DOWN to dismiss
- * (Apple-Music idiom) + the chevron-down minimize. Placeholder title for the
- * iOS-26 header-collapse reason; AudioPlayer overrides it via `setOptions`.
- *
- * i18n (Story 20.2): the placeholder `title` is set by the consumer
- * (`RootLayoutNav` in `app/_layout.tsx`) via `t('navigation:titles.nowPlaying')`
- * — see `SHARED_BOOK_STACK_OPTIONS` for why it is not baked here.
- */
-export const PLAYER_STACK_OPTIONS = {
-  ...LIQUID_GLASS_STACK_OPTIONS,
-  presentation: 'modal' as const,
-  gestureEnabled: true,
-  headerShown: true,
-  headerBackButtonDisplayMode: 'minimal' as const,
-};
+export function createNavigationTheme(colors: ColorTokens, isDark: boolean): ReactNavigation.Theme {
+  return {
+    dark: isDark,
+    colors: {
+      primary: colors.accent.primary,
+      background: colors.background.primary,
+      card: colors.background.secondary,
+      text: colors.text.primary,
+      border: colors.border,
+      notification: colors.accent.primary,
+    },
+    fonts: {
+      regular: { fontFamily: 'System', fontWeight: '400' },
+      medium: { fontFamily: 'System', fontWeight: '500' },
+      bold: { fontFamily: 'System', fontWeight: '700' },
+      heavy: { fontFamily: 'System', fontWeight: '900' },
+    },
+  };
+}

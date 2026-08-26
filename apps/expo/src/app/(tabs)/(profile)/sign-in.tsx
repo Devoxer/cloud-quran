@@ -48,7 +48,7 @@ import { Platform, Pressable, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { CodeInput, GoogleGLogo, InlineError, Text } from '@/components/ui';
 import { RADII } from '@/constants/radii';
-import { FLOATING_PILL_CLEARANCE, SPACING, screenContentStyle } from '@/constants/spacing';
+import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import {
   requestEmailCode,
@@ -425,7 +425,7 @@ const useStyles = () =>
     scrollContent: {
       ...screenContentStyle('content'),
       padding: SPACING.xl,
-      paddingBottom: SPACING.xxxl + FLOATING_PILL_CLEARANCE,
+      paddingBottom: SPACING.xxxl,
     },
     intro: {
       fontSize: FONT_SIZE.bodySmall,
