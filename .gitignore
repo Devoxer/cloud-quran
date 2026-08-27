@@ -83,5 +83,9 @@ tmp/
 /apps/expo/android/
 .bmad-loop/runs/
 .bmad-loop/cache/
-.bmad-loop/policy.toml
+# .bmad-loop/policy.toml is TRACKED on purpose. `bmad-loop init` gitignores it (it can carry a
+# machine-local [mux] backend and TUI pane sizes) and prints a note suggesting `git rm --cached`.
+# Ignore that note here: [verify] commands DEFAULTS TO EMPTY, so an untracked policy means a fresh
+# clone runs the loop with no lint, no typecheck and no tests, and commits the result. One machine,
+# one developer — the sharing hazard is empty and the unverified-commit hazard is not.
 _bmad/render/
