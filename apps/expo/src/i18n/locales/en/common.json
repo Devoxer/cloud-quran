@@ -88,6 +88,8 @@
     "nextSurah": "Next: {{name}}",
     "footnote": "Page {{page}} · {{surah}}:{{verse}}",
     "unreadableTitle": "The Quran text could not be opened",
-    "unreadableBody": "The bundled text is missing or unreadable on this device."
+    "unreadableBody": "The bundled text is missing or unreadable on this device.",
+    "noVersesTitle": "No verses to show",
+    "noVersesBody": "This surah came back empty. Try again, or move on to the next one."
   }
 }

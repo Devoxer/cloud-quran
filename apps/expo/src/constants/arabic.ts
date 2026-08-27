@@ -27,12 +27,16 @@
  *     rendered in Roboto, which still looks like Arabic to anything automated.
  *
  *   • **Web — the plugin does not run at all.** `app/_layout.tsx` registers the face with
- *     `useFonts` under the iOS spelling, web only, so the two agree by construction. Without
+ *     `useFonts`, web only, under the iOS spelling, so the two agree by construction. Without
  *     that, the face is silently absent on the platform the Electron desktop shell wraps.
+ *     The map itself is `UTHMANI_WEB_FONT` at the bottom of this file — see its docblock for why
+ *     it is here rather than written inline at the call site.
  *
- * There is no test that can catch a wrong value here: every spelling type-checks, and a missing
- * family renders fallback glyphs rather than throwing. A device smoke on each platform is the
- * only check, which is why the reasoning is written down instead.
+ * A device smoke on each platform is the check that matters — every spelling type-checks, and a
+ * missing family renders fallback glyphs rather than throwing. What CAN be pinned, and is
+ * (`arabic.test.ts`), is that the value actually differs per platform: replacing the whole
+ * `Platform.select` with the iOS spelling passed 104 suites, because the one case that read it
+ * compared the rendered style against this same constant.
  */
 
 import { Platform } from 'react-native';
@@ -81,3 +85,30 @@ export function clampArabicFontSize(size: number | undefined | null): number {
   if (typeof size !== 'number' || !Number.isFinite(size)) return ARABIC_FONT_SIZE.default;
   return Math.min(ARABIC_FONT_SIZE.max, Math.max(ARABIC_FONT_SIZE.min, size));
 }
+
+/**
+ * The web-only `useFonts` map: the family name a style asks for → the bundled face.
+ *
+ * ⚠️ IT IS A CONSTANT, NOT AN INLINE OBJECT, BECAUSE NOTHING COULD OBSERVE IT INLINE.
+ * `jest.setup.js` mocks `useFonts` and its argument was discarded, so deleting the whole
+ * registration — the only thing that loads this face on the platform Electron wraps — passed
+ * every gate. A named export is something a test can read on both platforms.
+ *
+ * ⚠️ EMPTY ON NATIVE, AND THAT IS THE POINT. The expo-font config plugin has already installed
+ * the face there; adding the TTF to the boot-gating font load would slow every native cold launch
+ * to fetch something already present. On web the bundle is an HTTP request either way.
+ *
+ * ⚠️ THE `require` SITS INSIDE THE WEB BRANCH, AND THE NATIVE BUNDLE DOES NOT CARRY IT — MEASURED,
+ * NOT ASSUMED. The worry is real in general (a bundler's dependency graph is static, so a
+ * `require` in a dead branch usually still registers the asset), but `babel-preset-expo` inlines
+ * `Platform.OS` at transform time and the folded branch is gone before Metro collects
+ * dependencies. `expo export --platform ios` lists three assets — `SpaceMono-Regular.ttf` (93 KB),
+ * `icon.png`, `src/data/quran.db` — and no KFGQPC face; `expo export --platform web` emits
+ * `assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.<hash>.ttf` at exactly 242,368 bytes. So a
+ * `.web.ts` sibling would buy nothing and cost a file no Jest resolver picks up by default.
+ * ⚠️ Re-measure if the inline-platform transform ever changes; nothing else would notice.
+ */
+export const UTHMANI_WEB_FONT: Record<string, number> =
+  Platform.OS === 'web'
+    ? { [UTHMANI_FONT_FAMILY_IOS]: require('@/assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf') }
+    : {};

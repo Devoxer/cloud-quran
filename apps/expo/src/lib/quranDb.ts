@@ -139,6 +139,12 @@ let opening: Promise<SQLiteDatabase> | null = null;
  * ⚠️ THE FAILED OPEN IS NOT CACHED. `opening` is cleared on rejection so a retry — which is what
  * the reading screen's error state offers — actually re-attempts rather than replaying the stored
  * failure forever. A successful open is cached for the process.
+ *
+ * ⚠️ AND A HALF-OPEN IS CLOSED RATHER THAN DROPPED. `openDatabaseSync` can succeed and the PRAGMA
+ * still reject — a locked file, a corrupt page, a native module that answers the open and then
+ * fails the first statement. Without the `try`, that path throws away a LIVE connection with no
+ * reference to it: the module has no handle to close, and the error state's retry opens another
+ * one on the same file, every press. Story 6-1 review.
  */
 async function openQuranDb(): Promise<SQLiteDatabase> {
   if (handle) return handle;
@@ -148,8 +154,15 @@ async function openQuranDb(): Promise<SQLiteDatabase> {
         assetId: require('@/data/quran.db'),
       });
       const opened = openDatabaseSync(QURAN_DATABASE_NAME);
-      // See the header: this is the closest thing to a read-only open flag that exists here.
-      await opened.execAsync('PRAGMA query_only = ON;');
+      try {
+        // See the header: this is the closest thing to a read-only open flag that exists here.
+        await opened.execAsync('PRAGMA query_only = ON;');
+      } catch (error) {
+        // The close is best-effort by design: the caller is already being handed the REAL
+        // failure, and a close that also fails must not replace it with a less useful one.
+        await opened.closeAsync().catch(() => {});
+        throw error;
+      }
       handle = opened;
       return opened;
     })().catch((error: unknown) => {

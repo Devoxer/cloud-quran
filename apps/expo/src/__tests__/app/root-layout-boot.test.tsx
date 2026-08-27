@@ -53,11 +53,18 @@ function loadRootLayout({
   optIn = false,
   sessionFails = false,
   sessionUserId,
+  fontFailure,
 }: {
   optIn?: boolean;
   sessionFails?: boolean;
   /** What `useSession()` resolves to. `undefined` mimics a session that has not arrived yet. */
   sessionUserId?: string;
+  /**
+   * Which `useFonts` call reports an error. `'boot'` is the UI face the first frame waits on;
+   * `'arabic'` is the web-only Uthmani face — see the story 6-1 cases at the bottom of this file
+   * for why the two must not behave the same.
+   */
+  fontFailure?: 'boot' | 'arabic';
 } = {}) {
   let mod: { default: unknown } | undefined;
   let sentry: { init: jest.Mock; wrap: jest.Mock } | undefined;
@@ -74,7 +81,24 @@ function loadRootLayout({
   // rather than two copies of React. Capturing the render here keeps them the same instance.
   let renderRoot: (() => { toJSON: () => unknown }) | undefined;
   let unmountRoot: (() => void) | undefined;
+  /** Every font map the layout registered, in call order. */
+  const fontMaps: Record<string, unknown>[] = [];
   jest.isolateModules(() => {
+    // ⚠️ story 6-1: `expo-font` IS MOCKED HERE, NOT JUST IN `jest.setup.js`, BECAUSE THE GLOBAL
+    // MOCK DISCARDS ITS ARGUMENT AND ITS CALL COUNT. That is what made the whole web-only Arabic
+    // registration deletable with every gate green — nothing could observe the map, and nothing
+    // could observe that there were TWO calls with different failure semantics.
+    let call = 0;
+    jest.doMock('expo-font', () => ({
+      useFonts: (map: Record<string, unknown>) => {
+        call += 1;
+        fontMaps.push(map);
+        const fails = fontFailure === 'boot' ? call === 1 : fontFailure === 'arabic' && call === 2;
+        return fails ? [false, new Error('font request failed')] : [true, null];
+      },
+      loadAsync: jest.fn(async () => {}),
+      isLoaded: () => true,
+    }));
     // ⚠️ Mocked INSIDE the isolated registry, for the same reason Sentry is captured there: a
     // mock created outside is a different module instance than the one the layout requires.
     // The whole module is replaced rather than spied, because requiring the real one drags in
@@ -184,6 +208,7 @@ function loadRootLayout({
   });
   return {
     mod: mod as { default: unknown },
+    fontMaps,
     sentry: sentry as { init: jest.Mock; wrap: jest.Mock },
     ensureAnonymousSession: ensureAnonymousSession as jest.Mock,
     startSyncManagers: startSyncManagers as jest.Mock,
@@ -406,5 +431,39 @@ describe('root layout — the provider gets the QUERY MODULE′s client, not jus
     // …and the prop is the imported binding, not a client constructed in this file.
     expect(source).toMatch(/<QueryClientProvider client=\{queryClient\}>/);
     expect(source).not.toMatch(/new QueryClient\(/);
+  });
+});
+
+describe('root layout — the Arabic face is loaded, and it cannot take the app down (story 6-1)', () => {
+  // ⚠️ THE WEB-ONLY UTHMANI REGISTRATION WAS A KEY IN THE BOOT FONT MAP FOR ONE ROUND, AND THAT
+  // MADE A 237 KB FONT FETCH A WHOLE-APP FAILURE MODE. The boot map's error is rethrown into the
+  // router's ErrorBoundary and gates the first frame, so on web a request that 404s or times out
+  // took the entire app down rather than degrading to fallback glyphs — on the platform the
+  // Electron desktop shell wraps. It is a second `useFonts` now, with its own state, whose return
+  // value is deliberately not read.
+  //
+  // The MAP itself — the Uthmani key present on web and absent on native — is pinned in
+  // `constants/arabic.test.ts`. What lives here is the wiring: two calls, one gating, one not.
+
+  it('registers fonts in TWO calls, and the boot map is not where the Arabic face goes', () => {
+    const { fontMaps, renderRoot } = loadRootLayout();
+    renderRoot(); // the maps are hook arguments, so they exist only once the tree mounts
+    // MUTATION: fold the Arabic face back into the boot map. Both cases below would still pass
+    // one at a time; this is what makes "a SECOND call" the assertion.
+    expect(fontMaps).toHaveLength(2);
+    expect(Object.keys(fontMaps[0])).toEqual(['SpaceMono']);
+    expect(fontMaps[0]).not.toHaveProperty('KFGQPC HAFS Uthmanic Script');
+  });
+
+  it('a failing ARABIC load is swallowed — the app renders, in a fallback face', () => {
+    const { renderRoot } = loadRootLayout({ fontFailure: 'arabic' });
+    expect(() => renderRoot()).not.toThrow();
+    expect(renderRoot().toJSON()).not.toBeNull();
+  });
+
+  it('a failing BOOT load still reaches the error boundary — anti-vacuity', () => {
+    // If the rethrow had simply been deleted, the case above would pass for the wrong reason.
+    const { renderRoot } = loadRootLayout({ fontFailure: 'boot' });
+    expect(() => renderRoot()).toThrow('font request failed');
   });
 });

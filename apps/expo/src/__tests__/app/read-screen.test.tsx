@@ -15,6 +15,15 @@
  * global one does not serve here: FlatList refuses `scrollToIndex` without `getItemLayout` — and
  * this story forbids `getItemLayout` outright — so the restore case could not be observed at all;
  * and the imperative ref is exactly what the restore IS, so it has to be inspectable.
+ *
+ * ⚠️ GESTURE HANDLER IS MOCKED LOCALLY TOO, AND THE MOCK RECORDS THE GESTURE'S CONFIGURATION
+ * RATHER THAN JUST SWALLOWING IT. The surface tap is the screen's only way to reveal the chrome —
+ * i.e. the route's only exit — and two of its three chained settings are load-bearing in ways
+ * nothing renders: `runOnJS(true)` (the callback is a React setter, not a worklet) and
+ * `cancelsTouchesInView(false)` (RNGH's default cancels the RN touch when the tap recognises,
+ * which would silently kill every `Pressable` inside the gesture's area). Both are asserted.
+ * What no Jest renderer can see is the thing the gesture exists FOR — that a drag still scrolls —
+ * because responder/recogniser negotiation is native. The simulator smoke is what proves that.
  */
 
 const mockBack = jest.fn();
@@ -32,14 +41,42 @@ jest.mock('expo-router', () => ({
   }),
 }));
 
+/** Every tap gesture the screen built, with its chained configuration and its handler. */
+const mockTaps: { settings: string[]; end?: () => void }[] = [];
+
+jest.mock('react-native-gesture-handler', () => {
+  // ⚠️ NO TYPE ANNOTATIONS INSIDE THIS FACTORY — Jest's hoisting guard rejects any identifier it
+  // does not recognise as in-scope, and a TypeScript parameter type is an identifier to it.
+  const { View } = require('react-native');
+  const Tap = () => {
+    const gesture: any = { settings: [] };
+    const setting =
+      (name: string) =>
+      (...args: unknown[]) => {
+        gesture.settings.push(`${name}(${args.map(String).join(',')})`);
+        return gesture;
+      };
+    gesture.cancelsTouchesInView = setting('cancelsTouchesInView');
+    gesture.runOnJS = setting('runOnJS');
+    gesture.maxDuration = setting('maxDuration');
+    gesture.maxDistance = setting('maxDistance');
+    gesture.onEnd = (callback: any) => {
+      gesture.end = callback;
+      return gesture;
+    };
+    mockTaps.push(gesture);
+    return gesture;
+  };
+  const GestureDetector = ({ children }: any) => children;
+  return { __esModule: true, Gesture: { Tap }, GestureDetector, GestureHandlerRootView: View };
+});
+
 const mockScrollToIndex = jest.fn();
 const mockScrollToOffset = jest.fn();
 /** Captured on every render so a case can assert what the list was configured with. */
 const mockListProps: Record<string, unknown>[] = [];
 
 jest.mock('@shopify/flash-list', () => {
-  // ⚠️ NO TYPE ANNOTATIONS INSIDE THIS FACTORY. Jest's hoisting guard rejects any identifier it
-  // does not recognise as in-scope, and a TypeScript parameter type is an identifier to it.
   const React = require('react');
   const { View } = require('react-native');
   const FlashList = React.forwardRef((props: any, ref: any) => {
@@ -68,11 +105,12 @@ jest.mock('@shopify/flash-list', () => {
 
 const mockSetReadingPosition = jest.fn();
 const mockReadingPositionRow = { current: null as { surah: number; verse: number } | null };
+const mockPreferencesRow = { current: null as { fontSize?: number } | null };
 
 jest.mock('@/lib/sync', () => ({
   setReadingPosition: (...args: unknown[]) => mockSetReadingPosition(...args),
   useReadingPosition: () => ({ data: mockReadingPositionRow.current }),
-  usePreferences: () => ({ data: null }),
+  usePreferences: () => ({ data: mockPreferencesRow.current }),
 }));
 
 const mockGetSurahVerses = jest.fn();
@@ -113,23 +151,55 @@ function reportVisible(item: TestVerse) {
   act(() => handler({ viewableItems: [{ item, key: '', index: 0, isViewable: true }] }));
 }
 
+/** Tap the reading surface — the screen's ONE gesture, and the chrome's only way back. */
+function tapSurface() {
+  const tap = mockTaps[mockTaps.length - 1];
+  act(() => tap.end?.());
+}
+
+/**
+ * The chrome bar's touch state — `'none'` while dismissed or still fading in.
+ *
+ * ⚠️ `includeHiddenElements` IS REQUIRED, AND THAT IS ITSELF THE PROOF OF ANOTHER FIX. A dismissed
+ * bar now carries `accessibilityElementsHidden` / `importantForAccessibility` as well as
+ * `pointerEvents: 'none'`, so RNTL — which models the accessibility tree — cannot see it by
+ * default. Before that fix every query below found the close button while it was invisible, which
+ * is exactly what a VoiceOver or TalkBack user experienced.
+ */
+function chromeTouches(): unknown {
+  return screen.getByTestId('reading-chrome-header', { includeHiddenElements: true }).props
+    .pointerEvents;
+}
+
+/** Tap, then wait for the reveal to settle — which is when the bars re-enter both trees. */
+async function revealChrome() {
+  tapSurface();
+  await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockListProps.length = 0;
+  mockTaps.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
+  mockPreferencesRow.current = null;
   mockGetSurahVerses.mockImplementation(async (surah: number) =>
-    versesOf(surah, surah === 2 ? 286 : 7)
+    surah >= 1 && surah <= 114 ? versesOf(surah, surah === 2 ? 286 : 7) : []
   );
-  mockGetSurahMetadata.mockImplementation(async (surah: number) => ({
-    number: surah,
-    nameArabic: 'x',
-    nameEnglish: 'x',
-    nameTransliteration: surah === 1 ? 'Al-Fatihah' : 'Al-Baqarah',
-    verseCount: surah === 2 ? 286 : 7,
-    revelationType: 'meccan' as const,
-    order: 1,
-  }));
+  mockGetSurahMetadata.mockImplementation(async (surah: number) =>
+    surah >= 1 && surah <= 114
+      ? {
+          number: surah,
+          nameArabic: 'x',
+          nameEnglish: 'x',
+          nameTransliteration: surah === 1 ? 'Al-Fatihah' : 'Al-Baqarah',
+          verseCount: surah === 2 ? 286 : 7,
+          revelationType: 'meccan' as const,
+          order: 1,
+        }
+      : null
+  );
 });
 
 describe('it shows verses', () => {
@@ -145,6 +215,19 @@ describe('it shows verses', () => {
     expect(flat.fontSize).toBe(ARABIC_FONT_SIZE.default);
     // Arabic sets its own direction locally; the app itself stays LTR (no RTL infrastructure).
     expect(flat.writingDirection).toBe('rtl');
+  });
+
+  it('sizes the verse from the reader’s synced preference, clamped', async () => {
+    // ⚠️ THE ONLY CASE THAT RUNS THE PREFERENCE PATH AT ALL. Every other one mocks
+    // `usePreferences` as `{ data: null }`, which exercises only `clampArabicFontSize`'s default
+    // branch — so `fontSize={fontSize}` could have been `fontSize={ARABIC_FONT_SIZE.default}` and
+    // nothing would have noticed. Story 6.5 ships the picker; the READ side is this story's.
+    mockPreferencesRow.current = { fontSize: 1000 };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    const style = screen.getByText('أية 1:1').props.style.flat(2);
+    const flat = Object.assign({}, ...style.filter(Boolean));
+    expect(flat.fontSize).toBe(ARABIC_FONT_SIZE.max);
   });
 
   it('renders the longest surah without a fixed-height estimate', async () => {
@@ -175,6 +258,76 @@ describe('it shows verses', () => {
     // ever tell us the bundled Quran text could not be opened on a reader's device.
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
+  });
+
+  it('gives a surah that reads clean and EMPTY its own surface, not a blank one', async () => {
+    // ⚠️ A DIFFERENT FAILURE FROM THE ONE ABOVE, AND IT SHIPPED AS A BLANK SCREEN FOR A ROUND.
+    // `getSurahVerses` answers `[]` rather than throwing for anything it cannot find, so `error`
+    // stayed null, the list rendered nothing, and the next-surah control — being the list's
+    // FOOTER, gated on `verses.length > 0` — was not there either. No verses, no error, no way
+    // forward.
+    mockGetSurahVerses.mockImplementation(async () => []);
+    render(<Read />);
+    await screen.findByTestId('reading-error');
+    expect(screen.getByText('No verses to show')).toBeTruthy();
+    expect(screen.getByText('Try Again')).toBeTruthy();
+  });
+
+  it('reveals the door on a failed surface, because a tap is not a discoverable exit there', async () => {
+    // The chrome is hidden on arrival everywhere else — one tap brings it back. On a screen that
+    // has FAILED, "guess that a tap does something" is not an exit, and `fullScreenModal` has no
+    // dismiss gesture on any platform.
+    mockGetSurahVerses.mockImplementation(async () => []);
+    render(<Read />);
+    await screen.findByTestId('reading-error');
+    await waitFor(() => expect(screen.getByTestId('reading-close')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('reading-close'));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('what the chrome says', () => {
+  // ⚠️ NOTHING OBSERVED EITHER STRING FOR A ROUND, AND BOTH MUTATIONS PASSED 1826 TESTS:
+  // `const title = null` (a blank header forever) and swapping `getPageForVerse`'s arguments
+  // (`Page -1 · 1:1`, frozen). `ReadingChrome.test.tsx` asserts literals its own harness passes
+  // in, so the screen's side of the wiring was covered by nobody.
+
+  it('names the surah the rows came from', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    await revealChrome();
+    expect(screen.getByText('Al-Fatihah')).toBeTruthy();
+  });
+
+  it('names the page and the verse the reader is on, and follows them', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    await revealChrome();
+    expect(screen.getByText('Page 1 · 1:1')).toBeTruthy();
+    reportVisible({ surah: 1, verse: 5, textUthmani: '', textSimple: '' });
+    expect(screen.getByText('Page 1 · 1:5')).toBeTruthy();
+  });
+
+  it('reads the page from the verse↔page map, in the right argument order', async () => {
+    // 2:255 is on page 42 of the Madinah mushaf; `getPageForVerse(255, 2)` answers -1. Swapping
+    // the two arguments type-checks — they are both `number` — and renders `Page -1` forever.
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    render(<Read />);
+    await screen.findByText('أية 2:255');
+    await revealChrome();
+    expect(screen.getByText('Page 42 · 2:255')).toBeTruthy();
+  });
+
+  it('never renders a page of -1 for an out-of-range saved verse', async () => {
+    // ⚠️ MEASURED DEFECT: `visibleVerse` was seeded from the saved row with NO range check, while
+    // the restore effect applied exactly that check one screen over. A row of `{1, 999}` — a
+    // corrupt or newer-build value — put `Page -1 · 1:999` in front of the reader.
+    mockReadingPositionRow.current = { surah: 1, verse: 999 };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    await revealChrome();
+    expect(screen.queryByText('Page -1 · 1:999')).toBeNull();
+    expect(screen.getByText('Page 1 · 1:1')).toBeTruthy();
   });
 });
 
@@ -209,12 +362,37 @@ describe('the position write', () => {
   });
 
   it('keeps the surah in the pair across a surah boundary', async () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 1 };
+    render(<Read />);
+    await screen.findByText('أية 2:1');
+    reportVisible({ surah: 2, verse: 1, textUthmani: '', textSimple: '' });
+    reportVisible({ surah: 2, verse: 2, textUthmani: '', textSimple: '' });
+    // MUTATION: drop the surah from the persisted pair. `1:1 → 2:1` is a real move and would
+    // look like "no change" to a verse-number comparison — covered exhaustively in
+    // `lib/usePosition.test.ts`; this is the screen's half.
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+    expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ surah: 2, verse: 2 });
+  });
+
+  it('writes NOTHING when a surah change scrolls the old rows to the top', async () => {
+    // ⚠️ THE ONE LEAK IN THE "ONE WRITE PER VERSE CHANGE" DISCIPLINE, MEASURED. `goToSurah` calls
+    // `scrollToOffset({ offset: 0 })` — and for one round it did so while the OLD surah's rows
+    // were still the list's data, so viewability fired and `(oldSurah, 1)` was written. A reader
+    // at 1:7 tapping "next" produced `[{1,7}, {1,1}]` before the new rows existed; if the next
+    // read then failed, their saved place was permanently the top of the surah they had left.
     render(<Read />);
     await screen.findByText('أية 1:7');
+    reportVisible({ surah: 1, verse: 7, textUthmani: '', textSimple: '' });
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(screen.getByTestId('next-surah-button'));
+    // The stale report the scroll provokes, replayed exactly: the old surah's verse 1.
     reportVisible({ surah: 1, verse: 1, textUthmani: '', textSimple: '' });
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+
+    // …and the NEW surah's rows are reported normally, so the guard is not a mute button.
+    await screen.findByText('أية 2:1');
     reportVisible({ surah: 2, verse: 1, textUthmani: '', textSimple: '' });
-    // MUTATION: drop the surah from the persisted pair. `1:1 → 2:1` is a real move and would
-    // look like "no change" to a verse-number comparison.
     expect(mockSetReadingPosition).toHaveBeenCalledTimes(2);
     expect(mockSetReadingPosition.mock.calls[1][0]).toMatchObject({ surah: 2, verse: 1 });
   });
@@ -241,6 +419,23 @@ describe('cold launch', () => {
     expect(mockScrollToIndex).not.toHaveBeenCalled();
   });
 
+  it('never applies a saved VERSE to a surah the saved SURAH did not name', async () => {
+    // ⚠️ MEASURED DEFECT, AND THE SUBTLEST ONE IN THIS SCREEN. The surah was locked on render one
+    // (`useState(() => saved?.surah ?? 1)`) while the restore effect read `saved?.verse` on a
+    // LATER render, with no comparison between them. A row that arrives one render late — null
+    // first, `{18, 4}` next, which is exactly what a first-ever launch syncing from another
+    // device looks like — opened Al-Fatihah and scrolled to index 3. The reader landed on 1:4.
+    mockReadingPositionRow.current = null;
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    // The row lands after the first render, and a re-render delivers it.
+    mockReadingPositionRow.current = { surah: 18, verse: 4 };
+    reportVisible({ surah: 1, verse: 1, textUthmani: '', textSimple: '' });
+    await waitFor(() => expect(screen.getByText('أية 1:1')).toBeTruthy());
+    expect(mockGetSurahVerses).not.toHaveBeenCalledWith(18);
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
+  });
+
   it('falls back to the top when the saved verse is not in the surah', async () => {
     // A corrupted or future-build row (surah 1 has 7 verses). The documented fallback is the top,
     // never a crash and never an out-of-range scroll.
@@ -248,6 +443,20 @@ describe('cold launch', () => {
     render(<Read />);
     await screen.findByText('أية 1:1');
     expect(mockScrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('falls back to 1:1 — and to a real screen — for a saved SURAH outside the book', async () => {
+    // ⚠️ MEASURED DEFECT: `{200, 1}` reached `getSurahVerses(200)`, which answers `[]`. `error`
+    // stayed null, the footer control was gated off, and the reader got a blank surface with the
+    // close button as the only thing on it. The I/O matrix's documented fallback is "falls back
+    // to the top" — only the VERSE half of it was implemented.
+    mockReadingPositionRow.current = { surah: 200, verse: 1 };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    expect(mockGetSurahVerses).toHaveBeenCalledWith(1);
+    expect(mockGetSurahVerses).not.toHaveBeenCalledWith(200);
+    await revealChrome();
+    expect(screen.getByText('Page 1 · 1:1')).toBeTruthy();
   });
 
   it('restores ONCE — moving to the next surah does not re-apply it', async () => {
@@ -277,6 +486,17 @@ describe('the next-surah control', () => {
     expect(content.paddingTop).toBeGreaterThan(56);
   });
 
+  it('labels and navigates to the SAME surah — one derivation, not three', async () => {
+    // ⚠️ `nextSurah(surah)` was computed three times for one press: twice in this screen for the
+    // label, once inside the button's own `onPress`. Three places for the label and the
+    // destination to disagree. The screen derives it once and passes both halves down.
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    expect(screen.getByText('Next: Al-Baqarah')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('next-surah-button'));
+    await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(2));
+  });
+
   it('wraps from An-Nas back to Al-Fatiha rather than dead-ending', async () => {
     mockReadingPositionRow.current = { surah: 114, verse: 1 };
     render(<Read />);
@@ -286,12 +506,55 @@ describe('the next-surah control', () => {
   });
 });
 
-describe('chrome toggling does not shift content', () => {
+describe('the chrome, and the gesture that reveals it', () => {
+  it('starts HIDDEN — the screen is immersive when it renders', async () => {
+    // ⚠️ IT SHIPPED STARTING VISIBLE FOR ONE ROUND. The frozen acceptance criterion is "given the
+    // reading screen, when it renders, then it is immersive", and the frozen I/O matrix's row is
+    // "Tap the surface | Chrome hidden | Header and footer appear together" — the hidden state is
+    // the one the screen opens in. The argument for flipping it (with the tap on the rows there
+    // was no "elsewhere" to tap, so the exit was undiscoverable) was answered by giving the tap
+    // back its surface, not by moving the intent.
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    expect(chromeTouches()).toBe('none');
+  });
+
+  it('reveals both bars on a tap of the surface', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    await revealChrome();
+    expect(screen.getByTestId('reading-chrome-footer').props.pointerEvents).toBe('box-none');
+  });
+
+  it('dismisses them again on the next tap, immediately', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    await revealChrome();
+    tapSurface();
+    // ⚠️ NO `waitFor` HERE, DELIBERATELY. Touches stop on the LEADING edge of a dismissal while
+    // the bars are still drawn; only the reveal waits for the animation to finish.
+    expect(chromeTouches()).toBe('none');
+  });
+
+  it('configures the gesture so a tap cannot cancel the RN touches underneath it', async () => {
+    // ⚠️ RNGH's DEFAULT IS `cancelsTouchesInView: true`: when the tap recognises, UIKit cancels
+    // the touch in the RN view tree — which silently kills every `Pressable` inside the gesture's
+    // area, i.e. the next-surah control and the error state's retry. And `runOnJS(true)` because
+    // the callback is a React state setter, not a worklet: without it Reanimated tries to run it
+    // on the UI thread. Neither is observable in a render.
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    const tap = mockTaps[mockTaps.length - 1];
+    expect(tap.settings).toContain('cancelsTouchesInView(false)');
+    expect(tap.settings).toContain('runOnJS(true)');
+    expect(tap.end).toBeInstanceOf(Function);
+  });
+
   it('leaves the list content style identical across a toggle', async () => {
     render(<Read />);
     await screen.findByText('أية 1:7');
     const before = { ...(listProps().contentContainerStyle as object) };
-    fireEvent.press(screen.getByTestId('verse-1:1'));
+    tapSurface();
     const after = { ...(listProps().contentContainerStyle as object) };
     // MUTATION: reserve the chrome's space only while it is shown. Every verse would then move
     // on each tap — the exact failure the acceptance criterion names.
@@ -301,16 +564,30 @@ describe('chrome toggling does not shift content', () => {
   it('keeps both bars in the tree either way', async () => {
     render(<Read />);
     await screen.findByText('أية 1:7');
-    fireEvent.press(screen.getByTestId('verse-1:1'));
-    expect(screen.getByTestId('reading-chrome-header')).toBeTruthy();
-    expect(screen.getByTestId('reading-chrome-footer')).toBeTruthy();
+    const options = { includeHiddenElements: true } as const;
+    expect(screen.getByTestId('reading-chrome-header', options)).toBeTruthy();
+    await revealChrome();
+    expect(screen.getByTestId('reading-chrome-header', options)).toBeTruthy();
+    expect(screen.getByTestId('reading-chrome-footer', options)).toBeTruthy();
+  });
+
+  it('hides a dismissed bar from VoiceOver and TalkBack, not just from touch', async () => {
+    // ⚠️ `pointerEvents` REASONS ABOUT THE TOUCH TREE ONLY. A bar at `opacity: 0` was still a
+    // first-class citizen of the ACCESSIBILITY tree, so a screen-reader user swiping the reading
+    // surface landed on a Close button nobody could see and no gesture had revealed.
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    expect(screen.queryByTestId('reading-close')).toBeNull();
+    await revealChrome();
+    expect(screen.getByTestId('reading-close')).toBeTruthy();
   });
 });
 
 describe('the room still has a door', () => {
   it('goes back when there is history to pop', async () => {
     render(<Read />);
-    await screen.findByTestId('reading-close');
+    await screen.findByText('أية 1:1');
+    await revealChrome();
     fireEvent.press(screen.getByTestId('reading-close'));
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
@@ -319,7 +596,8 @@ describe('the room still has a door', () => {
   it('replaces to the home tab when there is none', async () => {
     mockCanGoBack.mockReturnValue(false);
     render(<Read />);
-    await screen.findByTestId('reading-close');
+    await screen.findByText('أية 1:1');
+    await revealChrome();
     fireEvent.press(screen.getByTestId('reading-close'));
     expect(mockReplace).toHaveBeenCalledWith(HOME_HREF);
     expect(mockBack).not.toHaveBeenCalled();
@@ -328,19 +606,24 @@ describe('the room still has a door', () => {
   it('never sends the reader back to the screen they are leaving', async () => {
     mockCanGoBack.mockReturnValue(false);
     render(<Read />);
-    await screen.findByTestId('reading-close');
+    await screen.findByText('أية 1:1');
+    await revealChrome();
     fireEvent.press(screen.getByTestId('reading-close'));
     for (const call of mockReplace.mock.calls) expect(call[0]).not.toBe('/read');
   });
 
-  it('a tappable verse is not a button', async () => {
-    // ⚠️ THE ROWS CARRY THE CHROME TAP (a full-screen wrapper blocked scrolling — see `VerseRow`),
-    // and they carry NO `accessibilityRole`. Without that, Al-Baqarah would announce 286 buttons
-    // and the role queries would stop describing the real controls.
+  it('a tappable verse is not a button — and is no longer tappable at all', async () => {
+    // ⚠️ THE ROWS CARRIED THE CHROME TAP FOR A ROUND, AND GIVING IT BACK TO THE SURFACE IS WHAT
+    // FREES THEM. Epic 7's reserved semantics are "a tap on a verse plays audio from it and a tap
+    // elsewhere toggles chrome"; a row that already owns the chrome toggle has nowhere to put
+    // that. The rows are text again — no `onPress`, and still no `accessibilityRole`, which would
+    // announce 286 buttons on Al-Baqarah.
     render(<Read />);
     await screen.findByText('أية 1:7');
+    await revealChrome();
     const roles = screen.getAllByRole('button');
     expect(roles).toHaveLength(2); // the door, and next surah
+    expect(screen.getByTestId('verse-1:1').props.onStartShouldSetResponder).toBeUndefined();
   });
 
   it('the reading surface is a plain View, never a Pressable wrapping the list', async () => {
@@ -349,12 +632,13 @@ describe('the room still has a door', () => {
     // START and RN cancels a press only when the touch leaves the element, so a drag inside it
     // never releases — the list does not scroll at all, and every swipe lands as a toggle.
     // Reproduced on the iOS simulator; Jest cannot model responder negotiation, so this asserts
-    // the SHAPE instead of the behaviour and says so.
+    // the SHAPE instead of the behaviour and says so. The gesture that replaced it is asserted
+    // above; that a drag still scrolls is proved by the simulator smoke and by nothing here.
     render(<Read />);
     await screen.findByText('أية 1:7');
     expect(screen.getByTestId('reading-surface').props.onStartShouldSetResponder).toBeUndefined();
-    // …and the tap really is on the rows, which is what makes the shape above sufficient.
-    fireEvent.press(screen.getByTestId('verse-1:2'));
-    expect(screen.getByTestId('reading-chrome-header').props.pointerEvents).toBe('none');
+    expect(
+      screen.getByTestId('reading-tap-surface').props.onStartShouldSetResponder
+    ).toBeUndefined();
   });
 });

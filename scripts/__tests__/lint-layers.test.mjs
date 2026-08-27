@@ -34,6 +34,7 @@ import {
   findApiModuleImports,
   findCycle,
   findGatingAntiPattern,
+  findSqliteUses,
   hasBroadRnImport,
   isHookFile,
   isLibFile,
@@ -44,13 +45,17 @@ import {
   ownBarrel,
   QUERY_CACHE_MODULE,
   QUERY_MODULE,
+  QURAN_DB_CHOKEPOINT,
   queryModuleHolds,
+  quranDbChokepointHolds,
   RN_UI_PRIMITIVES,
   RPC_CLIENT_MODULE,
   runApiChokepointScan,
   runGatingScan,
   runLayerScan,
   runQueryModuleChokepointScan,
+  runQuranDbChokepointScan,
+  SQLITE_MODULE,
 } from '../lint-layers.mjs';
 
 // ── gap (a): fail-closed on a missing scan root ─────────────────────────────
@@ -1204,4 +1209,137 @@ test('query-chokepoint: the LIVE query module holds, and the tree reports ZERO',
   // module in the app reaches the RPC client directly.
   assert.equal(QUERY_MODULE, 'apps/expo/src/lib/sync.ts');
   assert.deepEqual(runQueryModuleChokepointScan(), []);
+});
+
+// ── story 6-1: the BUNDLED-DATABASE CHOKEPOINT scan ───────────────────────────────────────────
+//
+// Rules 6 and 7 guard the door onto the worker; this guards the door onto the 4.2 MB SQLite
+// database inside the app. It is the sentence CLAUDE.md carried as "convention, and that half is
+// NOT gated" — true only because until story 6-1 the tree had zero `openDatabaseSync` call sites,
+// and a rule with no subject cannot fire. Same three shapes the other two use: a POSITIVE hit, a
+// NEGATIVE that must stay quiet, and the EVASIONS including the fail-closed one.
+
+test('quran-db-chokepoint (positive): a screen importing expo-sqlite is flagged', () => {
+  const uses = findSqliteUses(
+    'apps/expo/src/app/read.tsx',
+    "import { openDatabaseSync } from 'expo-sqlite';\nconst db = openDatabaseSync('quran.db');"
+  );
+  // Both detectors fire on the obvious shape — the import AND the open.
+  assert.equal(uses.length, 2);
+  assert.match(uses[0], /imports "expo-sqlite"/);
+  assert.match(uses[1], /openDatabaseSync/);
+});
+
+test('quran-db-chokepoint (positive): a feature that opens WITHOUT importing is still flagged', () => {
+  // The binding arrived through a barrel or a helper. The import detector alone would miss it,
+  // which is the whole reason rule 6 pairs two detectors and this one copies the pairing.
+  const uses = findSqliteUses(
+    'apps/expo/src/features/reading/lib/rawText.ts',
+    "import { sqlite } from './vendor';\nconst { openDatabaseSync } = sqlite;\nopenDatabaseSync('quran.db');"
+  );
+  assert.equal(uses.length, 1);
+  assert.match(uses[0], /openDatabaseSync/);
+});
+
+test('quran-db-chokepoint (evasion): every other door onto a connection counts too', () => {
+  for (const opener of ['openDatabaseAsync', 'deserializeDatabaseAsync', 'SQLiteProvider']) {
+    const uses = findSqliteUses(
+      'apps/expo/src/features/reading/components/Raw.tsx',
+      `export const x = ${opener}('quran.db');`
+    );
+    assert.equal(uses.length, 1, opener);
+    assert.match(uses[0], new RegExp(opener));
+  }
+});
+
+test('quran-db-chokepoint (evasion): a SUBPATH is caught, not just the bare specifier', () => {
+  const uses = findSqliteUses(
+    'apps/expo/src/lib/prefs.ts',
+    "import Storage from 'expo-sqlite/kv-store';\nexport const s = Storage;"
+  );
+  assert.equal(uses.length, 1);
+  assert.match(uses[0], /expo-sqlite\/kv-store/);
+});
+
+test('quran-db-chokepoint (evasion): a dynamic import is caught', () => {
+  const uses = findSqliteUses(
+    'apps/expo/src/features/reading/hooks/useRaw.ts',
+    "export const load = async () => (await import('expo-sqlite')).openDatabaseSync;"
+  );
+  // The import detector fires; the `.openDatabaseSync` member access does NOT double-count,
+  // because the call regex requires a `(` and rejects a preceding dot.
+  assert.equal(uses.length, 1);
+  assert.match(uses[0], /imports "expo-sqlite"/);
+});
+
+test('quran-db-chokepoint (negative): the chokepoint module itself is exempt', () => {
+  const uses = findSqliteUses(
+    QURAN_DB_CHOKEPOINT,
+    "import { openDatabaseSync } from 'expo-sqlite';\nconst db = openDatabaseSync('quran.db');"
+  );
+  assert.deepEqual(uses, []);
+});
+
+test('quran-db-chokepoint (negative): going THROUGH the chokepoint is the compliant shape', () => {
+  const uses = findSqliteUses(
+    'apps/expo/src/features/reading/hooks/useSurah.ts',
+    "import { getSurahVerses } from '@/lib/quranDb';\nexport const load = (n) => getSurahVerses(n);"
+  );
+  assert.deepEqual(uses, []);
+});
+
+test('quran-db-chokepoint (evasion): the opener in a comment or a string is NOT a hit', () => {
+  const uses = findSqliteUses(
+    'apps/expo/src/features/reading/lib/notes.ts',
+    [
+      '// Never call openDatabaseSync( here — go through @/lib/quranDb.',
+      "const doc = 'openDatabaseSync(name) belongs in lib/quranDb.ts';",
+      '/* SQLiteProvider(assetSource) is the component form */',
+      'export const n = 1;',
+    ].join('\n')
+  );
+  assert.deepEqual(uses, []);
+});
+
+test('quran-db-chokepoint (evasion): a METHOD named openDatabaseSync is not a hit', () => {
+  const uses = findSqliteUses(
+    'apps/expo/src/lib/metrics.ts',
+    'export const send = (t) => t.openDatabaseSync(1);'
+  );
+  assert.deepEqual(uses, []);
+});
+
+// ⚠️ The fail-closed half, and it is the half that matters. `quranDb.ts` is a brand-new module in
+// a brand-new feature; a rename or a refactor is exactly the plausible future, and the moment it
+// stops opening the database "nobody else imports expo-sqlite" is trivially true.
+test('quran-db-chokepoint (fail-closed): a missing or hollowed-out chokepoint does NOT hold', () => {
+  assert.equal(quranDbChokepointHolds(null), false, 'absent file');
+  assert.equal(quranDbChokepointHolds(''), false, 'empty file');
+  assert.equal(
+    quranDbChokepointHolds("export { getSurahVerses } from './elsewhere';"),
+    false,
+    're-export shell that no longer opens anything'
+  );
+  assert.equal(
+    quranDbChokepointHolds(
+      "import type { SQLiteDatabase } from 'expo-sqlite';\nexport type D = SQLiteDatabase;"
+    ),
+    false,
+    'imports the driver but never opens a connection'
+  );
+  assert.equal(
+    quranDbChokepointHolds(
+      "import { openDatabaseSync } from 'expo-sqlite';\nconst db = openDatabaseSync('quran.db');"
+    ),
+    true,
+    'the real shape'
+  );
+});
+
+test('quran-db-chokepoint: the LIVE chokepoint holds, and the tree reports ZERO', () => {
+  // Both halves together: the floor is genuinely satisfied (not merely absent), and no other
+  // module in the app opens the shipped Quran database.
+  assert.equal(SQLITE_MODULE, 'expo-sqlite');
+  assert.equal(QURAN_DB_CHOKEPOINT, 'apps/expo/src/lib/quranDb.ts');
+  assert.deepEqual(runQuranDbChokepointScan(), []);
 });

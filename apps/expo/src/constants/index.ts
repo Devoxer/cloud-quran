@@ -17,6 +17,7 @@ export {
   UTHMANI_FONT_FAMILY,
   UTHMANI_FONT_FAMILY_ANDROID,
   UTHMANI_FONT_FAMILY_IOS,
+  UTHMANI_WEB_FONT,
 } from './arabic';
 // Colors
 export type {

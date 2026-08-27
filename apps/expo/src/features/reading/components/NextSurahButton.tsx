@@ -12,6 +12,11 @@
  *
  * Only NEXT, deliberately. Backwards navigation is the index's job; shipping a second control
  * here would be half of 6.3 built in the wrong place.
+ *
+ * ⚠️ IT TAKES THE DESTINATION, NOT THE CURRENT SURAH, AND THAT IS A FIX. It used to take `surah`
+ * and call `nextSurah(surah)` itself, while `read.tsx` called `nextSurah(surah)` twice more to
+ * build the label — three derivations of one number for one press, which is three places for the
+ * label and the destination to disagree. The screen derives it ONCE and passes both halves.
  */
 
 import { SURAH_COUNT } from 'quran-data';
@@ -30,13 +35,14 @@ export function nextSurah(surah: number): number {
 }
 
 export interface NextSurahButtonProps {
-  /** The surah being read. The label names the one this moves TO. */
-  surah: number;
+  /** The surah this moves TO — already wrapped. Derived once, by the screen. */
+  next: number;
+  /** That surah's name, from the same derivation. */
   nextName: string;
   onPress: (next: number) => void;
 }
 
-export function NextSurahButton({ surah, nextName, onPress }: NextSurahButtonProps) {
+export function NextSurahButton({ next, nextName, onPress }: NextSurahButtonProps) {
   const { t } = useTranslation();
   const styles = useThemedStyles((theme) => ({
     button: {
@@ -64,7 +70,7 @@ export function NextSurahButton({ surah, nextName, onPress }: NextSurahButtonPro
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      onPress={() => onPress(nextSurah(surah))}
+      onPress={() => onPress(next)}
       style={styles.button}
       testID="next-surah-button"
     >

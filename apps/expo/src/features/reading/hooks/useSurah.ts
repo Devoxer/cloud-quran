@@ -15,6 +15,14 @@
  *
  * `reload` clears the error and re-runs. `lib/quranDb.ts` deliberately does not cache a FAILED
  * open, so a retry actually re-attempts the asset import rather than replaying the stored failure.
+ *
+ * ⚠️ THE PREVIOUS SURAH'S ROWS ARE CLEARED BEFORE THE NEXT READ STARTS, AND THEY WERE NOT FOR ONE
+ * ROUND. `surah` is a prop, `verses`/`meta` are state — so between the render that changes the
+ * number and the render that lands the rows, this hook answered the OLD surah's verses with
+ * `loading: true`. Measured with a delayed mock: the list showed Al-Fatihah's seven ayat while
+ * the header, the footnote and the next-surah button all named Al-Baqarah. Worse, those stale
+ * rows are what the screen's viewability callback reports, which is how a surah change wrote a
+ * position the reader never chose (see `read.tsx`'s `goToSurah`).
  */
 
 import type { Surah, Verse } from 'quran-data';
@@ -57,6 +65,10 @@ export function useSurah(surah: number): SurahContent {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // ⚠️ See the header: the OLD surah's rows must not survive into the new surah's loading
+    // window. `loading: true` beside last-surah verses is a lie the whole screen renders.
+    setVerses([]);
+    setMeta(null);
     (async () => {
       try {
         const [rows, row] = await Promise.all([getSurahVerses(surah), getSurahMetadata(surah)]);

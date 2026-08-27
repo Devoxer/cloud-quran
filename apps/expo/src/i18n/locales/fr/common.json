@@ -88,6 +88,8 @@
     "nextSurah": "Suivante : {{name}}",
     "footnote": "Page {{page}} · {{surah}}:{{verse}}",
     "unreadableTitle": "Impossible d’ouvrir le texte du Coran",
-    "unreadableBody": "Le texte fourni est absent ou illisible sur cet appareil."
+    "unreadableBody": "Le texte fourni est absent ou illisible sur cet appareil.",
+    "noVersesTitle": "Aucun verset à afficher",
+    "noVersesBody": "Cette sourate est revenue vide. Réessayez ou passez à la suivante."
   }
 }

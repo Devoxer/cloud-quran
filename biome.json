@@ -18,6 +18,7 @@
       "!**/.github/**",
       "!**/docs/**",
       "!**/_bmad-output/**",
+      "!_reference/**",
       "!**/*.lock",
       "!**/expo-env.d.ts",
       "!**/features/quotes/data/daily-quotes.*.json",

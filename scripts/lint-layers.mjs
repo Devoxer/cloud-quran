@@ -57,6 +57,18 @@
  *      `@/lib/outbox`, whose exported singleton is a third door: `outbox.enqueue(...)` reaches
  *      the worker with no cache update, no invalidation and no debounce. FAILS CLOSED, on the
  *      same reasoning as rule 6.
+ *   8. BUNDLED-DATABASE CHOKEPOINT (story 6-1). `expo-sqlite` — the driver for the 4.2 MB Quran
+ *      database that ships inside the app — may be imported, and a connection opened, in EXACTLY
+ *      ONE module, `apps/expo/src/lib/quranDb.ts`. It closes the sentence CLAUDE.md carried as
+ *      convention-only until this story ("SQLite and MMKV access is centralised in lib/ by
+ *      convention, and that half is not gated"), which became answerable the moment the story
+ *      created the first consumer: before 6-1 the tree had ZERO `openDatabaseSync` call sites, so
+ *      there was nothing to centralise. What the rule buys is the non-negotiable: the chokepoint
+ *      issues `PRAGMA query_only = ON` and exports no handle and no `exec` door, so no runtime
+ *      path can mutate Quran text — a second connection opened anywhere else would be READWRITE,
+ *      would typecheck, and `pnpm verify` (a BUILD-time hash of `uthmani_text` only) could not
+ *      see it. FAILS CLOSED, verbatim from rules 6 and 7: if `quranDb.ts` stops existing or stops
+ *      opening the database, "nobody else imports expo-sqlite" becomes trivially true.
  *
  * Why rule-2 is defined precisely this way — and NOT as a blanket "no react-native in lib/":
  * the cheat sheet ITSELF places the theme/animation hooks (useTheme/useThemedStyles) in lib/,
@@ -1171,6 +1183,123 @@ export function runQueryModuleChokepointScan() {
   return violations;
 }
 
+// ── The BUNDLED-DATABASE CHOKEPOINT scan (story 6-1) ──────────────────────────────────────────
+//
+// Rules 6 and 7 guard the door onto the WORKER. This guards the door onto the 4.2 MB SQLite
+// database that ships inside the app.
+//
+// ⚠️ IT IS THE SENTENCE CLAUDE.md COULD NOT MAKE, NOT A NEW RULE CLASS. That file said, and had to
+// keep saying, "SQLite and MMKV access is centralised in `lib/` by convention, and **that half is
+// not gated** — do not claim it is". The honest reason it was not gated is that until story 6-1
+// there was NOTHING TO GATE: `expo-sqlite` was a dependency with zero call sites, `metro.config.js`
+// put `db` in `assetExts` for a file nobody required, and a rule with no subject can only report
+// clean. 6-1 created the first consumer and therefore the first thing a second consumer could
+// bypass, which is what makes the rule answerable now and not before.
+//
+// THE RULE: `expo-sqlite` may be imported, and a connection opened, in EXACTLY ONE module —
+// `apps/expo/src/lib/quranDb.ts`. Everything else asks that module for verses.
+//
+// WHAT IT BUYS, concretely — this is the Quran-text non-negotiable and not a tidiness argument.
+// The chokepoint runs `PRAGMA query_only = ON` on its connection, never exports the handle, and
+// offers no `exec` door, so SQLite ITSELF refuses every INSERT/UPDATE/DELETE/DDL on the only
+// connection that exists. A second `openDatabaseSync('quran.db')` anywhere else opens
+// READWRITE|CREATE (expo-sqlite has no read-only flag at all), typechecks, lints, and renders
+// fine. `pnpm verify` would not catch it either: it hashes `uthmani_text` at BUILD time against
+// the repo's copy, not the device's, and covers neither `simple_text` nor `translations` nor the
+// mushaf layouts. "No runtime path mutates Quran text" is true because there is no second door,
+// and this is what keeps it true.
+//
+// ⚠️ FAIL-CLOSED, VERBATIM FROM RULES 6 AND 7. If `quranDb.ts` disappears or stops opening the
+// database, "nobody else imports expo-sqlite" becomes trivially true and this scan reports OK
+// having checked nothing — which is exactly how the raw-db tripwire rule 6 replaced ended its
+// life. So it asserts the chokepoint EXISTS and still HOLDS the primitive, and fails if it does
+// not.
+
+/** The one module allowed to open the bundled Quran database. */
+export const QURAN_DB_CHOKEPOINT = 'apps/expo/src/lib/quranDb.ts';
+
+/** The primitive. Importing it anywhere else is a second connection onto the shipped text. */
+export const SQLITE_MODULE = 'expo-sqlite';
+
+/**
+ * Every way `expo-sqlite` hands out a connection. All four are equally a second door — the sync
+ * and async openers, the provider component (which opens one for its subtree), and the
+ * deserializer (which builds one from bytes). The lookbehind excludes an identifier char AND a
+ * dot, so `x.openDatabaseSync(` — a method of something else — is not a hit.
+ */
+const SQLITE_OPEN_RE =
+  /(?<![A-Za-z0-9_$.])(openDatabaseSync|openDatabaseAsync|deserializeDatabaseAsync|SQLiteProvider)\s*[(<]/;
+
+/**
+ * Pure: the ways `code` (a NON-chokepoint module) reaches a SQLite connection directly.
+ * Returns a list of reason fragments; empty means compliant.
+ *
+ * Two detectors, because either alone is evadable — the same pairing rule 6 uses. The IMPORT
+ * catches the normal case in all its forms (`import`, `require`, dynamic `import()`, `export …
+ * from`); the CALL catches a connection opened from a binding that arrived some other way (a
+ * re-export, a barrel, a helper that hands the opener back). The call test runs over comment- AND
+ * string-blanked source, so `openDatabaseSync(` written in prose or inside a string is not a hit.
+ */
+export function findSqliteUses(relFile, code) {
+  const rel = relFile.split('\\').join('/');
+  if (rel === QURAN_DB_CHOKEPOINT) return []; // the chokepoint is where this is supposed to happen
+  const uses = [];
+  for (const { source } of extractImports(stripComments(code))) {
+    if (source === SQLITE_MODULE || source.startsWith(`${SQLITE_MODULE}/`)) {
+      uses.push(`imports "${source}"`);
+    }
+  }
+  const opener = SQLITE_OPEN_RE.exec(blankCommentsAndStrings(code));
+  if (opener) uses.push(`calls \`${opener[1]}\` — it opens its own connection to the database`);
+  return uses;
+}
+
+/**
+ * Pure: is `code` still a real chokepoint? It must both IMPORT the primitive and OPEN with it.
+ * `null`/absent source answers false — that is the missing-file case, and it must not pass.
+ */
+export function quranDbChokepointHolds(code) {
+  if (typeof code !== 'string' || code.length === 0) return false;
+  const importsDriver = extractImports(stripComments(code)).some(
+    ({ source }) => source === SQLITE_MODULE
+  );
+  return importsDriver && SQLITE_OPEN_RE.test(blankCommentsAndStrings(code));
+}
+
+/** Run the bundled-database chokepoint scan over apps/expo/src and return violation strings. */
+export function runQuranDbChokepointScan() {
+  const violations = [];
+
+  // Fail-closed floor FIRST: without a live chokepoint the rest of this scan is vacuous.
+  const chokepointPath = join(repoRoot, QURAN_DB_CHOKEPOINT);
+  const chokepointSource = existsSync(chokepointPath) ? readFileSync(chokepointPath, 'utf8') : null;
+  if (!quranDbChokepointHolds(chokepointSource)) {
+    violations.push(
+      `[quran-db-chokepoint VACUOUS] ${QURAN_DB_CHOKEPOINT} does not exist, or no longer imports ` +
+        `'${SQLITE_MODULE}' and opens a connection. With no chokepoint the rule below is trivially ` +
+        'satisfied and this gate would pass having checked nothing — which is exactly how the ' +
+        'raw-db tripwire rule 6 replaces ended its life. Restore the module, or move this scan to ' +
+        'whatever module now owns the bundled Quran database.'
+    );
+  }
+
+  for (const file of collectSourceFiles(EXPO_SRC)) {
+    const relFile = relative(repoRoot, file).split('\\').join('/');
+    for (const use of findSqliteUses(relFile, readFileSync(file, 'utf8'))) {
+      violations.push(
+        `[quran-db-chokepoint] ${relFile} ${use}. The bundled Quran database is opened in exactly ` +
+          `one module (${QURAN_DB_CHOKEPOINT}), which runs \`PRAGMA query_only = ON\` and exports ` +
+          'no handle — a second connection opens READWRITE and no gate can see a runtime mutation ' +
+          "(`pnpm verify` hashes the REPO's copy at build time, and only `uthmani_text`). Import " +
+          '`getSurahVerses` / `getSurahMetadata` from there instead. See CLAUDE.md ' +
+          '§ "Quran text integrity".'
+      );
+    }
+  }
+
+  return violations;
+}
+
 function main() {
   // Fail-closed: a missing scan root means the scanner would find zero files and pass vacuously.
   const missing = missingRoots();
@@ -1191,6 +1320,7 @@ function main() {
     ...runGatingScan(),
     ...runApiChokepointScan(),
     ...runQueryModuleChokepointScan(),
+    ...runQuranDbChokepointScan(),
   ];
   if (violations.length > 0) {
     console.error(`lint:layers — ${violations.length} violation(s):\n`);
@@ -1203,7 +1333,7 @@ function main() {
   }
 
   console.log(
-    'lint:layers — OK (no layer / first-frame-gating / api-chokepoint / query-chokepoint violations)'
+    'lint:layers — OK (no layer / first-frame-gating / api-chokepoint / query-chokepoint / quran-db-chokepoint violations)'
   );
 }
 

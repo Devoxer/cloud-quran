@@ -26,6 +26,25 @@
  * rather than an animation (nothing to fade FROM), and it is what let the pre-fork build reach for
  * `display: 'none'` on the tab bar — which cannot animate, which is exactly the two-speed defect.
  * Hidden means `opacity: 0` plus `pointerEvents: 'none'`, so a dismissed bar cannot eat a tap.
+ *
+ * ⚠️ AND HIDDEN MEANS HIDDEN FROM VOICEOVER AND TALKBACK TOO. `pointerEvents` reasons about the
+ * TOUCH tree only; a bar at `opacity: 0` is still a first-class citizen of the ACCESSIBILITY
+ * tree, so a screen-reader user swiping the reading surface would land on a Close button that
+ * nobody can see and that the sighted gesture has not revealed. `accessibilityElementsHidden`
+ * (iOS) + `importantForAccessibility="no-hide-descendants"` (Android) is the pair the tree
+ * already uses for exactly this — see `components/ui/IconBase.tsx` and `RowDeleteButton.tsx`.
+ *
+ * ⚠️ REVEALED MEANS `box-none`, NOT `auto`, AND THE DIFFERENCE IS A DRAG. The bars are 56pt bands
+ * across the top and bottom of a scrolling surface. With `auto` the bar itself becomes a touch
+ * target, so a drag that STARTS inside those bands is swallowed and the list does not scroll —
+ * an invisible dead zone over the verse the reader is looking at. `box-none` gives touches to the
+ * bar's CHILDREN (the close button) and lets everything else fall through to the reading
+ * surface's tap gesture and the list underneath.
+ *
+ * ⚠️ THE PROP FOLLOWS `reveal.interactive`, NOT `reveal.visible`. The reveal takes
+ * `DURATIONS.standard`; flipping on `visible` makes the close button live while it is still
+ * transparent, so a second tap in the header strip 100ms after the first exits the screen.
+ * `useChromeReveal` turns `interactive` on from the animation's own completion callback.
  */
 
 import { useRouter } from 'expo-router';
@@ -132,13 +151,21 @@ export function ReadingChrome({ reveal, title, footnote }: ReadingChromeProps) {
   // and it holds no theme token, which is what `lint:style` scan 3 actually forbids.
   const headerSize = { height: CHROME_BAR_HEIGHT + insets.top, paddingTop: insets.top };
   const footerSize = { height: CHROME_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom };
-  const interactive = reveal.visible ? ('auto' as const) : ('none' as const);
+  // See the header for all three: `box-none` rather than `auto`, keyed on `interactive` rather
+  // than `visible`, and the accessibility tree hidden alongside the touch tree.
+  const touches = reveal.interactive ? ('box-none' as const) : ('none' as const);
+  const hidden = !reveal.interactive;
+  const offscreen = {
+    accessibilityElementsHidden: hidden,
+    importantForAccessibility: hidden ? ('no-hide-descendants' as const) : ('auto' as const),
+  };
 
   return (
     <>
       <Animated.View
         style={[styles.bar, styles.header, headerSize, reveal.headerStyle]}
-        pointerEvents={interactive}
+        pointerEvents={touches}
+        {...offscreen}
         testID="reading-chrome-header"
       >
         <Pressable
@@ -160,7 +187,8 @@ export function ReadingChrome({ reveal, title, footnote }: ReadingChromeProps) {
 
       <Animated.View
         style={[styles.bar, styles.footer, footerSize, reveal.footerStyle]}
-        pointerEvents={interactive}
+        pointerEvents={touches}
+        {...offscreen}
         testID="reading-chrome-footer"
       >
         <Text style={styles.footnote} numberOfLines={1}>

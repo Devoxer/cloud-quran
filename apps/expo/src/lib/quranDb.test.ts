@@ -36,8 +36,15 @@ const mockRealDb = join(__dirname, '..', 'data', 'quran.db');
 const mockImports = jest.fn();
 /** Every statement the module sent through `execSync` — how the read-only PRAGMA is observed. */
 const mockExeced: string[] = [];
-/** Set by a test to make the asset import fail, exercising the unreadable-database path. */
-const mockState = { importFailure: null as Error | null };
+/**
+ * Set by a test to make one leg of the open fail.
+ *   • `importFailure` — the asset never reaches the SQLite directory.
+ *   • `pragmaFailure` — `openDatabaseSync` SUCCEEDS and the first statement does not, which is a
+ *     locked file, a corrupt page, or a native module that answers the open and then fails.
+ */
+const mockState = { importFailure: null as Error | null, pragmaFailure: null as Error | null };
+/** Handles the module asked to close. The half-open path must not leak one. */
+const mockClosed: string[] = [];
 /** Live driver handles, closed after each test so the shipped file is never left open. */
 const mockOpened: DatabaseSync[] = [];
 
@@ -59,12 +66,16 @@ jest.mock('expo-sqlite', () => ({
     return {
       execAsync: async (sql: string) => {
         mockExeced.push(sql);
+        if (mockState.pragmaFailure) throw mockState.pragmaFailure;
         db.exec(sql);
       },
       getAllAsync: async (sql: string, ...params: unknown[]) => db.prepare(sql).all(...params),
       getFirstAsync: async (sql: string, ...params: unknown[]) =>
         db.prepare(sql).get(...params) ?? null,
-      closeAsync: async () => db.close(),
+      closeAsync: async () => {
+        mockClosed.push('closed');
+        db.close();
+      },
     };
   },
 }));
@@ -75,11 +86,22 @@ beforeEach(() => {
   __resetQuranDbForTests();
   mockImports.mockClear();
   mockExeced.length = 0;
+  mockClosed.length = 0;
   mockState.importFailure = null;
+  mockState.pragmaFailure = null;
 });
 
 afterEach(() => {
-  for (const db of mockOpened.splice(0)) db.close();
+  // ⚠️ TOLERANT OF AN ALREADY-CLOSED HANDLE, because one case's whole point is that the module
+  // closes its own connection when the read-only PRAGMA rejects — `node:sqlite` throws
+  // "database is not open" on a second close, which would fail that case from the teardown.
+  for (const db of mockOpened.splice(0)) {
+    try {
+      db.close();
+    } catch {
+      /* already closed by the module under test */
+    }
+  }
 });
 
 describe('the bundled database is real, and this is the file we ship', () => {
@@ -186,6 +208,22 @@ describe('opening', () => {
     const verses = await getSurahVerses(1);
     expect(verses).toHaveLength(7);
     expect(mockImports).toHaveBeenCalledTimes(2);
+  });
+
+  it('CLOSES the connection when the read-only PRAGMA rejects, rather than leaking it', async () => {
+    // ⚠️ `openDatabaseSync` CAN SUCCEED AND THE FIRST STATEMENT STILL FAIL — a locked file, a
+    // corrupt page, a native module that answers the open and then does not. Without the `try`,
+    // that path threw away a LIVE connection with no reference to it: the module had no handle to
+    // close, and the reading screen's error state offers a RETRY, so every press opened another
+    // one on the same file. Story 6-1 review.
+    mockState.pragmaFailure = new Error('database is locked');
+    await expect(getSurahVerses(1)).rejects.toThrow('database is locked');
+    expect(mockClosed).toHaveLength(1);
+
+    // …and the REAL failure is what the caller gets — not a close error wearing its clothes — and
+    // the retry still works, because a failed open is not cached.
+    mockState.pragmaFailure = null;
+    expect(await getSurahVerses(1)).toHaveLength(7);
   });
 
   it('asks SQLite itself to refuse writes on the connection', async () => {
