@@ -81,3 +81,7 @@ tmp/
 # output (prebuild regenerates them) and exist only under apps/expo.
 /apps/expo/ios/
 /apps/expo/android/
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/
