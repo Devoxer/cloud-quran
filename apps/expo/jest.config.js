@@ -13,6 +13,12 @@ module.exports = {
   transform: {
     ...expoPreset.transform,
     '\\.mjs$': expoPreset.transform['\\.[jt]sx?$'],
+    // ⚠️ story 6-2: `.woff2` IS NOT IN jest-expo's ASSET-TRANSFORM KEY either (`.ttf` and `.db`
+    // are), while `metro.config.js` ships it in `assetExts` for the patched mushaf page fonts.
+    // `lib/mushafFonts.ts` `require`s those at module scope, so without this line every suite
+    // that touches the mushaf dies parsing WOFF2 bytes as JavaScript. Same transformer the
+    // preset uses; a required asset resolves to the stub module id `1`.
+    '\\.woff2$': require.resolve('jest-expo/src/preset/assetFileTransformer.js'),
   },
   // Co-located layout (Story 17.5): tests live next to source as `<unit>.test.ts(x)`
   // under src/ and scripts/. EXCEPTION — route-screen tests: Expo Router requires

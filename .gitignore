@@ -89,3 +89,6 @@ tmp/
 # clone runs the loop with no lint, no typecheck and no tests, and commits the result. One machine,
 # one developer — the sharing hazard is empty and the unverified-commit hazard is not.
 _bmad/render/
+
+# Playwright MCP scratch output (console logs / page snapshots) — never source
+.playwright-mcp/

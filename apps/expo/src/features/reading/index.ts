@@ -15,3 +15,4 @@ export {
 export { VerseRow, type VerseRowProps } from './components/VerseRow';
 export { CHROME_TRAVEL, type ChromeReveal, useChromeReveal } from './hooks/useChromeReveal';
 export { type SurahContent, useSurah } from './hooks/useSurah';
+export { MushafPage, type MushafPageProps } from './mushaf/MushafPage';

@@ -160,20 +160,31 @@ export default function AccountScreen() {
       </SettingsGroup>
 
       <SettingsGroup label={t('profile:account.othersGroup')} testID="app-section">
-        {/* ⚠️ TEMPORARY, AND STORY 6.1 DELETES IT. `app/read.tsx` is a root-level route with no
-            in-app entry point — no `Link`, no `push`, no `href` anywhere — because the Read tab
-            that will own it arrives with 6.1. Without this row the immersive route is reachable
-            only by typing a URL, and two of the story's own acceptance rows ("opened from a tab as
-            a root modal", "returns to the tab, chrome restored, tab state intact") cannot be
-            exercised at all: a typed URL is a different history and leaves no tab state to
-            preserve. A smoke that cannot be run is not a smoke that passed. Remove this row when
-            the Read tab lands — the reader's real door is a tab, not a settings entry. */}
+        {/* ⚠️ TEMPORARY, AND STORY 6.3 DELETES IT (6.1's frozen Never list put navigation there,
+            so 6.1 left the row deliberately). `app/read.tsx` is a root-level route with no other
+            in-app entry point — no `Link`, no `push`, no `href` anywhere — until the Read tab
+            arrives with 6.3. Without this row the immersive route is reachable only by typing a
+            URL, and the acceptance rows about opening from a tab and returning with tab state
+            intact cannot be exercised at all: a typed URL is a different history and leaves no
+            tab state to preserve. A smoke that cannot be run is not a smoke that passed. Remove
+            this row when the Read tab lands — the reader's real door is a tab, not a settings
+            entry. */}
         <SettingsRow
           icon="book-outline"
           label={t('profile:rows.readingMode')}
           trailing="chevron"
           onPress={() => router.push('/read')}
           testID="reading-mode-row"
+        />
+        {/* ⚠️ TEMPORARY like the row above, and 6.3 removes BOTH. Same reasoning: `/mushaf` has
+            no other in-app entry until the real navigation ships, and the story's smokes need a
+            door that preserves tab history. (story 6-2) */}
+        <SettingsRow
+          icon="book-outline"
+          label={t('profile:rows.mushafMode')}
+          trailing="chevron"
+          onPress={() => router.push('/mushaf')}
+          testID="mushaf-mode-row"
         />
         <SettingsRow
           icon="lock-closed-outline"

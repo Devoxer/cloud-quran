@@ -91,5 +91,14 @@
     "unreadableBody": "The bundled text is missing or unreadable on this device.",
     "noVersesTitle": "No verses to show",
     "noVersesBody": "This surah came back empty. Try again, or move on to the next one."
+  },
+  "mushaf": {
+    "footnote": "Page {{page}}",
+    "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",
+    "pageA11y": "Page {{page}}, Surah {{name}}",
+    "pageLoadingA11y": "Page {{page}}, loading",
+    "pageErrorA11y": "Page {{page}}, failed to load",
+    "pageErrorTitle": "This page could not be loaded",
+    "pageErrorBody": "Its font is not on this device yet. Check your connection and try again."
   }
 }

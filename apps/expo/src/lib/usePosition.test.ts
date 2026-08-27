@@ -113,6 +113,25 @@ describe('the persisted pair', () => {
     act(() => result.current.reportVerse(1, 1));
     expect(mockSetReadingPosition.mock.calls[0][0].mode).toBe('reading');
   });
+
+  it('writes mode "mushaf" when the mushaf surface is the reporter (story 6-2)', () => {
+    const { result } = renderHook(() => usePosition('mushaf'));
+    act(() => result.current.reportVerse(2, 253));
+    expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({
+      surah: 2,
+      verse: 253,
+      page: 42,
+      mode: 'mushaf',
+    });
+  });
+
+  it('defaults to "reading" — the pre-6-2 caller keeps its behaviour with no argument', () => {
+    // Both directions pinned: a default flipped to 'mushaf' would corrupt every reading-mode
+    // resume, and a mushaf caller falling back to 'reading' would reopen the wrong renderer.
+    const { result } = renderHook(() => usePosition('reading'));
+    act(() => result.current.reportVerse(2, 253));
+    expect(mockSetReadingPosition.mock.calls[0][0].mode).toBe('reading');
+  });
 });
 
 describe('a restored position is not itself a write', () => {

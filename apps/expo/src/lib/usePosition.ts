@@ -74,7 +74,13 @@ function pairOf(row: ReadingPosition): ReadingPositionPair | null {
   return row ? { surah: row.surah, verse: row.verse } : null;
 }
 
-export function usePosition(): UsePositionResult {
+/**
+ * @param mode Which renderer is reporting — written through to the row so a resume (story 6.3)
+ *   knows which surface to reopen. Defaults to `'reading'`, the only caller before story 6-2;
+ *   the mushaf screen passes `'mushaf'`. The wire type (`outbox.ts` / the worker's `validate.ts`)
+ *   allowed both values before either surface existed.
+ */
+export function usePosition(mode: 'reading' | 'mushaf' = 'reading'): UsePositionResult {
   const { data } = useReadingPosition();
   const saved = pairOf(data ?? null);
 
@@ -82,25 +88,28 @@ export function usePosition(): UsePositionResult {
   // MMKV-seeded row is available if it exists at all.
   const lastWritten = useRef<string | null>(saved ? verseKey(saved.surah, saved.verse) : null);
 
-  const reportVerse = useCallback((surah: number, verse: number) => {
-    const key = verseKey(surah, verse);
-    // THE comparison. Everything above this line is why it is here rather than in a screen.
-    if (lastWritten.current === key) return;
-    lastWritten.current = key;
-    // ⚠️ `page` and `mode` are REQUIRED by `ReadingPositionBody`, and `page` is not derivable from
-    // the pair by arithmetic — it is a table read. `getPageForVerse` answers -1 for a verse that
-    // is not in the map, which the worker would store as-is; the map covers all 6,236 verses, so
-    // a -1 here means the pair itself is wrong.
-    setReadingPosition({
-      surah,
-      verse,
-      page: getPageForVerse(surah, verse),
-      mode: 'reading',
-    });
-    // No invalidation, deliberately: `setReadingPosition` writes MMKV and the query cache
-    // optimistically, and the drain invalidates on success via `INVALIDATED_BY`. A caller that
-    // invalidated here would invalidate against the PRE-write server.
-  }, []);
+  const reportVerse = useCallback(
+    (surah: number, verse: number) => {
+      const key = verseKey(surah, verse);
+      // THE comparison. Everything above this line is why it is here rather than in a screen.
+      if (lastWritten.current === key) return;
+      lastWritten.current = key;
+      // ⚠️ `page` and `mode` are REQUIRED by `ReadingPositionBody`, and `page` is not derivable
+      // from the pair by arithmetic — it is a table read. `getPageForVerse` answers -1 for a verse
+      // that is not in the map, which the worker would store as-is; the map covers all 6,236
+      // verses, so a -1 here means the pair itself is wrong.
+      setReadingPosition({
+        surah,
+        verse,
+        page: getPageForVerse(surah, verse),
+        mode,
+      });
+      // No invalidation, deliberately: `setReadingPosition` writes MMKV and the query cache
+      // optimistically, and the drain invalidates on success via `INVALIDATED_BY`. A caller that
+      // invalidated here would invalidate against the PRE-write server.
+    },
+    [mode]
+  );
 
   return { saved, reportVerse };
 }

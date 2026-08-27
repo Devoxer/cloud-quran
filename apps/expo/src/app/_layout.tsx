@@ -310,6 +310,14 @@ function RootLayoutNav() {
           name="read"
           options={{ presentation: 'fullScreenModal', headerShown: false }}
         />
+        {/* story 6-2: MUSHAF MODE — the same immersive shape as `read`, verbatim, and for the
+            same two reasons the comment above spells out: root-sibling POSITION removes the tab
+            bar, `fullScreenModal` PRESENTATION makes it immersive. Its exit is `ReadingChrome`'s
+            close button in content; `immersive-route.test.ts` pins this registration too. */}
+        <Stack.Screen
+          name="mushaf"
+          options={{ presentation: 'fullScreenModal', headerShown: false }}
+        />
         {/* Story 5-1 review: `subscription` and `player` Stack.Screen registrations were
             removed. Both route files went with the domain deletion, so expo-router logged
             `[Layout children]: No route named "…" exists` and dropped them on every boot.

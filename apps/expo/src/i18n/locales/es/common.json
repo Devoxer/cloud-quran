@@ -91,5 +91,14 @@
     "unreadableBody": "El texto incluido falta o no se puede leer en este dispositivo.",
     "noVersesTitle": "No hay versículos",
     "noVersesBody": "Esta sura no devolvió nada. Inténtalo de nuevo o pasa a la siguiente."
+  },
+  "mushaf": {
+    "footnote": "Página {{page}}",
+    "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",
+    "pageA11y": "Página {{page}}, sura {{name}}",
+    "pageLoadingA11y": "Página {{page}}, cargando",
+    "pageErrorA11y": "Página {{page}}, error de carga",
+    "pageErrorTitle": "No se pudo cargar esta página",
+    "pageErrorBody": "Su fuente aún no está en este dispositivo. Comprueba tu conexión e inténtalo de nuevo."
   }
 }

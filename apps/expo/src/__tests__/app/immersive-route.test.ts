@@ -31,8 +31,12 @@ import { join } from 'node:path';
 
 const APP_DIR = join(__dirname, '..', '..', 'app');
 
-/** The route file's basename, without extension — the name the root layout registers. */
-const IMMERSIVE_ROUTE = 'read';
+/**
+ * The route files' basenames, without extension — the names the root layout registers.
+ * Story 6-0 built the slot as `read`; story 6-2 added `mushaf`, the SAME shape on purpose:
+ * every structural fact below holds for both, so both are pinned by the same cases.
+ */
+const IMMERSIVE_ROUTES = ['read', 'mushaf'] as const;
 
 /**
  * Where the reader's chrome — and therefore the route's only exit — lives since story 6-1.
@@ -125,9 +129,9 @@ function screenOptions(source: string, name: string): string {
   throw new Error(`unbalanced options object on <Stack.Screen name="${name}">`);
 }
 
-describe('the immersive route is a ROOT SIBLING of (tabs)', () => {
+describe.each(IMMERSIVE_ROUTES)('the immersive route "%s" is a ROOT SIBLING of (tabs)', (route) => {
   it('lives at the root of the route tree', () => {
-    expect(existsSync(join(APP_DIR, `${IMMERSIVE_ROUTE}.tsx`))).toBe(true);
+    expect(existsSync(join(APP_DIR, `${route}.tsx`))).toBe(true);
     // The chrome module the exit cases below read. Fail-closed: without this a rename turns those
     // cases into an ENOENT whose message says nothing about the door.
     expect(existsSync(CHROME_SOURCE)).toBe(true);
@@ -137,12 +141,12 @@ describe('the immersive route is a ROOT SIBLING of (tabs)', () => {
     // MUTATION 1. A route pushed inside the tab navigator deliberately KEEPS the native tab bar
     // and the iPad sidebar — that is the navigator working as designed, not a styling problem.
     // Moving the file back here is invisible to tsc, Biome and every render test.
-    expect(existsSync(join(APP_DIR, '(tabs)', `${IMMERSIVE_ROUTE}.tsx`))).toBe(false);
+    expect(existsSync(join(APP_DIR, '(tabs)', `${route}.tsx`))).toBe(false);
   });
 
   it('is registered in the ROOT layout, beside (tabs)', () => {
     const root = code('_layout.tsx');
-    expect(root).toMatch(new RegExp(`name="${IMMERSIVE_ROUTE}"`));
+    expect(root).toMatch(new RegExp(`name="${route}"`));
     expect(root).toMatch(/name="\(tabs\)"/);
   });
 
@@ -152,12 +156,12 @@ describe('the immersive route is a ROOT SIBLING of (tabs)', () => {
     // passing. Anti-vacuity: there must be more than one registration for the scan to get wrong.
     const tags = screenTags(code('_layout.tsx'));
     expect(tags.length).toBeGreaterThan(1);
-    const tag = tags.find((t) => t.includes(`name="${IMMERSIVE_ROUTE}"`)) ?? '';
+    const tag = tags.find((t) => t.includes(`name="${route}"`)) ?? '';
     expect(tag.match(/name="/g)).toHaveLength(1);
   });
 });
 
-describe('…presented as a modal, with no header', () => {
+describe.each(IMMERSIVE_ROUTES)('…"%s" presented as a modal, with no header', (route) => {
   it('carries presentation: fullScreenModal — not `modal`, and not a push', () => {
     // ⚠️ WHAT THIS PINS IS IMMERSION, NOT THE ABSENCE OF THE TAB BAR — the earlier version of this
     // case claimed the latter, and it was wrong. On Android `presentation: 'modal'` is documented
@@ -169,15 +173,13 @@ describe('…presented as a modal, with no header', () => {
     // to `UIModalPresentationAutomatic` — an inset card with rounded corners and the tab screen
     // visible behind it. That satisfies "no chrome in layout" and fails "immersive", which is the
     // wrong trade for a Quran reader. Both wrong values typecheck and lint clean.
-    expect(screenOptions(code('_layout.tsx'), IMMERSIVE_ROUTE)).toMatch(
-      /presentation:\s*'fullScreenModal'/
-    );
+    expect(screenOptions(code('_layout.tsx'), route)).toMatch(/presentation:\s*'fullScreenModal'/);
   });
 
   it('carries headerShown: false', () => {
     // MUTATION 2. Without it the modal renders a native header — which would also drag in the
     // header-control question this story exists to sidestep.
-    expect(screenOptions(code('_layout.tsx'), IMMERSIVE_ROUTE)).toMatch(/headerShown:\s*false/);
+    expect(screenOptions(code('_layout.tsx'), route)).toMatch(/headerShown:\s*false/);
   });
 
   it('the screen itself never re-adds a header', () => {
@@ -186,13 +188,13 @@ describe('…presented as a modal, with no header', () => {
     // `<Stack.Screen options={{ headerShown: true, title }} />` — the exact idiom the four sibling
     // profile screens use, and the natural way to answer "the reader needs a way out".
     // Demonstrated: adding it left this file green, the whole app suite green, every gate OK.
-    expect(code(`${IMMERSIVE_ROUTE}.tsx`)).not.toMatch(/headerShown/);
+    expect(code(`${route}.tsx`)).not.toMatch(/headerShown/);
   });
 
   it('installs no control into a native header slot', () => {
     // `lint:header-controls` owns this tree-wide; asserted here because THIS route is the one
     // that imports the temptation — both wisdom-fruits root modals ship a header close button.
-    const source = code(`${IMMERSIVE_ROUTE}.tsx`);
+    const source = code(`${route}.tsx`);
     expect(source).not.toMatch(/header(?:Left|Right)/);
     expect(source).not.toMatch(/setOptions/);
   });
@@ -218,7 +220,7 @@ describe('…presented as a modal, with no header', () => {
     expect(chrome).toMatch(/canGoBack\(\)/);
     expect(chrome).toMatch(/accessibilityRole="button"/);
     // …and it is genuinely part of THIS route's tree, not an orphan module some other screen owns.
-    expect(code(`${IMMERSIVE_ROUTE}.tsx`)).toMatch(/ReadingChrome/);
+    expect(code(`${route}.tsx`)).toMatch(/ReadingChrome/);
   });
 
   it('installs no control into a native header slot from the CHROME either', () => {

@@ -91,5 +91,14 @@
     "unreadableBody": "Le texte fourni est absent ou illisible sur cet appareil.",
     "noVersesTitle": "Aucun verset à afficher",
     "noVersesBody": "Cette sourate est revenue vide. Réessayez ou passez à la suivante."
+  },
+  "mushaf": {
+    "footnote": "Page {{page}}",
+    "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",
+    "pageA11y": "Page {{page}}, sourate {{name}}",
+    "pageLoadingA11y": "Page {{page}}, chargement",
+    "pageErrorA11y": "Page {{page}}, échec du chargement",
+    "pageErrorTitle": "Impossible de charger cette page",
+    "pageErrorBody": "Sa police n'est pas encore sur cet appareil. Vérifiez votre connexion et réessayez."
   }
 }

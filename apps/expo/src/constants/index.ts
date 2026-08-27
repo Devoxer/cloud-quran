@@ -31,6 +31,16 @@ export type {
 export { default as Colors } from './Colors';
 // Library home (Story 23.15)
 export { LIBRARY_PREVIEW_CAP } from './library';
+// Mushaf rendering — per-page QPC V1 geometry + font CDN (story 6-2)
+export {
+  BASMALA_SCALE,
+  BASMALA_TEXT,
+  MUSHAF_FONT_CDN_BASE,
+  MUSHAF_GLYPH_SCALE,
+  MUSHAF_HEIGHT_BUDGET,
+  MUSHAF_LINE_HEIGHT_RATIO,
+  MUSHAF_WEB_MAX_WIDTH,
+} from './mushaf';
 // Navigation
 export type { TabConfig, TabIconMapping } from './navigation';
 export { HOME_HREF, TABS } from './navigation';
