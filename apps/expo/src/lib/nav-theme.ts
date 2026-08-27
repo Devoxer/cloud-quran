@@ -1,77 +1,16 @@
 /**
- * Cross-platform navigation header options.
+ * The navigator's THEME — the one thing left in this module (story 6-6).
  *
- * Story 17.3 (iPhone smoke pass 7) — centralised the iOS-specific
- * Liquid Glass opt-in so it lives in ONE place. Every migrated Stack
- * layout spreads `LIQUID_GLASS_STACK_OPTIONS` in its `screenOptions`
- * instead of repeating `Platform.select` per layout.
- *
- * Why centralise:
- * - Solo dev + AI + template scale → per-layout `Platform.select` is N
- *   places to maintain. One config util = one edit point. (User
- *   directive 2026-05-26: "i dont want divergeance thats gonna add
- *   maintenance".)
- *
- * Why iOS-only:
- * - `headerTransparent: true` on iOS lets the iOS 26 system
- *   `UINavigationBarAppearance` render its default Liquid Glass
- *   floating-capsule chrome. NOT setting `headerBlurEffect` is
- *   important — that prop forces the legacy iOS-17/18 `UIBlurEffect`
- *   flat-bar chrome and SUPPRESSES iOS 26's default Liquid Glass
- *   (per react-native-screens 4.25 docs).
- * - On Android, `headerTransparent: true` works at the toolbar level
- *   BUT `contentInsetAdjustmentBehavior` is iOS-only, so the
- *   ScrollView content overlaps the toolbar (top items hidden behind
- *   chrome). The native Android default — solid Material 3 toolbar —
- *   renders cleanly with no overlap. Don't fight it.
- * - On web, expo-router renders a JS `Header`; the native solid
- *   chrome is the safer + more accessible default.
- *
- * Net result on each platform with this util:
- * - iOS 26: floating Liquid Glass capsules, content scrolls under
- *   (auto-inset via `contentInsetAdjustmentBehavior="automatic"` on
- *   the scroll view).
- * - Android: solid Material 3 toolbar, content starts below it.
- * - Web: solid JS header, content starts below it.
+ * ⚠️ `LIQUID_GLASS_STACK_OPTIONS` and `lib/useLiquidGlassHeaderInset.ts` were DELETED here.
+ * Both described the NATIVE stack header — iOS 26's transparent Liquid Glass chrome and the
+ * inset a fixed element needed to clear it — and story 6-6 removed the native header from every
+ * screen: the app draws its own (`components/ui/AppHeader`), which is opaque, occupies layout
+ * in the settings shell and overlays on the reading surfaces. An option preset for a header
+ * that renders nowhere is a confident, detailed, WRONG answer waiting for the next grep — the
+ * same reason story 6-0 deleted five dead presets from this file before it.
  */
-
-import { Platform } from 'react-native';
 
 import type { ColorTokens } from '@/constants/Colors';
-
-// Intentionally NO explicit `NativeStackNavigationOptions` annotation —
-// that type lives at `expo-router/build/react-navigation/native-stack/types`
-// (deep internal path, no clean re-export) and tying this util to it
-// would make us brittle to expo-router internal moves. The literal
-// returned by `Platform.select` is structurally compatible with the
-// `screenOptions` slot at every Stack spread site; TS validates the
-// shape there.
-export const LIQUID_GLASS_STACK_OPTIONS = Platform.select({
-  ios: {
-    headerTransparent: true,
-    headerStyle: { backgroundColor: 'transparent' as const },
-  },
-  default: {},
-}) as { headerTransparent?: boolean; headerStyle?: { backgroundColor: string } };
-
-/**
- * For the Bottom Tabs `headerBackground` BlurView, see the
- * `Platform.OS === 'ios'` guard in `(tabs)/_layout.tsx`. BlurView lives
- * there alongside the `<Tabs.Screen>` config; this util stays
- * dep-light so it can be spread into any Stack layout's `screenOptions`
- * without pulling in `expo-blur`.
- */
-
-/**
- * ⚠️ story 6-0 deleted FIVE presets from this file — `SHARED_BOOK_STACK_OPTIONS`,
- * `SHARED_NOTE_STACK_OPTIONS`, `SHARED_QUIZ_STACK_OPTIONS`, `SHARED_QUOTES_STACK_OPTIONS` and
- * `PLAYER_STACK_OPTIONS`. Every one of them configured the chrome of a route that went with the
- * wisdom-fruits domain deletion in story 5-1, so each had zero importers and each was a
- * confident, detailed, WRONG answer waiting for whoever greps this file for a modal or a shared
- * route. `PLAYER_STACK_OPTIONS` in particular described the root-modal pattern story 6-0 is
- * built on — including the two native header controls `lint:header-controls` forbids here.
- * Epic 7 rebuilds the player; it should read the gate and the story, not a dead const.
- */
 
 /**
  * The React Navigation theme — the ONE place our palette tokens reach the native navigator.

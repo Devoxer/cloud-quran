@@ -1,6 +1,12 @@
 {
   "tabs": {
+    "mushaf": "Mushaf",
+    "read": "Lectura",
     "settings": "Ajustes"
+  },
+  "actions": {
+    "openMushaf": "Cambiar al modo Mushaf",
+    "openReading": "Cambiar al modo lectura"
   },
   "titles": {
     "account": "Ajustes",

@@ -3,7 +3,7 @@
  * Source: docs/ux-design-specification.md (lines 389-405)
  */
 
-import { Platform, type ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
 export const SPACING = {
   /** 4px - Tight gaps, icon padding */
@@ -62,58 +62,32 @@ export type LayoutMaxWidthToken = keyof typeof LAYOUT.maxWidth;
 export type LayoutMaxWidthValue = (typeof LAYOUT.maxWidth)[LayoutMaxWidthToken];
 
 /**
- * ⚠️ THE TAB-BAR OFFSET IS NOT HERE ANY MORE — it is `useTabBarHeight()` in
- * `lib/useTabBarHeight.ts`, and it stopped being a constant in story 6-0's review round.
- * `TAB_BAR_HEIGHT` answered 0 on any iPad running iPadOS 18+, because `<NativeTabs
- * sidebarAdaptable>` moves the tabs to the top or a sidebar there — but only at REGULAR horizontal
- * width. In Slide Over and in a compact-width Split View the bottom bar comes back, and no
- * module-scope value can see that: the width changes at runtime when the reader resizes the split.
- * The numbers, and the device smoke behind each, moved with it.
+ * ⚠️ THE TAB-BAR OFFSET IS `CHROME_BAR_HEIGHT` IN `constants/navigation.ts` (story 6-6). The
+ * hook that used to answer this (`lib/useTabBarHeight.ts`) was deleted WITH the native bar it
+ * measured: its `ios: 49` / `android: 80` / iPad-width logic were all facts about `NativeTabs`'
+ * own chrome, and our bar is one bottom-docked row at one height on every platform and at every
+ * window width. The iPad question the hook existed for (Slide Over puts a bottom bar back)
+ * returns only with epic 9's sidebar — whoever builds that re-opens it there, with our bar.
  *
- * ⚠️ story 6-0 also deleted `FLOATING_PILL_CLEARANCE`, which reserved 88px at the bottom of five
- * profile screens (`account`, `data`, `feedback`, `privacy-settings`, `sign-in`) to clear the
- * floating mini-player pill. ⚠️ ITS DELETION RATIONALE WAS FIRST WRITTEN DOWN WRONG, as "on web and
- * iPad nothing sits at the bottom at all" — the flat `Platform.isPad` premise `useTabBarHeight`
- * rejects at length, and an inversion of the constant's own reason. Web and iPad were its only
- * NON-zero branches precisely because something DID sit at the bottom there, unreserved: on
- * iPhone and Android the native bar auto-insets the content and the pill floats above it, while on
- * web and iPad nothing insets, so the 88px had to be reserved by hand. What actually made the
- * constant dead is simpler and platform-independent: the mini-player it cleared went with the audio
- * feature in story 5-1, so all five call sites were reserving space for an element that no longer
- * exists. Epic 7 rebuilds the player; it does not inherit this constant.
+ * ⚠️ story 6-0 also deleted `FLOATING_PILL_CLEARANCE` (the mini-player reservation); the player
+ * went with the audio feature in 5-1 and epic 7 does not inherit the constant.
  */
 
 /**
  * Cross-platform TOP breathing room below the header for a scroll screen whose content otherwise
  * butts the header.
  *
- * ⚠️ story 6-0 DELETED THIS AND THEN PUT IT BACK, which is worth recording because the delete
- * looked obviously right: zero consumers, and the story's own task list named it. What that missed
- * is that its premise had just been REINSTATED. The 2026-08-26 chrome reversal keeps the native
- * header on every pushed screen, and an opaque Material/web header is exactly the condition these
- * branches were measured against — story 6.1's reading surfaces are the first screens to meet it.
- * The story told us to ASK before deleting `useLiquidGlassHeaderInset` for precisely this reason,
- * and this constant is the same case; deleting it would have left three device-measured values
- * surviving only in git history, where nobody looks.
+ * ⚠️ RE-DERIVED A THIRD TIME (story 6-6), and the platform split DIED with the native header.
+ * The old values were measurements of three different native headers — iOS 0 because a
+ * transparent large-title header auto-inset scroll content, Android/web `SPACING.xl` because
+ * their opaque headers left no gap. There is ONE header now (`components/ui/AppHeader`), opaque
+ * and identical on every platform, so the breathing room below it is one value everywhere.
  *
- * Resolved **independently per platform** (they MAY differ):
- * - **iOS → 0.** The floating large-title header (`headerTransparent: true`) does NOT consume
- *   layout; `contentInsetAdjustmentBehavior="automatic"` already insets scroll content generously
- *   below it. A positive value here would *double-space*, so iOS MUST stay 0. Summing 0 into a
- *   `paddingTop` is a guaranteed no-op — the load-bearing invariant, pinned by its test.
- * - **Web → `SPACING.xl`.** The solid JS header is space-consuming but leaves no margin, so the
- *   first card butts it.
- * - **Android → `SPACING.xl`.** The opaque Material header consumes layout but leaves ZERO
- *   breathing gap, so the first row reads cramped across every header route. Confirmed on an
- *   Android emulator smoke.
- *
- * MUST be summed into a scroll view's `contentContainerStyle.paddingTop` — NEVER a wrapping
- * `<View>` or root scroll wrapper, which re-breaks the iOS large-title shrink-on-scroll. Routes
- * that already set an explicit `padding`/`paddingTop` (the settings forms do) already have a
- * cross-platform gap → do NOT add this, it would stack into double-spacing.
+ * MUST be summed into a scroll view's `contentContainerStyle.paddingTop`. Routes that already
+ * set an explicit `padding`/`paddingTop` (the settings forms do) already have a cross-platform
+ * gap → do NOT add this, it would stack into double-spacing.
  */
-export const HEADER_CONTENT_CLEARANCE =
-  Platform.OS === 'web' ? SPACING.xl : Platform.OS === 'android' ? SPACING.xl : 0;
+export const HEADER_CONTENT_CLEARANCE = SPACING.xl;
 
 /**
  * Minimum interactive touch-target size (pt). Apple HIG / Material accessibility

@@ -5,6 +5,9 @@
  * `@/components/ui` rather than reaching into individual files.
  */
 
+// ── Story 6-6: THE header and tab bar — custom chrome, every platform ──
+export { AppHeader, type AppHeaderProps } from './AppHeader';
+export { AppTabBar, TAB_INDICATOR_ALPHA } from './AppTabBar';
 // ── Story 16.8: relocated generic primitives + ownerless shared + themed primitives ──
 export * from './Avatar';
 // ── Story 31.1: the single book-cover rendering primitive (WebP-preferred + blurhash) ──

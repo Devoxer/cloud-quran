@@ -262,69 +262,29 @@ function RootLayoutNav() {
   return (
     <NavigationThemeProvider value={navigationTheme}>
       <Stack>
-        {/* story 6-0: `/` is a redirect into the tab shell (see `app/index.tsx`). Registered with
-            no header so the hop is invisible. ⚠️ It does NOT render a `<Redirect>`, and an earlier
-            version of this comment said it did — `<Redirect>` is a `router.replace` in a focus
-            effect and leaves the destination with `canGoBack() === true`, i.e. a phantom back
-            chevron on the app's most common entry. The screen renders NOTHING and pops the root
-            stack from a mount effect; the file's own docblock lists the three measured-wrong
-            spellings, and this one was among them. */}
-        <Stack.Screen name="index" options={{ headerShown: false }} />
+        {/* ⚠️ story 6-6: THE ROOT STACK IS ONE TAB SHELL, AND EVERY PIECE OF CHROME IS OURS.
+            `app/index.tsx` (the `/` redirect), `app/read.tsx` and `app/mushaf.tsx` are all GONE:
+            the reading surfaces are TAB ROUTES now (`(tabs)/index.tsx` — the mushaf, serving `/`
+            directly — and `(tabs)/read.tsx`), immersive because their chrome overlays and starts
+            hidden, not because a `fullScreenModal` covered the bar. `headerShown: false` is set
+            PER SCREEN here, never as a `screenOptions` blanket on this Stack — the anti-vacuity
+            half of `custom-chrome.test.ts` scans for exactly that blanket, so "no native chrome"
+            stays a per-surface decision with our components in its place.
+
+            The root-modal slot this Stack used to carry is not abolished — epic 7's player is a
+            genuinely modal surface and returns HERE, beside `(tabs)`, when it exists. What it
+            must never carry again is a native header control; `lint:header-controls` owns that,
+            and the reading chrome's controls live in `AppHeader`'s `leading`/`trailing` slots. */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* ⚠️ story 6-0: THE IMMERSIVE SLOT. Two independent properties, and they do DIFFERENT
-            jobs — an earlier draft of this comment credited both to the presentation, which is
-            wrong on Android and was never isolated anywhere.
-
-            **The POSITION is what removes the tab bar.** `read` is a sibling of `(tabs)`, so it
-            is not inside the tab navigator at all and the bar is not part of its layout. A route
-            pushed INSIDE the navigator deliberately keeps the bar and the iPad sidebar — that is
-            the navigator working as designed, and a native tab bar has no supported
-            `display: none` to style around. ⚠️ On Android `presentation: 'modal'` is documented
-            as equivalent to `push`, so the presentation CANNOT be what covers the Material
-            NavigationBar there; only the position can be.
-
-            **The PRESENTATION is what makes it immersive rather than a push.** `fullScreenModal`
-            covers the whole screen with no page-sheet inset, no rounded card, no parent visible
-            behind it and no back-chevron or edge-swipe affordance. ⚠️ It is NOT `modal`: on
-            iOS 13+ react-native-screens maps `modal` to `UIModalPresentationAutomatic`, which is
-            an inset card with the tab screen showing behind — that satisfies "no chrome in
-            layout" and fails "immersive", which is not what a Quran reader wants.
-
-            ⚠️ **wisdom-fruits' measurement does not separate the two.** Hoisting its `player`
-            from an in-tab modal to a root modal changed position AND stayed a modal at once, and
-            neither they nor we have run the isolating experiment. What is measured here is that
-            the pair works on both platforms; the split above is read from the navigator's own
-            documented behaviour, not from a device.
-
-            `headerShown: false`: hidden PER ROUTE, never globally. There is no app-wide
-            `headerShown` flip and no story owns one — the profile stack's native headers stay.
-
-            And NO header controls, deliberately. Both wisdom-fruits root modals put their close
-            button into a native header slot — one by the reserved left-slot prop, one through
-            setOptions — and `lint:header-controls` forbids both outright here, for the
-            Apple-silicon-Mac click defect. The way out lives in the screen's own CONTENT
-            instead. Story 6.1 still owns the real answer for the reader's chrome; it may use
-            content, or bring `HeaderControlSlots` across with an `EXCEPTIONS` entry arguing it —
-            never by copying. */}
-        <Stack.Screen
-          name="read"
-          options={{ presentation: 'fullScreenModal', headerShown: false }}
-        />
-        {/* story 6-2: MUSHAF MODE — the same immersive shape as `read`, verbatim, and for the
-            same two reasons the comment above spells out: root-sibling POSITION removes the tab
-            bar, `fullScreenModal` PRESENTATION makes it immersive. Its exit is `ReadingChrome`'s
-            close button in content; `immersive-route.test.ts` pins this registration too. */}
-        <Stack.Screen
-          name="mushaf"
-          options={{ presentation: 'fullScreenModal', headerShown: false }}
-        />
+        {/* +not-found auto-registers into this Stack; without this registration it would draw
+            the ONE native stack header left in the app. Its content carries its own title and
+            the "go home" link (`HOME_HREF`). */}
+        <Stack.Screen name="+not-found" options={{ headerShown: false }} />
         {/* Story 5-1 review: `subscription` and `player` Stack.Screen registrations were
             removed. Both route files went with the domain deletion, so expo-router logged
             `[Layout children]: No route named "…" exists` and dropped them on every boot.
             The player returns in epic 7 (recitation audio) and there is no subscription
-            screen — Cloud Quran has no monetization surface. story 5-2 removed the
-            `(welcome)` and `auth/callback` registrations for the same reason: their route
-            files went with InstantDB auth. Story 5-5 rebuilds sign-in on Better Auth. */}
+            screen — Cloud Quran has no monetization surface. */}
       </Stack>
     </NavigationThemeProvider>
   );

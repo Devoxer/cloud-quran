@@ -7,11 +7,9 @@
  */
 
 export { NextSurahButton, nextSurah } from './components/NextSurahButton';
-export {
-  CHROME_BAR_HEIGHT,
-  ReadingChrome,
-  type ReadingChromeProps,
-} from './components/ReadingChrome';
+// `CHROME_BAR_HEIGHT` moved to `@/constants/navigation` in story 6-6 — the height is the
+// app-wide chrome's, not this feature's, now that `AppHeader`/`AppTabBar` share it.
+export { ReadingChrome, type ReadingChromeProps } from './components/ReadingChrome';
 export { VerseRow, type VerseRowProps } from './components/VerseRow';
 export { CHROME_TRAVEL, type ChromeReveal, useChromeReveal } from './hooks/useChromeReveal';
 export { type SurahContent, useSurah } from './hooks/useSurah';

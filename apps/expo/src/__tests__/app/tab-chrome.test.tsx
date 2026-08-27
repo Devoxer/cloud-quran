@@ -1,31 +1,27 @@
 /**
- * The tab bar's theming, asserted where it is actually decided (story 6-0).
+ * The tab bar's theming, asserted where it is actually decided (story 6-0; re-aimed at OUR
+ * `AppTabBar` by story 6-6, which deleted the `<NativeTabs>` layout this file used to capture).
  *
  * ⚠️ THIS FILE EXISTS BECAUSE THE CONTRAST GATE DOES NOT GUARD THE CODE, AND CANNOT.
  * `constants/palettes.contrast.test.ts` imports the palettes and the colour helpers; it never
- * loads this layout. Deleting `labelStyle.selected` — the prop whose whole purpose is to keep the
- * selected label off a 3.07:1 pair — left all sixty of its cases green, the full app suite green,
- * and every lint gate OK. Demonstrated, not supposed. What the palette can prove is that a colour
- * is legible; what only a render can prove is that the colour is the one shipped.
- *
- * ⚠️ THE UPSTREAM FALLBACK IS THE WHOLE DEFECT, AND IT IS INVISIBLE FROM THE PROPS WE PASS.
- * `NativeBottomTabsNavigator` derives `selectedLabelStyle = { color: tintColor }` whenever
- * `tintColor` is set and no selected label colour is given, and `appearance.ios.ts` writes it into
- * the UITabBarAppearance unconditionally. So "we did not set a selected label colour" does not
- * mean the platform default applies — it means the ACCENT applies. That is why the assertions
- * below resolve the selected colour the way upstream does rather than merely checking a prop is
- * present.
- *
- * The three platforms differ only in the SURFACE group — the reasons are in the layout's own
- * docblock — so each is rendered and asserted separately. iOS is the case that regressed once
- * already: `labelStyle` was gated to android||web, which left iOS shipping the accent label.
+ * loads the component. Under `NativeTabs`, deleting the selected-label colour left all sixty of
+ * its cases green while the accent shipped as ~12sp text on a 3.07:1 pair — demonstrated, not
+ * supposed. What the palette gate can prove is that a colour is LEGIBLE; what only a render can
+ * prove is that the colour is the one SHIPPED. So every case here renders the real component and
+ * asserts the RESOLVED colour.
  *
  * ⚠️ IT DRIVES THE PALETTE AND THE SCHEME, BECAUSE OTHERWISE IT PROVES ONE OF TWELVE. `jest.setup`
- * mocks `@/lib/theme` to a fixed terracotta·light for every component test, so an earlier cut of
- * this file rendered that one slice thirty-six times and its dark branch was dead code — the story
- * claims the chrome "holds on all six palettes", and nothing here was in a position to say so.
- * The real hook is unmocked below and pointed at each palette × scheme through the same MMKV keys
- * the settings picker writes, so the layout resolves them exactly as it does on a device.
+ * mocks `@/lib/theme` to a fixed terracotta·light for every component test; the real hook is
+ * unmocked below and pointed at each palette × scheme through the same MMKV keys the settings
+ * picker writes, so the component resolves them exactly as it does on a device.
+ *
+ * ⚠️ THE PLATFORM AXIS IS DELIBERATELY STILL HERE, AND WHAT IT PROVES CHANGED. Under `NativeTabs`
+ * each platform got a different SURFACE group (iOS kept Liquid Glass). Under our chrome there is
+ * no platform branch to configure — the same component paints `background.secondary` everywhere,
+ * iOS included — so the three platform renders prove the ABSENCE of divergence: every colour
+ * resolves identically under each `Platform.OS`. (Module resolution stays the iOS preset's, so
+ * the icon renderer is the SF-symbol frame on all three — the COLOUR passed to it is what is
+ * asserted, and that value is platform-independent by construction.)
  */
 
 let mockPlatformOS = 'ios';
@@ -50,25 +46,24 @@ jest.mock('react-native', () => {
 // Exercise the REAL theme hook, not jest.setup's fixed-light stand-in — see the header.
 jest.unmock('@/lib/theme');
 
-/**
- * Capture the props `<NativeTabs>` receives, the way `root-layout-boot.test.tsx` captures the
- * root `<Stack>`. The real component is a `react-native-screens` host that renders an inert shell
- * under jest-expo — it would tell us nothing about what was passed to it.
- */
-const capturedProps: { current: Record<string, unknown> | null } = { current: null };
+const mockNavigate = jest.fn();
+let mockSegments: string[] = ['(tabs)'];
 
-jest.mock('expo-router/unstable-native-tabs', () => {
-  const NativeTabs = (props: Record<string, unknown>) => {
-    capturedProps.current = props;
-    return null;
-  };
-  const Trigger = Object.assign(() => null, { Icon: () => null, Label: () => null });
-  return { NativeTabs: Object.assign(NativeTabs, { Trigger }) };
-});
+jest.mock('expo-router', () => ({
+  useRouter: () => ({
+    navigate: mockNavigate,
+    back: jest.fn(),
+    replace: jest.fn(),
+    push: jest.fn(),
+    canGoBack: () => false,
+  }),
+  useSegments: () => mockSegments,
+}));
 
-import { render } from '@testing-library/react-native';
-import TabLayout from '@/app/(tabs)/_layout';
+import { render, screen } from '@testing-library/react-native';
+import { AppTabBar, TAB_INDICATOR_ALPHA } from '@/components/ui/AppTabBar';
 import { type ColorScheme, type ColorTokens, composeColors } from '@/constants/Colors';
+import { TABS } from '@/constants/navigation';
 import { PALETTE_NAMES, type PaletteName } from '@/constants/palettes';
 import { withAlpha } from '@/lib/color';
 import { setPalette, setThemeMode } from '@/lib/theme';
@@ -76,7 +71,7 @@ import { setPalette, setThemeMode } from '@/lib/theme';
 const PLATFORMS = ['ios', 'android', 'web'] as const;
 const SCHEMES: readonly ColorScheme[] = ['light', 'dark'];
 
-/** Every palette × scheme — the twelve slices the story claims the chrome holds on. */
+/** Every palette × scheme — the twelve slices the chrome must hold on. */
 const SLICES: readonly (readonly [PaletteName, ColorScheme])[] = PALETTE_NAMES.flatMap((palette) =>
   SCHEMES.map((scheme) => [palette, scheme] as const)
 );
@@ -86,126 +81,102 @@ const COMBOS: readonly (readonly [string, PaletteName, ColorScheme])[] = PLATFOR
   SLICES.map(([palette, scheme]) => [os, palette, scheme] as const)
 );
 
-function renderAs(os: string, palette: PaletteName, scheme: ColorScheme): Record<string, unknown> {
+function renderAs(os: string, palette: PaletteName, scheme: ColorScheme) {
   mockPlatformOS = os;
   // The two MMKV keys the settings picker writes. `setThemeMode` with an explicit scheme (rather
-  // than 'auto') is what makes the dark slice reachable at all: `useColorScheme()` answers `light`
-  // under jest-expo, so an 'auto' preference can only ever resolve light here.
+  // than 'auto') is what makes the dark slice reachable at all: `useColorScheme()` answers
+  // `light` under jest-expo, so an 'auto' preference can only ever resolve light here.
   setPalette(palette);
   setThemeMode(scheme);
-  capturedProps.current = null;
-  render(<TabLayout />);
-  if (!capturedProps.current) throw new Error(`NativeTabs never rendered on ${os}`);
-  return capturedProps.current;
+  // The read tab focused, so `index` (the first tab) is the UNSELECTED reference and `read` the
+  // selected one — both states observable in one render.
+  mockSegments = ['(tabs)', 'read'];
+  render(<AppTabBar />);
 }
 
-/**
- * The colour the SELECTED label resolves to, computed the way `NativeBottomTabsNavigator` does:
- *
- *   selectedLabelStyle = processedLabelStyle.selected
- *     ? { ...selected, color: selected.color ?? tintColor }
- *     : tintColor ? { color: tintColor } : undefined
- *
- * ⚠️ THERE IS NO FALL-THROUGH FROM THE DEFAULT LABEL STYLE, AND AN EARLIER VERSION OF THIS HELPER
- * INVENTED ONE. `utils/label.js`'s `convertLabelStylePropToObject` maps a FLAT `labelStyle` onto
- * `default` only, so a flat style never contributes to the selected colour — it falls through to
- * `tintColor`, i.e. to the accent. A `?? default?.color` link in here would report that shape as
- * shipping a legible colour while the device shipped the 3.07:1 pair. Mirror upstream exactly or
- * the helper is a second, wrong implementation of the thing under test.
- */
-function resolvedSelectedLabelColor(props: Record<string, unknown>): unknown {
-  const raw = props.labelStyle as
-    | { color?: unknown; default?: { color?: unknown }; selected?: { color?: unknown } }
-    | undefined;
-  const keyed = raw && typeof raw === 'object' && ('default' in raw || 'selected' in raw);
-  const selected = keyed ? raw?.selected : undefined;
-  return selected ? (selected.color ?? props.tintColor) : props.tintColor;
+/** Flattened style object of one node. */
+function styleOf(testID: string): Record<string, unknown> {
+  const style = screen.getByTestId(testID).props.style;
+  const flat = (Array.isArray(style) ? style.flat(3) : [style]).filter(Boolean);
+  return Object.assign({}, ...flat.map((s: unknown) => (typeof s === 'object' ? s : {})));
 }
+
+/** The colour the tab's ICON actually receives (the SF-symbol element inside the frame). */
+function iconColorOf(tabName: string): unknown {
+  const frame = screen.getByTestId(`chrome-tab-${tabName}-icon`);
+  const symbol = (frame.props as { children: { props: { tintColor?: unknown } } }).children;
+  return symbol.props.tintColor;
+}
+
+/** Flattened style of the LABEL inside one tab item. */
+function labelStyleOf(label: string): Record<string, unknown> {
+  const node = screen.getByText(label);
+  const flat = (Array.isArray(node.props.style) ? node.props.style.flat(3) : [node.props.style])
+    .filter(Boolean)
+    .map((s: unknown) => (typeof s === 'object' ? s : {}));
+  return Object.assign({}, ...flat);
+}
+
+afterEach(() => {
+  jest.clearAllMocks();
+  mockPlatformOS = 'ios';
+  mockSegments = ['(tabs)'];
+});
 
 describe.each(COMBOS)('tab chrome on %s · %s · %s', (os, palette, scheme) => {
   const t: ColorTokens = composeColors(palette, scheme);
 
   it('never resolves the selected label to the accent', () => {
-    // THE REGRESSION, stated as the thing that must not happen rather than as a prop that must be
-    // present — a future refactor that renames the prop but keeps the fallback fails here too.
-    const props = renderAs(os, palette, scheme);
-    expect(resolvedSelectedLabelColor(props)).not.toBe(t.accent.primary);
-    expect(resolvedSelectedLabelColor(props)).toBe(t.text.primary);
+    // THE REGRESSION `NativeTabs` shipped once: the accent as ~12sp text over the selection pill
+    // is 3.07:1 on terracotta·light, and terracotta's accent is byte-locked. Stated as the thing
+    // that must not happen, then as the thing that must.
+    renderAs(os, palette, scheme);
+    const label = labelStyleOf('Read');
+    expect(label.color).not.toBe(t.accent.primary);
+    expect(label.color).toBe(t.text.primary);
   });
 
   it('gives the unselected label the secondary text token', () => {
-    const props = renderAs(os, palette, scheme);
-    const label = props.labelStyle as { default?: { color?: unknown } };
-    expect(label?.default?.color).toBe(t.text.secondary);
+    renderAs(os, palette, scheme);
+    expect(labelStyleOf('Mushaf').color).toBe(t.text.secondary);
   });
 
-  it('tints the selected icon with the accent', () => {
-    // The accent is still the selection cue; it just stops being small text. This case is also
-    // what proves the palette × scheme actually reached the layout — if the driving above stopped
-    // working, every colour would resolve to terracotta·light and this reddens on eleven slices.
-    const props = renderAs(os, palette, scheme);
-    expect(props.tintColor).toBe(t.accent.primary);
+  it('tints the selected icon with the accent — the selection cue that only needs 3:1', () => {
+    // This case is also what proves the palette × scheme actually reached the component — if the
+    // driving above stopped working, every colour would resolve to terracotta·light and this
+    // reddens on eleven slices.
+    renderAs(os, palette, scheme);
+    expect(iconColorOf('read')).toBe(t.accent.primary);
+    expect(iconColorOf('index')).toBe(t.text.secondary);
   });
 
-  it('takes every colour from a palette token — no literals', () => {
-    const props = renderAs(os, palette, scheme);
-    const known = new Set<unknown>([
-      t.accent.primary,
-      t.text.primary,
-      t.text.secondary,
-      t.background.secondary,
-      withAlpha(t.accent.primary, 0.15),
-    ]);
-    const colours = [
-      props.tintColor,
-      props.backgroundColor,
-      props.iconColor,
-      props.indicatorColor,
-      props.rippleColor,
-      (props.labelStyle as { default?: { color?: unknown } })?.default?.color,
-      (props.labelStyle as { selected?: { color?: unknown } })?.selected?.color,
-    ].filter((c) => c !== undefined);
-    for (const colour of colours) expect(known.has(colour)).toBe(true);
+  it('paints the bar surface and the selection pill from the tokens — iOS included', () => {
+    // ⚠️ The old iOS exception (leave the surface to Liquid Glass) died with the native bar:
+    // OUR bar paints `background.secondary` on every platform, which is the surface the
+    // contrast gate measures the labels against.
+    renderAs(os, palette, scheme);
+    expect(styleOf('app-tab-bar').backgroundColor).toBe(t.background.secondary);
+    expect(styleOf('chrome-tab-read-pill').backgroundColor).toBe(
+      withAlpha(t.accent.primary, TAB_INDICATOR_ALPHA)
+    );
+    expect(styleOf('chrome-tab-index-pill').backgroundColor).toBeUndefined();
   });
 });
 
-describe.each(SLICES)('the SURFACE group — the only platform-varying part · %s · %s', (p, s) => {
-  const t: ColorTokens = composeColors(p, s);
-
-  it('themes the web pill — the case that was absent, not merely unverified', () => {
-    // expo-router's web CSS falls back to hardcoded greys (`#272727` pill, `#444444` selected
-    // pill) when these vars are unset, so gating them to Android left every palette rendering the
-    // same dark-grey pill on web. Both props reach the web view through the SCREEN options.
-    // ⚠️ Theming it also removed the only thing separating the pill from the page — `#272727` was
-    // ~14:1 against a light page and `background.secondary` is 1.11–1.24:1 — which is why
-    // `app/+html.tsx` now draws a border. `web-nav-pill.test.ts` holds that half.
-    const props = renderAs('web', p, s);
-    expect(props.backgroundColor).toBe(t.background.secondary);
-    expect(props.indicatorColor).toBe(withAlpha(t.accent.primary, 0.15));
+describe('the control set is the table, on every slice', () => {
+  it('renders one tab per TABS entry, in table order', () => {
+    renderAs('ios', 'terracotta', 'light');
+    for (const tab of TABS) {
+      expect(screen.getByTestId(`chrome-tab-${tab.name}`)).toBeTruthy();
+    }
+    expect(screen.getAllByRole('tab')).toHaveLength(TABS.length);
   });
 
-  it('themes the Android Material bar, ripple and all', () => {
-    const props = renderAs('android', p, s);
-    expect(props.backgroundColor).toBe(t.background.secondary);
-    expect(props.iconColor).toBe(t.text.secondary);
-    expect(props.indicatorColor).toBe(withAlpha(t.accent.primary, 0.15));
-    expect(props.rippleColor).toBe(withAlpha(t.accent.primary, 0.15));
-  });
-
-  it('leaves the iOS SURFACE alone — Liquid Glass is the point of keeping native chrome', () => {
-    // ⚠️ The narrow claim, and the one the earlier gate over-applied: the surface stays system,
-    // the LABEL does not. Setting `backgroundColor` here kills the iOS 26 material; setting a
-    // label colour does not, and leaving it unset is what shipped the accent label.
-    const props = renderAs('ios', p, s);
-    expect(props.backgroundColor).toBeUndefined();
-    expect(props.iconColor).toBeUndefined();
-    expect(props.rippleColor).toBeUndefined();
-    expect(props.labelStyle).toBeDefined();
-  });
-});
-
-describe('the iPad', () => {
-  it('adapts to the sidebar', () => {
-    expect(renderAs('ios', 'terracotta', 'light').sidebarAdaptable).toBe(true);
+  it('marks exactly one tab selected, via accessibilityState', () => {
+    renderAs('ios', 'terracotta', 'light');
+    const selected = screen
+      .getAllByRole('tab')
+      .filter((node) => node.props.accessibilityState?.selected === true);
+    expect(selected).toHaveLength(1);
   });
 });

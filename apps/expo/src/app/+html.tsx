@@ -20,8 +20,8 @@ export default function Root({ children }: { children: React.ReactNode }) {
 
         {/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}
         <style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
-        {/* Story 23.7 (AC-8): light web-only nav-pill alignment polish. */}
-        <style dangerouslySetInnerHTML={{ __html: webNavPillPolish }} />
+        {/* Story 6-6: keyboard focus indicator for OUR chrome controls. */}
+        <style dangerouslySetInnerHTML={{ __html: chromeFocusRing }} />
         {/* Favicon */}
         <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
 
@@ -47,69 +47,31 @@ body {
   }
 }`;
 
-// Story 23.7 (AC-8) — light web-only nav-pill alignment polish.
+// Story 6-6 — the keyboard focus indicator for OUR chrome, replacing story 6-0's
+// `webNavPillPolish` (which styled expo-router's web nav pill; the pill died with `NativeTabs`,
+// and so did the three upstream custom-property names this file used to read out of its CSS).
 //
-// On web, `<NativeTabs>` falls back to expo-router's Radix/react-tabs pill. The library
-// CSS (`expo-router/assets/native-tabs.module.css` → `.navigationMenuRoot`) pins it at a
-// fixed `top: 24px`, independent of the native Stack header, so it reads as not vertically
-// centered in the ~64px header band. The CSS-module class is hashed, but the react-tabs
-// `TabsList` carries a STABLE `aria-label="Main"` (`role="tablist"`) — target that.
+// ⚠️ THE SUBJECT SURVIVES THE PILL: a keyboard user must be able to SEE which chrome control has
+// focus, against every palette × scheme. The old fix pointed the library's outline variable at
+// the label colour; our own components expose no such variable, and this file is static CSS
+// rendered in Node before hydration — it has no access to the RN theme and can hold no token.
 //
-// This is the deliberately LIGHT polish the story scopes (AC-8): a single vertical nudge so
-// the pill sits centered in the standard web header band (40px pill in a ~64px header →
-// top ≈ 12px). The wholesale web-chrome rework (suppress/restyle the header, sidebar) is
-// the gated sidebar follow-up — NOT done here. Tune this one value in the web smoke if the
-// header height differs.
+// So the ring is the classic TWO-TONE indicator instead: a white inner ring (outline) inside a
+// black outer ring (box-shadow). No single static colour can clear a contrast floor against both
+// light and dark bars — but for ANY surface luminance the WORSE of {white, black} bottoms out at
+// ≈4.5:1 (at mid-grey), so at least one ring is always clearly visible, and the two rings sit at
+// 21:1 against each other, so the pair reads as one crisp indicator on anything. That bound is
+// MEASURED, not assumed: `__tests__/app/web-focus-ring.test.ts` computes both ratios against
+// `background.secondary` (the bar the ring lands on) for all six palettes × both schemes.
 //
-// ⚠️ story 6-0 added the SECOND AND THIRD rules, and they are an accessibility fix rather than
-// polish. The library CSS gives the keyboard focus ring `outline-color:
-// var(--expo-router-tabs-tab-outline-color, #444444)`, and NOTHING in the app can reach that
-// variable — `<NativeTabs>` exposes no prop that maps to it — so the hardcoded `#444444` shipped on
-// every palette. Against our dark bars that is roughly 1.6:1: a keyboard user could not see which
-// tab they were on.
-//
-// This file is static CSS rendered before hydration and has no access to the RN theme, so no token
-// can be written here. It does not need to be: expo-router already publishes the LABEL colours as
-// custom properties on the tabs root (from `labelStyle` — see `(tabs)/_layout.tsx`), and a custom
-// property may be defined in terms of another. Pointing the outline at those makes the ring take
-// the same colour as the label beside it, in every palette x scheme, and it cannot drift from that
-// label because it IS that label's value. Both are already held against the bar in
-// `palettes.contrast.test.ts`.
-//
-// ⚠️ NOT `currentColor`, which was the first attempt and measured BLACK. The library styles the
-// label on an inner `<span>`, so the trigger's own `color` is whatever `<body>` inherits — about
-// 1.06:1 on a dark pill, i.e. worse than the `#444444` this replaces. The fallbacks repeat the
-// library's own defaults so a future upstream rename degrades to today's behaviour rather than to
-// `invalid at computed-value time`.
-//
-// ⚠️ story 6-0's THIRD RULE — the `border` — IS A REGRESSION FIX FOR STORY 6-0 ITSELF, and it is
-// the price of theming the pill at all. Widening the SURFACE group to web
-// (`(tabs)/_layout.tsx`) replaced the library's hardcoded `#272727` with `background.secondary`.
-// That is correct — the old grey ignored every palette — but `#272727` was also carrying the pill
-// visually: it measured ~14:1 against a light page, and `.navigationMenuRoot` ships NO border and
-// NO shadow. `background.secondary` against `background.primary` measures **1.11–1.24:1** across
-// all six palettes × both schemes (terracotta·light 1.11), so the themed pill is very nearly
-// invisible against the page it floats over. A surface that quiet needs an edge.
-//
-// The edge takes the LABEL colour for the same reason the outline does: `--expo-router-tabs-text-
-// color` is `labelStyle.default.color`, i.e. `text.secondary`, which is already held at ≥4.5:1
-// against BOTH `background.primary` and `background.secondary` in `palettes.contrast.test.ts` —
-// comfortably past the 3:1 WCAG 1.4.11 asks of a non-text boundary, in every palette × scheme, and
-// it cannot drift from the labels inside the pill because it IS their value. `box-sizing:
-// border-box` is already on the rule, so the pill stays 40px tall.
-//
-// ⚠️ THIS FILE'S DEPENDENCE ON UPSTREAM IS INVISIBLE FROM UPSTREAM. Three custom-property names
-// and the `[role="tablist"][aria-label="Main"]` selector are all read out of
-// `expo-router/assets/native-tabs.module.css` and `NativeTabsView.web.js`; a rename there degrades
-// every rule below to its hardcoded fallback with no error anywhere. `__tests__/app/
-// web-nav-pill.test.ts` reads both this file and the installed stylesheet and fails when they stop
-// agreeing.
-const webNavPillPolish = `
-[role="tablist"][aria-label="Main"] {
-  top: 12px;
-  border: 1px solid var(--expo-router-tabs-text-color, #8b8b8b);
-  --expo-router-tabs-tab-outline-color: var(--expo-router-tabs-text-color, #8b8b8b);
-}
-[role="tablist"][aria-label="Main"] [data-state="active"] {
-  --expo-router-tabs-tab-outline-color: var(--expo-router-tabs-active-text-color, #ffffff);
+// ⚠️ THE SELECTOR IS OUR OWN CONTRACT, NOT UPSTREAM'S. react-native-web maps `testID` to
+// `data-testid`, and every interactive chrome control carries a `chrome-` testID prefix
+// (`chrome-back`, `chrome-mode-toggle`, `chrome-tab-*` — see `AppHeader` / `AppTabBar` /
+// `ReadingChrome`). The same test reads the component sources and fails if the prefix and this
+// selector stop agreeing — the drift that would silently un-style the ring.
+const chromeFocusRing = `
+[data-testid^="chrome-"]:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 0px;
+  box-shadow: 0 0 0 4px #000000;
 }`;

@@ -1,32 +1,45 @@
 /**
- * `/mushaf` — the 604-page surface, driven (story 6-2, mirroring `read-screen.test.tsx`).
+ * `/` — the 604-page mushaf surface, driven (story 6-2; THE HOME TAB with our chrome since 6-6,
+ * mirroring `read-screen.test.tsx`).
  *
  * ⚠️ THE FLASHLIST MOCK CAPTURES PROPS AND RENDERS NO ITEMS, unlike the read screen's (which
  * renders every verse row). Rendering 604 `MushafPage`s per case would start 604 async loads for
  * nothing: what this file drives is the SCREEN — reversed data, paging, the initial index, the
- * viewability→position wiring and the chrome — and each of those is a prop or a callback. The
- * page component itself is driven with the real renderer in `MushafPage.test.tsx`.
+ * viewability→position wiring, the chrome and the focus resync — and each of those is a prop or
+ * a callback. The page component itself is driven with the real renderer in `MushafPage.test.tsx`.
  *
  * The gesture mock records the tap's chained configuration for the same two load-bearing,
- * unrenderable settings `read-screen.test.tsx` documents: `cancelsTouchesInView(false)` and
- * `runOnJS(true)`. That a drag still turns the page is native recognizer behaviour no Jest
- * renderer can see — the simulator smoke proves it.
+ * unrenderable settings `read-screen.test.tsx` documents. That a drag still turns the page is
+ * native recognizer behaviour no Jest renderer can see — the simulator smoke proves it.
  */
 
 const mockBack = jest.fn();
-const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>(() => true);
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({
-    back: mockBack,
-    replace: mockReplace,
-    canGoBack: () => mockCanGoBack(),
-    push: jest.fn(),
-    navigate: jest.fn(),
-    dismissAll: jest.fn(),
-  }),
-}));
+/** Every focus callback the screen registered — the LAST one is the live screen's. */
+const mockFocusCallbacks: (() => void)[] = [];
+
+jest.mock('expo-router', () => {
+  const React = require('react');
+  return {
+    useRouter: () => ({
+      back: mockBack,
+      navigate: mockNavigate,
+      replace: jest.fn(),
+      canGoBack: () => mockCanGoBack(),
+      push: jest.fn(),
+      dismissAll: jest.fn(),
+    }),
+    useSegments: () => ['(tabs)'],
+    useFocusEffect: (callback: () => void) => {
+      React.useEffect(() => {
+        mockFocusCallbacks.push(callback);
+        callback();
+      }, [callback]);
+    },
+  };
+});
 
 /** Every tap gesture the screen built, with its chained configuration and its handler. */
 const mockTaps: { settings: string[]; end?: () => void }[] = [];
@@ -58,6 +71,7 @@ jest.mock('react-native-gesture-handler', () => {
   return { __esModule: true, Gesture: { Tap }, GestureDetector, GestureHandlerRootView: View };
 });
 
+const mockScrollToIndex = jest.fn();
 /** Captured on every render so a case can assert what the list was configured with. */
 const mockListProps: Record<string, unknown>[] = [];
 
@@ -67,7 +81,7 @@ jest.mock('@shopify/flash-list', () => {
   const FlashList = React.forwardRef((props: any, ref: any) => {
     mockListProps.push(props);
     React.useImperativeHandle(ref, () => ({
-      scrollToIndex: jest.fn(),
+      scrollToIndex: mockScrollToIndex,
       scrollToOffset: jest.fn(),
     }));
     // Props only — see the file header for why no items render here.
@@ -95,11 +109,10 @@ jest.mock('@/lib/mushafFonts', () => ({
 }));
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { getFirstVerseForPage, TOTAL_PAGES } from 'quran-data';
+import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import type { ViewToken } from 'react-native';
-import Mushaf from '@/app/mushaf';
+import Mushaf from '@/app/(tabs)/index';
 import { DURATIONS } from '@/constants/animation';
-import { HOME_HREF } from '@/constants/navigation';
 
 /** The most recent props the list was rendered with. */
 function listProps(): Record<string, unknown> {
@@ -114,10 +127,16 @@ function settleOnPage(page: number) {
   act(() => handler({ viewableItems: [{ item: page, key: '', index: 0, isViewable: true }] }));
 }
 
-/** Tap the surface — the screen's ONE gesture, and the chrome's only way back. */
+/** Tap the surface — the screen's ONE gesture, and the chrome's only reveal. */
 function tapSurface() {
   const tap = mockTaps[mockTaps.length - 1];
   act(() => tap.end?.());
+}
+
+/** Fire the screen's focus effect again — what a tab switch back to this screen does. */
+function refocus() {
+  const callback = mockFocusCallbacks[mockFocusCallbacks.length - 1];
+  act(() => callback?.());
 }
 
 function chromeTouches(): unknown {
@@ -146,6 +165,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockListProps.length = 0;
   mockTaps.length = 0;
+  mockFocusCallbacks.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
 });
@@ -262,6 +282,51 @@ describe('the position write', () => {
   });
 });
 
+describe('the focus resync — one position, two renderers (story 6-6)', () => {
+  it('jumps to the page where the OTHER renderer moved the pair, on focus', () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 255 }; // page 42
+    const view = render(<Mushaf />);
+    // Reading mode moves the position while this tab is blurred; the mounted position hook
+    // re-renders the screen (rerender stands in for that), then the tab regains focus.
+    mockReadingPositionRow.current = { surah: 18, verse: 1 };
+    view.rerender(<Mushaf />);
+    refocus();
+    const page = getPageForVerse(18, 1);
+    expect(mockScrollToIndex).toHaveBeenCalledWith({
+      index: TOTAL_PAGES - page,
+      animated: false,
+    });
+    // …and the preload re-aims at the new page.
+    expect(mockPreload).toHaveBeenLastCalledWith(page);
+  });
+
+  it('does NOTHING on a focus where the pair still resolves to the visible page', () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    const view = render(<Mushaf />);
+    settleOnPage(42);
+    view.rerender(<Mushaf />);
+    refocus();
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('a resync landing is a RESTORE, not a move — its settle writes nothing', () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    const view = render(<Mushaf />);
+    settleOnPage(42); // the opening restore settles; no write
+    mockReadingPositionRow.current = { surah: 18, verse: 1 };
+    view.rerender(<Mushaf />);
+    refocus();
+    const page = getPageForVerse(18, 1);
+    settleOnPage(page); // the resync's own landing
+    // Writing here would clobber 18:1 with the page's first verse — the same clobber the
+    // opening latch exists for, so the latch re-arms on every resync.
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+    // …and moving on afterwards writes normally, so the re-armed latch is not a mute button.
+    settleOnPage(page - 1);
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the chrome, and the gesture that reveals it', () => {
   it('starts HIDDEN — the mushaf is immersive when it renders', () => {
     render(<Mushaf />);
@@ -285,18 +350,30 @@ describe('the chrome, and the gesture that reveals it', () => {
     expect(tap.end).toBeInstanceOf(Function);
   });
 
-  it('names the settled page’s surah and the page number', async () => {
+  it('names the settled page’s surah — and not the page number, which the page itself draws', async () => {
     mockReadingPositionRow.current = { surah: 2, verse: 255 };
     render(<Mushaf />);
     await revealChrome();
     expect(screen.getByText('Al-Baqarah')).toBeTruthy();
-    expect(screen.getByText('Page 42')).toBeTruthy();
-    settleOnPage(41);
-    expect(screen.getByText('Page 41')).toBeTruthy();
+    expect(screen.queryByText('Page 42')).toBeNull();
+  });
+
+  it('carries the mode toggle, and it navigates to reading mode', async () => {
+    render(<Mushaf />);
+    await revealChrome();
+    fireEvent.press(screen.getByTestId('chrome-mode-toggle'));
+    expect(mockNavigate).toHaveBeenCalledWith('/read');
+  });
+
+  it('carries the tab bar, and switching away works', async () => {
+    render(<Mushaf />);
+    await revealChrome();
+    fireEvent.press(screen.getByTestId('chrome-tab-(profile)'));
+    expect(mockNavigate).toHaveBeenCalledWith('/account');
   });
 });
 
-describe('a page that fails reveals the door — for the page the reader is ON', () => {
+describe('a page that fails reveals the chrome — for the page the reader is ON', () => {
   /** The failure-state callback the screen hands each page, reached through `renderItem`. */
   function pageOnErrorChange(): (page: number, failed: boolean) => void {
     const renderItem = listProps().renderItem as (info: { item: number }) => {
@@ -319,10 +396,8 @@ describe('a page that fails reveals the door — for the page the reader is ON',
 
   it('reveals it when a page that ALREADY failed off-screen becomes the visible one', async () => {
     // ⚠️ THE REGRESSION, AND IT IS THE COMMON CASE OFFLINE. FlashList renders neighbours
-    // off-screen, so the page the reader swipes to has already loaded, already failed and already
-    // reported it before the viewability callback makes it current. Checking only the failure
-    // edge left the reader on an error surface with the exit hidden — measured on the simulator
-    // with the font host unreachable, while this file was green.
+    // off-screen, so the page the reader swipes to has already loaded, already failed and
+    // already reported it before the viewability callback makes it current.
     mockReadingPositionRow.current = { surah: 2, verse: 255 }; // opens on page 42
     render(<Mushaf />);
     act(() => pageOnError()(41)); // fails while it is still the off-screen neighbour
@@ -349,8 +424,7 @@ describe('a page that fails reveals the door — for the page the reader is ON',
     act(() => pageOnError()(41));
     // ⚠️ THE WAIT IS THE WHOLE CASE. A reveal reaches `pointerEvents` only after the 200ms
     // timing lands and `runOnJS` hops the setter back, so a SYNCHRONOUS assertion here passes
-    // whether or not `show()` was called. Demonstrated: with the guard removed (chrome revealed
-    // for every failing page, on-screen or not) the synchronous version stayed green.
+    // whether or not `show()` was called.
     await settle();
     expect(chromeTouches()).toBe('none');
   });
@@ -361,25 +435,5 @@ describe('a page that fails reveals the door — for the page the reader is ON',
     act(() => pageOnError()(42));
     await settle();
     expect(chromeTouches()).toBe('box-none');
-  });
-});
-
-describe('the room still has a door', () => {
-  it('goes back when there is history to pop', async () => {
-    render(<Mushaf />);
-    await revealChrome();
-    fireEvent.press(screen.getByTestId('reading-close'));
-    expect(mockBack).toHaveBeenCalledTimes(1);
-    expect(mockReplace).not.toHaveBeenCalled();
-  });
-
-  it('replaces to the home tab when there is none — never to the screen being left', async () => {
-    mockCanGoBack.mockReturnValue(false);
-    render(<Mushaf />);
-    await revealChrome();
-    fireEvent.press(screen.getByTestId('reading-close'));
-    expect(mockReplace).toHaveBeenCalledWith(HOME_HREF);
-    expect(mockBack).not.toHaveBeenCalled();
-    for (const call of mockReplace.mock.calls) expect(call[0]).not.toBe('/mushaf');
   });
 });

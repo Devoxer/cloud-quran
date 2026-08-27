@@ -160,32 +160,10 @@ export default function AccountScreen() {
       </SettingsGroup>
 
       <SettingsGroup label={t('profile:account.othersGroup')} testID="app-section">
-        {/* ⚠️ TEMPORARY, AND STORY 6.3 DELETES IT (6.1's frozen Never list put navigation there,
-            so 6.1 left the row deliberately). `app/read.tsx` is a root-level route with no other
-            in-app entry point — no `Link`, no `push`, no `href` anywhere — until the Read tab
-            arrives with 6.3. Without this row the immersive route is reachable only by typing a
-            URL, and the acceptance rows about opening from a tab and returning with tab state
-            intact cannot be exercised at all: a typed URL is a different history and leaves no
-            tab state to preserve. A smoke that cannot be run is not a smoke that passed. Remove
-            this row when the Read tab lands — the reader's real door is a tab, not a settings
-            entry. */}
-        <SettingsRow
-          icon="book-outline"
-          label={t('profile:rows.readingMode')}
-          trailing="chevron"
-          onPress={() => router.push('/read')}
-          testID="reading-mode-row"
-        />
-        {/* ⚠️ TEMPORARY like the row above, and 6.3 removes BOTH. Same reasoning: `/mushaf` has
-            no other in-app entry until the real navigation ships, and the story's smokes need a
-            door that preserves tab history. (story 6-2) */}
-        <SettingsRow
-          icon="book-outline"
-          label={t('profile:rows.mushafMode')}
-          trailing="chevron"
-          onPress={() => router.push('/mushaf')}
-          testID="mushaf-mode-row"
-        />
+        {/* story 6-6: the temporary `reading-mode-row` and `mushaf-mode-row` doors to the two
+            reading surfaces were REMOVED here — the real doors exist now (the Mushaf and Read
+            tabs, and the mode toggle in the reading chrome), which is what those rows were
+            waiting for. epic-6-context said 6.1's, then 6.3's; it was this story's. */}
         <SettingsRow
           icon="lock-closed-outline"
           label={t('profile:rows.privacy')}

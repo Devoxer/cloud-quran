@@ -9,7 +9,6 @@
     "save": "Save",
     "delete": "Delete",
     "remove": "Remove",
-    "close": "Close",
     "back": "Back",
     "seeAll": "See All",
     "clearAll": "Clear All",
@@ -86,14 +85,12 @@
   },
   "reading": {
     "nextSurah": "Next: {{name}}",
-    "footnote": "Page {{page}} · {{surah}}:{{verse}}",
     "unreadableTitle": "The Quran text could not be opened",
     "unreadableBody": "The bundled text is missing or unreadable on this device.",
     "noVersesTitle": "No verses to show",
     "noVersesBody": "This surah came back empty. Try again, or move on to the next one."
   },
   "mushaf": {
-    "footnote": "Page {{page}}",
     "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",
     "pageA11y": "Page {{page}}, Surah {{name}}",
     "pageLoadingA11y": "Page {{page}}, loading",

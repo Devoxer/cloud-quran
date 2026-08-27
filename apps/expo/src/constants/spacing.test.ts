@@ -113,17 +113,13 @@ describe('screenContentStyle() — wide-screen cap helper (Story 23.25)', () => 
 });
 
 describe('HEADER_CONTENT_CLEARANCE', () => {
-  // jest-expo runs the iPhone iOS preset, so the constant resolves to its iOS branch — 0 — at
-  // import. This is the load-bearing invariant: iOS already gets its top breathing room from the
-  // large-title inset (`contentInsetAdjustmentBehavior`), so it MUST be 0 there or summing it into
-  // a paddingTop double-spaces. The web and Android `SPACING.xl` branches are not
-  // import-time-observable under this preset and are exercised by those platform smokes.
-  //
-  // ⚠️ story 6-0 deleted this constant and its test, then restored both: the 2026-08-26 chrome
-  // reversal makes an opaque native header live again on every pushed screen, which is the exact
-  // condition the non-zero branches were measured against, and 6.1 is the first screen to meet it.
-  it('is 0 on iOS (large-title inset provides the top room — no double-spacing)', () => {
-    expect(HEADER_CONTENT_CLEARANCE).toBe(0);
+  // ⚠️ Re-derived a THIRD time in story 6-6, and the platform split died with the native header:
+  // the old iOS-0 branch was a measurement of a transparent large-title header that no longer
+  // renders anywhere. `components/ui/AppHeader` is opaque and identical on every platform, so
+  // the breathing room below it is one token everywhere — a platform branch reappearing here
+  // would be a claim about a native header this app no longer has.
+  it('is one platform-independent token (SPACING.xl) under our own header', () => {
+    expect(HEADER_CONTENT_CLEARANCE).toBe(SPACING.xl);
   });
 });
 

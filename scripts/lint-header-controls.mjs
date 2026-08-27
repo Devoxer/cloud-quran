@@ -21,25 +21,32 @@
  * native header; a prohibition means one is never written there at all. Adding one would
  * re-legitimise native header controls, which is the thing this gate exists to prevent.
  *
- * ⚠️ THE ARCHITECTURE UNDER THIS GATE WAS REVERSED ON 2026-08-26, AND THE REVERSAL MAKES THE GATE
- * MORE LOAD-BEARING, NOT LESS. §9 used to say Cloud Quran would draw its own header inside the RN
- * view tree, which would have deleted the defect class outright — this docblock called that "a
- * destination, not today's tree" and named Epic 6 as the owner of the `headerShown` flip. **That
- * flip is cancelled. No story owns one.** The app keeps `NativeTabs` and native stack headers,
- * because the claim the custom-chrome decision rested on — that web is the weakest native-chrome
- * rendering — was disproven against a running wisdom-fruits web build.
+ * ⚠️ THE ARCHITECTURE AROUND THIS GATE HAS NOW FLIPPED THREE TIMES AND THE GATE HAS NOT MOVED —
+ * 2026-08-20 custom chrome → 2026-08-26 native chrome → 2026-08-27 custom chrome again (story
+ * 6-6, current). Its justification never lived in any of those decisions: it is a MEASURED,
+ * platform-level defect that is independent of which way the architecture flips. On an
+ * Apple-silicon Mac running the iPhone build, a control in a native header slot is drawn and
+ * never receives a mouse click, while the same control in the RN view tree does — and `Platform`
+ * cannot distinguish that runtime (it reports `systemName: 'iPadOS'`, `interfaceIdiom: 'pad'`,
+ * `isMacCatalyst: false`). Judge the gate on that measurement, never on the architecture of the
+ * day; the previous revision of this docblock tied itself to the 2026-08-26 decision and had to
+ * be rewritten when the decision reversed. The web-rendering claim that drove the FIRST custom
+ * chrome era is dead (disproven 2026-08-26) and is not why custom chrome returned — see
+ * architecture §9 for the reasons that are.
  *
- * So a native header now exists on every pushed screen, permanently, and the defect is LIVE rather
- * than hypothetical. This prohibition is the only thing standing between it and a shipped screen —
- * which is what makes keeping native chrome a safe trade rather than a re-run of the
- * seven-screens-at-once failure the source app managed.
+ * Under today's custom chrome the defect is *impossible* rather than merely forbidden: there is
+ * no native header anywhere to install a control into. That is an argument FOR keeping the gate,
+ * not for retiring it — it costs nothing, and it is the only thing standing between a future
+ * native header (a dependency's default, a copied screen, epic 7's modal) and a silently broken
+ * control. The one measurement that never happened — whether the navigator's own back button
+ * takes a mouse click on that runtime (`deferred-work.md`) — is moot again while no native
+ * header exists, and becomes due the day one returns.
  *
- * What the tree needs today: nothing. The profile stack's headers carry a title and the system back
- * button only, and there are zero `headerLeft` / `headerRight` / `setOptions` call sites anywhere in
- * `apps/expo/src`. The first screen that genuinely wants a header control is the trigger — put the
- * control in content, or bring the shim across as a documented one-time decision with an
- * `EXCEPTIONS` entry that argues it. ⚠️ The system back button's own behaviour on that Mac runtime
- * was never measured (see `deferred-work.md`), and it now sits on the live path.
+ * ⚠️ AND THE IDENTIFIER MATCH NOW FIRES ON OUR OWN CHROME'S PROPS, WHICH IS THE LIVE CASE rather
+ * than a hypothetical: the app's header IS an in-tree component (`components/ui/AppHeader`), and
+ * habit is what writes `headerLeft` on it. The sanctioned answer is the one this codebase took —
+ * the props are named `leading` / `trailing` — and NEVER a file exemption, which blinds the gate
+ * to the whole file including a real native-slot assignment added to it later.
  *
  * ## The slot has four names and one JSX component — and the rule is SHAPE, not a list
  *

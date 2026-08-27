@@ -118,42 +118,30 @@ describe('route tree integrity', () => {
   });
 
   it('serves `/` at all — the regression story 6-0 caused and then fixed', () => {
-    // ⚠️ THE ONLY GUARD OVER THE THING THAT ACTUALLY BROKE. Moving the reading placeholder out of
-    // `(tabs)` deleted the route that served `/`, and nothing said so: tsc had no complaint (the
-    // generated route union is not part of `pnpm typecheck` — see this file's header), every
-    // suite stayed green, and the app served `+not-found` at its own front door on web while a
-    // native cold launch, which also starts at `/`, landed there too. One line, over the URL set
-    // this file already builds. ⚠️ `+not-found.tsx` used to link "go home" to `/` and no longer
-    // does — it goes to `HOME_HREF` directly, because bouncing through the redirect popped the
-    // ROOT stack and left the tab stack on whatever pushed screen the reader had been on. That
-    // removes the LAST in-app link to `/` and makes this case the only thing standing between a
-    // future refactor and a 404 at the app's own front door.
+    // ⚠️ THE ONLY GUARD OVER THE THING THAT ACTUALLY BROKE. Story 6-0 once deleted the route
+    // that served `/`, and nothing said so: tsc had no complaint (the generated route union is
+    // not part of `pnpm typecheck` — see this file's header), every suite stayed green, and the
+    // app served `+not-found` at its own front door on web while a native cold launch, which
+    // also starts at `/`, landed there too. Since story 6-6 the server of `/` is the tab
+    // group's OWN index — the mushaf, the home surface — with no redirect in front of it.
     expect(new Set(routeUrls(APP_DIR, ''))).toContain('/');
+    expect(existsSync(join(APP_DIR, '(tabs)', 'index.tsx'))).toBe(true);
   });
 
-  it('never points `/` at the immersive route', () => {
-    // `/` is a redirect into the tab shell, and its target is the one thing about it that can go
-    // wrong silently: repointing it at the immersive route — which its own docblock forbids by
-    // name — passed all 96 suites. Launching straight into a screen presented OVER the tabs, with
-    // nothing beneath it, is the "cold launch restores an empty player sheet" defect the source
-    // app already shipped once. Read the file rather than the URL set, because the target is a
-    // value in the redirect, not a route registration.
-    const redirect = readFileSync(join(APP_DIR, 'index.tsx'), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
-    expect(redirect).not.toMatch(/['"`]\/read['"`]/);
-    // …and the target it DOES use resolves to a real URL. ⚠️ THE DERIVATION MOVED IN STORY 6-0's
-    // REVIEW ROUND, so this no longer looks for `TABS[0]` in this file: three screens needed the
-    // same answer — the front door, the immersive route's no-history exit and `+not-found`'s "go
-    // home" — and each had grown its own spelling, which is how "go home" came to mean "pop the
-    // root stack and leave the tab stack drilled into settings". It is one exported `HOME_HREF`
-    // now, still read from the tab table rather than written as a path.
-    expect(redirect).toMatch(/HOME_HREF/);
+  it('derives the home from the tab table — one source, no written path', () => {
+    // ⚠️ THE REDIRECT THIS CASE USED TO READ IS DELETED (story 6-6): `app/index.tsx` existed to
+    // pop `/` into the tab shell, and a group index serving `/` directly replaced it, exactly as
+    // its own docblock demanded. What survives is the derivation rule: every surface that means
+    // "go home" (`+not-found.tsx` today) reads `HOME_HREF`, and `HOME_HREF` reads `TABS[0]` —
+    // hardcoding a path here is how "go home" once came to mean "whatever screen the reader had
+    // been on".
     const navigation = readFileSync(
       join(__dirname, '..', '..', 'constants', 'navigation.ts'),
       'utf8'
     );
     expect(navigation).toMatch(/HOME_HREF[^=]*=\s*TABS\[0\]/);
+    // The old redirect must STAY deleted — resurrected, it would shadow the mushaf at `/`.
+    expect(existsSync(join(APP_DIR, 'index.tsx'))).toBe(false);
     const urls = new Set(routeUrls(APP_DIR, ''));
     for (const tab of TABS) expect(urls).toContain(tab.href);
   });

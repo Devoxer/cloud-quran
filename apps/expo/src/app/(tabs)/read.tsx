@@ -1,5 +1,6 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { getPageForVerse, SURAH_COUNT, SURAH_METADATA, type Verse } from 'quran-data';
+import { useFocusEffect } from 'expo-router';
+import { SURAH_COUNT, SURAH_METADATA, type Verse } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, type ViewToken } from 'react-native';
@@ -8,9 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorView } from '@/components/ui';
 import { clampArabicFontSize } from '@/constants/arabic';
+import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import {
-  CHROME_BAR_HEIGHT,
   NextSurahButton,
   nextSurah,
   ReadingChrome,
@@ -23,88 +24,57 @@ import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 /**
- * READING MODE — the immersive reading surface (story 6-1, filling the slot story 6-0 built).
+ * READING MODE — the verse-by-verse surface (story 6-1; a TAB ROUTE since story 6-6).
  *
- * ⚠️ ITS ADDRESS AND ITS PRESENTATION ARE THE FEATURE, AND THEY DO DIFFERENT JOBS. This file sits
- * at the ROOT of `src/app/`, a sibling of `(tabs)`, and `app/_layout.tsx` registers it with
- * `presentation: 'fullScreenModal'`. Story 6-1 fills it IN PLACE: the file did not move and the
- * registration did not change.
+ * ⚠️ ITS ADDRESS CHANGED IN 6-6 AND ITS IMMERSION DID NOT. This file lives inside `(tabs)` and
+ * serves `/read`; the old root-sibling `fullScreenModal` registration is gone. "Immersive" is now
+ * a property WE own rather than one inherited from a presentation: the chrome overlays and starts
+ * hidden, and the navigator draws no bar and no header of its own (`(tabs)/_layout.tsx` renders a
+ * null tab bar — `AppTabBar` is mounted HERE, inside `ReadingChrome`, riding the same reveal as
+ * the header, because two mechanisms at two speeds is the recorded `chrome-render-storm` defect).
  *
- *   - **Position removes the tab bar.** Being outside the tab navigator is what keeps the bar out
- *     of this screen's layout. ⚠️ On Android `presentation: 'modal'` is documented as equivalent
- *     to `push`, so a presentation cannot be what covers the Material NavigationBar there — only
- *     the position can be.
- *   - **Presentation makes it immersive rather than a push**: full-screen cover, no page-sheet
- *     inset, no parent visible behind, no back-chevron or edge-swipe affordance.
+ * ⚠️ THIS FILE MUST NEVER CONTAIN THE STRING `headerShown`. The tab navigator hides its header
+ * per-layout; a local screen-options object putting one back would re-open the native-header
+ * question the reserved-words gate exists for. `custom-chrome.test.ts` scans this source for it.
  *
- * ⚠️ THIS FILE MUST NEVER CONTAIN THE STRING `headerShown`. The route is registered without a
- * header; a local `<Stack.Screen options={{ headerShown: true }} />` — the idiom the four sibling
- * profile screens use, and the natural way to answer "the reader needs a way out" — would put it
- * straight back and drag in the header-control question the epic exists to sidestep.
- * `immersive-route.test.ts` scans this source for it.
- *
- * ── The four things this screen is careful about ─────────────────────────────────────────────
+ * ── The five things this screen is careful about ─────────────────────────────────────────────
  *
  * 1. **ONE WRITE PER VERSE CHANGE, ZERO WITHIN A VERSE.** `onViewableItemsChanged` reports the
  *    top visible verse as often as it likes; `usePosition` writes only when the `(surah, verse)`
- *    pair actually differs. The screen holds no ref for that comparison and makes none — that is
- *    the whole design, because a screen that could forget the comparison eventually does. The
+ *    pair actually differs. The screen holds no comparison — that is the whole design. The
  *    pre-fork build fired a database transaction per scroll tick and burned a day of the
  *    account-wide write budget in 4.6 hours.
  *
- * 2. **NO FIXED HEIGHT AND NO `initialScrollIndex`.** Verse height varies with the Arabic length,
- *    the font size and the width; a fixed estimate accumulated thousands of pixels of error over
- *    Al-Baqarah's 286 verses. Story 1-7.5 fixed that by REMOVING the abstraction, and FlashList
- *    v2 dropped `getItemLayout` anyway. The saved position is restored by ONE imperative
- *    `scrollToIndex` after mount, which measures rather than predicts.
+ * 2. **NO FIXED HEIGHT AND NO `initialScrollIndex`.** Verse height varies with the Arabic
+ *    length, the font size and the width; a fixed estimate accumulated thousands of pixels of
+ *    error over Al-Baqarah's 286 verses. The saved position is restored by ONE imperative
+ *    `scrollToIndex` after the target surah's rows load, which measures rather than predicts.
  *
  * 3. **THE CHROME OVERLAYS AND NEVER OCCUPIES LAYOUT.** The list reserves padding for both bars
  *    permanently, so revealing or dismissing them changes nothing about where a verse sits. The
- *    bottom reservation is the safe-area inset plus this story's own footer — ⚠️ NOT
- *    `useTabBarHeight()`, which answers 49pt for a bar that is not on this route at all (see
- *    `ReadingChrome`'s `CHROME_BAR_HEIGHT` docblock).
+ *    reservation is `CHROME_BAR_HEIGHT + insets` at each end — the bottom bar is now the app's
+ *    own tab bar, and it is the SAME height constant, so there is no second number to drift.
  *
- * 4. **THE OPENING PAIR IS READ ONCE AND CLAMPED, AS A PAIR.** See `openingPosition` below: a
- *    saved row is device state that can be stale, corrupt, or newer than this build, and every
- *    part of the screen that trusted half of it produced a wrong screen rather than an error.
+ * 4. **THE TARGET PAIR IS RESOLVED AS A PAIR, AND RE-RESOLVED ONLY ON FOCUS.** `openingPosition`
+ *    clamps the saved row into the book as one value (the three half-trust defects it closes are
+ *    documented on it). While this screen is focused the reader owns where they are — a sync
+ *    arriving mid-read never yanks them. But a tab switch or mode toggle is a NAVIGATION: on
+ *    focus the saved pair is re-resolved, and if the other renderer moved it, this one jumps to
+ *    match — one position, two renderers, which is what makes the mushaf↔reading toggle mean
+ *    "same place, different renderer" (story 6-6's acceptance) rather than "wherever this tab
+ *    happened to be last".
  *
- * ── ⚠️ THE TAP IS A GESTURE, AND THE THREE SHAPES BEFORE IT ARE WHY ──────────────────────────
- *
- * The reading surface is immersive on arrival — the frozen criterion is "when it renders, then it
- * is immersive" — so the chrome, and with it the route's only exit, has to be reachable by
- * tapping the page. Getting that tap right took three attempts and only the third works:
- *
- *   1. a full-screen `Pressable` around the list **blocked scrolling outright** (it takes the RN
- *      responder on touch START and cancels a press only when the touch LEAVES its bounds, which
- *      a drag inside a full-screen element never does);
- *   2. a `Pressable` on each verse row scrolled fine but left no "elsewhere" to tap — which is
- *      what pushed the chrome into shipping revealed, against the frozen intent — and spent the
- *      tap epic 7 is already promised ("a tap on a verse plays audio from it");
- *   3. an RNGH **`Gesture.Tap()` over the whole reading area**, which is what ships. A gesture
- *      recogniser fails on movement instead of holding the responder, so a drag reaches the list
- *      and a tap reaches the toggle.
- *
- * ⚠️ `.cancelsTouchesInView(false)` IS LOAD-BEARING. RNGH's default is `true`: when the tap
- * recognises, UIKit cancels the touch in the RN view tree — which would silently kill every
- * `Pressable` INSIDE the gesture's area, i.e. the next-surah control and the error state's retry.
- * With it false, both fire normally and the tap simply also toggles the chrome.
- *
- * ⚠️ THE CHROME IS NOT INSIDE THE GESTURE. `ReadingChrome` is a sibling of the detector, so the
- * close button is not in the tap's area at all and pressing it cannot also toggle.
- *
- * ⚠️ THE ONLY IN-APP ENTRY IS STILL THE TEMPORARY SETTINGS ROW. There is no Read tab yet —
- * navigation is story 6.3, which is where the epic's frozen Never list puts it — so
- * `(tabs)/(profile)/account.tsx`'s `reading-mode-row` stays until that story gives the reader a
- * real door. Deleting the row now, with no tab to replace it, would strand the route.
+ * 5. **THE TAP IS AN RNGH GESTURE** (`Gesture.Tap()` over the whole surface,
+ *    `.cancelsTouchesInView(false)` so it cannot kill the Pressables inside its area). A
+ *    full-screen `Pressable` blocked scrolling outright and a per-row press left no "elsewhere"
+ *    to tap — both measured in 6-1; see that story's write-up for the three attempts.
  */
 
 /**
  * ⚠️ MODULE SCOPE, NOT A RENDER-TIME OBJECT. FlashList documents that changing
  * `viewabilityConfig` on the fly is not supported, and the FlatList this is mocked as under Jest
- * throws outright. A fresh object literal each render is exactly that change.
- *
- * 50% rather than a smaller threshold because the reported verse is what the reader is READING:
- * a sliver of the next ayah entering the viewport is not a move to it.
+ * throws outright. 50% because the reported verse is what the reader is READING: a sliver of the
+ * next ayah entering the viewport is not a move to it.
  */
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 } as const;
 
@@ -113,7 +83,7 @@ const FIRST_SURAH = 1;
 const FIRST_VERSE = 1;
 
 /**
- * The pair this screen OPENS at — clamped into the book, and clamped as a PAIR.
+ * The pair this screen targets — clamped into the book, and clamped as a PAIR.
  *
  * ⚠️ THE SAVED ROW IS UNTRUSTED INPUT. It comes out of MMKV, it can be written by a newer build,
  * it survives a downgrade, and it can be corrupt. Three defects came from trusting parts of it:
@@ -122,13 +92,12 @@ const FIRST_VERSE = 1;
  *     a row arriving one render late (`{18, 4}` after an initial `null`) opened Al-Fatihah and
  *     scrolled to its fourth ayah — the reader landed on 1:4 instead of 18:4;
  *   • an out-of-range verse (`{1, 999}`) was range-checked by the restore effect and NOT by the
- *     footer, which rendered `Page -1 · 1:999` to the reader;
+ *     chrome, which rendered `Page -1 · 1:999` to the reader;
  *   • an out-of-range surah (`{200, 1}`) reached `getSurahVerses`, which answers `[]` — a blank
  *     screen with no verses, no error, and no next-surah control to escape by.
  *
- * So the whole pair is resolved once, here. An out-of-range surah resets the VERSE too: a verse
- * number from a surah that does not exist means nothing in the surah we fall back to. The
- * documented fallback in the I/O matrix is "falls back to the top", and this is both halves of it.
+ * So the whole pair is resolved in one place. An out-of-range surah resets the VERSE too: a
+ * verse number from a surah that does not exist means nothing in the surah we fall back to.
  * ⚠️ The worker bounds these values on the way in; this clamp is about the copy already on the
  * device, which no server check has ever seen.
  */
@@ -151,39 +120,66 @@ export default function Read() {
   const { saved, reportVerse } = usePosition();
   const { data: preferences } = usePreferences();
 
-  // ⚠️ THE PAIR IS RESOLVED ONCE, ON THE FIRST RENDER, AND BOTH HALVES COME FROM THAT ONE READ.
-  // After that the reader owns where they are: re-reading the row would yank them back to their
-  // last position every time another device synced. See `openingPosition` for why reading the
+  // ⚠️ THE PAIR IS RESOLVED ONCE PER FOCUS, AND BOTH HALVES COME FROM THE SAME READ. Within a
+  // focused session the reader owns where they are: re-reading the row on every render would
+  // yank them back each time another device synced. See `openingPosition` for why reading the
   // surah on one render and the verse on another is a defect and not a detail.
-  const [opening] = useState(() => openingPosition(saved));
-  const [surah, setSurah] = useState(opening.surah);
+  const [target, setTarget] = useState(() => openingPosition(saved));
+  const [surah, setSurah] = useState(target.surah);
   const content = useSurah(surah);
-
-  // What the footer names. Seeded from the clamped opening verse so the chrome is correct — and
-  // in range — on the first frame, before any viewability callback has fired.
-  const [visibleVerse, setVisibleVerse] = useState(opening.verse);
 
   const fontSize = clampArabicFontSize(preferences?.fontSize);
 
   const listRef = useRef<FlashListRef<Verse>>(null);
-  // ⚠️ ONE restore, on the FIRST loaded surah only. Without the latch, tapping "next surah" would
-  // scroll the new surah's list to the saved verse index of the old one.
+  // ⚠️ ONE restore per TARGET. Without the latch, tapping "next surah" would scroll the new
+  // surah's list to the saved verse index of the old one. A focus resync resets it.
   const restored = useRef(false);
   // ⚠️ THE SURAH THE LIST IS ACTUALLY SHOWING, mirrored into a ref because the viewability
   // handler must stay identity-stable (see below) and still be able to reject stale rows.
-  const showing = useRef(opening.surah);
+  const showing = useRef(target.surah);
+  // The verse the reader is on. A ref, not state: since 6-6 nothing renders it (the chrome
+  // carries controls, not what the page shows), and the focus resync below compares against it
+  // without re-creating its callback (a fresh callback per verse would re-run the effect per
+  // verse). Seeded from the clamped target so it is in range before any viewability callback.
+  const visibleVerseRef = useRef(target.verse);
+  // The saved row, as a ref, for the same reason: the focus effect reads it at FOCUS time.
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+
+  /**
+   * ⚠️ THE FOCUS RESYNC — story 6-6's "one position, two renderers". Runs on every focus of this
+   * tab (the first mount included, where it is a no-op because the mount already resolved the
+   * same pair). If the saved pair moved while this screen was blurred — the mushaf turned pages,
+   * another device synced — the screen re-targets and the restore effect below re-applies it.
+   * If nothing moved, nothing happens, which is what keeps a plain tab switch from scrolling.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      const fresh = openingPosition(savedRef.current);
+      if (fresh.surah === showing.current && fresh.verse === visibleVerseRef.current) return;
+      showing.current = fresh.surah;
+      visibleVerseRef.current = fresh.verse;
+      restored.current = false;
+      setTarget(fresh);
+      setSurah(fresh.surah);
+    }, [])
+  );
 
   useEffect(() => {
     if (restored.current) return;
     if (content.loading || content.verses.length === 0) return;
-    // The rows on screen must be the surah the opening pair named. Without this the restore
-    // could apply the opening VERSE to some other surah's list.
-    if (content.surah !== opening.surah) return;
+    // ⚠️ The ROWS on screen must be the surah the target named — asked of the rows THEMSELVES,
+    // not of `content.surah`, which is the prop echoed straight back: during the one commit
+    // where the surah state has changed but `useSurah`'s clearing effect has not run yet, the
+    // prop already says the new number while the OLD surah's rows are still in state (and
+    // `loading` is still stale-false). Consuming the latch on that commit is how a cross-surah
+    // focus resync scrolled nowhere — caught by the 6-6 resync test, kept as the guard here.
+    if (content.verses[0]?.surah !== target.surah) return;
     restored.current = true;
-    const index = content.verses.findIndex((v) => v.verse === opening.verse);
+    const index = content.verses.findIndex((v) => v.verse === target.verse);
     if (index <= 0) return; // 1:1 and "not found" both open at the top — the documented fallback.
     listRef.current?.scrollToIndex({ index, animated: false });
-  }, [content.loading, content.verses, content.surah, opening]);
+  }, [content.loading, content.verses, content.surah, target]);
 
   /**
    * ⚠️ A SURAH THAT READS CLEAN AND EMPTY IS ITS OWN STATE, NOT A BLANK SCREEN. `getSurahVerses`
@@ -194,10 +190,9 @@ export default function Read() {
    */
   const isEmpty = !content.loading && content.error === null && content.verses.length === 0;
 
-  // ⚠️ THE ERROR AND EMPTY SURFACES REVEAL THE DOOR. The chrome is hidden on arrival, so on every
-  // other screen the way out is one tap away — but on a screen that has failed, "guess that a tap
-  // does something" is not an exit. `fullScreenModal` has no dismiss gesture and web never had
-  // one, so this is the only way out. A room with no door is not an acceptable empty room.
+  // ⚠️ THE ERROR AND EMPTY SURFACES REVEAL THE CHROME. It is hidden on arrival, so on every
+  // other screen the way out is one tap away — but on a screen that has failed, "guess that a
+  // tap does something" is not an exit. The tab bar the reveal brings back is the way out.
   const { show } = reveal;
   useEffect(() => {
     if (content.error !== null || isEmpty) show();
@@ -216,7 +211,7 @@ export default function Read() {
   /**
    * ⚠️ THE PADDING IS PERMANENT, AND THAT IS WHAT MAKES "CHROME DOES NOT SHIFT CONTENT" TRUE.
    * Reserving it only while the bars are shown would move every verse on each toggle — the exact
-   * failure the criterion names. The bottom sum clears the safe-area inset and the footer bar, so
+   * failure the criterion names. The bottom sum clears the safe-area inset and the tab bar, so
    * the last verse AND the next-surah control below it stay fully visible and tappable.
    */
   const listContentStyle = useMemo(
@@ -236,18 +231,16 @@ export default function Read() {
    * ⚠️ THAT GUARD IS A REAL FIX, NOT DEFENCE IN DEPTH. `goToSurah` scrolls the list to the top,
    * and for one round it did so while the OLD surah's rows were still the list's data — so
    * viewability fired and reported `(oldSurah, 1)`, and `usePosition` wrote it. Measured: a
-   * reader at 1:7 tapped "next" and the writes were `[{1,7}, {1,1}]` before the new rows existed.
-   * If the next read then failed, their saved place was permanently the top of the surah they had
-   * just left. That is the one leak in the "one write per verse change" discipline this whole
-   * story is built on. `useSurah` now clears its rows on a surah change too; the two fixes are
-   * independent, because either alone still leaves the other window open.
+   * reader at 1:7 tapped "next" and the writes were `[{1,7}, {1,1}]` before the new rows
+   * existed. `useSurah` clears its rows on a surah change too; the two fixes are independent,
+   * because either alone still leaves the other window open.
    */
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<Verse>[] }) => {
       const top = viewableItems[0]?.item;
       if (!top) return;
       if (top.surah !== showing.current) return;
-      setVisibleVerse(top.verse);
+      visibleVerseRef.current = top.verse;
       // Reported every time. `usePosition` decides whether it is a write.
       reportVerse(top.surah, top.verse);
     },
@@ -258,8 +251,8 @@ export default function Read() {
     // Synchronously, BEFORE the scroll: the viewability callback that the scroll provokes must
     // already see the new surah as the one we are showing.
     showing.current = next;
+    visibleVerseRef.current = FIRST_VERSE;
     setSurah(next);
-    setVisibleVerse(FIRST_VERSE);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, []);
 
@@ -292,9 +285,8 @@ export default function Read() {
 
   const title = content.meta?.nameTransliteration ?? null;
   /**
-   * ⚠️ DERIVED ONCE. It used to be computed three times per press — twice here for the label and
-   * once inside the button's `onPress` — which is three places for the label and the destination
-   * to drift apart.
+   * ⚠️ DERIVED ONCE. It used to be computed three times per press — three places for the label
+   * and the destination to drift apart.
    *
    * ⚠️ THE NEXT SURAH'S NAME COMES FROM `quran-data`, WHILE THE TITLE ABOVE COMES FROM THE
    * DATABASE, and the split is deliberate rather than an oversight. The title DESCRIBES the rows
@@ -305,20 +297,14 @@ export default function Read() {
    */
   const upcoming = nextSurah(surah);
   const nextSurahName = SURAH_METADATA[upcoming - 1]?.nameTransliteration ?? String(upcoming);
-  const footnote = t('common:reading.footnote', {
-    page: getPageForVerse(surah, visibleVerse),
-    surah,
-    verse: visibleVerse,
-  });
 
   return (
     <View style={styles.screen} testID="reading-surface">
       {/* ⚠️ NO SPINNER, DELIBERATELY. The text is bundled, so the read is fast on every launch
           after the first, and a loading view would flash for one frame — the epic's rule is that
-          loading is the exception and sync is invisible. An empty list for a beat is what
-          "instant" looks like when it briefly is not. The ERROR and EMPTY states are different:
-          a database that cannot be read, or a surah that reads clean with no rows, must be a real
-          surface with a retry — never a blank screen. */}
+          loading is the exception and sync is invisible. The ERROR and EMPTY states are
+          different: a database that cannot be read, or a surah that reads clean with no rows,
+          must be a real surface with a retry — never a blank screen. */}
       <GestureDetector gesture={surfaceTap}>
         <View style={styles.surface} testID="reading-tap-surface">
           {content.error !== null || isEmpty ? (
@@ -356,7 +342,7 @@ export default function Read() {
           )}
         </View>
       </GestureDetector>
-      <ReadingChrome reveal={reveal} title={title} footnote={footnote} />
+      <ReadingChrome reveal={reveal} title={title} mode="reading" />
     </View>
   );
 }

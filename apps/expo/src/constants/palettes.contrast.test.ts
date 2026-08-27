@@ -18,6 +18,15 @@
  * @/lib/color here is not a layer/token-home violation.
  */
 
+/**
+ * The selection pill's alpha, IMPORTED rather than copied.
+ *
+ * ⚠️ IT USED TO BE A HAND-COPIED `0.15` whose comment named `indicatorColor`, a `NativeTabs` prop
+ * story 6-6 deleted — so the gate went on measuring a blend the app had stopped rendering, green
+ * either way. `AppTabBar` exports the number it actually paints with; taking it from there means
+ * changing the pill re-measures the pill instead of leaving this file behind.
+ */
+import { TAB_INDICATOR_ALPHA as INDICATOR_ALPHA } from '@/components/ui/AppTabBar';
 import { blendOver, contrastRatio, meetsContrast } from '@/lib/color';
 import { PALETTE_NAMES, PALETTES } from './palettes';
 
@@ -25,8 +34,6 @@ const AAA_PRIMARY = 7;
 const AA_BODY = 4.5;
 const AA_LARGE = 3;
 const SCHEMES = ['light', 'dark'] as const;
-/** Mirrors the `withAlpha(accent.primary, 0.15)` the tab layout passes as `indicatorColor`. */
-const INDICATOR_ALPHA = 0.15;
 
 describe('palette contrast (AC-3 accessibility gate)', () => {
   for (const name of PALETTE_NAMES) {
@@ -95,10 +102,12 @@ describe('palette contrast (AC-3 accessibility gate)', () => {
  *   - a header TITLE is primary reading chrome → the AAA 7 the block above holds text to;
  *   - a tab ICON and a header tint are non-text UI components → WCAG 1.4.11, 3.
  *
- * ⚠️ WHAT THIS BLOCK DOES **NOT** REACH: the iOS surface. There the bar and header keep the
- * system Liquid Glass material by design — a translucent, content-dependent surface has no hex to
- * measure. The LABEL colours below do reach iOS, because `labelStyle` is not platform-gated
- * (`(tabs)/_layout.tsx`); the surface they are measured against is Android's and web's.
+ * ⚠️ SINCE STORY 6-6 EVERY PAIR BELOW REACHES EVERY PLATFORM, iOS INCLUDED. The chrome is our
+ * own (`components/ui/AppHeader` / `AppTabBar`), and it paints `background.secondary` everywhere
+ * — the old carve-out ("iOS keeps the Liquid Glass material, which has no hex to measure") died
+ * with the native bar it described. What this file still cannot prove is that these are the
+ * colours SHIPPED — that is `__tests__/app/tab-chrome.test.tsx`'s job, which renders the real
+ * component across every platform × palette × scheme.
  */
 describe('navigation chrome contrast (story 6-0)', () => {
   for (const name of PALETTE_NAMES) {
@@ -156,6 +165,20 @@ describe('navigation chrome contrast (story 6-0)', () => {
           // The back chevron and any tinted header glyph. Distinct from the icon case above: this
           // one is on the bare surface, that one is on the indicator.
           expect(meetsContrast(s.accent.primary, s.background.secondary, AA_LARGE)).toBe(true);
+        });
+
+        it('the bar EDGE delimits chrome from the page ≥ 3 (WCAG 1.4.11 non-text)', () => {
+          // ⚠️ THE CASE STORY 6-6 SHIPPED WITHOUT, AND THE ONE THE PAGE ACTUALLY NEEDS. Under
+          // native chrome the navigator drew its own hairline; ours does not — `AppHeader` and
+          // `AppTabBar` OVERLAY the reading surface, so this 1px line is the entire boundary
+          // between the chrome and the Quran beneath it. 6-6 first shipped it as
+          // `background.tertiary`, measured here at 1.21–1.49:1 over the page and 1.09–1.25:1
+          // over the bar — the very band whose invisibility made story 6-0 reject a
+          // background-toned edge. Both surfaces are gated because the header's underside meets
+          // the page while its topside meets the bar, and an edge that vanishes into either one
+          // has stopped being an edge.
+          expect(meetsContrast(s.text.secondary, s.background.primary, AA_LARGE)).toBe(true);
+          expect(meetsContrast(s.text.secondary, s.background.secondary, AA_LARGE)).toBe(true);
         });
       });
     }

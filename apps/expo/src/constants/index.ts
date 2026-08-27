@@ -42,8 +42,8 @@ export {
   MUSHAF_WEB_MAX_WIDTH,
 } from './mushaf';
 // Navigation
-export type { TabConfig, TabIconMapping } from './navigation';
-export { HOME_HREF, TABS } from './navigation';
+export type { TabConfig, TabRoute } from './navigation';
+export { CHROME_BAR_HEIGHT, HOME_HREF, READ_HREF, TABS } from './navigation';
 // Opacity
 export type { OpacityToken, OpacityValue } from './opacity';
 export { OPACITY } from './opacity';

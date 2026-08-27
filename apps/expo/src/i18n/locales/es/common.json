@@ -9,7 +9,6 @@
     "save": "Guardar",
     "delete": "Eliminar",
     "remove": "Quitar",
-    "close": "Cerrar",
     "back": "Atrás",
     "seeAll": "Ver todo",
     "clearAll": "Borrar todo",
@@ -86,14 +85,12 @@
   },
   "reading": {
     "nextSurah": "Siguiente: {{name}}",
-    "footnote": "Página {{page}} · {{surah}}:{{verse}}",
     "unreadableTitle": "No se pudo abrir el texto del Corán",
     "unreadableBody": "El texto incluido falta o no se puede leer en este dispositivo.",
     "noVersesTitle": "No hay versículos",
     "noVersesBody": "Esta sura no devolvió nada. Inténtalo de nuevo o pasa a la siguiente."
   },
   "mushaf": {
-    "footnote": "Página {{page}}",
     "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",
     "pageA11y": "Página {{page}}, sura {{name}}",
     "pageLoadingA11y": "Página {{page}}, cargando",

@@ -1,81 +1,81 @@
 /**
- * Profile Tab Stack Navigator
+ * The settings shell — a native Stack wrapped in OUR chrome (story 6-6).
  *
- * CHANGE-005-B: Fix Profile Navigation Layout
- * Issue: Expo Router auto-discovered profile files as separate tabs
- * showing "profile/index" and "profile/notif..." instead of proper tab labels.
+ * ⚠️ NO NATIVE HEADER RENDERS HERE ANY MORE. `headerShown: false` on this Stack is not
+ * "chromelessness" — the header these screens get is `components/ui/AppHeader`, mounted ONCE
+ * above the navigator, with the title resolved from the focused segment. The tab bar is
+ * `AppTabBar` below it. Both bars occupy layout on this shell (nothing here is immersive), so
+ * no screen needs to reserve padding for them — unlike the reading surfaces, where the same two
+ * components overlay and the lists pad permanently.
  *
- * Solution: Add _layout.tsx to establish proper Stack nesting under Profile tab.
+ * ⚠️ NAVIGATION BEHAVIOUR STAYS NATIVE: the Stack is `react-native-screens`' native stack, so
+ * push transitions and the iOS back-swipe survive the header's removal. The back CONTROL is
+ * `AppHeader`'s, history-conditional via `router.canGoBack()` — present on a pushed sub-screen,
+ * absent on the tab home (`backBehavior="none"` on the tab navigator is what keeps a tab switch
+ * out of that answer).
+ *
+ * ⚠️ `initialRouteName` must name a route that EXISTS — a missing anchor silently falls back to
+ * alphabetical order (this file shipped that defect twice; `route-integrity.test.ts` checks
+ * every layout's anchor against the filesystem).
  */
 
-import { Stack } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { LIQUID_GLASS_STACK_OPTIONS } from '@/lib/nav-theme';
+import { View } from 'react-native';
+import { AppHeader, AppTabBar } from '@/components/ui';
 import { useTheme } from '@/lib/theme';
+import { useThemedStyles } from '@/lib/useThemedStyles';
 
-// Story 17.17: this tab is now the `(profile)` GROUP, so the shared `book/[id]`
-// route materializes into its Stack (a book opened from Profile — e.g. via
-// History — stays in the Profile tab). (Story 19.6: `player` hoisted to a
-// root-level modal in `app/_layout.tsx` — no longer a per-tab route.) Home route
-// renamed `index.tsx` → `profile.tsx` to keep the `/profile` URL.
 export const unstable_settings = {
-  // story 5-2 review: this anchored on 'profile', whose route file went with the InstantDB
-  // account screen. An initialRouteName naming a missing route silently falls back to
-  // alphabetical order, so the tab would have opened privacy-settings rather than feedback.
-  //
-  // story 5-5: moved from 'feedback' to 'account'. The tab is labelled SETTINGS and it opened
-  // straight onto the Send Feedback form, while privacy-settings was reachable from nowhere in
-  // the UI at all. `account.tsx` is the settings list — it carries the account row this story
-  // adds and links to the other two, so nothing became unreachable in the move.
+  // story 5-5: `account.tsx` is the settings list — the tab is labelled Settings and this is
+  // the screen that makes it one.
   initialRouteName: 'account',
 };
+
+/** The focused segment → its header title key (the `navigation` namespace's `titles.*`). */
+const TITLE_KEYS = {
+  account: 'titles.account',
+  'sign-in': 'titles.signIn',
+  data: 'titles.data',
+  feedback: 'titles.feedback',
+  'privacy-settings': 'titles.privacy',
+} as const;
+type TitleKey = (typeof TITLE_KEYS)[keyof typeof TITLE_KEYS];
 
 export default function ProfileLayout() {
   const { t } = useTranslation('navigation');
   const { colors } = useTheme();
+  const segments: string[] = useSegments();
+  const leaf = segments[segments.length - 1] ?? 'account';
+  const titleKey: TitleKey =
+    (TITLE_KEYS as Record<string, TitleKey | undefined>)[leaf] ?? 'titles.account';
+  const styles = useThemedStyles((theme) => ({
+    shell: {
+      flex: 1,
+      backgroundColor: theme.colors.background.primary,
+    },
+    stack: {
+      flex: 1,
+    },
+  }));
 
   return (
-    <Stack
-      screenOptions={{
-        // Story 17.3 (iPhone smoke pass 7): native Stack header for
-        // profile sub-screens. Liquid Glass on iOS via the centralised
-        // util — Android + web get native solid chrome.
-        ...LIQUID_GLASS_STACK_OPTIONS,
-        headerShown: true,
-        // Story 17.3.5 follow-up #3 (user direction): no text in any
-        // back button — chevron alone is the affordance.
-        headerBackButtonDisplayMode: 'minimal',
-        contentStyle: { backgroundColor: colors.background.primary },
-      }}
-    >
-      {/* story 5-1 code review: nine Stack.Screen registrations were removed from here —
-          `profile`, `playback-settings`, `notification-settings`, `language-settings/index`,
-          `stats`, `book`, `note`, `quiz/[bookId]` and `quotes`. Every one of their route files
-          went with the wisdom-fruits domain deletion, so expo-router logged
-          `[Layout children]: No route named "…" exists in nested children` NINE TIMES on every
-          launch and dropped them. They survived the first review pass because the root
-          `_layout.tsx` was cleaned while this nested layout was not, and the guard added in that
-          same pass only read the root file — see `__tests__/app/route-integrity.test.ts`, which
-          now walks every `_layout.tsx` in the tree.
-
-          What remains is what exists: feedback (the tab home) and privacy-settings. Epic 6
-          rebuilds this group as Cloud Quran's Settings. */}
-      {/* story 5-5: `account` is the tab home — the settings list and the ONE door to sign-in. */}
-      <Stack.Screen
-        name="account"
-        options={{ title: t('titles.account'), headerLargeTitle: true }}
-      />
-      {/* story 5-7 (amended 2026-08-26): there is NO consent route. A `consent` screen sat
-          between `account` and `sign-in` for one day; it gated a navigation while sync already ran
-          for every anonymous guest, so it interrupted the reader without protecting anybody. The
-          disclosure is inline on `sign-in` and the opt-out is a switch on `data`. */}
-      <Stack.Screen name="sign-in" options={{ title: t('titles.signIn') }} />
-      {/* story 5-7: export, delete-my-data and delete-my-account (FR28/FR28a/FR29). */}
-      <Stack.Screen name="data" options={{ title: t('titles.data') }} />
-      <Stack.Screen name="feedback" options={{ title: t('titles.feedback') }} />
-      {/* Story 19.3: analytics opt-out toggle (device-local privacy choice). Story 5-7 turns
-          this into the opt-IN crash-reporting surface `lib/privacyPrefs.ts` now expects. */}
-      <Stack.Screen name="privacy-settings" options={{ title: t('titles.privacy') }} />
-    </Stack>
+    <View style={styles.shell}>
+      {/* ⚠️ `showBack` comes from the SAME segments as the title, not from the router's global
+          `canGoBack()` — which is computed over the focused path and measured one commit stale
+          on a push (the chevron missed its first frame). The stack root is `account`; any other
+          focused leaf is a pushed screen with history to pop. `AppHeader`'s docblock has the
+          full story. */}
+      <AppHeader title={t(titleKey)} showBack={leaf !== 'account'} />
+      <View style={styles.stack}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.background.primary },
+          }}
+        />
+      </View>
+      <AppTabBar />
+    </View>
   );
 }

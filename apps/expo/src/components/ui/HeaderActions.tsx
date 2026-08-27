@@ -1,13 +1,9 @@
 /**
- * HeaderActions — the canonical row wrapper for grouping multiple
- * `HeaderActionButton`s in a native Stack `headerRight`. One gap constant
- * (`HEADER_ACTION_GAP`) so every multi-action header is spaced identically; on
- * iOS 26 the system draws a single Liquid Glass capsule around the grouped
- * items. Single-action headers don't need this — render the bare
- * `HeaderActionButton` directly.
- *
- * Used by the dual-action headers (book detail, collection detail, filters, feed)
- * so the row style isn't redefined per screen.
+ * HeaderActions — the canonical row wrapper for grouping multiple `HeaderActionButton`s in one
+ * of `AppHeader`'s slots (story 6-6: the app's only header is our own; a native `headerRight`
+ * exists nowhere and its name is a reserved word here). One gap constant (`HEADER_ACTION_GAP`)
+ * so every multi-action header is spaced identically. Single-action slots don't need this —
+ * render the bare `HeaderActionButton` directly.
  */
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
