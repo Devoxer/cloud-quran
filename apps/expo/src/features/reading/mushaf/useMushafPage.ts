@@ -61,7 +61,24 @@ export function useMushafPage(page: number): MushafPageContent {
     setFontFamily(null);
     (async () => {
       try {
-        const [pageLayout] = await Promise.all([getPageLayout(page), loadPageFont(page)]);
+        // ⚠️ ONE SILENT RETRY BEFORE THE READER EVER SEES A FAILURE (owner report 2026-08-27:
+        // sweeping quickly through the mushaf surfaced the error screen on page 346, on a
+        // connection that was working). A font fetch that is merely SLOW or briefly refused
+        // under a burst of concurrent requests is not the offline case the error surface exists
+        // for, and showing a full-screen failure with a button for it trains the reader to
+        // distrust a page that would have arrived on its own. The retry is silent and immediate
+        // because a visible spinner-then-retry reads as a stutter; the error surface still
+        // stands behind it for the genuine offline case, which fails twice just as fast.
+        let pageLayout: Awaited<ReturnType<typeof getPageLayout>>;
+        try {
+          [pageLayout] = await Promise.all([getPageLayout(page), loadPageFont(page)]);
+        } catch (firstFailure) {
+          if (cancelled) return;
+          // Re-throw the SECOND failure, not the first: the reader's error surface should name
+          // what actually stopped it, and a retry that fails differently is worth surfacing.
+          void firstFailure;
+          [pageLayout] = await Promise.all([getPageLayout(page), loadPageFont(page)]);
+        }
         if (cancelled) return;
         setLayout(pageLayout);
         setFontFamily(getPageFontFamily(page));

@@ -155,7 +155,7 @@ describe('the measured geometry', () => {
     // MUTATION: change any of these four and every case above stays green — they assert the
     // component READS the constant, which a changed value survives (`VerseRow.test.tsx` pins its
     // badge geometry as literals for the same reason). The provenance is in `constants/mushaf.ts`.
-    expect(MUSHAF_GLYPH_SCALE).toBe(0.06);
+    expect(MUSHAF_GLYPH_SCALE).toBe(0.0628);
     expect(MUSHAF_HEIGHT_BUDGET).toBe(0.86);
     expect(MUSHAF_LINE_HEIGHT_RATIO).toBe(1.4);
     expect(BASMALA_SCALE).toBe(0.8);

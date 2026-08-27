@@ -33,9 +33,16 @@ export const MUSHAF_FONT_CDN_BASE = 'https://cdn.nobleachievements.com/fonts/qpc
  * with its own `QCF_P{NNN}` face at a 100px reference size (2026-08-27, harness described in the
  * story's Implementation Notes). The widest line in the book is **page 254 line 13** (13:41) at
  * **15.92× the font size**, so the largest scale that fits any line into the container width is
- * **0.0628**; the median page's widest line wants 14.63× (0.0684). 0.060 leaves ~4.5% of headroom
- * against that hard ceiling for CoreText-vs-Blink advance rounding, and gives the median page the
- * ~12% side margin a printed mushaf has.
+ * **0.0628**, which is what ships (owner call 2026-08-27, after comparing 0.060 and 0.0628 on
+ * device: 0.060 left visible horizontal waste on a 393pt iPhone 15 Pro).
+ *
+ * ⚠️ **THE 15.92× MEASUREMENT ABOVE WAS TAKEN ON THE BROKEN LAYOUT AND NO LONGER HOLDS.** Page 254
+ * was drawing the WRONG glyphs — upstream's V1 map skipped U+FB9C, so every slot from 13:38 on was
+ * one too high and the line was measured wider than it truly is. After the relayering that line is
+ * 8.9% narrower and the book-wide widest is **page 189 line 8**. So 0.0628 is no longer the hard
+ * ceiling it was chosen as; it now carries real headroom. Nothing wraps — all 604 lines checked,
+ * and confirmed on device. Re-derive the true ceiling before treating this number as tight again. The median page's widest line wants 14.63× (0.0684), so a
+ * typical page still carries a modest side margin like a printed mushaf.
  *
  * ⚠️ THE MEASUREMENT ONLY HOLDS IF THE WHOLE LINE IS IN THE PAGE FACE AT THIS SIZE — including
  * the spaces between words. `MushafPage` puts `fontFamily`/`fontSize` on the LINE's `Text`, not
@@ -43,7 +50,7 @@ export const MUSHAF_FONT_CDN_BASE = 'https://cdn.nobleachievements.com/fonts/qpc
  * system-font space at RN's default 14pt: ~4pt of unbudgeted width per word, which is most of
  * what pushed page 50 over the edge.
  */
-export const MUSHAF_GLYPH_SCALE = 0.06;
+export const MUSHAF_GLYPH_SCALE = 0.0628;
 
 /** The web container cap the glyph scale is measured against (pre-fork `MushafPage.tsx:77`). */
 export const MUSHAF_WEB_MAX_WIDTH = 700;

@@ -9,11 +9,20 @@
  * ── The order of the branches is the contract ────────────────────────────────────────────────
  *
  * 1. **`Font.isLoaded` short-circuit** — a face already registered this session is free.
- * 2. **Patched fonts WIN, before any platform or network branch.** Five glyphs across the
- *    upstream copies for pages 154/161/166/566 have degenerate TrueType contours (0 on-curve
- *    points) that Safari/CoreText render INVISIBLE — affected words 7:35:8, 7:84:8, 7:135:8,
- *    68:47:5, 69:5:3. The repaired files are bundled at `assets/fonts/qpc-patched/`; loading them
- *    first means those four pages never fetch, never miss, and never draw a hole in the text.
+ * 2. **Patched fonts WIN, before any platform or network branch.** SIX glyphs across the
+ *    upstream copies for pages 154/161/166/302/472/566 contain a two-point contour whose first
+ *    point is off-curve, which makes CoreText and Skia discard the WHOLE glyph and leave a
+ *    word-shaped hole at its advance — affected words 7:35:8, 7:84:8, 7:135:8, 18:80:9, 40:49:4,
+ *    68:47:5. The repaired files are bundled at `assets/fonts/qpc-patched/`; loading them first
+ *    means those six pages never fetch, never miss, and never draw a hole in the text.
+ *
+ *    ⚠️ THE SET WAS FOUND BY SWEEPING, NOT BY REPORTS, AND THE FIRST FOUR WERE INCOMPLETE.
+ *    `node scripts/lint-mushaf-glyphs.mjs --corpus <clone>` rasterises all 88,246 glyph slots the
+ *    layout references across all 604 pages and selects exactly these six. Page 302 (`18:80:9`)
+ *    was a reader report; page 472 (`40:49:4`) nobody had ever noticed. Page 566's glyph has TWO
+ *    such contours and the original patch repaired ONE, so `68:47:5` stayed invisible while the
+ *    prose credited the second contour to `69:5:3` — a different codepoint that has always been
+ *    sound. `lint:mushaf-glyphs` runs on every push and pins this list against the files on disk.
  * 3. **Web** — load straight from the CDN URL; the browser's HTTP cache is the disk cache.
  * 4. **Native** — download once into a DOCUMENT-directory cache, then load from disk.
  *
@@ -44,11 +53,13 @@ const PATCHED_FONTS: Record<number, number> = {
   154: require('@/assets/fonts/qpc-patched/QCF_P154.woff2'),
   161: require('@/assets/fonts/qpc-patched/QCF_P161.woff2'),
   166: require('@/assets/fonts/qpc-patched/QCF_P166.woff2'),
+  302: require('@/assets/fonts/qpc-patched/QCF_P302.woff2'),
+  472: require('@/assets/fonts/qpc-patched/QCF_P472.woff2'),
   566: require('@/assets/fonts/qpc-patched/QCF_P566.woff2'),
 };
 
 /** The pages `PATCHED_FONTS` covers — exported so the test pins the exact set. */
-export const PATCHED_FONT_PAGES = [154, 161, 166, 566] as const;
+export const PATCHED_FONT_PAGES = [154, 161, 166, 302, 472, 566] as const;
 
 /** Subdirectory of the document directory the downloaded faces live in. */
 const FONT_CACHE_DIR = 'qpc-fonts';

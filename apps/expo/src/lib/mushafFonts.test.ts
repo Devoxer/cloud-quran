@@ -90,12 +90,15 @@ describe('family names', () => {
 });
 
 describe('the patched fonts', () => {
-  it('covers exactly the four pages with degenerate upstream glyphs', () => {
-    expect([...PATCHED_FONT_PAGES]).toEqual([154, 161, 166, 566]);
+  it('covers exactly the six pages with renderer-dropped upstream glyphs', () => {
+    // The set `scripts/lint-mushaf-glyphs.mjs --corpus` selects out of all 88,246 referenced
+    // glyph slots. 302 and 472 were added on 2026-08-27; that gate pins this list against the
+    // files on disk and against `prepare-fonts.ts`, so the three can no longer drift apart.
+    expect([...PATCHED_FONT_PAGES]).toEqual([154, 161, 166, 302, 472, 566]);
   });
 
   it.each([
-    154, 161, 166, 566,
+    154, 161, 166, 302, 472, 566,
   ])('loads page %i from the BUNDLE, with no network fetch', async (page) => {
     const family = await loadPageFont(page);
     expect(family).toBe(getPageFontFamily(page));
@@ -178,13 +181,26 @@ describe('the web path', () => {
 
 describe('the ±2 preload', () => {
   it('aims at the four neighbours and never the current page', async () => {
+    // ⚠️ A WINDOW WITH NO PATCHED PAGE IN IT. Page 302 ships in the bundle, so a window around
+    // 300 downloads three neighbours rather than four — which says nothing about the ±2 aim and
+    // everything about the overlay. The two facts are asserted separately, below.
+    await preloadAdjacentPageFonts(100);
+    expect(downloadedUrls().map((u) => u.slice(-14))).toEqual([
+      'QCF_P098.woff2',
+      'QCF_P099.woff2',
+      'QCF_P101.woff2',
+      'QCF_P102.woff2',
+    ]);
+  });
+
+  it('takes a patched neighbour from the BUNDLE — the preload never fetches one', async () => {
     await preloadAdjacentPageFonts(300);
     expect(downloadedUrls().map((u) => u.slice(-14))).toEqual([
       'QCF_P298.woff2',
       'QCF_P299.woff2',
       'QCF_P301.woff2',
-      'QCF_P302.woff2',
     ]);
+    expect(mockLoadAsync).toHaveBeenCalledWith({ QCF_P302: 1 });
   });
 
   it('clamps at page 1', async () => {

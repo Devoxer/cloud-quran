@@ -291,6 +291,7 @@ const SCRIPTS = [
   { script: 'lint-i18n.mjs', expect: 'lint:i18n —' },
   { script: 'lint-native-patches.mjs', expect: 'lint:native-patches —' },
   { script: 'lint-header-controls.mjs', expect: 'lint:header-controls —' },
+  { script: 'lint-mushaf-glyphs.mjs', expect: 'lint:mushaf-glyphs —' },
 ];
 
 /**
@@ -337,8 +338,9 @@ test('the entrypoint suite covers every script that imports the entrypoint check
   // Anti-vacuity: a regex that stopped matching would otherwise report an empty population as full
   // coverage — the "reports OK having checked nothing" shape this whole suite exists to refuse.
   // story 5-2 took the population from six to four (lint-instant-perms + perms-verify deleted);
-  // story 5-8 brings it back to five with `lint-header-controls.mjs`.
-  assert.ok(consumers.length >= 5, `expected ≥5 importers, found ${consumers.length}`);
+  // story 5-8 brings it back to five with `lint-header-controls.mjs`, and story 6-2 to six with
+  // `lint-mushaf-glyphs.mjs`.
+  assert.ok(consumers.length >= 6, `expected ≥6 importers, found ${consumers.length}`);
   const covered = SCRIPTS.map((s) => s.script).sort();
   assert.deepEqual(
     consumers.filter((f) => !covered.includes(f)),
@@ -391,8 +393,8 @@ test('every gate script is RUN by `pnpm lint`, and every gate suite by `pnpm tes
 
   // Anti-vacuity on both populations: a filter that stopped matching would report "all covered"
   // over nothing at all, which is the failure this test exists to refuse.
-  assert.ok(gates.length >= 5, `expected ≥5 gate scripts, found ${gates.length}`);
-  assert.ok(suites.length >= 6, `expected ≥6 gate suites, found ${suites.length}`);
+  assert.ok(gates.length >= 6, `expected ≥6 gate scripts, found ${gates.length}`);
+  assert.ok(suites.length >= 7, `expected ≥7 gate suites, found ${suites.length}`);
 
   assert.deepEqual(
     gates.filter((f) => !lintChain.includes(`scripts/${f}`)),

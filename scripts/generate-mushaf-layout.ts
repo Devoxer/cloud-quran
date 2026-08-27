@@ -167,6 +167,98 @@ function ensureRepos(): void {
   );
 }
 
+// ─── The QPC V1 glyph ladder ────────────────────────────────────────────────
+//
+// ⚠️ A PAGE'S V1 GLYPHS ARE A LADDER, AND UPSTREAM'S MAP DOES NOT ALWAYS CLIMB IT. Each
+// `QCF_P{NNN}` font encodes that page's words as ONE CONSECUTIVE RUN of Arabic Presentation
+// Forms-A codepoints starting at U+FB51 — the publisher's own `mushaf.txt` in nuqayah/qpc-fonts
+// lists it verse by verse — and past the page's last word the font holds nothing but a
+// box-shaped filler glyph. `zonetecde/mushaf-layout`'s `QPC1/qpc-v1.json` assigns those
+// codepoints per WORD, and on three pages the assignment slips:
+//
+//   • **page 27 (2:181) and page 177 (8:6)** — the word `بَعْدَ مَا` is TWO glyphs in the V1 font
+//     (`بَعْدَ` then `مَا`, verified by rendering them) and upstream gives it ONE. Every glyph
+//     after it on the page is then one too low, so each word draws the PREVIOUS word's glyph and
+//     the page's last glyph — the ١٨١ / ٦ ayah marker — is never drawn at all.
+//   • **page 254 (13:38 onwards)** — upstream simply skips U+FB9C. Every glyph from `13:38:1`
+//     (`وَلَقَدْ`, which IS U+FB9C) onwards is one too high, so the page drew the FOLLOWING word in
+//     each slot and its last slot ran past the end of the ladder into the font's box glyph. That
+//     box is the tofu the reader saw at the end of Ar-Ra'd 13:42, and no font patch could fix it:
+//     the font was right and the map was wrong.
+//
+// So the codepoints are DERIVED here rather than trusted: each word keeps the glyph COUNT
+// upstream gives it (plus the two corrections below) and the run is laid along the ladder from
+// U+FB51. On all 601 other pages that reproduces upstream exactly — `assertRelayeredPages`
+// FAILS THE BUILD if the set of changed pages is ever anything other than those three, so a
+// future upstream that fixes (or newly breaks) a page is a loud error rather than a silent
+// re-shuffle of Quran glyphs.
+//
+// Only V1 is re-laddered. V2 is a different font family with its own numbering, it has no
+// equivalent defect, and nothing in the app renders it.
+
+/** First codepoint of every page's run. */
+const V1_LADDER_START = 0xfb51;
+/** The one hole in the ladder: U+FBB2–U+FBD2 are Unicode's Arabic symbols and no page font maps
+ *  them, so the run jumps straight from U+FBB1 to U+FBD3. */
+const V1_LADDER_GAP_FROM = 0xfbb1;
+const V1_LADDER_GAP_TO = 0xfbd3;
+const nextV1Codepoint = (cp: number): number =>
+  cp === V1_LADDER_GAP_FROM ? V1_LADDER_GAP_TO : cp + 1;
+
+/** Words the V1 font draws with MORE glyphs than upstream's map allots them. See the note above. */
+const V1_EXTRA_GLYPHS: Record<string, number> = {
+  '2:181:3': 1, // بَعْدَ مَا — page 27, drawn as بَعْدَ + مَا
+  '8:6:4': 1, // بَعْدَ مَا — page 177, same word, same split
+};
+
+/** The pages the ladder is expected to change. Anything else is a build failure. */
+const V1_RELADDERED_PAGES = [27, 177, 254];
+
+/**
+ * Re-assign one page's V1 codepoints along the ladder. Returns true when anything changed.
+ *
+ * A word's `qpcV1` is one group of glyphs, or two separated by a space when the generator merged
+ * a verse-end marker into the preceding word. The grouping and the space are preserved exactly;
+ * only the codepoints are rewritten.
+ */
+function relayerPageV1(page: OutputPage): boolean {
+  let cp = V1_LADDER_START;
+  let changed = false;
+  for (const line of page.lines) {
+    for (const word of line.words ?? []) {
+      const groups = word.qpcV1.split(' ');
+      const counts = groups.map((g) => [...g].length);
+      counts[0] += V1_EXTRA_GLYPHS[word.location] ?? 0;
+      const rebuilt = counts
+        .map((n) => {
+          let out = '';
+          for (let i = 0; i < n; i++) {
+            out += String.fromCodePoint(cp);
+            cp = nextV1Codepoint(cp);
+          }
+          return out;
+        })
+        .join(' ');
+      if (rebuilt !== word.qpcV1) changed = true;
+      word.qpcV1 = rebuilt;
+    }
+  }
+  return changed;
+}
+
+/** Fail the build unless the ladder changed exactly the pages this file documents. */
+function assertRelayeredPages(changed: number[]): void {
+  const got = [...changed].sort((a, b) => a - b).join(',');
+  const want = V1_RELADDERED_PAGES.join(',');
+  if (got !== want) {
+    console.error(`❌ QPC V1 ladder changed pages [${got}], expected exactly [${want}].`);
+    console.error('   Upstream qpc-v1.json has moved. Do NOT widen the expected list without');
+    console.error('   rendering the affected pages: every entry here is a Quran glyph mapping.');
+    process.exit(1);
+  }
+  console.log(`  ✓ QPC V1 ladder: corrected pages ${want} (all other 601 match upstream)`);
+}
+
 // ─── Phase 1: Build layouts from zonetecde data ─────────────────────────────
 
 function buildAllPages(
@@ -174,6 +266,7 @@ function buildAllPages(
   qpcV2Map: Record<string, string>
 ): Map<number, OutputPage> {
   const pages = new Map<number, OutputPage>();
+  const relayered: number[] = [];
 
   for (let pageNum = 1; pageNum <= TOTAL_PAGES; pageNum++) {
     const filePath = resolve(ZT_PAGE_DIR, `page-${pageNum}.json`);
@@ -375,9 +468,12 @@ function buildAllPages(
       lines[i].line = i + 1;
     }
 
-    pages.set(pageNum, { page: pageNum, lines });
+    const page: OutputPage = { page: pageNum, lines };
+    if (relayerPageV1(page)) relayered.push(pageNum);
+    pages.set(pageNum, page);
   }
 
+  assertRelayeredPages(relayered);
   return pages;
 }
 

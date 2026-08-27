@@ -2,11 +2,17 @@
  * QPC V1 mushaf font pipeline for Cloud Quran (story 6-2).
  *
  * Phase 1: Clone nuqayah/qpc-fonts at a PINNED commit and verify all 604 page fonts exist.
- * Phase 2: Overlay the 4 bundled PATCHED fonts (pages 154/161/166/566 — five glyphs in the
- *          upstream copies have degenerate TrueType contours that Safari/CoreText render
- *          invisible; the repaired files in `apps/expo/assets/fonts/qpc-patched/` are canonical).
- *          The patched pages are uploaded too so the CDN set is complete and self-consistent,
- *          even though the app prefers its bundled copies and never fetches them.
+ * Phase 2: Overlay the 6 bundled PATCHED fonts (pages 154/161/166/302/472/566 — one glyph each
+ *          holds a two-point contour starting off-curve, which CoreText and Skia answer by
+ *          discarding the whole glyph and leaving a word-shaped hole; the repaired files in
+ *          `apps/expo/assets/fonts/qpc-patched/` are canonical). ⚠️ THIS SET IS DERIVED, NOT
+ *          REPORTED: `node scripts/lint-mushaf-glyphs.mjs --corpus <clone>/mushaf-woff2`
+ *          rasterises every glyph slot the layout references on all 604 pages and selects
+ *          exactly these six — and fails if any of them no longer needs its patch. Keep it equal
+ *          to `PATCHED_FONT_PAGES` in `apps/expo/src/lib/mushafFonts.ts`; `lint:mushaf-glyphs`
+ *          refuses a build where the two disagree. The patched pages are uploaded too so the CDN
+ *          set is complete and self-consistent, even though the app prefers its bundled copies
+ *          and never fetches them.
  * Phase 3: Upload to R2 `gp-cdn/fonts/qpc-v1/QCF_P{NNN}.woff2` via wrangler, with
  *          `--content-type font/woff2` (wrangler guesses nothing for .woff2).
  *
@@ -43,7 +49,7 @@ const QPC_PIN = '8a4f39d563ea69c994416a1692827e38156c548d';
 const QPC_WOFF2_DIR = resolve(QPC_REPO, 'mushaf-woff2');
 
 const TOTAL_PAGES = 604;
-const PATCHED_PAGES = new Set([154, 161, 166, 566]);
+const PATCHED_PAGES = new Set([154, 161, 166, 302, 472, 566]);
 
 const BUCKET = 'gp-cdn';
 const KEY_PREFIX = 'fonts/qpc-v1';
