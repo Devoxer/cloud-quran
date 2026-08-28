@@ -403,6 +403,36 @@ describe('patchPreferences — the partial writer every settings control uses (s
     expect(entry.body.fontSize).toBe(28);
   });
 
+  it('a first-ever write from a DARK reader carries THEIR look, not the default', () => {
+    // ⚠️ THE ROW CAN BE CREATED BY A CONTROL THAT IS NOT THE THEME PICKER, and that is where the
+    // column went wrong. `DEFAULT_PREFERENCES.theme` is the literal `'light'`, so a font-size
+    // patch with no cached row and no explicit theme CREATES the row as light for a reader
+    // demonstrably sitting in dark — and it never self-corrects, because the appearance screen's
+    // skip-if-unchanged guard has nothing to compare against but the row itself. The screen
+    // therefore sends the reader's current `wireTheme(...)` on every write; what this pins is
+    // that the caller's value wins over the default, in that order.
+    patchPreferences({ fontSize: 34, theme: 'dark' });
+
+    const entry = outbox.list()[0] as Extract<OutboxEntry, { kind: 'preferences' }>;
+    expect(entry.body.theme).toBe('dark');
+    // …and the other five still come from the default, so the body is complete and valid.
+    expect(entry.body).toMatchObject({ ...DEFAULT_PREFERENCES, theme: 'dark', fontSize: 34 });
+  });
+
+  it('WITHOUT an explicit theme the default is light — which is why callers must send one', () => {
+    // ⚠️ ANTI-VACUITY FOR THE CASE ABOVE, AND THE PIN ON THE DEFAULT ITSELF. Flipping
+    // `DEFAULT_PREFERENCES.theme` to `'dark'` used to leave this suite and the appearance
+    // screen's green — the value was load-bearing for every first-ever write and asserted
+    // nowhere. This is not a defect in `patchPreferences`: the wire format has no partial
+    // update, so SOME complete body is required. It is the reason no caller may lean on it to
+    // describe the reader's screen.
+    patchPreferences({ fontSize: 34 });
+
+    const entry = outbox.list()[0] as Extract<OutboxEntry, { kind: 'preferences' }>;
+    expect(entry.body.theme).toBe('light');
+    expect(DEFAULT_PREFERENCES.theme).toBe('light');
+  });
+
   it('merges onto the CACHED row — the five fields nobody touched survive', () => {
     writeCache(ALICE, 'preferences', { userId: ALICE, ...preferences, updatedAt: 1 });
 

@@ -434,6 +434,44 @@ describe('root layout — the provider gets the QUERY MODULE′s client, not jus
   });
 });
 
+describe('root layout — the theme crossfade is MOUNTED, not merely written (story 6-5)', () => {
+  it('wraps the app content in <ThemeCrossfade>, around the routed tree', () => {
+    // ⚠️ MUTATION-PROVED UNPINNED. Deleting the `<ThemeCrossfade>` wrapper and its import from
+    // `app/_layout.tsx` left this file 26/26 green and every other suite green with it.
+    // `ThemeCrossfade.test.tsx` proves the COMPONENT fades; nothing proved it is mounted — and
+    // it has exactly ONE mount point, deliberately, because a theme change repaints every
+    // surface at once and a per-screen fade would desynchronise. So a provider-stack refactor
+    // could drop it and the only symptom would be that theme changes stop animating: no error,
+    // no failing test, nothing a screenshot shows. Pinned the way `QueryClientProvider` is.
+    const { renderRoot } = loadRootLayout();
+    const tree = renderRoot();
+
+    const testIDs: unknown[] = [];
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        for (const kid of node) walk(kid);
+        return;
+      }
+      if (!node || typeof node !== 'object') return;
+      const n = node as { props?: Record<string, unknown>; children?: unknown };
+      if (n.props && 'testID' in n.props) testIDs.push(n.props.testID);
+      if (Array.isArray(n.children)) for (const kid of n.children) walk(kid);
+    };
+    walk(tree.toJSON());
+
+    expect(testIDs).toContain('theme-crossfade');
+    // Anti-vacuity: the walk actually traversed a rendered tree rather than finding nothing.
+    expect(testIDs.length).toBeGreaterThan(0);
+
+    const source: string = require('node:fs')
+      .readFileSync(require('node:path').join(__dirname, '..', '..', 'app', '_layout.tsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    // …and it wraps the CONTENT: the navigator renders inside it, not beside it.
+    expect(source).toMatch(/<ThemeCrossfade>[\s\S]*<RootLayoutNav \/>[\s\S]*<\/ThemeCrossfade>/);
+  });
+});
+
 describe('root layout — the Arabic face is loaded, and it cannot take the app down (story 6-1)', () => {
   // ⚠️ THE WEB-ONLY UTHMANI REGISTRATION WAS A KEY IN THE BOOT FONT MAP FOR ONE ROUND, AND THAT
   // MADE A 237 KB FONT FETCH A WHOLE-APP FAILURE MODE. The boot map's error is rethrown into the

@@ -11,7 +11,6 @@
     }
   },
   "appearance": {
-    "label": "Apparence",
     "paletteGroup": "THÈME DE LECTURE",
     "paletteFootnote": "S'applique partout. Chaque thème marche en clair et en sombre.",
     "modeGroup": "CLAIR ET SOMBRE",

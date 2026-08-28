@@ -149,14 +149,38 @@ describe('the palette picker — six swatches, and the palette is device-local',
     expect(mockPatchPreferences).toHaveBeenCalledWith({ theme: 'dark' });
   });
 
-  it('a palette change the column cannot express writes NOTHING', () => {
+  it('a palette change the STORED ROW already agrees with writes NOTHING', () => {
     // Six palettes collapse onto three wire values. olive and terracotta both mirror as the
-    // resolved scheme, so this tap has nothing for the server to hold — queueing an outbox
-    // entry for it would spend a write per tap on a preference that never syncs.
+    // resolved scheme, so with a row that already says `light` this tap has nothing for the
+    // server to hold — an entry per tap would spend a write on a preference that never syncs.
+    mockPreferences = { theme: 'light' };
     render(<AppearanceScreen />);
     choosePalette('olive');
     expect(themeStore.getString(PALETTE_KEY)).toBe('olive');
     expect(mockPatchPreferences).not.toHaveBeenCalled();
+  });
+
+  it('with NO row yet, the same tap DOES write — the row has to get created', () => {
+    // ⚠️ THE ANTI-VACUITY FOR THE CASE ABOVE, and the half that was broken. The guard means
+    // "the server already knows"; with `preferences` undefined it knows nothing, so a first
+    // touch of this screen must create the row rather than skip because the device agrees
+    // with itself.
+    mockPreferences = null;
+    render(<AppearanceScreen />);
+    choosePalette('olive');
+    expect(mockPatchPreferences).toHaveBeenCalledWith({ theme: 'light' });
+  });
+
+  it('REPAIRS a stored row that disagrees, even though this device did not change', () => {
+    // ⚠️ THE CROSS-DEVICE DEFECT. Phone A wrote `sepia`; this tablet is on terracotta in dark.
+    // Tapping Dark changes nothing locally — the old guard compared this device's derived value
+    // against itself and returned early, so the row stayed `sepia` forever. Comparing against
+    // the row is what makes the disagreement visible and self-healing.
+    mockPreferences = { theme: 'sepia' };
+    act(() => setThemeMode('dark'));
+    render(<AppearanceScreen />);
+    chooseMode(APPEARANCE_MODES.indexOf('dark'));
+    expect(mockPatchPreferences).toHaveBeenCalledWith({ theme: 'dark' });
   });
 
   it('the selected swatch is the STORED one, not the first', () => {
@@ -213,7 +237,8 @@ describe('the appearance control — System / Light / Dark, and nothing else', (
 
   it('a mode change that does not move the resolved scheme writes nothing', () => {
     // Auto already resolves to the device's light here, so pinning Light is a device-local
-    // change only — the row already says what the reader is looking at.
+    // change only — and the row already says what the reader is looking at.
+    mockPreferences = { theme: 'light' };
     render(<AppearanceScreen />);
     chooseMode(APPEARANCE_MODES.indexOf('light'));
     expect(themeStore.getString(THEME_MODE_KEY)).toBe('light');
@@ -221,6 +246,7 @@ describe('the appearance control — System / Light / Dark, and nothing else', (
   });
 
   it('a mode change under sepia keeps the wire value on sepia', () => {
+    mockPreferences = { theme: 'sepia' };
     act(() => setPalette('sepia'));
     render(<AppearanceScreen />);
     chooseMode(APPEARANCE_MODES.indexOf('dark'));
@@ -295,7 +321,7 @@ describe('the font-size slider — integers, live, and one write per real change
     render(<AppearanceScreen />);
     act(() => (sliderProps.onValueChange as (v: number) => void)(36));
 
-    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: 36 });
+    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: 36, theme: 'light' });
     expect(Number.isInteger(mockPatchPreferences.mock.calls[0][0].fontSize)).toBe(true);
     expect(screen.getByTestId('font-size-value')).toHaveTextContent('36');
   });
@@ -305,13 +331,16 @@ describe('the font-size slider — integers, live, and one write per real change
     // rounding, so the rounding has to happen here or the entry can only be 422-and-dropped.
     render(<AppearanceScreen />);
     act(() => (sliderProps.onValueChange as (v: number) => void)(33.5));
-    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: 34 });
+    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: 34, theme: 'light' });
   });
 
   it('clamps a value outside the scale rather than sending it', () => {
     render(<AppearanceScreen />);
     act(() => (sliderProps.onValueChange as (v: number) => void)(999));
-    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: ARABIC_FONT_SIZE.max });
+    expect(mockPatchPreferences).toHaveBeenCalledWith({
+      fontSize: ARABIC_FONT_SIZE.max,
+      theme: 'light',
+    });
   });
 
   it('THE SAME-VALUE GUARD: repeated emissions of one value write exactly once', () => {
@@ -336,6 +365,50 @@ describe('the font-size slider — integers, live, and one write per real change
     render(<AppearanceScreen />);
     act(() => (sliderProps.onValueChange as (v: number) => void)(30));
     expect(mockPatchPreferences).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    // themeMode, palette, the look the size write must carry
+    ['dark', 'terracotta', 'dark'],
+    ['light', 'sepia', 'sepia'],
+  ])('a size write from a %s / %s reader creates the row as %s, not the default light', (mode, palette, expected) => {
+    // ⚠️ THE ROW CAN BE CREATED BY THE SLIDER, AND USED TO BE CREATED WRONG. `patchPreferences`
+    // completes the body from `DEFAULT_PREFERENCES`, whose `theme` is the literal `'light'`.
+    // A reader in Dark or Parchment with no row yet, who only ever drags this slider, would
+    // therefore create their row describing a screen they are not looking at — and the mirror
+    // guard would never repair it, because the device agrees with itself.
+    mockPreferences = null;
+    act(() => {
+      setPalette(palette as 'terracotta' | 'sepia');
+      setThemeMode(mode as 'light' | 'dark');
+    });
+    render(<AppearanceScreen />);
+    act(() => (sliderProps.onValueChange as (v: number) => void)(34));
+
+    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: 34, theme: expected });
+  });
+
+  it('TRACKS A PREFERENCES ROW THAT ARRIVES AFTER MOUNT — thumb, number and guard', () => {
+    // ⚠️ `usePreferences()` IS `undefined` UNTIL THE PULL LANDS. Seeding `useState` once and
+    // never tracking it left a signed-in reader whose row says 40, opening this screen first,
+    // looking at 28 here while `read.tsx` rendered verses at 40 — and `lastWritten` stale with
+    // it, so the first nudge wrote off a number they never chose.
+    mockPreferences = null;
+    const { rerender } = render(<AppearanceScreen />);
+    expect(sliderProps.value).toBe(ARABIC_FONT_SIZE.default);
+
+    mockPreferences = { fontSize: 40 };
+    act(() => rerender(<AppearanceScreen />));
+
+    expect(sliderProps.value).toBe(40);
+    expect(screen.getByTestId('font-size-value')).toHaveTextContent('40');
+    // …and the guard re-seeded with it: nudging the thumb back onto the arrived value is not a
+    // change, so it must not queue a write.
+    act(() => (sliderProps.onValueChange as (v: number) => void)(40));
+    expect(mockPatchPreferences).not.toHaveBeenCalled();
+    // Anti-vacuity: a DIFFERENT value still writes, off the arrived number rather than the seed.
+    act(() => (sliderProps.onValueChange as (v: number) => void)(42));
+    expect(mockPatchPreferences).toHaveBeenCalledWith({ fontSize: 42, theme: 'light' });
   });
 
   it('a drag through every step writes once per DISTINCT step', () => {

@@ -30,9 +30,16 @@
  * invalidate → pull → re-apply, with a device that disagrees with itself in between. The mirror
  * sends the RESOLVED scheme, so the row says what the reader is actually looking at.
  *
- * ⚠️ AND IT ONLY WRITES WHEN THE WIRE VALUE ACTUALLY MOVES. Six palettes collapse onto three wire
- * values, so most palette taps (olive → linen, say) change nothing the server can hold. Writing
- * anyway would queue an outbox entry per tap for a preference the column cannot even express.
+ * ⚠️ AND IT SKIPS A WRITE ONLY WHEN THE STORED ROW ALREADY AGREES — never when this device
+ * merely agrees with itself. Six palettes collapse onto three wire values, so most palette taps
+ * (olive → linen, say) change nothing the server can hold, and queueing an entry per tap for a
+ * preference the column cannot express is waste. But the comparison has to be against
+ * `preferences?.theme`, because a row can be wrong: created by a first write that filled `theme`
+ * from a default, or written by another device. A guard that compared this device's current
+ * derived value would let that row stand forever — tapping Dark while already dark returns early,
+ * so the disagreement is never even noticed. Every write from this screen also CARRIES the
+ * reader's current `wireTheme(palette, resolvedScheme)`, the font slider included, so whichever
+ * control creates the row creates it describing the screen the reader is actually looking at.
  *
  * ── ⚠️ THE SLIDER WRITES LIVE, AND THE MACHINERY THAT MAKES THAT SAFE ALREADY EXISTS ─────────
  *
@@ -129,18 +136,47 @@ export default function AppearanceScreen() {
   // left behind.
   const systemScheme: ColorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 
+  /**
+   * The coarse look this reader is ACTUALLY in, right now — the value the synced column should
+   * hold. Every write from this screen carries it; see `changeSize`.
+   */
+  const currentTheme = wireTheme(palette, colorScheme);
+
   const storedSize = clampArabicFontSize(preferences?.fontSize);
-  // ⚠️ LOCAL STATE FOR THE SLIDER'S OWN POSITION, seeded from the cache — NOT a `useState` of a
-  // query result that then stops tracking it. The cached value is still the source of truth for
-  // the reading screen; this only keeps the thumb from snapping back between a write and the
-  // cache round-trip on platforms where the native slider is uncontrolled.
+  // ⚠️ LOCAL STATE FOR THE SLIDER'S OWN POSITION, seeded from the cache. The cached value is
+  // still the source of truth for the reading screen; this only keeps the thumb from snapping
+  // back between a write and the cache round-trip on platforms where the slider is uncontrolled.
   const [size, setSize] = useState(storedSize);
   const lastWritten = useRef(storedSize);
 
-  /** Mirror the coarse look, but only when the value the column can hold actually changed. */
+  // ⚠️ AND IT MUST TRACK A ROW THAT ARRIVES LATE, WHICH A BARE `useState(storedSize)` DOES NOT.
+  // `usePreferences()` is `undefined` until the pull lands, so a signed-in reader whose row says
+  // 40 and who opens this screen first would see 28 on the label, the thumb AND the preview while
+  // `read.tsx` renders verses at 40 — and `lastWritten` would be stale with it, so their first
+  // nudge writes off a number they never chose. This is React's own "adjust state when an input
+  // changes" pattern (a guarded set during render, no effect and no extra paint); `lastWritten`
+  // re-seeds with it so re-emitting the value the row already holds still writes nothing.
+  const [seenStored, setSeenStored] = useState(storedSize);
+  if (storedSize !== seenStored) {
+    setSeenStored(storedSize);
+    setSize(storedSize);
+    lastWritten.current = storedSize;
+  }
+
+  /**
+   * Mirror the coarse look — skipping only when the STORED ROW already says it.
+   *
+   * ⚠️ THIS COMPARED AGAINST THIS DEVICE'S OWN DERIVED VALUE FOR ONE ROUND, AND THAT MADE THE
+   * COLUMN UNREPAIRABLE. A row created wrong (or written by another device) could never be
+   * corrected, because tapping Dark while already dark returned early — the device agreed with
+   * itself and never asked what the server held. Comparing against `preferences?.theme` makes the
+   * guard mean "the server already knows", which is the only thing worth skipping a write for,
+   * and it makes a disagreeing row self-heal on the next appearance touch. With no row at all the
+   * comparison is against `undefined`, so the first write always lands.
+   */
   const mirror = (nextPalette: PaletteName, nextScheme: ColorScheme) => {
     const next = wireTheme(nextPalette, nextScheme);
-    if (next === wireTheme(palette, colorScheme)) return;
+    if (next === preferences?.theme) return;
     patchPreferences({ theme: next });
   };
 
@@ -167,7 +203,14 @@ export default function AppearanceScreen() {
     setSize(quantized);
     if (quantized === lastWritten.current) return;
     lastWritten.current = quantized;
-    patchPreferences({ fontSize: quantized });
+    // ⚠️ THE THEME RIDES ALONG, AND THIS IS NOT TIDINESS. The wire format has no partial update,
+    // so `patchPreferences` completes the body from the cached row or, when there is none, from
+    // `DEFAULT_PREFERENCES` — whose `theme` is the literal `'light'`. A reader sitting in Dark or
+    // Parchment with no row yet, who only ever drags this slider, would therefore CREATE their
+    // row as `'light'`: a value they never chose, describing a screen they are demonstrably not
+    // looking at. Sending what they are actually in makes the first write correct whichever
+    // control happens to be the one that creates the row.
+    patchPreferences({ fontSize: quantized, theme: currentTheme });
   };
 
   return (
