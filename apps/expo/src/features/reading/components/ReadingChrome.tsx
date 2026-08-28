@@ -48,6 +48,7 @@
  */
 
 import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -72,6 +73,24 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
 
   // See the header for all three: `box-none` rather than `auto`, keyed on `interactive` rather
   // than `visible`, and the accessibility tree hidden alongside the touch tree.
+  /**
+   * ⚠️ THE VISIBLE ICON IS THE REAL ENTRY; THE TITLE PRESS IS THE SECOND WAY IN.
+   * Story 6-3 shipped the index behind a press on the title, and the title is plain text — the
+   * app's own author could not find it. A control nobody can see is a control that does not
+   * exist, so the empty `trailing` slot now carries an actual icon. Both call this one handler,
+   * so there is one destination and no chance of them drifting.
+   *
+   * ⚠️ NOT A FIFTH TAB, and the reason is that the tab bar would not help: BOTH bars ride the
+   * same `useChromeReveal`, so a tab is exactly as hidden as this icon until the reader taps the
+   * page. The problem was never that the header is hidden — it was that plain text does not look
+   * pressable. A tab would also miscategorise the index: every other tab is somewhere you STAY,
+   * while the index always bounces you back out to the surface you came from.
+   */
+  const openIndex = useCallback(
+    () => router.push({ pathname: '/surahs', params: { mode } }),
+    [router, mode]
+  );
+
   const touches = reveal.interactive ? ('box-none' as const) : ('none' as const);
   const hidden = !reveal.interactive;
   const offscreen = {
@@ -92,8 +111,18 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
         <AppHeader
           title={title ?? ''}
           interactive={reveal.interactive}
-          onTitlePress={() => router.push({ pathname: '/surahs', params: { mode } })}
+          onTitlePress={openIndex}
           titleHint={t('index.titleHint')}
+          trailing={
+            <HeaderActionButton
+              name="search-outline"
+              onPress={openIndex}
+              color={colors.accent.primary}
+              accessibilityLabel={t('actions.openIndex')}
+              focusable={reveal.interactive}
+              testID="chrome-index-entry"
+            />
+          }
           leading={
             <HeaderActionButton
               name={mode === 'reading' ? 'view-agenda' : 'view-list'}

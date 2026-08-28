@@ -307,6 +307,28 @@ describe('it overlays; it never occupies layout', () => {
 });
 
 describe('the controls the chrome carries (story 6-6)', () => {
+  it('the index has a VISIBLE control, not just a pressable title', async () => {
+    // ⚠️ THE REGRESSION IS INVISIBILITY, NOT BREAKAGE. Story 6-3 shipped the index behind a press
+    // on the header title. The title is plain text, and the app's own author could not find it —
+    // which is the strongest possible evidence that no reader would. This pins the icon itself,
+    // because a test that only exercised `onTitlePress` would stay green while the control the
+    // reader can actually see disappeared.
+    render(<Harness />);
+    await reveal();
+    fireEvent.press(screen.getByTestId('chrome-index-entry'));
+    expect(mockNavigate).not.toHaveBeenCalled(); // it PUSHES — the index is a return trip
+  });
+
+  it('the icon and the title press are ONE destination — they cannot drift', async () => {
+    render(<Harness />);
+    await reveal();
+    fireEvent.press(screen.getByTestId('chrome-index-entry'));
+    fireEvent.press(screen.getByTestId('chrome-title-entry'));
+    const targets = mockPush.mock.calls.map(([arg]) => JSON.stringify(arg));
+    expect(targets).toHaveLength(2);
+    expect(new Set(targets).size).toBe(1);
+  });
+
   it('the tab bar is the revealed footer — every tab, and switching away works', async () => {
     render(<Harness />);
     await reveal();

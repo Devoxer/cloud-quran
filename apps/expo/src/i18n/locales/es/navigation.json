@@ -7,7 +7,8 @@
   },
   "actions": {
     "openMushaf": "Cambiar al modo Mushaf",
-    "openReading": "Cambiar al modo lectura"
+    "openReading": "Cambiar al modo lectura",
+    "openIndex": "Buscar una sura o página"
   },
   "titles": {
     "account": "Ajustes",
