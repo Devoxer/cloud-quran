@@ -7,8 +7,7 @@
   },
   "actions": {
     "openMushaf": "Switch to Mushaf mode",
-    "openReading": "Switch to reading mode",
-    "openIndex": "Find a surah or page"
+    "openReading": "Switch to reading mode"
   },
   "titles": {
     "account": "Settings",

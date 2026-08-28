@@ -55,7 +55,11 @@ import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { HeaderActionButton } from './HeaderActionButton';
+import { Icon } from './Icon';
 import { Text } from './Themed';
+
+/** The chevron beside a pressable title — smaller than a header action's glyph, it is a hint. */
+const TITLE_CHEVRON_SIZE = 18;
 
 export interface AppHeaderProps {
   title: string;
@@ -124,6 +128,24 @@ export function AppHeader({
     },
     titlePress: {
       flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    /**
+     * ⚠️ THE CHEVRON IS THE AFFORDANCE, AND IT SITS ON THE TITLE ON PURPOSE. The index was
+     * originally reachable only by pressing the plain-text title, and the app's own author could
+     * not find it. A search magnifier was tried first and rejected by the owner: it is the
+     * universal signal for TEXT SEARCH, which this is not, and which the Quran will eventually
+     * want — spending that icon on a navigator would mislead now and collide later.
+     *
+     * ⚠️ `chevron-forward`, NOT `chevron-down`: a DOWN chevron promises a dropdown that opens in
+     * place, and the index is a pushed SCREEN you navigate to and come back from. Forward is what
+     * the index's own `ListRow`s use for the same "this goes somewhere" meaning, and the
+     * `forward` name is direction-aware — it flips on its own if the UI is ever laid out RTL,
+     * which a literal right-pointing glyph would not.
+     */
+    titleChevron: {
+      marginLeft: SPACING.xs,
     },
     titleInPress: {
       flex: 0,
@@ -167,6 +189,13 @@ export function AppHeader({
           testID="chrome-title-entry"
         >
           {titleText}
+          <Icon
+            name="chevron-forward"
+            size={TITLE_CHEVRON_SIZE}
+            color={colors.accent.primary}
+            style={styles.titleChevron}
+            testID="chrome-title-chevron"
+          />
         </Pressable>
       ) : (
         titleText

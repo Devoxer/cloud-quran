@@ -74,17 +74,15 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
   // See the header for all three: `box-none` rather than `auto`, keyed on `interactive` rather
   // than `visible`, and the accessibility tree hidden alongside the touch tree.
   /**
-   * ⚠️ THE VISIBLE ICON IS THE REAL ENTRY; THE TITLE PRESS IS THE SECOND WAY IN.
-   * Story 6-3 shipped the index behind a press on the title, and the title is plain text — the
-   * app's own author could not find it. A control nobody can see is a control that does not
-   * exist, so the empty `trailing` slot now carries an actual icon. Both call this one handler,
-   * so there is one destination and no chance of them drifting.
-   *
-   * ⚠️ NOT A FIFTH TAB, and the reason is that the tab bar would not help: BOTH bars ride the
-   * same `useChromeReveal`, so a tab is exactly as hidden as this icon until the reader taps the
-   * page. The problem was never that the header is hidden — it was that plain text does not look
-   * pressable. A tab would also miscategorise the index: every other tab is somewhere you STAY,
-   * while the index always bounces you back out to the surface you came from.
+   * ⚠️ THE TITLE IS THE INDEX ENTRY, AND `AppHeader` DRAWS A CHEVRON BESIDE IT TO SAY SO.
+   * Story 6-3 shipped this behind a press on plain text and the app's own author could not find
+   * it — a control nobody can see does not exist. Two answers were tried and rejected before the
+   * chevron: a SEARCH MAGNIFIER in the trailing slot (the universal signal for text search, which
+   * this is not and which the Quran will eventually want — spending that icon here would mislead
+   * now and collide later), and a FIFTH TAB (which would not have helped at all: both bars ride
+   * the same `useChromeReveal`, so a tab is exactly as hidden as the header until the reader taps
+   * the page — and every other tab is somewhere you STAY, while the index bounces you straight
+   * back out).
    */
   const openIndex = useCallback(
     () => router.push({ pathname: '/surahs', params: { mode } }),
@@ -113,16 +111,6 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
           interactive={reveal.interactive}
           onTitlePress={openIndex}
           titleHint={t('index.titleHint')}
-          trailing={
-            <HeaderActionButton
-              name="search-outline"
-              onPress={openIndex}
-              color={colors.accent.primary}
-              accessibilityLabel={t('actions.openIndex')}
-              focusable={reveal.interactive}
-              testID="chrome-index-entry"
-            />
-          }
           leading={
             <HeaderActionButton
               name={mode === 'reading' ? 'view-agenda' : 'view-list'}

@@ -307,26 +307,16 @@ describe('it overlays; it never occupies layout', () => {
 });
 
 describe('the controls the chrome carries (story 6-6)', () => {
-  it('the index has a VISIBLE control, not just a pressable title', async () => {
-    // ⚠️ THE REGRESSION IS INVISIBILITY, NOT BREAKAGE. Story 6-3 shipped the index behind a press
-    // on the header title. The title is plain text, and the app's own author could not find it —
-    // which is the strongest possible evidence that no reader would. This pins the icon itself,
-    // because a test that only exercised `onTitlePress` would stay green while the control the
-    // reader can actually see disappeared.
+  it('the title carries a CHEVRON — the index must not be invisible again', async () => {
+    // ⚠️ THE REGRESSION HERE IS INVISIBILITY, NOT BREAKAGE, so pressing the title is not enough
+    // to assert: story 6-3 shipped exactly that and the app's own author could not find the
+    // index. A case that only exercised `onTitlePress` would stay green while the thing a reader
+    // can SEE disappeared. The chevron is what says the name opens a list.
     render(<Harness />);
     await reveal();
-    fireEvent.press(screen.getByTestId('chrome-index-entry'));
-    expect(mockNavigate).not.toHaveBeenCalled(); // it PUSHES — the index is a return trip
-  });
-
-  it('the icon and the title press are ONE destination — they cannot drift', async () => {
-    render(<Harness />);
-    await reveal();
-    fireEvent.press(screen.getByTestId('chrome-index-entry'));
+    expect(screen.getByTestId('chrome-title-chevron')).toBeTruthy();
     fireEvent.press(screen.getByTestId('chrome-title-entry'));
-    const targets = mockPush.mock.calls.map(([arg]) => JSON.stringify(arg));
-    expect(targets).toHaveLength(2);
-    expect(new Set(targets).size).toBe(1);
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/surahs', params: { mode: 'reading' } });
   });
 
   it('the tab bar is the revealed footer — every tab, and switching away works', async () => {
