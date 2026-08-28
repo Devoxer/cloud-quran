@@ -166,7 +166,7 @@ describe('the web path', () => {
     platform.OS = 'web';
     await expect(loadPageFont(5)).resolves.toBe('QCF_P005');
     expect(mockLoadAsync).toHaveBeenCalledWith({
-      QCF_P005: 'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P005.woff2',
+      QCF_P005: 'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P005.ttf',
     });
     expect(mockDownload).not.toHaveBeenCalled();
     expect(mockCreateDir).not.toHaveBeenCalled();
@@ -186,7 +186,7 @@ describe('the platform format split', () => {
     platform.OS = nativeOS;
   });
 
-  it('⚠️ NATIVE GETS .ttf AND WEB GETS .woff2 — Android cannot parse WOFF2 at all', async () => {
+  it('⚠️ EVERY PLATFORM GETS .ttf — Android cannot parse WOFF2 at all', async () => {
     // THE REGRESSION THIS FILE EXISTED WITHOUT. Android's `Typeface` loader rejects WOFF2 and
     // `Font.loadAsync` RESOLVES ANYWAY, so `loadPageFont` returned a family name, the page
     // rendered, no error surface appeared — and every line drew in the system fallback. Because
@@ -217,7 +217,7 @@ describe('the platform format split', () => {
     platform.OS = 'web';
     await loadPageFont(7);
     expect(mockLoadAsync).toHaveBeenCalledWith({
-      QCF_P007: 'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P007.woff2',
+      QCF_P007: 'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P007.ttf',
     });
   });
 });

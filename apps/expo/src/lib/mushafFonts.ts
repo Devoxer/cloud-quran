@@ -36,9 +36,8 @@
  * correctly-rendered basmala. Measured on a Pixel 9 Pro emulator, 2026-08-28; the file was present
  * and byte-identical to the CDN's, so nothing about the download was wrong.
  *
- * Native therefore fetches `.ttf` and web keeps `.woff2` (~2.8× smaller, and browsers handle it).
- * The BUNDLED patched six are TTF only — one file each, valid on every platform, and a woff2 copy
- * would reintroduce exactly this bug for the six pages that are supposed to be the safe ones.
+ * Everything is therefore `.ttf`, on every platform and in the bundle — see `FONT_EXT` below for
+ * why the per-platform split that first fixed this was then removed.
  *
  * ⚠️ THE CACHE LIVES IN THE DOCUMENT DIRECTORY, NOT `Paths.cache` (the pre-fork choice, changed
  * deliberately). The OS may evict the cache directory under disk pressure, and an evicted page
@@ -103,18 +102,20 @@ export function getPageFontFamily(page: number): string {
  * `Font.loadAsync` does not fail when it tries, so this is a correctness switch, not an
  * optimisation. iOS takes TTF too, so native is one branch rather than two.
  *
- * ⚠️ A FUNCTION, NOT A MODULE-LOAD CONSTANT. `Platform.OS` is fixed in production, but a
- * const evaluated at import time freezes the answer before any test can set the platform — which
- * would leave the web branch permanently asserting the native extension, i.e. the one thing this
- * split exists to keep apart would be untestable.
  */
-function fontExt(): string {
-  return Platform.OS === 'web' ? 'woff2' : 'ttf';
-}
+/**
+ * ⚠️ ONE FORMAT EVERYWHERE — TTF. There WAS a per-platform split here (`.ttf` native, `.woff2`
+ * web) and it was deleted the same day it shipped, on the owner's call: the only thing WOFF2
+ * bought was ~2.8× smaller page fetches on web, which is not the primary surface, against the
+ * cost of a branch nobody can see fail, a CDN carrying two sets, and TWO copies of every patched
+ * face that could silently drift apart. TTF loads on iOS, Android and every browser. Subtracting
+ * the branch is worth more than the bytes — and the branch is exactly what the Android bug was.
+ */
+const FONT_EXT = 'ttf';
 
 /** CDN URL for a page's font, in this platform's format. */
 function getFontUrl(page: number): string {
-  return `${MUSHAF_FONT_CDN_BASE}/${getPageFontFamily(page)}.${fontExt()}`;
+  return `${MUSHAF_FONT_CDN_BASE}/${getPageFontFamily(page)}.${FONT_EXT}`;
 }
 
 /**
@@ -141,7 +142,7 @@ export async function loadPageFont(page: number): Promise<string> {
 
     // Native: document-directory cache, download on first visit, load from disk.
     const cacheDir = new Directory(Paths.document, FONT_CACHE_DIR);
-    const fontFile = new File(cacheDir, `${fontName}.${fontExt()}`);
+    const fontFile = new File(cacheDir, `${fontName}.${FONT_EXT}`);
     if (!fontFile.exists) {
       if (!cacheDir.exists) cacheDir.create({ intermediates: true });
       await File.downloadFileAsync(getFontUrl(page), fontFile, { idempotent: true });

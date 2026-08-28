@@ -62,11 +62,12 @@ const BUCKET = 'gp-cdn';
 const KEY_PREFIX = 'fonts/qpc-v1';
 const CDN_BASE = 'https://cdn.nobleachievements.com';
 /**
- * Both formats are uploaded for all 604 pages: native fetches `.ttf`, web fetches `.woff2`
- * (~2.8× smaller). `lib/mushafFonts.ts`'s `FONT_EXT` is the other half of this contract.
+ * ⚠️ ONE FORMAT, TTF, FOR EVERY PLATFORM — see `lib/mushafFonts.ts`'s `FONT_EXT`. A woff2 leg
+ * existed for a few hours (smaller on web) and was removed: the branch cost more than the bytes,
+ * and a second copy of each patched face is a second thing that can drift. The upstream woff2
+ * directory is still what `lint:mushaf-glyphs --corpus` sweeps, which is a different question.
  */
 const FORMATS = [
-  { ext: 'woff2', srcDir: QPC_WOFF2_DIR, srcExt: 'woff2', contentType: 'font/woff2' },
   { ext: 'ttf', srcDir: QPC_TTF_DIR, srcExt: 'TTF', contentType: 'font/ttf' },
 ] as const;
 const UPLOAD_WORKERS = 4;

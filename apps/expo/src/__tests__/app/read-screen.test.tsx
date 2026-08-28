@@ -98,6 +98,14 @@ jest.mock('@shopify/flash-list', () => {
       scrollToIndex: mockScrollToIndex,
       scrollToOffset: mockScrollToOffset,
     }));
+    // ⚠️ THE MOCK MUST FIRE `onLoad`, OR IT MODELS A LIST THAT NEVER FINISHES MEASURING.
+    // The screen defers its restore `scrollToIndex` until FlashList reports it has laid out —
+    // that deferral is the fix for a blank reading surface on Android, where scrolling to an
+    // unmeasured index overshoots the content. A mock that never calls `onLoad` would make every
+    // restore case fail for a reason the real list does not have.
+    React.useEffect(() => {
+      props.onLoad?.({ elapsedTimeInMs: 0 });
+    }, [props.onLoad]);
     const data = props.data ?? [];
     return React.createElement(
       View,
@@ -520,11 +528,18 @@ describe('cold launch', () => {
     mockReadingPositionRow.current = { surah: 1, verse: 5 };
     render(<Read />);
     await screen.findByText('أية 1:5');
-    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalledTimes(1));
+    // ⚠️ ONE restore, but TWO calls — and that is the contract, not slack. The restore scrolls
+    // immediately and re-asserts the SAME index on the next frame, because the first call runs
+    // before FlashList has measured any row and lands on an estimate (blank page on Android).
+    // So this counts TARGETS, not calls: every call must name the same index.
+    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalled());
+    const restoreTargets = () =>
+      new Set(mockScrollToIndex.mock.calls.map(([arg]) => (arg as { index: number }).index));
+    expect(restoreTargets()).toEqual(new Set([4]));
     fireEvent.press(screen.getByTestId('next-surah-button'));
     await screen.findByText('أية 2:1');
     // Without the latch, the new surah's list would be yanked to the old surah's saved index.
-    expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
+    expect(restoreTargets()).toEqual(new Set([4]));
     expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: false });
   });
 });
@@ -550,11 +565,15 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     mockReadingPositionRow.current = { surah: 2, verse: 100 };
     const view = render(<Read />);
     await screen.findByText('أية 2:100');
-    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalled());
+    const callsAfterRestore = mockScrollToIndex.mock.calls.length;
     view.rerender(<Read />);
     refocus();
-    // A plain tab switch away and back must not scroll the reader or re-read the surah.
-    expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
+    // A plain tab switch away and back must not scroll the reader or re-read the surah. Compared
+    // against the count the RESTORE left, not against 1: a restore is two idempotent calls to the
+    // same index (immediate, then re-asserted after measurement — see the 'restores ONCE' case).
+    // What this pins is that an unmoved focus adds NOTHING on top of it.
+    expect(mockScrollToIndex.mock.calls.length).toBe(callsAfterRestore);
     expect(mockGetSurahVerses.mock.calls.filter(([s]) => s === 2).length).toBeLessThanOrEqual(2);
   });
 
@@ -590,8 +609,12 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     await waitFor(() =>
       expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: false })
     );
-    // …and no index scroll for it: verse 1 is the top, not an estimated offset.
-    expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
+    // …and no NEW index target for it: verse 1 is the top, not an estimated offset. Counted as
+    // distinct targets, because a restore re-asserts its own index on the next frame (see the
+    // 'restores ONCE' case) — what must not happen is a second, different index.
+    expect(
+      new Set(mockScrollToIndex.mock.calls.map(([arg]) => (arg as { index: number }).index)).size
+    ).toBe(1);
   });
 });
 

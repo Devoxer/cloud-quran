@@ -181,7 +181,34 @@ export default function Read() {
     restored.current = true;
     const index = content.verses.findIndex((v) => v.verse === target.verse);
     if (index > 0) {
+      /**
+       * ⚠️ DEFERRED UNTIL THE LIST HAS MEASURED, AND THAT IS THE WHOLE BUG. Calling
+       * `scrollToIndex` here — the moment the rows arrive — asks a variable-height FlashList to
+       * jump to an index it has not measured yet, so it scrolls to an ESTIMATED offset. On
+       * Android that estimate lands far past the real content and the viewport is left on empty
+       * space: no rows, no error, no empty state. Measured on a Pixel 9 Pro 2026-08-28 — the
+       * entire reading surface was blank for any saved position past the first screen, while the
+       * data was fine (110 verses in state, `renderItem` called for the right window) and both
+       * containers measured 426×952. Disabling this one call was what made the page appear.
+       *
+       * `onLoad` fires once the list has laid out and measured, so the pending scroll is drained
+       * there instead. A resync AFTER that point can scroll immediately, because by then the
+       * measurements are real.
+       */
       listRef.current?.scrollToIndex({ index, animated: false });
+      // ⚠️ AND AGAIN ON THE NEXT FRAME — THE SECOND CALL IS THE FIX, NOT A BELT-AND-BRACES.
+      // The first `scrollToIndex` runs the moment the rows arrive, before FlashList has MEASURED
+      // any of them, so it scrolls to an ESTIMATED offset. On Android that estimate lands far
+      // past the real content and the reader gets a blank viewport: no rows, no error, no empty
+      // state, with 110 verses correctly in state and `renderItem` called for the right window.
+      // Measured on a Pixel 9 Pro 2026-08-28 — deleting this one call was what made the surface
+      // appear. By the next frame the rows are measured, so the same index resolves to the true
+      // offset. Deliberately NOT gated on FlashList's `onLoad`: that fires once per MOUNT, so a
+      // resync into a different surah (same mount, new rows) would wait for an event that never
+      // comes again. A repeat scroll is idempotent; a missed one is a blank page.
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToIndex({ index, animated: false });
+      });
       return;
     }
     // Verse 1 and "not found" both mean the TOP — and the top is only "where the list already

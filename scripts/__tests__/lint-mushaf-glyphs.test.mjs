@@ -265,13 +265,11 @@ const gateSandbox = ({
   // An "upstream" corpus holding the REPAIRED copy — i.e. a page whose patch has no reason left.
   if (corpus) {
     mkdirSync(join(root, 'corpus'), { recursive: true });
-    // ⚠️ The corpus keeps `.woff2` — it stands in for UPSTREAM, which ships both formats and whose
-    // woff2 directory is what `--corpus` sweeps. Only the bundled overlay became TTF (Android
-    // cannot parse WOFF2 and `Font.loadAsync` resolves anyway; see `lib/mushafFonts.ts`).
-    copyFileSync(
-      join(PATCHED_DIR, `QCF_P${page}.woff2`),
-      join(root, 'corpus', `QCF_P${page}.woff2`)
-    );
+    // ⚠️ The corpus FILENAME keeps `.woff2` because that is what `--corpus` sweeps upstream, but
+    // the BYTES come from the patched `.ttf` — the repo no longer ships a woff2 copy of anything,
+    // and `readTables` reads a bare sfnt and a WOFF2 alike, so the container does not matter to
+    // what this case is asserting (a patch whose upstream is already sound must be reported).
+    copyFileSync(join(PATCHED_DIR, `QCF_P${page}.ttf`), join(root, 'corpus', `QCF_P${page}.woff2`));
   }
   return root;
 };
