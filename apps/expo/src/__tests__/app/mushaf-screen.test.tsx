@@ -92,7 +92,9 @@ jest.mock('@shopify/flash-list', () => {
 });
 
 const mockSetReadingPosition = jest.fn();
-const mockReadingPositionRow = { current: null as { surah: number; verse: number } | null };
+const mockReadingPositionRow = {
+  current: null as { surah: number; verse: number; updatedAt?: number } | null,
+};
 
 jest.mock('@/lib/sync', () => ({
   setReadingPosition: (...args: unknown[]) => mockSetReadingPosition(...args),
@@ -370,6 +372,42 @@ describe('the chrome, and the gesture that reveals it', () => {
     await revealChrome();
     fireEvent.press(screen.getByTestId('chrome-tab-(profile)'));
     expect(mockNavigate).toHaveBeenCalledWith('/account');
+  });
+});
+
+describe('the welcome-back banner (story 6-3)', () => {
+  const EIGHT_DAYS_MS = 8 * 24 * 60 * 60 * 1000;
+
+  it('mounts for a saved row ≥7 days old, naming the saved surah', () => {
+    mockReadingPositionRow.current = {
+      surah: 2,
+      verse: 255,
+      updatedAt: Date.now() - EIGHT_DAYS_MS,
+    };
+    render(<Mushaf />);
+    expect(screen.getByTestId('welcome-back-banner')).toBeTruthy();
+    expect(screen.getByText('Welcome back. You were reading Al-Baqarah.')).toBeTruthy();
+  });
+
+  it('does not mount for a fresh row', () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 255, updatedAt: Date.now() };
+    render(<Mushaf />);
+    expect(screen.queryByTestId('welcome-back-banner')).toBeNull();
+  });
+
+  it('dismisses on the first REAL page move — the restore settling is not one', () => {
+    mockReadingPositionRow.current = {
+      surah: 2,
+      verse: 255,
+      updatedAt: Date.now() - EIGHT_DAYS_MS,
+    };
+    render(<Mushaf />);
+    // The opening restore lands on page 42 — the latch ignores it, and so must the banner.
+    settleOnPage(42);
+    expect(screen.getByTestId('welcome-back-banner')).toBeTruthy();
+    // …and the first genuine page turn dismisses it.
+    settleOnPage(41);
+    expect(screen.queryByTestId('welcome-back-banner')).toBeNull();
   });
 });
 

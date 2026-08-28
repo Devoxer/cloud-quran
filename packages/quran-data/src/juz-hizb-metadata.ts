@@ -1,11 +1,29 @@
-// Juz and Hizb boundary metadata for the standard Madinah Mushaf
-// Source: Tanzil.net metadata + King Fahd Complex Madinah Mushaf page numbers
+/**
+ * Juz' and Hizb boundary metadata — Tanzil.net segmentation, VERSE PAIRS ONLY.
+ *
+ * ⚠️ THERE IS NO STORED PAGE COLUMN, AND THAT IS A FIX, NOT AN OMISSION (story 6-3). This file
+ * used to carry a `startPage` per entry, credited to "King Fahd Complex Madinah Mushaf page
+ * numbers". It was nothing of the sort: 56 of the 60 hizb values were exactly `10n − 8` and 27 of
+ * the 30 juz' values exactly `20n − 18` — an arithmetic ladder, hand-nudged in four places to
+ * meet the juz' column. The real page gaps between hizb boundaries (from the verse↔page map) run
+ * 7–13 pages; the stored column's ran 9–11, which no printed mushaf does. Measured against the
+ * map regenerated and verified in story 6-2, the stored column mislabelled the hizb on 27 of 604
+ * page headers and the juz' on 1.
+ *
+ * So the page is DERIVED, never stored: `getPageForVerse(startSurah, startVerse)` is the one
+ * answer to "which page does this boundary sit on", and the two halves agree by construction.
+ * `juz-hizb-metadata.test.ts` pins that the stored column has not come back.
+ *
+ * ⚠️ THE VERSE PAIRS ARE THE RELIGIOUS SEGMENTATION AND ARE UNTOUCHED — which verse begins which
+ * juz' or hizb is exactly as Tanzil states it. Only the fabricated page column was removed.
+ */
+
+import { getPageForVerse } from './verse-page-map';
 
 export interface JuzMetadata {
   number: number; // 1-30
   startSurah: number; // Surah number where juz starts
   startVerse: number; // Verse number where juz starts
-  startPage: number; // Mushaf page where juz starts
 }
 
 export interface HizbMetadata {
@@ -13,119 +31,149 @@ export interface HizbMetadata {
   juz: number; // Which juz this hizb belongs to (1-30)
   startSurah: number;
   startVerse: number;
-  startPage: number;
 }
 
-// 30 Juz boundaries — standard Madinah Mushaf
+// 30 Juz boundaries — Tanzil.net segmentation
 export const JUZ_METADATA: JuzMetadata[] = [
-  { number: 1, startSurah: 1, startVerse: 1, startPage: 1 },
-  { number: 2, startSurah: 2, startVerse: 142, startPage: 22 },
-  { number: 3, startSurah: 2, startVerse: 253, startPage: 42 },
-  { number: 4, startSurah: 3, startVerse: 93, startPage: 62 },
-  { number: 5, startSurah: 4, startVerse: 24, startPage: 82 },
-  { number: 6, startSurah: 4, startVerse: 148, startPage: 102 },
-  { number: 7, startSurah: 5, startVerse: 83, startPage: 121 },
-  { number: 8, startSurah: 6, startVerse: 111, startPage: 142 },
-  { number: 9, startSurah: 7, startVerse: 88, startPage: 162 },
-  { number: 10, startSurah: 8, startVerse: 41, startPage: 182 },
-  { number: 11, startSurah: 9, startVerse: 93, startPage: 201 },
-  { number: 12, startSurah: 11, startVerse: 6, startPage: 222 },
-  { number: 13, startSurah: 12, startVerse: 53, startPage: 242 },
-  { number: 14, startSurah: 15, startVerse: 1, startPage: 262 },
-  { number: 15, startSurah: 17, startVerse: 1, startPage: 282 },
-  { number: 16, startSurah: 18, startVerse: 75, startPage: 302 },
-  { number: 17, startSurah: 21, startVerse: 1, startPage: 322 },
-  { number: 18, startSurah: 23, startVerse: 1, startPage: 342 },
-  { number: 19, startSurah: 25, startVerse: 21, startPage: 362 },
-  { number: 20, startSurah: 27, startVerse: 56, startPage: 382 },
-  { number: 21, startSurah: 29, startVerse: 46, startPage: 402 },
-  { number: 22, startSurah: 33, startVerse: 31, startPage: 422 },
-  { number: 23, startSurah: 36, startVerse: 28, startPage: 442 },
-  { number: 24, startSurah: 39, startVerse: 32, startPage: 462 },
-  { number: 25, startSurah: 41, startVerse: 47, startPage: 482 },
-  { number: 26, startSurah: 46, startVerse: 1, startPage: 502 },
-  { number: 27, startSurah: 51, startVerse: 31, startPage: 522 },
-  { number: 28, startSurah: 58, startVerse: 1, startPage: 542 },
-  { number: 29, startSurah: 67, startVerse: 1, startPage: 562 },
-  { number: 30, startSurah: 78, startVerse: 1, startPage: 582 },
+  { number: 1, startSurah: 1, startVerse: 1 },
+  { number: 2, startSurah: 2, startVerse: 142 },
+  { number: 3, startSurah: 2, startVerse: 253 },
+  { number: 4, startSurah: 3, startVerse: 93 },
+  { number: 5, startSurah: 4, startVerse: 24 },
+  { number: 6, startSurah: 4, startVerse: 148 },
+  { number: 7, startSurah: 5, startVerse: 83 },
+  { number: 8, startSurah: 6, startVerse: 111 },
+  { number: 9, startSurah: 7, startVerse: 88 },
+  { number: 10, startSurah: 8, startVerse: 41 },
+  { number: 11, startSurah: 9, startVerse: 93 },
+  { number: 12, startSurah: 11, startVerse: 6 },
+  { number: 13, startSurah: 12, startVerse: 53 },
+  { number: 14, startSurah: 15, startVerse: 1 },
+  { number: 15, startSurah: 17, startVerse: 1 },
+  { number: 16, startSurah: 18, startVerse: 75 },
+  { number: 17, startSurah: 21, startVerse: 1 },
+  { number: 18, startSurah: 23, startVerse: 1 },
+  { number: 19, startSurah: 25, startVerse: 21 },
+  { number: 20, startSurah: 27, startVerse: 56 },
+  { number: 21, startSurah: 29, startVerse: 46 },
+  { number: 22, startSurah: 33, startVerse: 31 },
+  { number: 23, startSurah: 36, startVerse: 28 },
+  { number: 24, startSurah: 39, startVerse: 32 },
+  { number: 25, startSurah: 41, startVerse: 47 },
+  { number: 26, startSurah: 46, startVerse: 1 },
+  { number: 27, startSurah: 51, startVerse: 31 },
+  { number: 28, startSurah: 58, startVerse: 1 },
+  { number: 29, startSurah: 67, startVerse: 1 },
+  { number: 30, startSurah: 78, startVerse: 1 },
 ];
 
 // 60 Hizb boundaries — each juz has 2 hizbs
 export const HIZB_METADATA: HizbMetadata[] = [
-  { number: 1, juz: 1, startSurah: 1, startVerse: 1, startPage: 1 },
-  { number: 2, juz: 1, startSurah: 2, startVerse: 75, startPage: 12 },
-  { number: 3, juz: 2, startSurah: 2, startVerse: 142, startPage: 22 },
-  { number: 4, juz: 2, startSurah: 2, startVerse: 203, startPage: 32 },
-  { number: 5, juz: 3, startSurah: 2, startVerse: 253, startPage: 42 },
-  { number: 6, juz: 3, startSurah: 3, startVerse: 15, startPage: 52 },
-  { number: 7, juz: 4, startSurah: 3, startVerse: 93, startPage: 62 },
-  { number: 8, juz: 4, startSurah: 3, startVerse: 171, startPage: 72 },
-  { number: 9, juz: 5, startSurah: 4, startVerse: 24, startPage: 82 },
-  { number: 10, juz: 5, startSurah: 4, startVerse: 88, startPage: 92 },
-  { number: 11, juz: 6, startSurah: 4, startVerse: 148, startPage: 102 },
-  { number: 12, juz: 6, startSurah: 5, startVerse: 27, startPage: 112 },
-  { number: 13, juz: 7, startSurah: 5, startVerse: 83, startPage: 121 },
-  { number: 14, juz: 7, startSurah: 6, startVerse: 36, startPage: 132 },
-  { number: 15, juz: 8, startSurah: 6, startVerse: 111, startPage: 142 },
-  { number: 16, juz: 8, startSurah: 7, startVerse: 1, startPage: 151 },
-  { number: 17, juz: 9, startSurah: 7, startVerse: 88, startPage: 162 },
-  { number: 18, juz: 9, startSurah: 7, startVerse: 189, startPage: 172 },
-  { number: 19, juz: 10, startSurah: 8, startVerse: 41, startPage: 182 },
-  { number: 20, juz: 10, startSurah: 9, startVerse: 34, startPage: 192 },
-  { number: 21, juz: 11, startSurah: 9, startVerse: 93, startPage: 201 },
-  { number: 22, juz: 11, startSurah: 10, startVerse: 26, startPage: 212 },
-  { number: 23, juz: 12, startSurah: 11, startVerse: 6, startPage: 222 },
-  { number: 24, juz: 12, startSurah: 11, startVerse: 83, startPage: 232 },
-  { number: 25, juz: 13, startSurah: 12, startVerse: 53, startPage: 242 },
-  { number: 26, juz: 13, startSurah: 13, startVerse: 19, startPage: 252 },
-  { number: 27, juz: 14, startSurah: 15, startVerse: 1, startPage: 262 },
-  { number: 28, juz: 14, startSurah: 16, startVerse: 30, startPage: 272 },
-  { number: 29, juz: 15, startSurah: 17, startVerse: 1, startPage: 282 },
-  { number: 30, juz: 15, startSurah: 17, startVerse: 99, startPage: 292 },
-  { number: 31, juz: 16, startSurah: 18, startVerse: 75, startPage: 302 },
-  { number: 32, juz: 16, startSurah: 19, startVerse: 59, startPage: 312 },
-  { number: 33, juz: 17, startSurah: 21, startVerse: 1, startPage: 322 },
-  { number: 34, juz: 17, startSurah: 22, startVerse: 19, startPage: 332 },
-  { number: 35, juz: 18, startSurah: 23, startVerse: 1, startPage: 342 },
-  { number: 36, juz: 18, startSurah: 24, startVerse: 21, startPage: 352 },
-  { number: 37, juz: 19, startSurah: 25, startVerse: 21, startPage: 362 },
-  { number: 38, juz: 19, startSurah: 26, startVerse: 111, startPage: 372 },
-  { number: 39, juz: 20, startSurah: 27, startVerse: 56, startPage: 382 },
-  { number: 40, juz: 20, startSurah: 28, startVerse: 51, startPage: 392 },
-  { number: 41, juz: 21, startSurah: 29, startVerse: 46, startPage: 402 },
-  { number: 42, juz: 21, startSurah: 31, startVerse: 22, startPage: 412 },
-  { number: 43, juz: 22, startSurah: 33, startVerse: 31, startPage: 422 },
-  { number: 44, juz: 22, startSurah: 34, startVerse: 24, startPage: 432 },
-  { number: 45, juz: 23, startSurah: 36, startVerse: 28, startPage: 442 },
-  { number: 46, juz: 23, startSurah: 37, startVerse: 145, startPage: 452 },
-  { number: 47, juz: 24, startSurah: 39, startVerse: 32, startPage: 462 },
-  { number: 48, juz: 24, startSurah: 40, startVerse: 41, startPage: 472 },
-  { number: 49, juz: 25, startSurah: 41, startVerse: 47, startPage: 482 },
-  { number: 50, juz: 25, startSurah: 43, startVerse: 24, startPage: 492 },
-  { number: 51, juz: 26, startSurah: 46, startVerse: 1, startPage: 502 },
-  { number: 52, juz: 26, startSurah: 48, startVerse: 18, startPage: 512 },
-  { number: 53, juz: 27, startSurah: 51, startVerse: 31, startPage: 522 },
-  { number: 54, juz: 27, startSurah: 54, startVerse: 28, startPage: 532 },
-  { number: 55, juz: 28, startSurah: 58, startVerse: 1, startPage: 542 },
-  { number: 56, juz: 28, startSurah: 61, startVerse: 1, startPage: 552 },
-  { number: 57, juz: 29, startSurah: 67, startVerse: 1, startPage: 562 },
-  { number: 58, juz: 29, startSurah: 71, startVerse: 11, startPage: 572 },
-  { number: 59, juz: 30, startSurah: 78, startVerse: 1, startPage: 582 },
-  { number: 60, juz: 30, startSurah: 84, startVerse: 1, startPage: 592 },
+  { number: 1, juz: 1, startSurah: 1, startVerse: 1 },
+  { number: 2, juz: 1, startSurah: 2, startVerse: 75 },
+  { number: 3, juz: 2, startSurah: 2, startVerse: 142 },
+  { number: 4, juz: 2, startSurah: 2, startVerse: 203 },
+  { number: 5, juz: 3, startSurah: 2, startVerse: 253 },
+  { number: 6, juz: 3, startSurah: 3, startVerse: 15 },
+  { number: 7, juz: 4, startSurah: 3, startVerse: 93 },
+  { number: 8, juz: 4, startSurah: 3, startVerse: 171 },
+  { number: 9, juz: 5, startSurah: 4, startVerse: 24 },
+  { number: 10, juz: 5, startSurah: 4, startVerse: 88 },
+  { number: 11, juz: 6, startSurah: 4, startVerse: 148 },
+  { number: 12, juz: 6, startSurah: 5, startVerse: 27 },
+  { number: 13, juz: 7, startSurah: 5, startVerse: 83 },
+  { number: 14, juz: 7, startSurah: 6, startVerse: 36 },
+  { number: 15, juz: 8, startSurah: 6, startVerse: 111 },
+  { number: 16, juz: 8, startSurah: 7, startVerse: 1 },
+  { number: 17, juz: 9, startSurah: 7, startVerse: 88 },
+  { number: 18, juz: 9, startSurah: 7, startVerse: 189 },
+  { number: 19, juz: 10, startSurah: 8, startVerse: 41 },
+  { number: 20, juz: 10, startSurah: 9, startVerse: 34 },
+  { number: 21, juz: 11, startSurah: 9, startVerse: 93 },
+  { number: 22, juz: 11, startSurah: 10, startVerse: 26 },
+  { number: 23, juz: 12, startSurah: 11, startVerse: 6 },
+  { number: 24, juz: 12, startSurah: 11, startVerse: 83 },
+  { number: 25, juz: 13, startSurah: 12, startVerse: 53 },
+  { number: 26, juz: 13, startSurah: 13, startVerse: 19 },
+  { number: 27, juz: 14, startSurah: 15, startVerse: 1 },
+  { number: 28, juz: 14, startSurah: 16, startVerse: 30 },
+  { number: 29, juz: 15, startSurah: 17, startVerse: 1 },
+  { number: 30, juz: 15, startSurah: 17, startVerse: 99 },
+  { number: 31, juz: 16, startSurah: 18, startVerse: 75 },
+  { number: 32, juz: 16, startSurah: 19, startVerse: 59 },
+  { number: 33, juz: 17, startSurah: 21, startVerse: 1 },
+  { number: 34, juz: 17, startSurah: 22, startVerse: 19 },
+  { number: 35, juz: 18, startSurah: 23, startVerse: 1 },
+  { number: 36, juz: 18, startSurah: 24, startVerse: 21 },
+  { number: 37, juz: 19, startSurah: 25, startVerse: 21 },
+  { number: 38, juz: 19, startSurah: 26, startVerse: 111 },
+  { number: 39, juz: 20, startSurah: 27, startVerse: 56 },
+  { number: 40, juz: 20, startSurah: 28, startVerse: 51 },
+  { number: 41, juz: 21, startSurah: 29, startVerse: 46 },
+  { number: 42, juz: 21, startSurah: 31, startVerse: 22 },
+  { number: 43, juz: 22, startSurah: 33, startVerse: 31 },
+  { number: 44, juz: 22, startSurah: 34, startVerse: 24 },
+  { number: 45, juz: 23, startSurah: 36, startVerse: 28 },
+  { number: 46, juz: 23, startSurah: 37, startVerse: 145 },
+  { number: 47, juz: 24, startSurah: 39, startVerse: 32 },
+  { number: 48, juz: 24, startSurah: 40, startVerse: 41 },
+  { number: 49, juz: 25, startSurah: 41, startVerse: 47 },
+  { number: 50, juz: 25, startSurah: 43, startVerse: 24 },
+  { number: 51, juz: 26, startSurah: 46, startVerse: 1 },
+  { number: 52, juz: 26, startSurah: 48, startVerse: 18 },
+  { number: 53, juz: 27, startSurah: 51, startVerse: 31 },
+  { number: 54, juz: 27, startSurah: 54, startVerse: 28 },
+  { number: 55, juz: 28, startSurah: 58, startVerse: 1 },
+  { number: 56, juz: 28, startSurah: 61, startVerse: 1 },
+  { number: 57, juz: 29, startSurah: 67, startVerse: 1 },
+  { number: 58, juz: 29, startSurah: 71, startVerse: 11 },
+  { number: 59, juz: 30, startSurah: 78, startVerse: 1 },
+  { number: 60, juz: 30, startSurah: 84, startVerse: 1 },
 ];
 
-/** Get the juz number for a given mushaf page (1-604) */
+/**
+ * Resolve one boundary pair to its page, FAILING CLOSED.
+ *
+ * ⚠️ `getPageForVerse` ANSWERS `-1` FOR A PAIR IT CANNOT FIND, AND `-1` IS CATASTROPHIC HERE
+ * RATHER THAN MERELY WRONG. Both lookups below scan in reverse and return the first entry whose
+ * start page is `<= page`; `page >= -1` is true for every page in the book, so a single
+ * unresolvable pair would make the LAST juz'/hizb the answer for all 604 pages — every page
+ * header in the mushaf reading "Juz' 30 · Hizb 60", with no test failing unless one happened to
+ * cover that page. Since story 6-3 these arrays are the only source of the labels, so a silent
+ * `-1` is a whole-book defect on the facsimile. Throwing at module load turns it into an
+ * immediate, obvious failure instead.
+ */
+function boundaryPage(surah: number, verse: number, label: string): number {
+  const page = getPageForVerse(surah, verse);
+  if (page < 1) {
+    throw new Error(
+      `${label} boundary ${surah}:${verse} is absent from the verse↔page map (got ${page})`
+    );
+  }
+  return page;
+}
+
+// The derived page boundaries, computed once at module load. Ascending because the verse pairs
+// are ascending through the book — pinned by the test rather than assumed.
+const JUZ_START_PAGES = JUZ_METADATA.map((j) =>
+  boundaryPage(j.startSurah, j.startVerse, `juz' ${j.number}`)
+);
+const HIZB_START_PAGES = HIZB_METADATA.map((h) =>
+  boundaryPage(h.startSurah, h.startVerse, `hizb ${h.number}`)
+);
+
+/** Get the juz number for a given mushaf page (1-604). */
 export function getJuzForPage(page: number): number {
   for (let i = JUZ_METADATA.length - 1; i >= 0; i--) {
-    if (page >= JUZ_METADATA[i].startPage) return JUZ_METADATA[i].number;
+    if (page >= JUZ_START_PAGES[i]) return JUZ_METADATA[i].number;
   }
   return 1;
 }
 
-/** Get the hizb number for a given mushaf page (1-604) */
+/** Get the hizb number for a given mushaf page (1-604). */
 export function getHizbForPage(page: number): number {
   for (let i = HIZB_METADATA.length - 1; i >= 0; i--) {
-    if (page >= HIZB_METADATA[i].startPage) return HIZB_METADATA[i].number;
+    if (page >= HIZB_START_PAGES[i]) return HIZB_METADATA[i].number;
   }
   return 1;
 }

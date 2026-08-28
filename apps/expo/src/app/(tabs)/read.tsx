@@ -12,9 +12,10 @@ import { clampArabicFontSize } from '@/constants/arabic';
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import {
-  NextSurahButton,
   nextSurah,
+  prevSurah,
   ReadingChrome,
+  SurahNavigator,
   useChromeReveal,
   useSurah,
   VerseRow,
@@ -285,18 +286,21 @@ export default function Read() {
 
   const title = content.meta?.nameTransliteration ?? null;
   /**
-   * ⚠️ DERIVED ONCE. It used to be computed three times per press — three places for the label
-   * and the destination to drift apart.
+   * ⚠️ DERIVED ONCE, EACH DIRECTION. It used to be computed three times per press — three places
+   * for the label and the destination to drift apart. Story 6-3 adds the previous direction under
+   * the same single-derivation rule.
    *
-   * ⚠️ THE NEXT SURAH'S NAME COMES FROM `quran-data`, WHILE THE TITLE ABOVE COMES FROM THE
+   * ⚠️ THE DESTINATION NAMES COME FROM `quran-data`, WHILE THE TITLE ABOVE COMES FROM THE
    * DATABASE, and the split is deliberate rather than an oversight. The title DESCRIBES the rows
-   * on screen, so it must be read from the same file those rows came from. The next-surah label
+   * on screen, so it must be read from the same file those rows came from. A navigator label
    * describes a destination nothing has loaded yet — reading it from the database would mean a
    * second async read to draw a button. `quranDb.test.ts` asserts the two tables agree for all
    * 114, which is what makes this safe to say.
    */
   const upcoming = nextSurah(surah);
   const nextSurahName = SURAH_METADATA[upcoming - 1]?.nameTransliteration ?? String(upcoming);
+  const preceding = prevSurah(surah);
+  const prevSurahName = SURAH_METADATA[preceding - 1]?.nameTransliteration ?? String(preceding);
 
   return (
     <View style={styles.screen} testID="reading-surface">
@@ -334,7 +338,13 @@ export default function Read() {
               viewabilityConfig={VIEWABILITY_CONFIG}
               ListFooterComponent={
                 content.verses.length > 0 ? (
-                  <NextSurahButton next={upcoming} nextName={nextSurahName} onPress={goToSurah} />
+                  <SurahNavigator
+                    prev={preceding}
+                    prevName={prevSurahName}
+                    next={upcoming}
+                    nextName={nextSurahName}
+                    onNavigate={goToSurah}
+                  />
                 ) : null
               }
               testID="reading-list"

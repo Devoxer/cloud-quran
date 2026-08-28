@@ -588,6 +588,26 @@ describe('the chrome, and the gesture that reveals it', () => {
     await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(1));
   });
 
+  it('labels and navigates the PREVIOUS surah — the same single derivation, backwards (story 6-3)', async () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 1 };
+    render(<Read />);
+    await screen.findByText('أية 2:1');
+    // The label comes from quran-data's table, like next's; Al-Baqarah's predecessor.
+    expect(screen.getByText('Previous: Al-Fatihah')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('prev-surah-button'));
+    await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(1));
+  });
+
+  it('wraps from Al-Fatiha back to An-Nas — 1 → 114, the other end (story 6-3)', async () => {
+    // MUTATION: `prevSurah` computing `surah - 1` without the wrap answers 0 here, and
+    // `getSurahVerses(0)` is an empty screen.
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    expect(screen.getByText('Previous: An-Nas')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('prev-surah-button'));
+    await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(114));
+  });
+
   it('keeps both bars in the tree either way', async () => {
     render(<Read />);
     await screen.findByText('أية 1:7');

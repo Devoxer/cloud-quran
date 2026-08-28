@@ -88,7 +88,9 @@
     "unreadableTitle": "The Quran text could not be opened",
     "unreadableBody": "The bundled text is missing or unreadable on this device.",
     "noVersesTitle": "No verses to show",
-    "noVersesBody": "This surah came back empty. Try again, or move on to the next one."
+    "noVersesBody": "This surah came back empty. Try again, or move on to the next one.",
+    "prevSurah": "Previous: {{name}}",
+    "welcomeBack": "Welcome back. You were reading {{name}}."
   },
   "mushaf": {
     "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",

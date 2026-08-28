@@ -87,9 +87,13 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
         {...offscreen}
         testID="reading-chrome-header"
       >
+        {/* story 6-3: the title IS the index entry. The pushed route carries the opener's mode so
+            a selection writes — and, on a deep link, exits — toward the surface it came from. */}
         <AppHeader
           title={title ?? ''}
           interactive={reveal.interactive}
+          onTitlePress={() => router.push({ pathname: '/surahs', params: { mode } })}
+          titleHint={t('index.titleHint')}
           leading={
             <HeaderActionButton
               name={mode === 'reading' ? 'view-agenda' : 'view-list'}

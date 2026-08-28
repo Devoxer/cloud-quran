@@ -28,6 +28,7 @@ import { Pressable, Text } from 'react-native';
 
 const mockBack = jest.fn();
 const mockNavigate = jest.fn();
+const mockPush = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>(() => true);
 
 jest.mock('expo-router', () => ({
@@ -35,7 +36,7 @@ jest.mock('expo-router', () => ({
     back: mockBack,
     navigate: mockNavigate,
     replace: jest.fn(),
-    push: jest.fn(),
+    push: mockPush,
     canGoBack: () => mockCanGoBack(),
   }),
   useSegments: () => ['(tabs)', 'read'],
@@ -107,6 +108,13 @@ describe('one driver', () => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
+        // ⚠️ THE BANNER IS THE ONE DOCUMENTED EXCLUSION, BY FILENAME (story 6-3). It is NOT
+        // chrome: a transient notice with its own lifecycle (4s, or the first page move) that
+        // must never ride the reveal — so its fade is legitimately its own driver. Excluding
+        // this ONE file keeps the count fail-closed for every other file in the walk; raising
+        // the count to 2 instead would let a second CHROME driver hide behind the banner's
+        // allowance. The companion case below proves the banner never touches `useChromeReveal`.
+        else if (entry.name === 'WelcomeBackBanner.tsx') continue;
         else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) read(full);
       }
     };
@@ -144,6 +152,16 @@ describe('one driver', () => {
     const hook = source('hooks/useChromeReveal.ts');
     expect(hook.match(/useAnimatedStyle\(/g)).toHaveLength(2);
     expect(hook.match(/progress\.value/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('the excluded banner never touches the reveal — and really has the driver the exclusion excuses', () => {
+    // Both directions of the exclusion's honesty: the banner must not import the chrome's
+    // driver (riding the reveal would summon it on every chrome tap), and it must actually
+    // CONTAIN its own — an exclusion excusing nothing would mean the walk skips a file that
+    // could later gain a second chrome driver unnoticed.
+    const banner = source('components/WelcomeBackBanner.tsx');
+    expect(banner).not.toMatch(/useChromeReveal/);
+    expect(banner).toMatch(/withTiming\(/);
   });
 
   it('takes its duration and easing from the tokens, never inline', () => {
@@ -305,6 +323,23 @@ describe('the controls the chrome carries (story 6-6)', () => {
     await reveal();
     fireEvent.press(screen.getByTestId('chrome-mode-toggle'));
     expect(mockNavigate).toHaveBeenCalledWith(READ_HREF);
+  });
+
+  it('the title is the index entry — from reading mode it pushes /surahs in that mode', async () => {
+    // Story 6-3: `onTitlePress` had zero callers since 6-6 shipped it; this is the wiring. The
+    // mode param is what makes a selection write — and a deep-linked exit go — toward the
+    // surface the reader came from.
+    render(<Harness mode="reading" />);
+    await reveal();
+    fireEvent.press(screen.getByTestId('chrome-title-entry'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/surahs', params: { mode: 'reading' } });
+  });
+
+  it('…and from the mushaf it pushes /surahs in mushaf mode', async () => {
+    render(<Harness mode="mushaf" />);
+    await reveal();
+    fireEvent.press(screen.getByTestId('chrome-title-entry'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/surahs', params: { mode: 'mushaf' } });
   });
 
   it('shows a back control when there is history, and it pops', async () => {

@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { ThemeProvider as NavigationThemeProvider, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-reanimated';
@@ -276,6 +276,28 @@ function RootLayoutNav() {
             must never carry again is a native header control; `lint:header-controls` owns that,
             and the reading chrome's controls live in `AppHeader`'s `leading`/`trailing` slots. */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* story 6-3: the Quran index — a pushed ROOT route beside the tab shell, never a fourth
+            tab (owner-settled 3-tab IA, 6-6). Same per-screen header-off shape as `(tabs)`: the
+            screen renders our own `AppHeader`, whose back control is history-conditional.
+
+            ⚠️ `transparentModal` ON WEB ONLY, AND IT IS A MEASURED FIX, NOT A STYLE. A default
+            card push detaches the covered screen with `display: none` on web, and a display-none
+            scroller's offset reads 0 and swallows writes — so popping back from the index put
+            the mushaf pager at offset 0 (page 604), the focus resync's `scrollToIndex` (issued
+            while the pager was still hidden) never landed, and the transient page-604
+            viewability could even WRITE 112:1 over the reader's real position. Measured in
+            WebKit against the dev server, 2026-08-28. A transparent modal keeps the screen
+            below ATTACHED (the index paints its own opaque background over it), so the offset
+            survives and the write→back→focus-resync arc lands. Native keeps the default card
+            push — the platform preserves covered content, and this branch changes only HOW the
+            same route presents, never what exists. */}
+        <Stack.Screen
+          name="surahs"
+          options={{
+            headerShown: false,
+            presentation: Platform.OS === 'web' ? 'transparentModal' : 'card',
+          }}
+        />
         {/* +not-found auto-registers into this Stack; without this registration it would draw
             the ONE native stack header left in the app. Its content carries its own title and
             the "go home" link (`HOME_HREF`). */}

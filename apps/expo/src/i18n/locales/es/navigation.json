@@ -13,6 +13,23 @@
     "signIn": "Iniciar sesión",
     "data": "Tus datos",
     "feedback": "Comentarios",
-    "privacy": "Privacidad"
+    "privacy": "Privacidad",
+    "index": "Corán"
+  },
+  "index": {
+    "segments": {
+      "surahs": "Suras",
+      "juz": "Juz'",
+      "hizb": "Hizb"
+    },
+    "surahSubtitle": "{{name}} · {{verses}} versículos · {{revelation}}",
+    "revelation": {
+      "meccan": "Mecana",
+      "medinan": "Medinesa"
+    },
+    "juzTitle": "Juz' {{number}}",
+    "hizbTitle": "Hizb {{number}}",
+    "boundarySubtitle": "{{name}} {{surah}}:{{verse}} · Página {{page}}",
+    "titleHint": "Abre el índice de suras, juz' y hizb"
   }
 }

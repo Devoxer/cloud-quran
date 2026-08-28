@@ -32,10 +32,10 @@
  * lets everything else fall through. In the settings shell the bar occupies layout and nothing
  * sits behind it, so the pass-through is harmless there.
  *
- * ⚠️ `onTitlePress` IS 6.3's SURAH/PAGE PICKER ENTRY, and it is inert-by-absence: with no
- * handler the title is plain text — never a dead control. Story 6.3 lands the picker route and
- * passes the handler in the same change (the pre-fork chrome's `Verse {n} of {count}` pressable
- * is the precedent for the title area being the jump affordance).
+ * ⚠️ `onTitlePress` IS THE QURAN-INDEX ENTRY (story 6.3: `ReadingChrome` passes it, pushing
+ * `/surahs`), and it is inert-by-absence: with no handler the title is plain text — never a dead
+ * control (the pre-fork chrome's `Verse {n} of {count}` pressable is the precedent for the title
+ * area being the jump affordance). With a handler it carries the index accessibility hint.
  *
  * Colours: the bar is `background.secondary`, the title `text.primary` (held at AAA on that
  * surface), the back chevron `accent.primary` (held at WCAG 1.4.11's 3:1) — all pinned in
@@ -66,6 +66,13 @@ export interface AppHeaderProps {
   /** 6.3's picker entry: when set, the title becomes the pressable jump affordance. */
   onTitlePress?: () => void;
   /**
+   * Spoken hint for the title entry. ⚠️ A PROP, NOT A CONSTANT IN THIS FILE. This is a shared
+   * `components/ui` primitive; hardcoding `navigation:index.titleHint` here made every future
+   * consumer of `onTitlePress` announce "opens the surah, juz' and hizb index" whatever it
+   * actually opened. The caller knows its own destination.
+   */
+  titleHint?: string;
+  /**
    * Whether the back control renders. Omitted → `router.canGoBack()`. Pass it from a shell that
    * knows its own stack — see the docblock for the measured one-commit staleness this closes.
    */
@@ -83,6 +90,7 @@ export function AppHeader({
   leading,
   trailing,
   onTitlePress,
+  titleHint,
   showBack,
   interactive = true,
   testID = 'app-header',
@@ -153,6 +161,7 @@ export function AppHeader({
           onPress={onTitlePress}
           style={styles.titlePress}
           accessibilityRole="button"
+          accessibilityHint={titleHint}
           focusable={interactive}
           tabIndex={interactive ? 0 : -1}
           testID="chrome-title-entry"

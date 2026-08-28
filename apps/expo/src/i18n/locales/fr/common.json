@@ -88,7 +88,9 @@
     "unreadableTitle": "Impossible d’ouvrir le texte du Coran",
     "unreadableBody": "Le texte fourni est absent ou illisible sur cet appareil.",
     "noVersesTitle": "Aucun verset à afficher",
-    "noVersesBody": "Cette sourate est revenue vide. Réessayez ou passez à la suivante."
+    "noVersesBody": "Cette sourate est revenue vide. Réessayez ou passez à la suivante.",
+    "prevSurah": "Précédente : {{name}}",
+    "welcomeBack": "Bon retour. Vous lisiez {{name}}."
   },
   "mushaf": {
     "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",

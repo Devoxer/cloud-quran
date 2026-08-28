@@ -83,6 +83,9 @@ tmp/
 /apps/expo/android/
 .bmad-loop/runs/
 .bmad-loop/cache/
+# Archived runs are tarballs of the above — same reason, and `bmad-loop run` REFUSES to start on a
+# dirty worktree, so an unignored archive from `bmad-loop archive` blocks the next run outright.
+.bmad-loop/archive/
 # .bmad-loop/policy.toml is TRACKED on purpose. `bmad-loop init` gitignores it (it can carry a
 # machine-local [mux] backend and TUI pane sizes) and prints a note suggesting `git rm --cached`.
 # Ignore that note here: [verify] commands DEFAULTS TO EMPTY, so an untracked policy means a fresh

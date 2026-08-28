@@ -13,6 +13,23 @@
     "signIn": "Se connecter",
     "data": "Vos données",
     "feedback": "Commentaires",
-    "privacy": "Confidentialité"
+    "privacy": "Confidentialité",
+    "index": "Coran"
+  },
+  "index": {
+    "segments": {
+      "surahs": "Sourates",
+      "juz": "Juz'",
+      "hizb": "Hizb"
+    },
+    "surahSubtitle": "{{name}} · {{verses}} versets · {{revelation}}",
+    "revelation": {
+      "meccan": "Mecquoise",
+      "medinan": "Médinoise"
+    },
+    "juzTitle": "Juz' {{number}}",
+    "hizbTitle": "Hizb {{number}}",
+    "boundarySubtitle": "{{name}} {{surah}}:{{verse}} · Page {{page}}",
+    "titleHint": "Ouvre l'index des sourates, juz' et hizb"
   }
 }

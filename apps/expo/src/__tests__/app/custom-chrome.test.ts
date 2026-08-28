@@ -82,6 +82,24 @@ describe('no native chrome renders anywhere', () => {
     expect(root).toMatch(/name="\+not-found"/);
   });
 
+  it('the surahs index is a WEB-CONDITIONAL presentation — a measured data-loss fix', () => {
+    // ⚠️ THIS TERNARY LOOKS LIKE A STYLE CHOICE AND IS NOT. Measured in WebKit 2026-08-28: with a
+    // default card push, popping back from the index left the mushaf pager `display: none` with
+    // its scroller reporting offset 0 — so the focus resync's `scrollToIndex` stranded, and the
+    // transient page-604 viewability could WRITE 112:1 over the reader's real saved position.
+    // Demonstrated during review that collapsing it to plain `'card'` left 310 app/route tests
+    // green, so nothing stopped a later "simplification" from restoring silent position loss.
+    //
+    // A source scan, like its neighbours here: `root-layout-boot.test.tsx` stubs `Stack.Screen`
+    // as `() => null`, so no rendered test in this repo can observe a screen's options at all.
+    // Weaker than a render, and named as such — but it does catch the exact mutation above.
+    const rootLayout = code(APP_DIR, '_layout.tsx');
+    expect(rootLayout).toMatch(/name="surahs"/);
+    expect(rootLayout).toMatch(
+      /presentation:\s*Platform\.OS === 'web' \? 'transparentModal' : 'card'/
+    );
+  });
+
   it('the tab navigator paints nothing of its own', () => {
     const layout = code(APP_DIR, '(tabs)', '_layout.tsx');
     expect(layout).toMatch(/tabBar=\{\(\)\s*=>\s*null\}/);

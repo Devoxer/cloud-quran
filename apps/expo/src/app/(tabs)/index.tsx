@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-import { MushafPage, ReadingChrome, useChromeReveal } from '@/features/reading';
+import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -111,6 +111,13 @@ export default function Mushaf() {
    */
   const failedPages = useRef(new Set<number>());
   const { show } = reveal;
+  /**
+   * Story 6-3: the welcome-back banner's screen-driven dismissal. Flipped where `moved.current`
+   * first becomes true — a REAL page move, not the restore settling — because "gone on page
+   * movement" must not fire on the open-position landing the latch exists to ignore. The banner
+   * decides for itself whether to show at all (the 7-day gate lives in the component).
+   */
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const styles = useThemedStyles((theme) => ({
     screen: {
@@ -154,6 +161,7 @@ export default function Mushaf() {
       if (!moved.current) {
         if (page === restoreTarget.current) return; // a restore settling is not a move
         moved.current = true;
+        setBannerDismissed(true); // the first real move dismisses the welcome-back banner
       }
       const first = getFirstVerseForPage(page);
       if (first.surah === 0) return; // out-of-range answer — nothing true to write
@@ -226,6 +234,9 @@ export default function Mushaf() {
           />
         </View>
       </GestureDetector>
+      {/* Sibling of the chrome, over the pager — NOT inside the reveal: the banner is not
+          chrome, and it sits below the header zone so a revealed header never overlaps it. */}
+      <WelcomeBackBanner dismissed={bannerDismissed} />
       <ReadingChrome reveal={reveal} title={title} mode="mushaf" />
     </View>
   );

@@ -88,7 +88,9 @@
     "unreadableTitle": "No se pudo abrir el texto del Corán",
     "unreadableBody": "El texto incluido falta o no se puede leer en este dispositivo.",
     "noVersesTitle": "No hay versículos",
-    "noVersesBody": "Esta sura no devolvió nada. Inténtalo de nuevo o pasa a la siguiente."
+    "noVersesBody": "Esta sura no devolvió nada. Inténtalo de nuevo o pasa a la siguiente.",
+    "prevSurah": "Anterior: {{name}}",
+    "welcomeBack": "Bienvenido de nuevo. Estabas leyendo {{name}}."
   },
   "mushaf": {
     "juzHizb": "Juz' {{juz}} · Hizb {{hizb}}",

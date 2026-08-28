@@ -90,14 +90,15 @@ describe('every platform renders the identical control set', () => {
 
   it('…and that set is the real inventory, not an empty agreement', () => {
     // Anti-vacuity: three empty sets are also "equal". The inventory must contain the back
-    // control, the mode toggle, and one item per TABS entry.
+    // control, the mode toggle, the title's index entry (story 6-3), and one item per TABS entry.
     const ios = controlSet('ios');
     expect(ios).toContain('chrome-back');
     expect(ios).toContain('chrome-mode-toggle');
+    expect(ios).toContain('chrome-title-entry');
     for (const tab of TABS) {
       expect(ios).toContain(`chrome-tab-${tab.name}`);
     }
-    expect(ios.length).toBeGreaterThanOrEqual(2 + TABS.length);
+    expect(ios.length).toBeGreaterThanOrEqual(3 + TABS.length);
   });
 
   it('the history-conditional back is conditional IDENTICALLY on every platform', () => {
