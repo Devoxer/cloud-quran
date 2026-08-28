@@ -17,7 +17,7 @@ jest.mock('@/lib/useColorScheme', () => ({
 }));
 
 import Colors from '@/constants/Colors';
-import { PALETTES } from '@/constants/palettes';
+import { PALETTE_NAMES, PALETTES } from '@/constants/palettes';
 import { PALETTE_KEY, setPalette, setThemeMode, THEME_MODE_KEY, useTheme } from '@/lib/theme';
 
 // Shares the same in-memory store the module's instance uses (mock keys stores by id).
@@ -107,8 +107,8 @@ describe('lib/theme', () => {
     });
 
     it('setPalette persists to the palette MMKV key', () => {
-      act(() => setPalette('cobalt'));
-      expect(themeStore.getString(PALETTE_KEY)).toBe('cobalt');
+      act(() => setPalette('sepia'));
+      expect(themeStore.getString(PALETTE_KEY)).toBe('sepia');
     });
 
     it('returns the selected palette colors and re-renders reactively', () => {
@@ -116,36 +116,74 @@ describe('lib/theme', () => {
       const { result } = renderHook(() => useTheme());
       expect(result.current.palette).toBe('terracotta');
 
-      act(() => setPalette('forest'));
-      expect(result.current.palette).toBe('forest');
-      expect(result.current.colors.accent.primary).toBe(PALETTES.forest.light.accent.primary);
+      act(() => setPalette('sepia'));
+      expect(result.current.palette).toBe('sepia');
+      expect(result.current.colors.accent.primary).toBe(PALETTES.sepia.light.accent.primary);
       expect(result.current.colors.background.primary).toBe(
-        PALETTES.forest.light.background.primary
+        PALETTES.sepia.light.background.primary
+      );
+      // The parchment is genuinely a different surface, not the default under another name.
+      expect(result.current.colors.background.primary).not.toBe(
+        PALETTES.terracotta.light.background.primary
       );
     });
 
+    /**
+     * ⚠️ THE WHOLE MIGRATION STORY FOR THE FIVE PALETTES STORY 6-5 DELETED, AND THE REASON THERE
+     * IS NO MIGRATION CODE. A device that stored `'cobalt'` before the deletion still has that
+     * string in MMKV; `isPaletteName` validates against `PALETTE_NAMES`, so it fails the guard
+     * exactly like a typo and the reader lands on the default. Deleting the guard, or replacing
+     * it with a cast, turns that stored value into `PALETTES[undefined]` at compose time.
+     */
     it('falls back to terracotta for an unknown stored palette', () => {
       act(() => themeStore.set(PALETTE_KEY, 'neon-banana'));
       const { result } = renderHook(() => useTheme());
       expect(result.current.palette).toBe('terracotta');
     });
 
+    it('falls back to terracotta for a palette this fork DELETED (stored `cobalt`)', () => {
+      act(() => themeStore.set(PALETTE_KEY, 'cobalt'));
+      const { result } = renderHook(() => useTheme());
+      expect(result.current.palette).toBe('terracotta');
+      expect(result.current.colors.background.primary).toBe(
+        PALETTES.terracotta.light.background.primary
+      );
+    });
+
     it('still flips light/dark WITHIN the selected palette', () => {
       mockUseColorScheme.mockReturnValue('dark');
       act(() => {
-        setPalette('plum');
+        setPalette('sepia');
         setThemeMode('dark');
       });
       const { result } = renderHook(() => useTheme());
-      expect(result.current.palette).toBe('plum');
+      expect(result.current.palette).toBe('sepia');
       expect(result.current.colorScheme).toBe('dark');
-      expect(result.current.colors.background.primary).toBe(PALETTES.plum.dark.background.primary);
+      expect(result.current.colors.background.primary).toBe(PALETTES.sepia.dark.background.primary);
+    });
+
+    /**
+     * ⚠️ THIS PINNED THE EXACT OPPOSITE UNTIL THE PICKER'S TWO AXES WERE SEPARATED. Sepia's dark
+     * slice used to BE terracotta's, on the argument that sepia was defined by its light face and
+     * the picker forced `themeMode: 'light'` whenever it was chosen — so sepia × dark was a cell
+     * nobody could navigate to. That coupling is gone: a colour choice may not decide a reader's
+     * scheme, so every palette × scheme is somewhere a reader can actually sit, and two palettes
+     * sharing a slice would mean two swatches that are indistinguishable after dusk.
+     */
+    it('every palette has a dark face of its own, distinct from its light one', () => {
+      const darks = PALETTE_NAMES.map((name) => JSON.stringify(PALETTES[name].dark));
+      expect(new Set(darks).size).toBe(PALETTE_NAMES.length);
+      for (const name of PALETTE_NAMES) {
+        expect(PALETTES[name].dark).not.toEqual(PALETTES[name].light);
+      }
+      // Anti-vacuity: there is more than one palette to tell apart.
+      expect(PALETTE_NAMES.length).toBeGreaterThan(1);
     });
 
     it('keeps the fixed groups identical across palettes (semantic unchanged)', () => {
       const { result } = renderHook(() => useTheme());
       const fixedError = result.current.colors.semantic.error;
-      act(() => setPalette('slate'));
+      act(() => setPalette('sepia'));
       expect(result.current.colors.semantic.error).toBe(fixedError);
     });
   });

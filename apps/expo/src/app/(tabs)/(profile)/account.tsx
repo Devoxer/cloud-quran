@@ -164,6 +164,17 @@ export default function AccountScreen() {
             reading surfaces were REMOVED here — the real doors exist now (the Mushaf and Read
             tabs, and the mode toggle in the reading chrome), which is what those rows were
             waiting for. epic-6-context said 6.1's, then 6.3's; it was this story's. */}
+        {/* story 6-5: FIRST in the group, above Privacy. It is the row a reader looks for
+            most often (the reading look and the Quran text size), and the two below it are
+            things you visit once. */}
+        <SettingsRow
+          icon="color-palette-outline"
+          label={t('profile:rows.appearance')}
+          trailing="chevron"
+          onPress={() => router.push('/appearance')}
+          accessibilityLabel={t('profile:a11y.appearance')}
+          testID="appearance-row"
+        />
         <SettingsRow
           icon="lock-closed-outline"
           label={t('profile:rows.privacy')}

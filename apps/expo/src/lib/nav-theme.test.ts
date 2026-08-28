@@ -60,8 +60,8 @@ describe('createNavigationTheme', () => {
     // ANTI-VACUITY. Every case above would still pass if the function ignored its argument and
     // returned the default palette — the terracotta slice IS what `Colors[scheme]` resolves to, so
     // a hard-coded implementation looks correct on the default and is wrong on the other five.
-    const cobalt = createNavigationTheme(composeColors('cobalt', 'light'), false);
-    expect(cobalt.colors.background).not.toBe(Colors.light.background.primary);
+    const sepia = createNavigationTheme(composeColors('sepia', 'light'), false);
+    expect(sepia.colors.background).not.toBe(Colors.light.background.primary);
   });
 
   it('supplies the whole `fonts` group the navigator contract requires', () => {

@@ -34,10 +34,12 @@ import {
   cancelScheduledDrains,
   clearSyncState,
   currentUserId,
+  DEFAULT_PREFERENCES,
   DRAIN_DEBOUNCE_MS,
   DRAIN_MAX_WAIT_MS,
   drainNow,
   exportMyData,
+  patchPreferences,
   prefetchSyncReads,
   purgeMyData,
   queryClient,
@@ -379,6 +381,117 @@ describe('mutations — local first, queued, debounced', () => {
     expect(mockApi.api.sync.bookmarks[':id'].$delete).toHaveBeenCalledWith({
       param: { id: BOOKMARK.id },
     });
+  });
+});
+
+describe('patchPreferences — the partial writer every settings control uses (story 6-5)', () => {
+  /**
+   * ⚠️ THE WIRE FORMAT HAS NO PARTIAL UPDATE, WHICH IS THE ONLY REASON THIS FUNCTION EXISTS.
+   * `parsePreferences` validates all seven fields on every PUT, so a control that knows about
+   * one of them still has to send a complete body. Every case here is about what the OTHER six
+   * end up being.
+   */
+  it('a first-ever change sends the FULL default body, with the changed field applied', () => {
+    // The fresh-guest row of the matrix: nothing pulled, nothing cached, nothing to merge onto.
+    patchPreferences({ theme: 'sepia' });
+
+    const entry = outbox.list()[0] as Extract<OutboxEntry, { kind: 'preferences' }>;
+    expect(entry.body).toMatchObject({ ...DEFAULT_PREFERENCES, theme: 'sepia' });
+    // ⚠️ NOT `''`. The worker's `shortString(reciterId, 64)` is 1–64 characters, so an empty
+    // string is a 422 the drain drops — silently losing the reader's first theme change.
+    expect(entry.body.reciterId).toBe('alafasy');
+    expect(entry.body.fontSize).toBe(28);
+  });
+
+  it('merges onto the CACHED row — the five fields nobody touched survive', () => {
+    writeCache(ALICE, 'preferences', { userId: ALICE, ...preferences, updatedAt: 1 });
+
+    patchPreferences({ fontSize: 36 });
+
+    const entry = outbox.list()[0] as Extract<OutboxEntry, { kind: 'preferences' }>;
+    expect(entry.body).toMatchObject({
+      theme: 'sepia',
+      fontSize: 36,
+      reciterId: 'alafasy',
+      readingMode: 'reading',
+      translationId: null,
+      speedRate: 1,
+      transliteration: false,
+    });
+  });
+
+  it('never sends the row keys the request body has no place for', () => {
+    // ⚠️ `userId` IS THE ROW'S PRIMARY KEY AND `updatedAt` IS STAMPED BY `setPreferences`.
+    // Spreading the cached row wholesale would send a STALE `updatedAt`, which loses an LWW
+    // comparison it should win — and `parsePreferences` ignores unknown keys, so the defect is
+    // invisible on the wire. Naming the seven fields is what this pins.
+    writeCache(ALICE, 'preferences', { userId: ALICE, ...preferences, updatedAt: 1 });
+
+    patchPreferences({ fontSize: 36 });
+
+    const entry = outbox.list()[0] as Extract<OutboxEntry, { kind: 'preferences' }>;
+    expect(entry.body).not.toHaveProperty('userId');
+    expect(entry.body.updatedAt).toBeGreaterThan(1);
+  });
+
+  it('prefers the QUERY CACHE over MMKV — two changes in a row do not revert each other', () => {
+    // ⚠️ THE `visibleRows` DEFECT, FOR PREFERENCES. MMKV and the query cache are not always in
+    // step, and reading only MMKV takes a base a `setQueryData` in this same tick has already
+    // superseded. Here MMKV says 24 and the query cache says 40; a merge off MMKV would send
+    // the theme change with fontSize 24 and silently undo a size the reader just chose.
+    writeCache(ALICE, 'preferences', { userId: ALICE, ...preferences, fontSize: 24, updatedAt: 1 });
+    queryClient.setQueryData(syncKey('preferences', ALICE), {
+      userId: ALICE,
+      ...preferences,
+      fontSize: 40,
+      updatedAt: 2,
+    });
+
+    patchPreferences({ theme: 'dark' });
+
+    const entry = outbox.list()[0] as Extract<OutboxEntry, { kind: 'preferences' }>;
+    expect(entry.body.fontSize).toBe(40);
+    expect(entry.body.theme).toBe('dark');
+  });
+
+  it('applies to the caches synchronously — the reading screen re-renders on the same tick', () => {
+    patchPreferences({ fontSize: 34 });
+
+    expect(queryClient.getQueryData(syncKey('preferences', ALICE))).toMatchObject({ fontSize: 34 });
+    expect(readCache(ALICE, 'preferences')?.data).toMatchObject({ fontSize: 34 });
+  });
+
+  it('a whole slider drag is ONE queued entry and ONE request', async () => {
+    // The AC: live `onValueChange` per step-2 change is safe because the outbox coalesces LWW and
+    // the debounce restarts per write. Thirteen steps, 20 → 44.
+    jest.useFakeTimers();
+
+    for (let size = 20; size <= 44; size += 2) patchPreferences({ fontSize: size });
+
+    expect(outbox.size()).toBe(1);
+    expect(mockApi.api.sync.preferences.$put).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(DRAIN_DEBOUNCE_MS);
+
+    expect(mockApi.api.sync.preferences.$put).toHaveBeenCalledTimes(1);
+    expect(mockApi.api.sync.preferences.$put).toHaveBeenCalledWith({
+      json: expect.objectContaining({ fontSize: 44 }),
+    });
+  });
+
+  it('the default body is one the WORKER would accept — every field, in range', () => {
+    // Anti-vacuity for the defaults: the cases above assert they are SENT, not that they are
+    // valid. These are the worker's own bars (`apps/worker/src/lib/validate.ts`).
+    expect(['light', 'sepia', 'dark']).toContain(DEFAULT_PREFERENCES.theme);
+    expect(Number.isInteger(DEFAULT_PREFERENCES.fontSize)).toBe(true);
+    expect(DEFAULT_PREFERENCES.fontSize).toBeGreaterThanOrEqual(20);
+    expect(DEFAULT_PREFERENCES.fontSize).toBeLessThanOrEqual(44);
+    expect(DEFAULT_PREFERENCES.reciterId.length).toBeGreaterThanOrEqual(1);
+    expect(DEFAULT_PREFERENCES.reciterId.length).toBeLessThanOrEqual(64);
+    expect(['reading', 'mushaf']).toContain(DEFAULT_PREFERENCES.readingMode);
+    expect(DEFAULT_PREFERENCES.speedRate).toBeGreaterThanOrEqual(0.5);
+    expect(DEFAULT_PREFERENCES.speedRate).toBeLessThanOrEqual(2);
+    expect(typeof DEFAULT_PREFERENCES.transliteration).toBe('boolean');
   });
 });
 

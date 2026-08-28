@@ -58,11 +58,19 @@ export const UTHMANI_FONT_FAMILY: string =
 /**
  * The Arabic reading scale, in points.
  *
- * ⚠️ `min` AND `max` BOUND A READER-CHOSEN SIZE THAT STORY 6.5 OWNS, not this one.
- * `PreferencesBody.fontSize` is already a synced number (`lib/outbox.ts`), so a preference may
- * exist before its picker does — this story READS one if it is there and clamps it, and ships
- * `default` when it is not. The range matches the epic's stated 20–44px Arabic scale (Reading
- * Mode only; mushaf mode's size is fixed by its per-page fonts).
+ * ⚠️ `min` AND `max` BOUND A READER-CHOSEN SIZE, AND THE PICKER SHIPPED IN STORY 6-5:
+ * `app/(tabs)/(profile)/appearance.tsx`, a `step: 2` slider over exactly this range writing
+ * `PreferencesBody.fontSize` through `patchPreferences`. (This docblock used to say 6.5 "owns"
+ * it, in the future tense — it does now.) `default` is what a reader with no stored preference
+ * gets, and `lib/sync.ts`'s `DEFAULT_PREFERENCES.fontSize` carries the same number for the
+ * first-ever wire body.
+ *
+ * The range matches the epic's stated 20–44px Arabic scale, **Reading Mode only** — mushaf
+ * mode's size is fixed by its per-page fonts and nothing on the appearance screen touches it.
+ *
+ * ⚠️ THE WORKER REQUIRES AN INTEGER (`intIn(fontSize, 20, 44)`), and `clampArabicFontSize` below
+ * clamps without ROUNDING. Anything feeding a value toward the wire rounds first; the slider's
+ * `step` is what makes that a formality rather than a live risk.
  */
 export const ARABIC_FONT_SIZE = {
   min: 20,

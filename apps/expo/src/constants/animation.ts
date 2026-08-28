@@ -24,6 +24,16 @@ export const DURATIONS = {
   standard: 200,
   /** Screen-level transitions. 300ms max. */
   screen: 300,
+  /**
+   * The whole-app theme crossfade (story 6-5) — `components/ui/ThemeCrossfade`.
+   *
+   * ⚠️ LONGER THAN `screen`, AND THAT IS THE MEASURED PRE-FORK VALUE (`e8c05e7`
+   * `src/theme/tokens.ts` `animation.theme = 400`), not a drift. A route change moves one
+   * surface; a theme change repaints every pixel at once, and at 300ms the repaint reads as a
+   * flicker rather than a settle. It is the one duration above the 300ms ceiling, which is why
+   * it is named here rather than left inline.
+   */
+  theme: 400,
 } as const;
 
 export type DurationToken = keyof typeof DURATIONS;

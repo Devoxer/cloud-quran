@@ -633,6 +633,66 @@ export function setPreferences(input: Omit<PreferencesInput, 'updatedAt'>): void
   scheduleDrain();
 }
 
+/**
+ * The preferences body a reader who has NEVER written one starts from.
+ *
+ * ⚠️ EVERY FIELD IS REQUIRED BY THE WORKER, WHICH IS THE WHOLE REASON THIS EXISTS. The wire
+ * format has no partial update: `parsePreferences` validates all seven fields on every PUT and
+ * refuses the request if one is missing. So a UI that only knows about `fontSize` still has to
+ * send a complete, valid body — and the first-ever write is the case with nothing to merge onto.
+ *
+ * ⚠️ `reciterId` IS `'alafasy'` AND MUST NOT BE `''`. The worker's `shortString(reciterId, 64)`
+ * accepts 1–64 characters, so an empty string is a 422 the client would retry-then-drop, silently
+ * losing the reader's first theme change. `'alafasy'` is the established default across the
+ * worker suite and `sync.integration.test.ts`.
+ *
+ * ⚠️ `theme: 'light'` rather than an `'auto'` sentinel: the column is one of three literals and
+ * `auto` is not one of them (it is inherently per-device — see the picker, which mirrors the
+ * RESOLVED scheme). `fontSize: 28` is `ARABIC_FONT_SIZE.default`, duplicated here rather than
+ * imported because `constants/` may not be reached from a module this file's layer rules pin —
+ * they are the same number and `sync.test.ts` asserts it.
+ */
+export const DEFAULT_PREFERENCES: Omit<PreferencesInput, 'updatedAt'> = {
+  theme: 'light',
+  fontSize: 28,
+  reciterId: 'alafasy',
+  readingMode: 'mushaf',
+  translationId: null,
+  speedRate: 1,
+  transliteration: false,
+};
+
+/**
+ * Change SOME preferences without knowing the rest — the writer every settings control uses.
+ *
+ * ⚠️ THE MERGE BASE IS THE QUERY CACHE FIRST, MMKV SECOND, DEFAULTS LAST — the same doctrine
+ * `visibleRows` was written for, and for the same defect. Reading only MMKV would take a base
+ * that a `setQueryData` in the current tick has already superseded, so two changes in quick
+ * succession (drag the font slider, then tap Sepia) would send the second one with the FIRST
+ * one's value still in it — silently reverting a change the reader watched happen.
+ *
+ * ⚠️ THE SERVER ROW CARRIES FIELDS THE REQUEST BODY MUST NOT: `userId` is the row's primary key
+ * and `updatedAt` is stamped by `setPreferences` on every write. Spreading the row wholesale
+ * would send both, and `parsePreferences` ignores unknown keys — so the bug would be invisible
+ * on the wire and only show up as a stale `updatedAt` losing an LWW comparison it should win.
+ * The seven fields are therefore named one at a time rather than spread.
+ */
+export function patchPreferences(partial: Partial<Omit<PreferencesInput, 'updatedAt'>>): void {
+  const current = visibleRows<Preferences>('preferences', currentUserId());
+  const base: Omit<PreferencesInput, 'updatedAt'> = current
+    ? {
+        theme: current.theme as PreferencesInput['theme'],
+        fontSize: current.fontSize,
+        reciterId: current.reciterId,
+        readingMode: current.readingMode as PreferencesInput['readingMode'],
+        translationId: current.translationId,
+        speedRate: current.speedRate,
+        transliteration: current.transliteration,
+      }
+    : DEFAULT_PREFERENCES;
+  setPreferences({ ...base, ...partial });
+}
+
 export function setAudioPosition(input: Omit<AudioPositionInput, 'updatedAt'>): void {
   const body = { ...input, updatedAt: Date.now() };
   applyLocal('audio-position', body);

@@ -39,6 +39,7 @@ const TITLE_KEYS = {
   data: 'titles.data',
   feedback: 'titles.feedback',
   'privacy-settings': 'titles.privacy',
+  appearance: 'titles.appearance',
 } as const;
 type TitleKey = (typeof TITLE_KEYS)[keyof typeof TITLE_KEYS];
 

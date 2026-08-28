@@ -81,6 +81,8 @@ export { SpeedSelector } from './SpeedSelector';
 // ── Story 25.5: shared summary-strip cell (Profile hero + Quizzes hub) ──
 export { StatStripCell, type StatStripCellProps } from './StatStripCell';
 export { Switch, type SwitchProps } from './Switch';
+// ── Story 6-5: the whole-app opacity dip on a theme change ──
+export { THEME_CROSSFADE_FLOOR, ThemeCrossfade, type ThemeCrossfadeProps } from './ThemeCrossfade';
 export * from './Themed';
 // ── Story 18.8: community datetime-picker drop-in (configurable reminder time) ──
 export { TimePicker, type TimePickerProps } from './TimePicker';

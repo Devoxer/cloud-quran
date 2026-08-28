@@ -12,12 +12,26 @@
   },
   "appearance": {
     "label": "Appearance",
-    "light": "Light",
-    "dark": "Dark",
-    "auto": "Auto"
+    "paletteGroup": "READING THEME",
+    "paletteFootnote": "Applies everywhere. Every theme works in light and dark.",
+    "modeGroup": "LIGHT & DARK",
+    "modeFootnote": "System follows your device's light or dark setting.",
+    "mode": {
+      "auto": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "fontSizeGroup": "QURAN TEXT SIZE",
+    "fontSizeLabel": "Size",
+    "fontSizeFootnote": "Reading mode only. Mushaf pages keep their printed size."
   },
   "palette": {
-    "label": "Color"
+    "terracotta": "Warm",
+    "sepia": "Parchment",
+    "linen": "Paper",
+    "contrast": "High contrast",
+    "olive": "Green",
+    "midnight": "Night"
   },
   "groups": {
     "preferences": "PREFERENCES",
@@ -39,7 +53,8 @@
     "contactUs": "Contact Us",
     "version": "Version",
     "signIn": "Sign In",
-    "yourData": "Your Data"
+    "yourData": "Your Data",
+    "appearance": "Appearance"
   },
   "signOutDialog": {
     "title": "Sign Out",
@@ -106,21 +121,16 @@
       "refundPolicyHint": "Opens refund policy in your browser",
       "contactUsHint": "Opens contact page in your browser"
     },
-    "palette": {
-      "terracotta": "Terracotta",
-      "cobalt": "Cobalt",
-      "forest": "Forest",
-      "plum": "Plum",
-      "honey": "Honey",
-      "slate": "Slate"
-    },
     "language": "Language",
     "signIn": "Sign in",
     "copyEmail": "Copy your account email address",
     "yourData": "Your data",
     "exportData": "Export my data",
     "purgeData": "Delete my synced data",
-    "syncToggle": "Sync to my account"
+    "syncToggle": "Sync to my account",
+    "appearance": "Appearance",
+    "readingTheme": "Reading theme",
+    "fontSize": "Quran text size"
   },
   "language": {
     "footnote": "Sets menus and narration on this device. Downloads keep the language they were made in.",

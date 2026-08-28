@@ -1,5 +1,5 @@
 /**
- * Curated color palettes (Story 23.8) — the user-selectable color identity.
+ * Curated color palettes — the reading look, and the whole of it (story 23.8, reshaped by 6-5).
  *
  * A `src/constants/` module is a sanctioned `lint:style` token home, so the hex/rgba
  * literals below are allowed here (and ONLY here for palette data — `lib/` is not a
@@ -13,35 +13,51 @@
  * Palette-VARYING tokens (this file): background · text · accent · border · separator.
  * Brand-FIXED tokens (Colors.ts `FIXED_COLORS`): semantic · highlight · overlay · shadow.
  *
+ * ── ⚠️ SIX PALETTES, AND THE SET HAS BEEN CUT TO TWO AND BACK ────────────────────────────────
+ *
+ * Six palettes were inherited from wisdom-fruits (cobalt, forest, plum, honey, slate beside
+ * terracotta) and story 6-5 deleted five of them, because **no picker for them ever shipped in
+ * this fork** — 23.8's UI died with the wisdom-fruits profile screen and `setPalette` had zero
+ * callers — and because the product was stated then as THREE reading themes. The owner reopened
+ * that: the model is wisdom-fruits' again, a swatch picker over six palettes PLUS a separate
+ * light/dark control. The six here are authored for a Quran reader, not restored by name.
+ *
+ * ⚠️ THE MIGRATION FOR A STORED NAME THIS FILE NO LONGER EXPORTS IS THAT THERE IS NONE, AND THAT
+ * IS DELIBERATE. `lib/theme.ts`'s `isPaletteName` guard validates the MMKV value against
+ * `PALETTE_NAMES` and falls back to `terracotta`; a retired name simply fails the guard. Do not
+ * add a rename table — the guard IS the table, and `theme.test.ts` pins it.
+ *
  * `terracotta` is the default and reproduces today's "Cozy Warmth" look BYTE-FOR-BYTE
  * from the live `Colors.ts` values (a clean no-op cutover for existing users) — the two
  * genuinely-new sub-tokens `accent.faint` / `accent.soft` (the tinted-badge pair) are
- * the only values harvested from the `design-artifacts/tokens.ts` mockup. The other five
- * palettes derive their full slice from each preset's `tokens.ts` anchors, matching the
- * production-terracotta intra-ramp relationships, and EVERY palette × {light,dark} is
- * contrast-checked by `palettes.contrast.test.ts` (the accessibility gate — tune the hue,
- * never lower the bar). A few non-default accents were nudged lighter/darker from their
- * raw mockup anchor to clear the WCAG `onAccent`-on-accent bar. Their BACKGROUND ramps are
- * deliberately MUTED (chroma reduced to ~55%) so surfaces stay close to neutral with only a
- * whisper of hue — terracotta keeps its byte-identical warm default.
+ * the only values harvested from the `design-artifacts/tokens.ts` mockup. Its LIGHT slice is
+ * the epic's warm white and its DARK slice is the warm charcoal.
  *
- * 23.17 heads-up: a future per-mascot `illustration` group may join the palette-varying
- * set — `PaletteSlice` is kept small + flat so adding a sibling group later is a localized,
- * one-value-per-palette edit, not a restructure.
+ * `sepia` is the parchment reading look, and it is a PALETTE rather than a third scheme —
+ * `ColorScheme` stays exactly `'light' | 'dark'`. Its light slice is adapted from the pre-fork
+ * theme (`e8c05e7` `src/theme/tokens.ts`: surfaces `#F5E6D3`/`#EBD9C4`, text `#2C1810`, border
+ * `#D4C4B0`); its DARK slice is its own low-glare parchment-at-night, because the picker no
+ * longer forces a scheme and every palette must therefore work in both.
+ *
+ * EVERY palette × {light,dark} is contrast-checked by `palettes.contrast.test.ts` (the
+ * accessibility gate — tune the hue, never lower the bar), which holds every non-terracotta
+ * palette to the stricter 4.5 `onAccent` bar. That is what moved sepia's `accent.primary` off
+ * terracotta's `#C65D3B` (4.17 white-on-accent, and 2.59 against the tab-bar selection
+ * indicator) onto the deeper `#A8472A` — same hue family, 5.83 and 3.50.
  */
 
 import type { ColorScheme } from './Colors';
 
-export type PaletteName = 'terracotta' | 'cobalt' | 'forest' | 'plum' | 'honey' | 'slate';
+export type PaletteName = 'terracotta' | 'sepia' | 'linen' | 'contrast' | 'olive' | 'midnight';
 
 /** Display order (terracotta = default, first). */
 export const PALETTE_NAMES: readonly PaletteName[] = [
   'terracotta',
-  'cobalt',
-  'forest',
-  'plum',
-  'honey',
-  'slate',
+  'sepia',
+  'linen',
+  'contrast',
+  'olive',
+  'midnight',
 ];
 
 /**
@@ -58,10 +74,34 @@ export interface PaletteSlice {
   separator: string;
 }
 
+/**
+ * Terracotta's dark slice — the app's original warm charcoal, byte-for-byte. Held out as a named
+ * const because it is the reference dark reading look, and retuning it changes what every
+ * existing reader already sees after dusk.
+ *
+ * ⚠️ IT USED TO BE SHARED WITH SEPIA, and the reason it no longer is matters. The first picker
+ * forced `themeMode: 'light'` whenever sepia was chosen, so sepia × dark was a cell that existed
+ * only because `PALETTES` is `Record<PaletteName, Record<ColorScheme, PaletteSlice>>` and the
+ * contrast gate iterates every one. That coupling is gone — the appearance screen's two axes are
+ * independent, and a colour choice may not decide a reader's scheme — so every palette needs a
+ * dark face somebody can actually sit in, and sepia has its own.
+ */
+const WARM_CHARCOAL_DARK: PaletteSlice = {
+  background: { primary: '#1A1612', secondary: '#2A2520', tertiary: '#3A352F' },
+  text: { primary: '#F5EFE9', secondary: '#C4BCB3', tertiary: '#8C8279', onAccent: '#1A1612' },
+  accent: {
+    // The LIGHTENED #E8A87C (base #C65D3B is secondary) — do not invert it.
+    primary: '#E8A87C',
+    secondary: '#C65D3B',
+    faint: 'rgba(198, 93, 59, 0.16)',
+    soft: '#E3906E',
+    strong: '#AE4E30',
+  },
+  border: '#3A342E',
+  separator: '#322D28',
+};
+
 export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = {
-  // ── Terracotta (default) — existing keys BYTE-IDENTICAL to live Colors.ts;
-  //    accent.faint/soft harvested from tokens.ts. Dark accent.primary is the
-  //    LIGHTENED #E8A87C (base #C65D3B is secondary) — do not invert it.
   terracotta: {
     light: {
       background: { primary: '#FFFBF7', secondary: '#F5EFE9', tertiary: '#EBE3DA' },
@@ -76,172 +116,150 @@ export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = 
       border: '#E5DED6',
       separator: '#ECE5DD',
     },
-    dark: {
-      background: { primary: '#1A1612', secondary: '#2A2520', tertiary: '#3A352F' },
-      text: { primary: '#F5EFE9', secondary: '#C4BCB3', tertiary: '#8C8279', onAccent: '#1A1612' },
+    dark: WARM_CHARCOAL_DARK,
+  },
+  sepia: {
+    light: {
+      background: { primary: '#F5E6D3', secondary: '#EBD9C4', tertiary: '#E0CBB2' },
+      text: { primary: '#2C1810', secondary: '#5C3D2E', tertiary: '#7A5C4A', onAccent: '#FFFFFF' },
       accent: {
-        primary: '#E8A87C',
-        secondary: '#C65D3B',
-        faint: 'rgba(198, 93, 59, 0.16)',
-        soft: '#E3906E',
-        strong: '#AE4E30',
+        primary: '#A8472A',
+        secondary: '#C98A63',
+        faint: 'rgba(168, 71, 42, 0.12)',
+        soft: '#9C4123',
+        strong: '#8C3D20',
       },
-      border: '#3A342E',
-      separator: '#322D28',
+      border: '#D4C4B0',
+      separator: '#DFD0BC',
+    },
+    dark: {
+      background: { primary: '#211A13', secondary: '#302619', tertiary: '#41341F' },
+      text: { primary: '#F2E3CE', secondary: '#C9B79C', tertiary: '#9A8A72', onAccent: '#211A13' },
+      accent: {
+        primary: '#E0A96D',
+        secondary: '#A8472A',
+        faint: 'rgba(224, 169, 109, 0.16)',
+        soft: '#D49A5C',
+        strong: '#B07F45',
+      },
+      border: '#40331F',
+      separator: '#382C1B',
     },
   },
-
-  // ── Cobalt — cool blue. Dark accent nudged lighter (#4E80E0) so the dark
-  //    onAccent clears the WCAG button-label bar.
-  cobalt: {
+  // Second paper flavour: cool grey, no warmth. For readers who find sepia yellow.
+  linen: {
     light: {
-      background: { primary: '#F7F8FB', secondary: '#EAEDF2', tertiary: '#E0E3EA' },
-      text: { primary: '#1A2230', secondary: '#485466', tertiary: '#7B8696', onAccent: '#FFFFFF' },
+      background: { primary: '#F7F5F0', secondary: '#EDEAE3', tertiary: '#E0DCD3' },
+      text: { primary: '#1C1B18', secondary: '#4F4C45', tertiary: '#77736A', onAccent: '#FFFFFF' },
       accent: {
-        primary: '#3361C8',
-        secondary: '#6E97E6',
-        faint: 'rgba(51, 97, 200, 0.12)',
-        soft: '#3F73D9',
-        strong: '#254DA9',
+        primary: '#5C6B52',
+        secondary: '#8B9A80',
+        faint: 'rgba(92, 107, 82, 0.12)',
+        soft: '#4E5C45',
+        strong: '#42503A',
       },
-      border: '#DCE3F0',
-      separator: '#E6EBF6',
+      border: '#DAD5CA',
+      separator: '#E4DFD6',
     },
     dark: {
-      background: { primary: '#141518', secondary: '#25282E', tertiary: '#32353C' },
-      text: { primary: '#EAECF1', secondary: '#B3BAC6', tertiary: '#828A98', onAccent: '#0B1220' },
+      background: { primary: '#17181A', secondary: '#232527', tertiary: '#313436' },
+      text: { primary: '#EDEEF0', secondary: '#B5B8BC', tertiary: '#83878C', onAccent: '#17181A' },
       accent: {
-        primary: '#4E80E0',
-        secondary: '#3F73D9',
-        faint: 'rgba(78, 128, 224, 0.16)',
-        soft: '#6E97E6',
-        strong: '#284D93',
+        primary: '#A3B899',
+        secondary: '#5C6B52',
+        faint: 'rgba(163, 184, 153, 0.16)',
+        soft: '#93A889',
+        strong: '#7A8F71',
       },
-      border: '#262A33',
-      separator: '#20242C',
+      border: '#32353A',
+      separator: '#2A2D31',
     },
   },
-
-  // ── Forest — muted green. Light accent nudged darker (#2C8056) for the white-on-accent bar.
-  forest: {
+  // Maximum legibility — the accessibility choice, not a mood.
+  contrast: {
     light: {
-      background: { primary: '#F7F9F7', secondary: '#E8ECE8', tertiary: '#DDE3DD' },
-      text: { primary: '#18241C', secondary: '#4B5A4F', tertiary: '#7C8B80', onAccent: '#FFFFFF' },
+      background: { primary: '#FFFFFF', secondary: '#F2F2F2', tertiary: '#E2E2E2' },
+      text: { primary: '#000000', secondary: '#3A3A3A', tertiary: '#5E5E5E', onAccent: '#FFFFFF' },
       accent: {
-        primary: '#2C8056',
-        secondary: '#6FBE92',
-        faint: 'rgba(44, 128, 86, 0.12)',
-        soft: '#3E9B6B',
-        strong: '#1D613F',
+        primary: '#00457A',
+        secondary: '#3D7BB0',
+        faint: 'rgba(0, 69, 122, 0.12)',
+        soft: '#003A67',
+        strong: '#002E52',
       },
-      border: '#DCE7DD',
-      separator: '#E5EDE6',
+      border: '#CFCFCF',
+      separator: '#DEDEDE',
     },
     dark: {
-      background: { primary: '#121512', secondary: '#232823', tertiary: '#2E352F' },
-      text: { primary: '#E9EEE6', secondary: '#B4BDB2', tertiary: '#828C82', onAccent: '#0C1610' },
+      background: { primary: '#000000', secondary: '#131313', tertiary: '#242424' },
+      text: { primary: '#FFFFFF', secondary: '#D2D2D2', tertiary: '#A6A6A6', onAccent: '#000000' },
       accent: {
-        primary: '#3E9B6B',
-        secondary: '#2F895A',
-        faint: 'rgba(62, 155, 107, 0.16)',
-        soft: '#6FBE92',
-        strong: '#2C5B43',
+        primary: '#8FC4F5',
+        secondary: '#00457A',
+        faint: 'rgba(143, 196, 245, 0.16)',
+        soft: '#7BB6EE',
+        strong: '#5E9AD4',
       },
-      border: '#262C24',
-      separator: '#20251E',
+      border: '#2B2B2B',
+      separator: '#1E1E1E',
     },
   },
-
-  // ── Plum — purple. Dark accent nudged lighter (#A468CE) for the dark onAccent bar.
-  plum: {
+  // Mushaf green — the colour of a bound Quran.
+  olive: {
     light: {
-      background: { primary: '#FBF9FC', secondary: '#EEE9F0', tertiary: '#E4DEE8' },
-      text: { primary: '#271E2E', secondary: '#5A4E60', tertiary: '#897E90', onAccent: '#FFFFFF' },
+      background: { primary: '#FBFAF4', secondary: '#F1F0E6', tertiary: '#E4E3D5' },
+      text: { primary: '#181A14', secondary: '#4B4F42', tertiary: '#74796A', onAccent: '#FFFFFF' },
       accent: {
-        primary: '#8A4BB5',
-        secondary: '#B98ADB',
-        faint: 'rgba(138, 75, 181, 0.12)',
-        soft: '#9A5BC5',
-        strong: '#72389A',
+        primary: '#3F6B43',
+        secondary: '#7BA37F',
+        faint: 'rgba(63, 107, 67, 0.12)',
+        soft: '#365C39',
+        strong: '#2C4C2F',
       },
-      border: '#E7DCEE',
-      separator: '#EFE6F4',
+      border: '#DCDBCB',
+      separator: '#E7E6D8',
     },
     dark: {
-      background: { primary: '#161418', secondary: '#27242D', tertiary: '#332E39' },
-      text: { primary: '#EEE9F2', secondary: '#BDB4C4', tertiary: '#8C8294', onAccent: '#150E1A' },
+      background: { primary: '#12160F', secondary: '#1E2419', tertiary: '#2C3426' },
+      text: { primary: '#E9EFE4', secondary: '#B2BCA9', tertiary: '#7F8A78', onAccent: '#12160F' },
       accent: {
-        primary: '#A468CE',
-        secondary: '#9A5BC5',
-        faint: 'rgba(164, 104, 206, 0.16)',
-        soft: '#B98ADB',
-        strong: '#673888',
+        primary: '#8FC593',
+        secondary: '#3F6B43',
+        faint: 'rgba(143, 197, 147, 0.16)',
+        soft: '#7DB682',
+        strong: '#649C69',
       },
-      border: '#2A2233',
-      separator: '#241C2C',
+      border: '#2D3527',
+      separator: '#252C20',
     },
   },
-
-  // ── Honey — warm gold. Light accent nudged much darker (#8C6A1E) because
-  //    white-on-bright-gold is intrinsically low-contrast; light `soft` is a deep
-  //    gold so the tinted-badge glyph stays legible on the pale faint fill.
-  honey: {
+  // Night reading — cool and low-glare.
+  midnight: {
     light: {
-      background: { primary: '#FBFAF6', secondary: '#ECE7DD', tertiary: '#E1DCCF' },
-      text: { primary: '#2A2415', secondary: '#5E5236', tertiary: '#8B8164', onAccent: '#FFFFFF' },
+      background: { primary: '#F7F8FB', secondary: '#EDEFF4', tertiary: '#DFE2EA' },
+      text: { primary: '#14171D', secondary: '#474C57', tertiary: '#6F7683', onAccent: '#FFFFFF' },
       accent: {
-        primary: '#8C6A1E',
-        secondary: '#C99A3B',
-        faint: 'rgba(140, 106, 30, 0.12)',
-        soft: '#946F1F',
-        strong: '#694F13',
+        primary: '#3B5A99',
+        secondary: '#7D95C4',
+        faint: 'rgba(59, 90, 153, 0.12)',
+        soft: '#334E86',
+        strong: '#2A4173',
       },
-      border: '#ECE1C9',
-      separator: '#F3EAD6',
+      border: '#D6DAE3',
+      separator: '#E4E7EE',
     },
     dark: {
-      background: { primary: '#161511', secondary: '#26231D', tertiary: '#332F27' },
-      text: { primary: '#F2EDE2', secondary: '#C4BBA6', tertiary: '#8C846E', onAccent: '#1A150A' },
+      background: { primary: '#0E1219', secondary: '#171D27', tertiary: '#242C39' },
+      text: { primary: '#E6ECF5', secondary: '#AEB8C7', tertiary: '#7C8697', onAccent: '#0E1219' },
       accent: {
-        primary: '#C99A3B',
-        secondary: '#B0852A',
-        faint: 'rgba(201, 154, 59, 0.16)',
-        soft: '#E0BD6E',
-        strong: '#765D2C',
+        primary: '#94B4EC',
+        secondary: '#3B5A99',
+        faint: 'rgba(148, 180, 236, 0.16)',
+        soft: '#83A6E4',
+        strong: '#6A8DCB',
       },
-      border: '#2C2618',
-      separator: '#261F13',
-    },
-  },
-
-  // ── Slate — desaturated blue-gray. Dark accent nudged lighter (#6E889C) for the
-  //    dark onAccent bar.
-  slate: {
-    light: {
-      background: { primary: '#F7F8F9', secondary: '#E7EAED', tertiary: '#DDE0E4' },
-      text: { primary: '#1E262C', secondary: '#4D5860', tertiary: '#7D868C', onAccent: '#FFFFFF' },
-      accent: {
-        primary: '#4C6376',
-        secondary: '#8AA0B2',
-        faint: 'rgba(76, 99, 118, 0.12)',
-        soft: '#5B7488',
-        strong: '#364C5E',
-      },
-      border: '#DCE2E8',
-      separator: '#E6EBF0',
-    },
-    dark: {
-      background: { primary: '#131416', secondary: '#24272C', tertiary: '#303339' },
-      text: { primary: '#E8ECEF', secondary: '#B2BAC2', tertiary: '#828A92', onAccent: '#0E1216' },
-      accent: {
-        primary: '#6E889C',
-        secondary: '#5B7488',
-        faint: 'rgba(110, 136, 156, 0.16)',
-        soft: '#8AA0B2',
-        strong: '#46545F',
-      },
-      border: '#262C33',
-      separator: '#20252C',
+      border: '#252D3A',
+      separator: '#1D2430',
     },
   },
 };

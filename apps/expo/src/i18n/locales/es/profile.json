@@ -12,12 +12,26 @@
   },
   "appearance": {
     "label": "Apariencia",
-    "light": "Claro",
-    "dark": "Oscuro",
-    "auto": "Auto"
+    "paletteGroup": "TEMA DE LECTURA",
+    "paletteFootnote": "Se aplica en toda la app. Cada tema funciona en claro y oscuro.",
+    "modeGroup": "CLARO Y OSCURO",
+    "modeFootnote": "Sistema sigue el ajuste claro u oscuro de tu dispositivo.",
+    "mode": {
+      "auto": "Sistema",
+      "light": "Claro",
+      "dark": "Oscuro"
+    },
+    "fontSizeGroup": "TAMAÑO DEL TEXTO CORÁNICO",
+    "fontSizeLabel": "Tamaño",
+    "fontSizeFootnote": "Solo modo lectura. El mushaf conserva su tamaño impreso."
   },
   "palette": {
-    "label": "Color"
+    "terracotta": "Cálido",
+    "sepia": "Pergamino",
+    "linen": "Papel",
+    "contrast": "Alto contraste",
+    "olive": "Verde",
+    "midnight": "Noche"
   },
   "groups": {
     "preferences": "PREFERENCIAS",
@@ -39,7 +53,8 @@
     "contactUs": "Contáctanos",
     "version": "Versión",
     "signIn": "Iniciar sesión",
-    "yourData": "Tus datos"
+    "yourData": "Tus datos",
+    "appearance": "Apariencia"
   },
   "signOutDialog": {
     "title": "Cerrar sesión",
@@ -106,21 +121,16 @@
       "refundPolicyHint": "Abre la política de reembolsos en tu navegador",
       "contactUsHint": "Abre la página de contacto en tu navegador"
     },
-    "palette": {
-      "terracotta": "Terracota",
-      "cobalt": "Cobalto",
-      "forest": "Bosque",
-      "plum": "Ciruela",
-      "honey": "Miel",
-      "slate": "Pizarra"
-    },
     "language": "Idioma",
     "signIn": "Iniciar sesión",
     "copyEmail": "Copiar la dirección de correo de tu cuenta",
     "yourData": "Tus datos",
     "exportData": "Exportar mis datos",
     "purgeData": "Borrar mis datos sincronizados",
-    "syncToggle": "Sincronizar con mi cuenta"
+    "syncToggle": "Sincronizar con mi cuenta",
+    "appearance": "Apariencia",
+    "readingTheme": "Tema de lectura",
+    "fontSize": "Tamaño del texto coránico"
   },
   "language": {
     "footnote": "Define menús y narración en este dispositivo. Las descargas mantienen su idioma original.",

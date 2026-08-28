@@ -563,13 +563,21 @@ jest.mock('@/lib/haptics', () => ({
 // @/lib/theme — provider-free theme hook (Story 16.6) used by components for colors.
 // Mocked globally so most component tests get a fixed light theme without touching MMKV.
 // Tests that exercise the real hook (scheme resolution, backfill) jest.unmock('@/lib/theme').
+// ⚠️ story 6-5: `palette` / `setPalette` / `separator` JOINED THE SHAPE. The mock predates the
+// palette axis, so a component reading `useTheme().palette` got `undefined` and one calling
+// `setPalette` threw — which is every consumer of the appearance picker. Extended minimally
+// (the module-level `setPalette` export too, since `lib/theme.ts` exports both spellings);
+// unrelated dead keys below are left alone deliberately, they are not this story's to audit.
 jest.mock('@/lib/theme', () => ({
   setThemeMode: jest.fn(),
+  setPalette: jest.fn(),
   useTheme: jest.fn(() => ({
     colorScheme: 'light',
     isDark: false,
     themeMode: 'auto',
     setThemeMode: jest.fn(),
+    palette: 'terracotta',
+    setPalette: jest.fn(),
     colors: {
       background: { primary: '#FFFBF7', secondary: '#F5EFE9', tertiary: '#EBE3DA' },
       text: { primary: '#1A1612', secondary: '#5C534A', tertiary: '#8C8279', onAccent: '#FFFFFF' },
@@ -599,6 +607,7 @@ jest.mock('@/lib/theme', () => ({
         infoBackground: '#E3F2FD',
       },
       border: '#E5DED6',
+      separator: '#ECE5DD',
       shadow: '#000000',
       overlay: {
         dark: 'rgba(26, 22, 18, 0.5)',

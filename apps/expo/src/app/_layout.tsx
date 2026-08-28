@@ -10,6 +10,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import 'react-native-reanimated';
 
 import { AlertHost } from '@/components/ui/AlertHost';
+import { ThemeCrossfade } from '@/components/ui/ThemeCrossfade';
 import { UTHMANI_WEB_FONT } from '@/constants/arabic';
 import { initI18n } from '@/i18n';
 import { ensureAnonymousSession, useSession } from '@/lib/auth';
@@ -169,23 +170,33 @@ function RootLayout() {
       <GestureHandlerRootView style={styles.gestureRoot}>
         {/* Mirrors the resolved session id into the query/cache keys. Renders null. */}
         <SyncIdentityBridge />
-        {/* KeyboardProvider (react-native-keyboard-controller) — outermost
+        {/* ⚠️ story 6-5: THE THEME CROSSFADE, AND IT IS NOT A BOOT GATE. It mounts at opacity 1
+            and animates only on a SUBSEQUENT `(palette, colorScheme)` change, so the first frame
+            of a cold launch is never dimmed and nothing here waits on anything — see
+            `ThemeCrossfade`'s docblock for the `useRef` seeding that makes the first effect run a
+            no-op. It wraps the app CONTENT (every routed surface, both reading modes and the
+            settings shell) rather than living inside one screen, because a theme change repaints
+            all of them at once and a per-screen fade would desynchronise. It sits directly under
+            the gesture root, which is a `flex: 1` host, so the `flex: 1` Animated.View fills. */}
+        <ThemeCrossfade>
+          {/* KeyboardProvider (react-native-keyboard-controller) — outermost
           app-content provider so KeyboardAwareScrollView works on every
           routed form. Sits just inside the gesture root, above the
           gesture-driven BottomSheets. Story 17.6. */}
-        <KeyboardProvider>
-          {/* Theme is a provider-free hook (@/lib/theme) — no <ThemeProvider> here.
-              story 5-2: <AnalyticsProvider> wrapped this subtree. It was a pass-through with
-              zero useAnalytics() consumers, and Cloud Quran ships zero third-party analytics
-              (PRD NFR8), so it was removed rather than emptied. */}
-          <RootLayoutNav />
-          {/* story 5-1: the audio engine host mounted here in the source app. Cloud Quran's
-              engine arrives in epic 7 (surah tracks + per-ayah offsets) and re-mounts as a
-              null-rendering sibling in this exact position — NOT wrapped around the tree, so
-              its position ticks stay off the nav graph. */}
-          {/* Single mounted host for the imperative useAlert() native alert. */}
-          <AlertHost />
-        </KeyboardProvider>
+          <KeyboardProvider>
+            {/* Theme is a provider-free hook (@/lib/theme) — no <ThemeProvider> here.
+                story 5-2: <AnalyticsProvider> wrapped this subtree. It was a pass-through with
+                zero useAnalytics() consumers, and Cloud Quran ships zero third-party analytics
+                (PRD NFR8), so it was removed rather than emptied. */}
+            <RootLayoutNav />
+            {/* story 5-1: the audio engine host mounted here in the source app. Cloud Quran's
+                engine arrives in epic 7 (surah tracks + per-ayah offsets) and re-mounts as a
+                null-rendering sibling in this exact position — NOT wrapped around the tree, so
+                its position ticks stay off the nav graph. */}
+            {/* Single mounted host for the imperative useAlert() native alert. */}
+            <AlertHost />
+          </KeyboardProvider>
+        </ThemeCrossfade>
       </GestureHandlerRootView>
     </QueryClientProvider>
   );

@@ -12,12 +12,26 @@
   },
   "appearance": {
     "label": "Apparence",
-    "light": "Clair",
-    "dark": "Sombre",
-    "auto": "Auto"
+    "paletteGroup": "THÈME DE LECTURE",
+    "paletteFootnote": "S'applique partout. Chaque thème marche en clair et en sombre.",
+    "modeGroup": "CLAIR ET SOMBRE",
+    "modeFootnote": "Système suit le réglage clair ou sombre de votre appareil.",
+    "mode": {
+      "auto": "Système",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "fontSizeGroup": "TAILLE DU TEXTE CORANIQUE",
+    "fontSizeLabel": "Taille",
+    "fontSizeFootnote": "Mode lecture seulement. Le mushaf garde sa taille imprimée."
   },
   "palette": {
-    "label": "Couleur"
+    "terracotta": "Chaleureux",
+    "sepia": "Parchemin",
+    "linen": "Papier",
+    "contrast": "Contraste élevé",
+    "olive": "Vert",
+    "midnight": "Nuit"
   },
   "groups": {
     "preferences": "PRÉFÉRENCES",
@@ -39,7 +53,8 @@
     "contactUs": "Contactez-nous",
     "version": "Version",
     "signIn": "Se connecter",
-    "yourData": "Vos données"
+    "yourData": "Vos données",
+    "appearance": "Apparence"
   },
   "signOutDialog": {
     "title": "Se déconnecter",
@@ -106,21 +121,16 @@
       "refundPolicyHint": "Ouvre la politique de remboursement dans votre navigateur",
       "contactUsHint": "Ouvre la page de contact dans votre navigateur"
     },
-    "palette": {
-      "terracotta": "Terre cuite",
-      "cobalt": "Cobalt",
-      "forest": "Forêt",
-      "plum": "Prune",
-      "honey": "Miel",
-      "slate": "Ardoise"
-    },
     "language": "Langue",
     "signIn": "Se connecter",
     "copyEmail": "Copier l'adresse e-mail de votre compte",
     "yourData": "Vos données",
     "exportData": "Exporter mes données",
     "purgeData": "Supprimer mes données synchronisées",
-    "syncToggle": "Synchroniser avec mon compte"
+    "syncToggle": "Synchroniser avec mon compte",
+    "appearance": "Apparence",
+    "readingTheme": "Thème de lecture",
+    "fontSize": "Taille du texte coranique"
   },
   "language": {
     "footnote": "Définit menus et narration sur cet appareil. Les téléchargements gardent leur langue d'origine.",
