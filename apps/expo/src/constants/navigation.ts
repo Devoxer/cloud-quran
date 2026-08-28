@@ -49,7 +49,7 @@ export const CHROME_BAR_HEIGHT = 56;
 // compile error rather than a build that silently produces no bundle (`expo export` emits
 // NOTHING for a tab whose segment does not exist — the failure commit 38db2cb repaired).
 // Widen it when a route lands; never loosen it to `string`.
-export type TabRoute = '/' | '/read' | '/account';
+export type TabRoute = '/' | '/read' | '/bookmarks' | '/account';
 
 export interface TabConfig {
   /** The route segment under `(tabs)/` — a file base name or a group directory. Asserted
@@ -62,7 +62,7 @@ export interface TabConfig {
    * `t(tab.titleKey)` in `AppTabBar`. A key, not display text — this module evaluates before
    * i18n, so it can't call `t()` itself.
    */
-  titleKey: `tabs.${'mushaf' | 'read' | 'settings'}`;
+  titleKey: `tabs.${'mushaf' | 'read' | 'bookmarks' | 'settings'}`;
   /** Semantic icon name — `components/ui/icon-registry` resolves it per platform (SF Symbol on
    * iOS, Ionicons on Android + web), and tsc rejects a name that exists on neither. */
   icon: IconName;
@@ -87,6 +87,15 @@ const READ_TAB: TabConfig = {
   icon: 'view-list',
 };
 
+const BOOKMARKS_TAB: TabConfig = {
+  name: 'bookmarks',
+  href: '/bookmarks',
+  titleKey: 'tabs.bookmarks',
+  // The OUTLINE glyph, deliberately: the filled `bookmark` is the verse toggle's "saved" state
+  // (story 6-4), and the selected-tab cue is already the accent tint (`AppTabBar`'s rule 2).
+  icon: 'bookmark-outline',
+};
+
 const SETTINGS_TAB: TabConfig = {
   // The group is still named `(profile)` because that is the directory the seed left behind;
   // its home is `account.tsx`, the settings list. The label has always said Settings.
@@ -103,10 +112,11 @@ const SETTINGS_TAB: TabConfig = {
  *
  * ⚠️ ORDER IS MEANING: `TABS[0]` is the home surface (`HOME_HREF` reads it), and the app opens
  * on the mushaf at the reader's last-read position — opening on Settings was an artefact of
- * this table having exactly one entry, not a decision. Bookmarks (6.4) and any further tab land
- * here TOGETHER WITH THEIR ROUTE, never ahead of it.
+ * this table having exactly one entry, not a decision. Bookmarks landed in 6-4 exactly as this
+ * table reserved: together with its route, `(tabs)/bookmarks.tsx`. Any further tab lands the
+ * same way — TOGETHER WITH ITS ROUTE, never ahead of it.
  */
-export const TABS: TabConfig[] = [MUSHAF_TAB, READ_TAB, SETTINGS_TAB];
+export const TABS: TabConfig[] = [MUSHAF_TAB, READ_TAB, BOOKMARKS_TAB, SETTINGS_TAB];
 
 /**
  * Where "open the app" goes — the first tab's home, read from the table above rather than written

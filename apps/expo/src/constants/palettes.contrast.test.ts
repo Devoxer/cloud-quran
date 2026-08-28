@@ -63,6 +63,14 @@ describe('palette contrast (AC-3 accessibility gate)', () => {
           expect(meetsContrast(s.text.onAccent, s.accent.primary, AA_LARGE)).toBe(true);
         });
 
+        it('accent.primary on background.primary ≥ 3 (bookmark indicator, WCAG 1.4.11)', () => {
+          // Story 6-4: the verse bookmark control's FILLED state is `accent.primary` drawn
+          // directly on the reading page (`background.primary`) — a non-text component, so 3:1
+          // is the applicable bar. Measured 2026-08-28 at ≥ 4.05:1 across all twelve slices
+          // (floor: terracotta·light); this pins that a palette edit cannot walk it under.
+          expect(meetsContrast(s.accent.primary, s.background.primary, AA_LARGE)).toBe(true);
+        });
+
         // The 5 non-default palettes are authored from scratch, so hold them to the stricter
         // 4.5 body bar (terracotta is the documented 4.17 live-default exception).
         if (name !== 'terracotta') {

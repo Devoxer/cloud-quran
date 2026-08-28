@@ -99,5 +99,15 @@
     "pageErrorA11y": "Page {{page}}, échec du chargement",
     "pageErrorTitle": "Impossible de charger cette page",
     "pageErrorBody": "Sa police n'est pas encore sur cet appareil. Vérifiez votre connexion et réessayez."
+  },
+  "bookmarks": {
+    "add": "Ajouter un signet",
+    "remove": "Retirer le signet",
+    "rowTitle": "{{name}} · {{surah}}:{{verse}}",
+    "rowA11y": "{{name}}, verset {{verse}}",
+    "deleteA11y": "Retirer le signet de {{name}} {{surah}}:{{verse}}",
+    "surahFallback": "Sourate {{number}}",
+    "emptyTitle": "Aucun signet pour l’instant",
+    "emptyBody": "En mode lecture, touchez l’icône de signet sur un verset pour l’enregistrer ici."
   }
 }

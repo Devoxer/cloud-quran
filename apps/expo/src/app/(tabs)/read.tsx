@@ -1,4 +1,5 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { SURAH_COUNT, SURAH_METADATA, type Verse } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,8 +21,8 @@ import {
   useSurah,
   VerseRow,
 } from '@/features/reading';
-import { usePreferences } from '@/lib/sync';
-import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
+import { addBookmark, removeBookmark, useBookmarks, usePreferences } from '@/lib/sync';
+import { type ReadingPositionPair, usePosition, verseKey } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 /**
@@ -120,6 +121,7 @@ export default function Read() {
   const reveal = useChromeReveal();
   const { saved, reportVerse } = usePosition();
   const { data: preferences } = usePreferences();
+  const { data: bookmarks } = useBookmarks();
 
   // ⚠️ THE PAIR IS RESOLVED ONCE PER FOCUS, AND BOTH HALVES COME FROM THE SAME READ. Within a
   // focused session the reader owns where they are: re-reading the row on every render would
@@ -178,8 +180,17 @@ export default function Read() {
     if (content.verses[0]?.surah !== target.surah) return;
     restored.current = true;
     const index = content.verses.findIndex((v) => v.verse === target.verse);
-    if (index <= 0) return; // 1:1 and "not found" both open at the top — the documented fallback.
-    listRef.current?.scrollToIndex({ index, animated: false });
+    if (index > 0) {
+      listRef.current?.scrollToIndex({ index, animated: false });
+      return;
+    }
+    // Verse 1 and "not found" both mean the TOP — and the top is only "where the list already
+    // is" on a fresh mount. On a focus resync the reader can be anywhere in the surah, so this
+    // must be a real scroll: measured in the 6-4 device smoke, tapping a verse-1 bookmark row
+    // while scrolled to 13:12 navigated and then went nowhere, because the early return here
+    // assumed mount geometry. `scrollToOffset(0)` is a no-op on a mounted-at-top list, so the
+    // mount path is unchanged.
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [content.loading, content.verses, content.surah, target]);
 
   /**
@@ -248,6 +259,38 @@ export default function Read() {
     [reportVerse]
   );
 
+  /**
+   * The verses this list holds a bookmark for — `verseKey` → the bookmark's id, so the toggle
+   * can remove by id and the rows can render their state. Rebuilt when the cache changes; the
+   * cache itself is applied SYNCHRONOUSLY by `addBookmark`/`removeBookmark`, which is what makes
+   * the indicator flip on the same interaction with no optimistic-update code here (story 6-4).
+   */
+  const bookmarkIds = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of bookmarks ?? []) map.set(verseKey(b.surah, b.verse), b.id);
+    return map;
+  }, [bookmarks]);
+  // Mirrored into a ref (the `showing.current` pattern above) so ONE stable callback serves
+  // every row — a fresh callback per cache change would defeat `VerseRow`'s load-bearing memo.
+  const bookmarkIdsRef = useRef(bookmarkIds);
+  bookmarkIdsRef.current = bookmarkIds;
+
+  const toggleBookmark = useCallback((surah: number, verse: number) => {
+    // ⚠️ THE PAIR COMES FROM THE ROW, NOT FROM `showing.current`. The ref moves synchronously in
+    // `goToSurah` AND the focus resync while the OLD surah's rows are still rendered and tappable
+    // (a resync's rows load async from SQLite), so reading it here minted the new surah paired
+    // with an old row's verse — 6-4's review. The row reports the pair it renders; the callback
+    // stays identity-stable because everything else it touches is a ref or a module function.
+    const id = bookmarkIdsRef.current.get(verseKey(surah, verse));
+    if (id) {
+      removeBookmark(id);
+      return;
+    }
+    // Client-minted id (the `lib/auth.ts` `randomUUID` convention): an offline create keeps its
+    // identity through the drain, and a retry is idempotent on the worker's unique index.
+    addBookmark({ id: Crypto.randomUUID(), surah, verse });
+  }, []);
+
   const goToSurah = useCallback((next: number) => {
     // Synchronously, BEFORE the scroll: the viewability callback that the scroll provokes must
     // already see the new surah as the one we are showing.
@@ -275,13 +318,16 @@ export default function Read() {
   const renderItem = useCallback(
     ({ item }: { item: Verse }) => (
       <VerseRow
+        surah={item.surah}
         verse={item.verse}
         text={item.textUthmani}
         fontSize={fontSize}
+        bookmarked={bookmarkIds.has(verseKey(item.surah, item.verse))}
+        onToggleBookmark={toggleBookmark}
         testID={`verse-${item.surah}:${item.verse}`}
       />
     ),
-    [fontSize]
+    [fontSize, bookmarkIds, toggleBookmark]
   );
 
   const title = content.meta?.nameTransliteration ?? null;

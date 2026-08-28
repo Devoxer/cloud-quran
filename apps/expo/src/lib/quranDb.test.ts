@@ -80,7 +80,12 @@ jest.mock('expo-sqlite', () => ({
   },
 }));
 
-import { __resetQuranDbForTests, getSurahMetadata, getSurahVerses } from './quranDb';
+import {
+  __resetQuranDbForTests,
+  getSurahMetadata,
+  getSurahVerses,
+  getVersesForPositions,
+} from './quranDb';
 
 beforeEach(() => {
   __resetQuranDbForTests();
@@ -181,6 +186,86 @@ describe('surah metadata', () => {
     let total = 0;
     for (const meta of SURAH_METADATA) total += (await getSurahVerses(meta.number)).length;
     expect(total).toBe(TOTAL_VERSES);
+  });
+});
+
+describe('verses by position — the bookmarks preview join (story 6-4)', () => {
+  it('answers [] for empty input WITHOUT opening the database', async () => {
+    // An empty bookmarks list must not pay the first-open asset import — or surface its failure —
+    // for a query that can only answer nothing.
+    expect(await getVersesForPositions([])).toEqual([]);
+    expect(mockImports).not.toHaveBeenCalled();
+  });
+
+  it('reads a single position', async () => {
+    const verses = await getVersesForPositions([{ surah: 2, verse: 255 }]);
+    expect(verses).toHaveLength(1);
+    expect(verses[0]).toMatchObject({ surah: 2, verse: 255 });
+    expect(verses[0].textUthmani).toMatch(/\p{Script=Arabic}/u);
+  });
+
+  it('reads many positions across surahs in ONE query, pairs kept as PAIRS', async () => {
+    const verses = await getVersesForPositions([
+      { surah: 1, verse: 1 },
+      { surah: 2, verse: 255 },
+      { surah: 114, verse: 6 },
+    ]);
+    const keys = verses.map((v) => `${v.surah}:${v.verse}`).sort();
+    // Lexicographic sort, so '114:6' orders before '1:1' (':' > '1').
+    expect(keys).toEqual(['114:6', '1:1', '2:255']);
+    // ⚠️ The cross-product trap: `surah IN (1,2) AND verse IN (1,255)` would also answer 1:255
+    // (Al-Fatihah has 7 verses, so a wrong match needs surahs that share the verse numbers) —
+    // here 2:1 and 1:255 must both be absent even though their halves each appear.
+    expect(keys).not.toContain('2:1');
+  });
+
+  it('omits a pair that is not in the book — the caller keeps its row and degrades', async () => {
+    const verses = await getVersesForPositions([
+      { surah: 1, verse: 1 },
+      { surah: 200, verse: 1 },
+      { surah: 1, verse: 999 },
+    ]);
+    expect(verses.map((v) => `${v.surah}:${v.verse}`)).toEqual(['1:1']);
+  });
+
+  it('is usable whatever the input order — callers join by key, not by index', async () => {
+    const forward = await getVersesForPositions([
+      { surah: 1, verse: 1 },
+      { surah: 3, verse: 3 },
+    ]);
+    const reversed = await getVersesForPositions([
+      { surah: 3, verse: 3 },
+      { surah: 1, verse: 1 },
+    ]);
+    const byKey = (rows: typeof forward) =>
+      new Map(rows.map((v) => [`${v.surah}:${v.verse}`, v.textUthmani]));
+    expect(byKey(reversed)).toEqual(byKey(forward));
+    expect(byKey(forward).size).toBe(2);
+  });
+
+  it('serves an input LARGER than one query chunk — the parameter-ceiling guard', async () => {
+    // ⚠️ Two bound params per pair against SQLite's compile-flag `SQLITE_MAX_VARIABLE_NUMBER`
+    // (999 historically): an unchunked 486-pair query is 972 params and lives one bookmark from
+    // the cliff, and the throw would land in the preview join's silent catch — every preview
+    // gone for exactly the heaviest bookmarkers. 486 spans two chunks of 400.
+    const pairs = [
+      ...Array.from({ length: 286 }, (_, i) => ({ surah: 2, verse: i + 1 })),
+      ...Array.from({ length: 200 }, (_, i) => ({ surah: 3, verse: i + 1 })),
+    ];
+    const verses = await getVersesForPositions(pairs);
+    expect(verses).toHaveLength(486);
+    const keys = new Set(verses.map((v) => `${v.surah}:${v.verse}`));
+    expect(keys.has('2:1')).toBe(true);
+    expect(keys.has('2:286')).toBe(true); // the last pair of chunk one's surah
+    expect(keys.has('3:200')).toBe(true); // deep inside the SECOND chunk
+  });
+
+  it('returns the same bytes the per-surah read path returns', async () => {
+    // The two accessors must agree — a preview that differs from the reading surface would be a
+    // second rendering of the Quran text.
+    const [viaPosition] = await getVersesForPositions([{ surah: 1, verse: 1 }]);
+    const viaSurah = (await getSurahVerses(1))[0];
+    expect(viaPosition).toEqual(viaSurah);
   });
 });
 

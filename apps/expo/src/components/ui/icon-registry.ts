@@ -104,6 +104,8 @@ export const ICON_REGISTRY = {
   'library-outline': { sf: 'books.vertical', ion: 'library-outline' },
   library: { sf: 'books.vertical.fill', ion: 'library' },
   'bookmark-outline': { sf: 'bookmark', ion: 'bookmark-outline' },
+  // Story 6-4: the verse bookmark toggle's FILLED state (outline above is the unset state).
+  bookmark: { sf: 'bookmark.fill', ion: 'bookmark' },
   // Round-framed variant (Story 26.12) — book-detail action-row symmetry (see pencil-circle-outline).
   'bookmark-circle-outline': { sf: 'bookmark.circle', ion: 'bookmark-outline' },
   'document-text-outline': { sf: 'doc.text', ion: 'document-text-outline' },

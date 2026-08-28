@@ -276,8 +276,9 @@ function RootLayoutNav() {
             must never carry again is a native header control; `lint:header-controls` owns that,
             and the reading chrome's controls live in `AppHeader`'s `leading`/`trailing` slots. */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* story 6-3: the Quran index — a pushed ROOT route beside the tab shell, never a fourth
-            tab (owner-settled 3-tab IA, 6-6). Same per-screen header-off shape as `(tabs)`: the
+        {/* story 6-3: the Quran index — a pushed ROOT route beside the tab shell, never a tab
+            (the table grew to four in 6-4 with Bookmarks, a destination; the index stays a
+            picker). Same per-screen header-off shape as `(tabs)`: the
             screen renders our own `AppHeader`, whose back control is history-conditional.
 
             ⚠️ `transparentModal` ON WEB ONLY, AND IT IS A MEASURED FIX, NOT A STYLE. A default

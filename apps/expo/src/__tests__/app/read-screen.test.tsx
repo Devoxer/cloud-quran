@@ -117,14 +117,26 @@ jest.mock('@shopify/flash-list', () => {
 });
 
 const mockSetReadingPosition = jest.fn();
+const mockAddBookmark = jest.fn();
+const mockRemoveBookmark = jest.fn();
 const mockReadingPositionRow = { current: null as { surah: number; verse: number } | null };
 const mockPreferencesRow = { current: null as { fontSize?: number } | null };
+type TestBookmark = { id: string; surah: number; verse: number };
+const mockBookmarksRow = { current: [] as TestBookmark[] };
 
 jest.mock('@/lib/sync', () => ({
   setReadingPosition: (...args: unknown[]) => mockSetReadingPosition(...args),
+  addBookmark: (...args: unknown[]) => mockAddBookmark(...args),
+  removeBookmark: (...args: unknown[]) => mockRemoveBookmark(...args),
   useReadingPosition: () => ({ data: mockReadingPositionRow.current }),
   usePreferences: () => ({ data: mockPreferencesRow.current }),
+  useBookmarks: () => ({ data: mockBookmarksRow.current }),
 }));
+
+// `expo-crypto`'s native module is absent under Jest, so the real `randomUUID()` answers nothing —
+// the `auth.test.ts` convention. The screen mints bookmark ids with it.
+const mockRandomUUID = jest.fn(() => 'uuid-under-test');
+jest.mock('expo-crypto', () => ({ randomUUID: () => mockRandomUUID() }));
 
 const mockGetSurahVerses = jest.fn();
 const mockGetSurahMetadata = jest.fn();
@@ -208,6 +220,8 @@ beforeEach(() => {
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
   mockPreferencesRow.current = null;
+  mockBookmarksRow.current = [];
+  mockRandomUUID.mockReturnValue('uuid-under-test');
   mockGetSurahVerses.mockImplementation(async (surah: number) =>
     surah >= 1 && surah <= 114 ? versesOf(surah, surah === 2 ? 286 : 7) : []
   );
@@ -384,6 +398,68 @@ describe('the position write', () => {
   });
 });
 
+describe('the bookmark control (story 6-4)', () => {
+  it('presses ADD on an unbookmarked row — a minted id and the ROW’s pair, one write', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    fireEvent.press(screen.getByTestId('bookmark-toggle-3'));
+    expect(mockAddBookmark).toHaveBeenCalledTimes(1);
+    expect(mockAddBookmark).toHaveBeenCalledWith({ id: 'uuid-under-test', surah: 1, verse: 3 });
+    expect(mockRemoveBookmark).not.toHaveBeenCalled();
+  });
+
+  it('presses REMOVE on a bookmarked row — that row’s id, never a second create', async () => {
+    mockBookmarksRow.current = [{ id: 'bk-1-3', surah: 1, verse: 3 }];
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    fireEvent.press(screen.getByTestId('bookmark-toggle-3'));
+    expect(mockRemoveBookmark).toHaveBeenCalledTimes(1);
+    expect(mockRemoveBookmark).toHaveBeenCalledWith('bk-1-3');
+    expect(mockAddBookmark).not.toHaveBeenCalled();
+  });
+
+  it('keys the state by the PAIR — the same verse number in another surah stays outlined', async () => {
+    // ⚠️ The map is `verseKey(surah, verse)` → id, not verse → id. A bookmark on 2:3 must not
+    // fill 1:3's control or hand its id to 1:3's remove.
+    mockBookmarksRow.current = [{ id: 'bk-2-3', surah: 2, verse: 3 }];
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    fireEvent.press(screen.getByTestId('bookmark-toggle-3'));
+    expect(mockAddBookmark).toHaveBeenCalledWith({ id: 'uuid-under-test', surah: 1, verse: 3 });
+    expect(mockRemoveBookmark).not.toHaveBeenCalled();
+  });
+
+  it('after navigating to another surah, a toggle mints the NEW surah — the row reports its own pair', async () => {
+    // ⚠️ THE STALE-SURAH RACE THE REVIEW CAUGHT. The screen's `showing.current` moves
+    // synchronously in `goToSurah` and the focus resync while the OLD surah's rows are still
+    // tappable, so a toggle that asked the screen "which surah?" minted wrong-surah bookmarks.
+    // The row reports the pair it renders; this pins the wiring end-to-end through a real
+    // navigation.
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    fireEvent.press(screen.getByTestId('next-surah-button'));
+    await screen.findByText('أية 2:1');
+    fireEvent.press(screen.getByTestId('bookmark-toggle-5'));
+    expect(mockAddBookmark).toHaveBeenCalledTimes(1);
+    expect(mockAddBookmark).toHaveBeenCalledWith({ id: 'uuid-under-test', surah: 2, verse: 5 });
+  });
+
+  it('each press reads the CURRENT map — add then remove on one control converges', async () => {
+    // The frozen matrix's rapid-double-tap row: the second press must see the state the first
+    // one wrote. In production `addBookmark` applies the cache synchronously and `useBookmarks`
+    // re-renders the screen; the mock + `rerender` play those two roles here.
+    const view = render(<Read />);
+    await screen.findByText('أية 1:7');
+    fireEvent.press(screen.getByTestId('bookmark-toggle-2'));
+    expect(mockAddBookmark).toHaveBeenCalledTimes(1);
+    mockBookmarksRow.current = [{ id: 'bk-new', surah: 1, verse: 2 }];
+    view.rerender(<Read />);
+    fireEvent.press(screen.getByTestId('bookmark-toggle-2'));
+    expect(mockRemoveBookmark).toHaveBeenCalledWith('bk-new');
+    expect(mockAddBookmark).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('cold launch', () => {
   it('restores to the saved (surah, verse) after mount', async () => {
     mockReadingPositionRow.current = { surah: 2, verse: 100 };
@@ -495,6 +571,27 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     await waitFor(() =>
       expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 254, animated: false })
     );
+  });
+
+  it('a resync to VERSE 1 of the same surah scrolls to the TOP — not nowhere', async () => {
+    // ⚠️ MEASURED IN THE 6-4 DEVICE SMOKE. Tapping a verse-1 bookmark row while scrolled deep in
+    // the same surah wrote the pair, navigated — and the list stayed where it was, because the
+    // restore effect's `index <= 0` early-return assumed mount geometry ("verse 1 is already the
+    // top"), which is false on a refocused, scrolled list. The top is a REAL scroll on a resync.
+    mockReadingPositionRow.current = { surah: 2, verse: 100 };
+    const view = render(<Read />);
+    await screen.findByText('أية 2:100');
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 99, animated: false })
+    );
+    mockReadingPositionRow.current = { surah: 2, verse: 1 };
+    view.rerender(<Read />);
+    refocus();
+    await waitFor(() =>
+      expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: false })
+    );
+    // …and no index scroll for it: verse 1 is the top, not an estimated offset.
+    expect(mockScrollToIndex).toHaveBeenCalledTimes(1);
   });
 });
 

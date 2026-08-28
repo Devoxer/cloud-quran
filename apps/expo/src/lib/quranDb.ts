@@ -189,6 +189,51 @@ export async function getSurahVerses(surah: number): Promise<Verse[]> {
 }
 
 /**
+ * The verses at the given `(surah, verse)` positions — the bookmarks list's preview join
+ * (story 6-4).
+ *
+ * ONE query for the whole list, not a read per row: the bookmarks screen renders every row's
+ * preview in a single pass, and N round-trips through the async bridge is the shape that makes a
+ * list stutter. Row-value `IN` keeps the pair a PAIR in SQL exactly as `usePosition` keeps it one
+ * in the app — `surah IN (…) AND verse IN (…)` would match the cross product.
+ *
+ * ⚠️ EMPTY INPUT ANSWERS `[]` WITHOUT OPENING THE DATABASE. An empty bookmarks list must not pay
+ * the first-open asset import (or surface its failure) for a query that can only answer nothing.
+ *
+ * A position that is not in the book is simply ABSENT from the result — the caller keeps its row
+ * and degrades the preview (never drops the row; the pre-fork list silently hid orphans forever,
+ * decided against in 6-4). Order of the result is the database's, not the input's: callers join
+ * by key, so input order carries no meaning here.
+ */
+/**
+ * Two bound parameters per pair, so the input is CHUNKED against SQLite's host-parameter
+ * ceiling — `SQLITE_MAX_VARIABLE_NUMBER` is a compile flag (999 historically, 32766 on modern
+ * builds) and expo-sqlite does not document which one each platform ships. 400 pairs = 800
+ * parameters clears the older floor with room; without the chunk, the heaviest bookmarkers are
+ * exactly the readers whose whole preview column would vanish behind one thrown query.
+ */
+const POSITIONS_PER_QUERY = 400;
+
+export async function getVersesForPositions(
+  pairs: readonly { surah: number; verse: number }[]
+): Promise<Verse[]> {
+  if (pairs.length === 0) return [];
+  const db = await openQuranDb();
+  const rows: VerseRow[] = [];
+  for (let i = 0; i < pairs.length; i += POSITIONS_PER_QUERY) {
+    const chunk = pairs.slice(i, i + POSITIONS_PER_QUERY);
+    const placeholders = chunk.map(() => '(?, ?)').join(', ');
+    rows.push(
+      ...(await db.getAllAsync<VerseRow>(
+        `SELECT surah_number, verse_number, uthmani_text, simple_text FROM verses WHERE (surah_number, verse_number) IN (VALUES ${placeholders})`,
+        ...chunk.flatMap((p) => [p.surah, p.verse])
+      ))
+    );
+  }
+  return rows.map(toVerse);
+}
+
+/**
  * One surah's metadata, or `null` if the number is not a surah.
  *
  * ⚠️ READ FROM THE DATABASE, NOT FROM `quran-data`'s `SURAH_METADATA`, and the duplication is

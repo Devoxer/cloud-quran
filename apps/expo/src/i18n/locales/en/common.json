@@ -99,5 +99,15 @@
     "pageErrorA11y": "Page {{page}}, failed to load",
     "pageErrorTitle": "This page could not be loaded",
     "pageErrorBody": "Its font is not on this device yet. Check your connection and try again."
+  },
+  "bookmarks": {
+    "add": "Add bookmark",
+    "remove": "Remove bookmark",
+    "rowTitle": "{{name}} · {{surah}}:{{verse}}",
+    "rowA11y": "{{name}}, verse {{verse}}",
+    "deleteA11y": "Remove bookmark for {{name}} {{surah}}:{{verse}}",
+    "surahFallback": "Surah {{number}}",
+    "emptyTitle": "No bookmarks yet",
+    "emptyBody": "In reading mode, tap the bookmark icon on any verse to save it here."
   }
 }

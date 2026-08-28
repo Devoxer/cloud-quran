@@ -2,6 +2,7 @@
   "tabs": {
     "mushaf": "Mushaf",
     "read": "Lectura",
+    "bookmarks": "Marcadores",
     "settings": "Ajustes"
   },
   "actions": {
@@ -14,7 +15,8 @@
     "data": "Tus datos",
     "feedback": "Comentarios",
     "privacy": "Privacidad",
-    "index": "Corán"
+    "index": "Corán",
+    "bookmarks": "Marcadores"
   },
   "index": {
     "segments": {

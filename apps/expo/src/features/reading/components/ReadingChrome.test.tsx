@@ -68,6 +68,16 @@ function Harness({
 /** Bars are hidden from BOTH trees when dismissed, so structural queries have to opt in. */
 const ANY = { includeHiddenElements: true } as const;
 
+/** Every tab the bar carries, as an EXPLICIT list — four since 6-4's Bookmarks. Deliberately
+ *  not derived from `TABS`: a test that maps the same table the component maps cannot notice a
+ *  tab going missing from it. */
+const TAB_IDS = [
+  'chrome-tab-index',
+  'chrome-tab-read',
+  'chrome-tab-bookmarks',
+  'chrome-tab-(profile)',
+] as const;
+
 /** Flattened style of one element, as an object. */
 function styleOf(testID: string): Record<string, unknown> {
   const style = screen.getByTestId(testID, ANY).props.style;
@@ -284,12 +294,12 @@ describe('it overlays; it never occupies layout', () => {
     // DOM while this very test went green off the React prop. Both are passed — `focusable` is the
     // native/TV one — but this case measures the half that reaches the browser.
     render(<Harness />);
-    for (const id of ['chrome-tab-index', 'chrome-tab-read', 'chrome-tab-(profile)']) {
+    for (const id of TAB_IDS) {
       expect(screen.getByTestId(id, ANY).props.tabIndex).toBe(-1);
     }
     expect(screen.getByTestId('chrome-mode-toggle', ANY).props.tabIndex).toBe(-1);
     await reveal();
-    for (const id of ['chrome-tab-index', 'chrome-tab-read', 'chrome-tab-(profile)']) {
+    for (const id of TAB_IDS) {
       expect(screen.getByTestId(id).props.tabIndex).toBe(0);
     }
     expect(screen.getByTestId('chrome-mode-toggle').props.tabIndex).toBe(0);
@@ -300,10 +310,12 @@ describe('the controls the chrome carries (story 6-6)', () => {
   it('the tab bar is the revealed footer — every tab, and switching away works', async () => {
     render(<Harness />);
     await reveal();
-    // All three tabs exist (the parity test holds this per platform; this is the wiring).
-    expect(screen.getByTestId('chrome-tab-index')).toBeTruthy();
-    expect(screen.getByTestId('chrome-tab-read')).toBeTruthy();
-    expect(screen.getByTestId('chrome-tab-(profile)')).toBeTruthy();
+    // Every tab exists — FOUR since 6-4's Bookmarks (the parity test holds this per platform;
+    // this is the wiring). Explicit ids, not a TABS-derived list: a test that derives its
+    // expectations from the same table the component maps proves nothing about the table.
+    for (const id of TAB_IDS) {
+      expect(screen.getByTestId(id)).toBeTruthy();
+    }
     fireEvent.press(screen.getByTestId('chrome-tab-(profile)'));
     expect(mockNavigate).toHaveBeenCalledWith('/account');
   });

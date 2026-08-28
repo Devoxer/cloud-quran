@@ -87,6 +87,41 @@ export function clampArabicFontSize(size: number | undefined | null): number {
 }
 
 /**
+ * ⚠️ U+06DF (ARABIC SMALL HIGH ROUNDED ZERO) IS STRIPPED FOR DISPLAY, AND THIS IS A MEASURED FONT
+ * DEFECT RATHER THAN A TASTE CALL — recovered from the pre-fork row, which had it and whose reason
+ * story 6-1 shipped without (`_reference/prefork-reading/features/reading/VerseRow.tsx`).
+ *
+ * The mark means "this letter is written but not pronounced" and a printed mushaf draws it as a
+ * tiny ring above the letter. **The KFGQPC face draws it at full letter size.** Re-measured in
+ * Chromium on 2026-08-27 against this repo's own `KFGQPCUthmanicScriptHAFS.ttf`: rendered beside a
+ * lone waw at 200px it is a solid black disc WIDER THAN THE WAW ITSELF, and in 2:5
+ * (`أُو۟لَٰٓئِكَ`) it lands mid-word twice, so the word reads as though a bullet were punched
+ * through it. 2,240 of the 6,236 verses carry at least one, so this is a third of the book.
+ *
+ * ⚠️ THIS IS A DISPLAY TRANSFORM AND NOTHING ELSE. The Quran-text non-negotiable says no runtime
+ * path MUTATES the text: the database is opened `PRAGMA query_only = ON`, the text reaches a
+ * caller exactly as `uthmani_text` stores it, and the stripped copy is a local string that is
+ * rendered and thrown away. Nothing persisted, nothing synced, nothing hashed sees it. A future
+ * search or copy-to-clipboard must take the raw text, not this.
+ *
+ * ⚠️ IT IS UNCONDITIONAL, NOT WEB-ONLY, THOUGH THE DEFECT WAS FIRST FOUND ON WEB. The same file is
+ * bundled for iOS and Android, one reader may open the same ayah on a phone and on the desktop
+ * shell, and a platform branch here would give them two different-looking mushafs. Removing the
+ * strip is how you re-measure it; the geometry above is what to look for.
+ *
+ * Moved here from `VerseRow` in story 6-4, because the bookmarks list's Arabic preview renders
+ * the same face and owes the same transform — one definition, layer-legal from both features.
+ * ⚠️ It applies to TEXT in the KFGQPC text face only: the mushaf's `word.qpcV1` is QPC glyph
+ * encoding, where the codepoints mean glyph ids, so the strip must never touch that path.
+ */
+const SMALL_HIGH_ROUNDED_ZERO = /\u06DF/g;
+
+/** Strip the marks the KFGQPC text face renders defectively — for DISPLAY only (see above). */
+export function stripDisplayMarks(text: string): string {
+  return text.replace(SMALL_HIGH_ROUNDED_ZERO, '');
+}
+
+/**
  * The web-only `useFonts` map: the family name a style asks for → the bundled face.
  *
  * ⚠️ IT IS A CONSTANT, NOT AN INLINE OBJECT, BECAUSE NOTHING COULD OBSERVE IT INLINE.

@@ -1,5 +1,5 @@
 /**
- * VerseRow — one ayah, in the Uthmani face (story 6-1).
+ * VerseRow — one ayah, in the Uthmani face (story 6-1; bookmark control folded back in 6-4).
  *
  * ⚠️ THE ROW SETS ITS OWN DIRECTION, AND THE APP STAYS LTR. Cloud Quran has no RTL
  * infrastructure — `I18nManager.forceRTL` is unbuilt tree-wide, the interface ships one locale,
@@ -33,47 +33,33 @@
  *      scrolls. It lives in `read.tsx`; the row is plain text again, and the row's tap is free
  *      for the story that has a use for it.
  *
- * So this component has no `onPress` and renders a `View`, not a `Pressable`. Adding one back
+ * So the row CONTAINER has no `onPress` and renders a `View`, not a `Pressable`. Adding one back
  * re-opens (2): put the verse-level gesture in `read.tsx` beside the surface one, where the two
- * can be composed and one can be given priority over the other. ⚠️ The pre-fork row ALSO carried a
- * bookmark `Pressable` in its meta row — bookmarks are story 6.4, and a control per row would put
- * 286 buttons on Al-Baqarah, so that half is deliberately not folded back either.
+ * can be composed and one can be given priority over the other.
  *
- * ⚠️ AND STILL NO `accessibilityRole`. The row is text, not a control. A role would announce every
- * ayah as a button and put 286 of them on Al-Baqarah.
+ * ⚠️ THE BOOKMARK CONTROL IS THE ONE PRESSABLE INSIDE THE ROW (story 6-4, the pre-fork meta-row
+ * shape folded back). It is a small target in the meta row — not the row tap of shape (2), so the
+ * "elsewhere" the chrome gesture needs survives and epic 7's verse tap stays unspent. Its press
+ * ALSO fires the surface's chrome toggle: RNGH's tap runs in a different touch system, RN
+ * `stopPropagation` cannot reach it, and 6-1's `.cancelsTouchesInView(false)` is what lets this
+ * Pressable receive the touch at all — the double-fire is named and accepted in story 6-4's
+ * design notes (the 1-8 "must not toggle chrome" clause described the pre-fork responder
+ * architecture, superseded with it).
+ *
+ * ⚠️ AND STILL NO `accessibilityRole` ON THE ROW. The row is text, not a control. A role would
+ * announce every ayah as a button; the bookmark control carries its own role and a label that
+ * flips add/remove.
  */
 
 import { memo } from 'react';
-import { Text, View } from 'react-native';
-import { ARABIC_LINE_HEIGHT, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
+import { useTranslation } from 'react-i18next';
+import { Pressable, Text, View } from 'react-native';
+import { Icon } from '@/components/ui';
+import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { SPACING } from '@/constants/spacing';
 import { FONT_WEIGHT } from '@/constants/typography';
+import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
-
-/**
- * ⚠️ U+06DF (ARABIC SMALL HIGH ROUNDED ZERO) IS STRIPPED FOR DISPLAY, AND THIS IS A MEASURED FONT
- * DEFECT RATHER THAN A TASTE CALL — recovered from the pre-fork row, which had it and whose reason
- * story 6-1 shipped without (`_reference/prefork-reading/features/reading/VerseRow.tsx`).
- *
- * The mark means "this letter is written but not pronounced" and a printed mushaf draws it as a
- * tiny ring above the letter. **The KFGQPC face draws it at full letter size.** Re-measured in
- * Chromium on 2026-08-27 against this repo's own `KFGQPCUthmanicScriptHAFS.ttf`: rendered beside a
- * lone waw at 200px it is a solid black disc WIDER THAN THE WAW ITSELF, and in 2:5
- * (`أُو۟لَٰٓئِكَ`) it lands mid-word twice, so the word reads as though a bullet were punched
- * through it. 2,240 of the 6,236 verses carry at least one, so this is a third of the book.
- *
- * ⚠️ THIS IS A DISPLAY TRANSFORM AND NOTHING ELSE. The Quran-text non-negotiable says no runtime
- * path MUTATES the text: the database is opened `PRAGMA query_only = ON`, `text` arrives here
- * exactly as `uthmani_text` stores it, and the stripped copy is a local string that is rendered
- * and thrown away. Nothing persisted, nothing synced, nothing hashed sees it. A future search or
- * copy-to-clipboard must take `text`, not this.
- *
- * ⚠️ IT IS UNCONDITIONAL, NOT WEB-ONLY, THOUGH THE DEFECT WAS FIRST FOUND ON WEB. The same file is
- * bundled for iOS and Android, one reader may open the same ayah on a phone and on the desktop
- * shell, and a platform branch here would give them two different-looking mushafs. Removing the
- * strip is how you re-measure it; the geometry above is what to look for.
- */
-const SMALL_HIGH_ROUNDED_ZERO = /\u06DF/g;
 
 /**
  * The ayah badge's geometry, all expressed as ratios of the reader's chosen verse size (story
@@ -86,7 +72,20 @@ const BADGE_UNIT_RATIO = 0.45;
 const BADGE_NUMBER_RATIO = 1.1;
 const BADGE_BORDER_WIDTH = 1.5;
 
+/** Bookmark glyph size + the slop that carries its touch target to the 44pt HIG minimum. */
+const BOOKMARK_ICON_SIZE = 20;
+const BOOKMARK_HIT_SLOP = 12;
+
 export interface VerseRowProps {
+  /**
+   * The surah THIS ROW belongs to — the bookmark toggle reports it back, so the toggle always
+   * acts on the pair the row renders. ⚠️ Never let the screen substitute its "current surah"
+   * ref: `goToSurah` and the focus resync both move that ref synchronously while the OLD surah's
+   * rows are still on screen (a resync's rows load async from SQLite), and a press in that
+   * window would mint the new surah paired with an old row's verse — 6-4's review caught the
+   * shape. NOT rendered anywhere; the badge below shows the verse alone.
+   */
+  surah: number;
   /**
    * The ayah number, and the only thing the badge shows. ⚠️ NOT `{surah}:{verse}` — the whole list
    * is one surah and the chrome footer names it, so repeating it on all 286 rows of Al-Baqarah is
@@ -94,28 +93,53 @@ export interface VerseRowProps {
    * the surface read as a debug view.
    */
   verse: number;
-  /** The Uthmani text, exactly as the database holds it. Never transformed — see the strip above. */
+  /** The Uthmani text, exactly as the database holds it. Never transformed — `stripDisplayMarks`
+   *  (`constants/arabic.ts`) touches only the rendered copy. */
   text: string;
   /** Points. Comes from the reader's synced preference when one exists — story 6.5 owns the picker. */
   fontSize: number;
+  /** Whether this verse is bookmarked — decides the control's glyph, colour and label. */
+  bookmarked: boolean;
+  /**
+   * Toggle this row's bookmark — called with the ROW's own `(surah, verse)` pair (see `surah`
+   * above). ⚠️ Must be IDENTITY-STABLE across renders (`memo` below is load-bearing):
+   * `read.tsx` passes one callback that reads its map through a ref.
+   */
+  onToggleBookmark: (surah: number, verse: number) => void;
   testID?: string;
 }
 
-function VerseRowInner({ verse, text, fontSize, testID }: VerseRowProps) {
+function VerseRowInner({
+  surah,
+  verse,
+  text,
+  fontSize,
+  bookmarked,
+  onToggleBookmark,
+  testID,
+}: VerseRowProps) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
   const styles = useThemedStyles((theme) => ({
     row: {
       paddingVertical: SPACING.md,
       paddingHorizontal: SPACING.lg,
+    },
+    // The pre-fork meta row: bookmark control at the visual LEFT, ayah badge at the RIGHT (the
+    // Arabic below is right-aligned, so the badge stays column-aligned with the verse it labels).
+    meta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: SPACING.sm,
     },
     // ⚠️ `text.secondary`, NOT `text.tertiary`. The numeral is small text, and tertiary is only
     // gated at 3:1 (AA large) by `palettes.contrast.test.ts` while secondary is held at 4.5:1 on
     // every palette × scheme. The ring is a non-text component (WCAG 1.4.11, 3:1) and clears its
     // bar on the same token, so both halves take one colour.
     badge: {
-      alignSelf: 'flex-end',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: SPACING.sm,
       borderWidth: BADGE_BORDER_WIDTH,
       borderColor: theme.colors.text.secondary,
     },
@@ -145,12 +169,39 @@ function VerseRowInner({ verse, text, fontSize, testID }: VerseRowProps) {
 
   return (
     <View style={styles.row} testID={testID}>
-      {/* A bare numeral: no run of two letters, so `lint:i18n` correctly leaves it alone. */}
-      <View style={[styles.badge, badgeSize]} testID={`ayah-badge-${verse}`}>
-        <Text style={[styles.badgeNumber, badgeNumberSize]}>{verse}</Text>
+      <View style={styles.meta}>
+        {/* ⚠️ The FILLED state is `accent.primary` on `background.primary` — measured 2026-08-28
+            at ≥ 4.05:1 on every palette × scheme against WCAG 1.4.11's 3:1 non-text bar, pinned
+            in `palettes.contrast.test.ts`. Outline is `text.secondary` (4.5:1, the badge
+            precedent). The indicator flips on the SAME interaction because `addBookmark` applies
+            the local cache synchronously — no optimistic-update code here. */}
+        <Pressable
+          onPress={() => onToggleBookmark(surah, verse)}
+          hitSlop={BOOKMARK_HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel={bookmarked ? t('common:bookmarks.remove') : t('common:bookmarks.add')}
+          // The label says which ACTION is available; `selected` announces the current STATE as
+          // state, which is the half a screen reader otherwise never hears.
+          accessibilityState={{ selected: bookmarked }}
+          testID={`bookmark-toggle-${verse}`}
+        >
+          <Icon
+            name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+            size={BOOKMARK_ICON_SIZE}
+            color={bookmarked ? colors.accent.primary : colors.text.secondary}
+            // Decorative — the Pressable carries the label. `IconFrame` derives Android's
+            // `importantForAccessibility="no-hide-descendants"` from this same flag.
+            accessibilityElementsHidden
+            testID={`bookmark-icon-${verse}`}
+          />
+        </Pressable>
+        {/* A bare numeral: no run of two letters, so `lint:i18n` correctly leaves it alone. */}
+        <View style={[styles.badge, badgeSize]} testID={`ayah-badge-${verse}`}>
+          <Text style={[styles.badgeNumber, badgeNumberSize]}>{verse}</Text>
+        </View>
       </View>
       <Text style={[styles.arabic, { fontSize, lineHeight: fontSize * ARABIC_LINE_HEIGHT }]}>
-        {text.replace(SMALL_HIGH_ROUNDED_ZERO, '')}
+        {stripDisplayMarks(text)}
       </Text>
     </View>
   );
@@ -161,7 +212,9 @@ function VerseRowInner({ verse, text, fontSize, testID }: VerseRowProps) {
  * list-level state change, and this screen has two that tick while the reader scrolls: the
  * visible verse (every viewability callback) and the chrome flag (every tap). Without `memo`,
  * one chrome toggle re-renders all 286 rows of Al-Baqarah, each of which re-runs
- * `useThemedStyles` and re-measures a full paragraph of Arabic.
+ * `useThemedStyles` and re-measures a full paragraph of Arabic. The 6-4 props keep it effective:
+ * `bookmarked` is a boolean and `onToggleBookmark` is one stable callback, so toggling ONE verse
+ * re-renders one row.
  *
  * `VerseRow.test.tsx` asserts the identity — `React.memo` leaves an observable `$$typeof` and a
  * `type` pointing at the inner function, so stripping it reddens rather than merely slowing.
