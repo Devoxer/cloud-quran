@@ -40,7 +40,7 @@
     "secrets:push:expo": "sh scripts/secrets.sh push:expo",
     "secrets:push:local": "sh scripts/secrets.sh push:local",
     "prepare-data": "node scripts/prepare-data.ts",
-    "verify": "node scripts/verify-quran.ts",
+    "verify": "node scripts/verify-quran.ts && node scripts/verify-artifacts.ts",
     "prepare-audio": "node scripts/prepare-audio.ts",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "test:verify-gate": "node --test scripts/__tests__/verify-quran.test.mjs"
