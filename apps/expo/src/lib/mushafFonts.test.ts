@@ -112,7 +112,7 @@ describe('the native download path', () => {
   it('fetches from the app’s OWN CDN — never GitHub', async () => {
     await loadPageFont(5);
     expect(downloadedUrls()).toEqual([
-      'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P005.woff2',
+      'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P005.ttf',
     ]);
     for (const url of downloadedUrls()) expect(url).not.toContain('githubusercontent');
   });
@@ -120,7 +120,7 @@ describe('the native download path', () => {
   it('caches under the DOCUMENT directory — the cache directory is OS-evictable', async () => {
     await loadPageFont(5);
     const [, file] = mockDownload.mock.calls[0];
-    expect(file.uri).toBe('file:///documents/qpc-fonts/QCF_P005.woff2');
+    expect(file.uri).toBe('file:///documents/qpc-fonts/QCF_P005.ttf');
     expect(mockCreateDir).toHaveBeenCalledWith('file:///documents/qpc-fonts', {
       intermediates: true,
     });
@@ -133,7 +133,7 @@ describe('the native download path', () => {
     await loadPageFont(5);
     expect(mockDownload).not.toHaveBeenCalled();
     expect(mockLoadAsync).toHaveBeenCalledWith({
-      QCF_P005: 'file:///documents/qpc-fonts/QCF_P005.woff2',
+      QCF_P005: 'file:///documents/qpc-fonts/QCF_P005.ttf',
     });
   });
 
@@ -179,38 +179,81 @@ describe('the web path', () => {
   });
 });
 
+describe('the platform format split', () => {
+  const platform = Platform as { OS: string };
+  const nativeOS = platform.OS;
+  afterEach(() => {
+    platform.OS = nativeOS;
+  });
+
+  it('⚠️ NATIVE GETS .ttf AND WEB GETS .woff2 — Android cannot parse WOFF2 at all', async () => {
+    // THE REGRESSION THIS FILE EXISTED WITHOUT. Android's `Typeface` loader rejects WOFF2 and
+    // `Font.loadAsync` RESOLVES ANYWAY, so `loadPageFont` returned a family name, the page
+    // rendered, no error surface appeared — and every line drew in the system fallback. Because
+    // QPC V1 encodes glyphs as Arabic Presentation Forms-A from U+FB51, that fallback renders
+    // them as their literal Unicode meaning: disconnected Arabic letters that read as plausible
+    // Arabic but are NOT the Quran. Measured on a Pixel 9 Pro, 2026-08-28, with the correct file
+    // present on disk and byte-identical to the CDN's — nothing about the download was wrong.
+    //
+    // Asserted in BOTH directions, because a one-sided check passes if the branch collapses to
+    // whichever side it kept.
+    // ⚠️ RESTORE A WORKING DOWNLOADER FIRST. An earlier case calls
+    // `mockDownload.mockRejectedValue(...)`, and `jest.clearAllMocks()` clears CALLS but not
+    // IMPLEMENTATIONS — so every case after it inherits an offline downloader unless it says
+    // otherwise. The preload cases survive that only because they assert call URLs and
+    // `preloadAdjacentPageFonts` swallows failures; this one actually awaits a success.
+    mockDownload.mockResolvedValue(undefined);
+
+    platform.OS = 'android';
+    await loadPageFont(5);
+    expect(downloadedUrls()[0]).toMatch(/QCF_P005\.ttf$/);
+
+    mockDownload.mockClear();
+    platform.OS = 'ios';
+    await loadPageFont(6);
+    expect(downloadedUrls()[0]).toMatch(/QCF_P006\.ttf$/);
+
+    mockLoadAsync.mockClear();
+    platform.OS = 'web';
+    await loadPageFont(7);
+    expect(mockLoadAsync).toHaveBeenCalledWith({
+      QCF_P007: 'https://cdn.nobleachievements.com/fonts/qpc-v1/QCF_P007.woff2',
+    });
+  });
+});
+
 describe('the ±2 preload', () => {
   it('aims at the four neighbours and never the current page', async () => {
     // ⚠️ A WINDOW WITH NO PATCHED PAGE IN IT. Page 302 ships in the bundle, so a window around
     // 300 downloads three neighbours rather than four — which says nothing about the ±2 aim and
     // everything about the overlay. The two facts are asserted separately, below.
     await preloadAdjacentPageFonts(100);
-    expect(downloadedUrls().map((u) => u.slice(-14))).toEqual([
-      'QCF_P098.woff2',
-      'QCF_P099.woff2',
-      'QCF_P101.woff2',
-      'QCF_P102.woff2',
+    expect(downloadedUrls().map((u) => u.slice(-12))).toEqual([
+      'QCF_P098.ttf',
+      'QCF_P099.ttf',
+      'QCF_P101.ttf',
+      'QCF_P102.ttf',
     ]);
   });
 
   it('takes a patched neighbour from the BUNDLE — the preload never fetches one', async () => {
     await preloadAdjacentPageFonts(300);
-    expect(downloadedUrls().map((u) => u.slice(-14))).toEqual([
-      'QCF_P298.woff2',
-      'QCF_P299.woff2',
-      'QCF_P301.woff2',
+    expect(downloadedUrls().map((u) => u.slice(-12))).toEqual([
+      'QCF_P298.ttf',
+      'QCF_P299.ttf',
+      'QCF_P301.ttf',
     ]);
     expect(mockLoadAsync).toHaveBeenCalledWith({ QCF_P302: 1 });
   });
 
   it('clamps at page 1', async () => {
     await preloadAdjacentPageFonts(1);
-    expect(downloadedUrls().map((u) => u.slice(-14))).toEqual(['QCF_P002.woff2', 'QCF_P003.woff2']);
+    expect(downloadedUrls().map((u) => u.slice(-12))).toEqual(['QCF_P002.ttf', 'QCF_P003.ttf']);
   });
 
   it('clamps at page 604', async () => {
     await preloadAdjacentPageFonts(604);
-    expect(downloadedUrls().map((u) => u.slice(-14))).toEqual(['QCF_P602.woff2', 'QCF_P603.woff2']);
+    expect(downloadedUrls().map((u) => u.slice(-12))).toEqual(['QCF_P602.ttf', 'QCF_P603.ttf']);
   });
 
   it('never throws — a failed neighbour becomes that page’s own retry surface later', async () => {

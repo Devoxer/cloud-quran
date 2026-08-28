@@ -47,6 +47,13 @@ const QPC_REPO_URL = 'https://github.com/nuqayah/qpc-fonts.git';
 const QPC_REPO = '/tmp/qpc-fonts';
 const QPC_PIN = '8a4f39d563ea69c994416a1692827e38156c548d';
 const QPC_WOFF2_DIR = resolve(QPC_REPO, 'mushaf-woff2');
+// ⚠️ TTF IS NOT AN ALTERNATIVE FORMAT, IT IS THE ONLY ONE ANDROID CAN LOAD. Android's `Typeface`
+// loader rejects WOFF2 and `Font.loadAsync` resolves anyway, so every mushaf page drew in the
+// system fallback — and because QPC V1 encodes glyphs as Arabic Presentation Forms-A from U+FB51,
+// the fallback renders them as their literal Unicode meaning: disconnected Arabic letters that
+// look like plausible Arabic but are not the Quran. Measured on a Pixel 9 Pro, 2026-08-28.
+// Upstream ships both directories; `mushaf/` is uppercase-extension `.TTF`.
+const QPC_TTF_DIR = resolve(QPC_REPO, 'mushaf');
 
 const TOTAL_PAGES = 604;
 const PATCHED_PAGES = new Set([154, 161, 166, 302, 472, 566]);
@@ -54,21 +61,34 @@ const PATCHED_PAGES = new Set([154, 161, 166, 302, 472, 566]);
 const BUCKET = 'gp-cdn';
 const KEY_PREFIX = 'fonts/qpc-v1';
 const CDN_BASE = 'https://cdn.nobleachievements.com';
-const CONTENT_TYPE = 'font/woff2';
+/**
+ * Both formats are uploaded for all 604 pages: native fetches `.ttf`, web fetches `.woff2`
+ * (~2.8× smaller). `lib/mushafFonts.ts`'s `FONT_EXT` is the other half of this contract.
+ */
+const FORMATS = [
+  { ext: 'woff2', srcDir: QPC_WOFF2_DIR, srcExt: 'woff2', contentType: 'font/woff2' },
+  { ext: 'ttf', srcDir: QPC_TTF_DIR, srcExt: 'TTF', contentType: 'font/ttf' },
+] as const;
 const UPLOAD_WORKERS = 4;
 
 const skipUpload = process.argv.includes('--skip-upload');
 const force = process.argv.includes('--force');
 
-function fontName(page: number): string {
-  return `QCF_P${String(page).padStart(3, '0')}.woff2`;
+function fontName(page: number, ext: string): string {
+  return `QCF_P${String(page).padStart(3, '0')}.${ext}`;
 }
 
-/** Local source of truth for one page: the patched copy when one exists, upstream otherwise. */
-function localPathFor(page: number): string {
+/**
+ * Local source of truth for one page in one format: the patched copy when one exists, upstream
+ * otherwise. ⚠️ The patched dir holds BOTH formats deliberately — the app bundles only the `.ttf`,
+ * but a CDN mirror carrying an unrepaired `.woff2` for one of these six pages would be a defective
+ * file sitting under a correct name, waiting for the first consumer that does not check the bundle
+ * first. Upstream's TTF directory uses an UPPERCASE extension.
+ */
+function localPathFor(page: number, fmt: (typeof FORMATS)[number]): string {
   return PATCHED_PAGES.has(page)
-    ? resolve(PATCHED_DIR, fontName(page))
-    : resolve(QPC_WOFF2_DIR, fontName(page));
+    ? resolve(PATCHED_DIR, fontName(page, fmt.ext))
+    : resolve(fmt.srcDir, fontName(page, fmt.srcExt));
 }
 
 // ─── Phase 1: pinned clone (same shape as generate-mushaf-layout.ts) ─────────
@@ -105,9 +125,11 @@ function ensureRepo(): void {
 
 function verifyLocalSet(): void {
   const missing: string[] = [];
-  for (let page = 1; page <= TOTAL_PAGES; page++) {
-    const path = localPathFor(page);
-    if (!existsSync(path) || statSync(path).size === 0) missing.push(fontName(page));
+  for (const fmt of FORMATS) {
+    for (let page = 1; page <= TOTAL_PAGES; page++) {
+      const path = localPathFor(page, fmt);
+      if (!existsSync(path) || statSync(path).size === 0) missing.push(fontName(page, fmt.ext));
+    }
   }
   if (missing.length > 0) {
     console.error(`❌ ${missing.length} font file(s) missing or empty locally:`);
@@ -115,7 +137,8 @@ function verifyLocalSet(): void {
     process.exit(1);
   }
   console.log(
-    `  ✓ All ${TOTAL_PAGES} page fonts present (${PATCHED_PAGES.size} from the patched overlay)`
+    `  ✓ All ${TOTAL_PAGES} page fonts present in ${FORMATS.length} format(s) ` +
+      `(${PATCHED_PAGES.size} per format from the patched overlay)`
   );
 }
 
@@ -147,9 +170,12 @@ async function remoteSize(key: string): Promise<number | null> {
   }
 }
 
-async function uploadOne(page: number): Promise<'uploaded' | 'skipped'> {
-  const key = `${KEY_PREFIX}/${fontName(page)}`;
-  const localPath = localPathFor(page);
+async function uploadOne(
+  page: number,
+  fmt: (typeof FORMATS)[number]
+): Promise<'uploaded' | 'skipped'> {
+  const key = `${KEY_PREFIX}/${fontName(page, fmt.ext)}`;
+  const localPath = localPathFor(page, fmt);
   if (!force) {
     const size = await remoteSize(key);
     if (size !== null && size === statSync(localPath).size) return 'skipped';
@@ -165,7 +191,7 @@ async function uploadOne(page: number): Promise<'uploaded' | 'skipped'> {
       '--file',
       localPath,
       '--content-type',
-      CONTENT_TYPE,
+      fmt.contentType,
       '--remote',
     ]);
     if (exitCode === 0) return 'uploaded';
@@ -180,16 +206,17 @@ async function phase3Upload(): Promise<void> {
   let uploaded = 0;
   let skipped = 0;
   const pages = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
-  for (let i = 0; i < pages.length; i += UPLOAD_WORKERS) {
-    const batch = pages.slice(i, i + UPLOAD_WORKERS);
-    const results = await Promise.all(batch.map((page) => uploadOne(page)));
+  const jobs = FORMATS.flatMap((fmt) => pages.map((page) => ({ page, fmt })));
+  for (let i = 0; i < jobs.length; i += UPLOAD_WORKERS) {
+    const batch = jobs.slice(i, i + UPLOAD_WORKERS);
+    const results = await Promise.all(batch.map(({ page, fmt }) => uploadOne(page, fmt)));
     for (const result of results) {
       if (result === 'uploaded') uploaded++;
       else skipped++;
     }
     const done = uploaded + skipped;
-    if (done % 100 < UPLOAD_WORKERS || done === TOTAL_PAGES) {
-      console.log(`  ${done}/${TOTAL_PAGES} (${uploaded} uploaded, ${skipped} already current)`);
+    if (done % 200 < UPLOAD_WORKERS || done === jobs.length) {
+      console.log(`  ${done}/${jobs.length} (${uploaded} uploaded, ${skipped} already current)`);
     }
   }
   console.log(`  ✓ ${uploaded} uploaded, ${skipped} already current`);
@@ -199,16 +226,20 @@ async function verifyCdn(): Promise<void> {
   // The four corners that matter: an ordinary page, both ends, and a patched page — whose size
   // must match the PATCHED file, proving the overlay actually won.
   const checks: number[] = [1, 2, 154, 604];
-  for (const page of checks) {
-    const key = `${KEY_PREFIX}/${fontName(page)}`;
-    const size = await remoteSize(key);
-    const expected = statSync(localPathFor(page)).size;
-    if (size !== expected) {
-      console.error(`❌ CDN check failed for ${key}: remote=${size}, local=${expected}`);
-      process.exit(1);
+  const names: string[] = [];
+  for (const fmt of FORMATS) {
+    for (const page of checks) {
+      const key = `${KEY_PREFIX}/${fontName(page, fmt.ext)}`;
+      const size = await remoteSize(key);
+      const expected = statSync(localPathFor(page, fmt)).size;
+      if (size !== expected) {
+        console.error(`❌ CDN check failed for ${key}: remote=${size}, local=${expected}`);
+        process.exit(1);
+      }
+      names.push(fontName(page, fmt.ext));
     }
   }
-  console.log(`  ✓ CDN serves the uploaded set (${checks.map(fontName).join(', ')})`);
+  console.log(`  ✓ CDN serves the uploaded set (${names.join(', ')})`);
 }
 
 async function main(): Promise<void> {

@@ -864,7 +864,13 @@ const ROOTS = {
 /** Pages in the book — the layout population, and the `--corpus` sweep's expected size. */
 export const TOTAL_MUSHAF_PAGES = 604;
 
-const pageFontName = (page) => `QCF_P${String(page).padStart(3, '0')}.woff2`;
+// ⚠️ THE BUNDLED PATCHES ARE `.ttf`, THE UPSTREAM `--corpus` IS `.woff2`, and they are different
+// questions. Android's Typeface loader cannot parse WOFF2 while `Font.loadAsync` resolves anyway,
+// so a bundled woff2 patch drew the system fallback on every Android page (measured 2026-08-28) —
+// the six "safe offline" pages were the least safe of all. `readTables` handles a bare sfnt and a
+// WOFF2 alike, so only the names differ.
+const pageFontName = (page) => `QCF_P${String(page).padStart(3, '0')}.ttf`;
+const corpusFontName = (page) => `QCF_P${String(page).padStart(3, '0')}.woff2`;
 const pageLayoutName = (page) => `page-${String(page).padStart(3, '0')}.json`;
 
 /** Repo-relative names of the roots that are absent — the first fail-closed floor. */
@@ -881,7 +887,7 @@ export function missingRoots(root = repoRoot) {
 export function patchedPagesOnDisk(root = repoRoot) {
   const dir = join(root, ROOTS.patchedFonts);
   return readdirSync(dir)
-    .filter((f) => /^QCF_P\d{3}\.woff2$/.test(f))
+    .filter((f) => /^QCF_P\d{3}\.ttf$/.test(f))
     .map((f) => Number(f.slice(5, 8)))
     .sort((a, b) => a - b);
 }
@@ -1025,7 +1031,7 @@ export function runGlyphScan({ root = repoRoot, pages = null, corpusDir = null }
       ? patchedPath
       : corpusDir === null
         ? null
-        : join(corpusDir, pageFontName(page));
+        : join(corpusDir, corpusFontName(page));
     if (fontPath === null || !existsSync(fontPath)) {
       throw new Error(
         `no font for page ${page} — pass --corpus <dir> to scan pages the repo does not bundle`
@@ -1052,7 +1058,7 @@ export function runGlyphScan({ root = repoRoot, pages = null, corpusDir = null }
 
     // A patch earns its place only while the upstream copy it overrides is still broken.
     if (isPatched && corpusDir !== null) {
-      const upstreamPath = join(corpusDir, pageFontName(page));
+      const upstreamPath = join(corpusDir, corpusFontName(page));
       if (existsSync(upstreamPath)) {
         const upstream = parseFont(readFileSync(upstreamPath));
         const stillBroken = [...refs.keys()].some((cp) => {

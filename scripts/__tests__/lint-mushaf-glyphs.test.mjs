@@ -156,7 +156,7 @@ test('every shipped patched font actually repairs the glyph it exists for', () =
     'the patched overlay on disk moved'
   );
   for (const [page, cp, location] of SHIPPED_PATCHES) {
-    const font = parseFont(readFileSync(join(PATCHED_DIR, `QCF_P${page}.woff2`)));
+    const font = parseFont(readFileSync(join(PATCHED_DIR, `QCF_P${page}.ttf`)));
     const gid = font.cmap.get(cp);
     assert.ok(gid !== undefined, `page ${page}: U+${cp.toString(16)} is not in the font`);
     const glyph = font.glyphs[gid];
@@ -240,7 +240,7 @@ const gateSandbox = ({
   mkdirSync(join(root, 'apps/expo/src/lib'), { recursive: true });
 
   if (seedFont)
-    copyFileSync(join(PATCHED_DIR, `QCF_P${page}.woff2`), join(fontDir, `QCF_P${page}.woff2`));
+    copyFileSync(join(PATCHED_DIR, `QCF_P${page}.ttf`), join(fontDir, `QCF_P${page}.ttf`));
   writeFileSync(
     join(layoutDir, `page-${page}.json`),
     layout === null
@@ -250,7 +250,7 @@ const gateSandbox = ({
 
   const list = registries.join(', ');
   const requires = registries
-    .map((p) => `  ${p}: require('@/assets/fonts/qpc-patched/QCF_P${p}.woff2'),`)
+    .map((p) => `  ${p}: require('@/assets/fonts/qpc-patched/QCF_P${p}.ttf'),`)
     .join('\n');
   writeFileSync(
     join(root, 'apps/expo/src/lib/mushafFonts.ts'),
@@ -265,6 +265,9 @@ const gateSandbox = ({
   // An "upstream" corpus holding the REPAIRED copy — i.e. a page whose patch has no reason left.
   if (corpus) {
     mkdirSync(join(root, 'corpus'), { recursive: true });
+    // ⚠️ The corpus keeps `.woff2` — it stands in for UPSTREAM, which ships both formats and whose
+    // woff2 directory is what `--corpus` sweeps. Only the bundled overlay became TTF (Android
+    // cannot parse WOFF2 and `Font.loadAsync` resolves anyway; see `lib/mushafFonts.ts`).
     copyFileSync(
       join(PATCHED_DIR, `QCF_P${page}.woff2`),
       join(root, 'corpus', `QCF_P${page}.woff2`)

@@ -26,6 +26,20 @@
  * 3. **Web** — load straight from the CDN URL; the browser's HTTP cache is the disk cache.
  * 4. **Native** — download once into a DOCUMENT-directory cache, then load from disk.
  *
+ * ⚠️ THE FORMAT IS PER-PLATFORM, AND ANDROID IS THE REASON. Android's `Typeface` loader accepts
+ * TTF/OTF and **not WOFF2** — and `Font.loadAsync` RESOLVES ANYWAY, so `loadPageFont` returned a
+ * family name, `MushafPage` rendered, no error surface appeared, and every page drew in the system
+ * fallback. What the reader saw was not a blank page or an obviously wrong font: QPC V1 maps a
+ * page's ligatures onto Arabic Presentation Forms-A from U+FB51, so with no face applied those
+ * codepoints render as their LITERAL Unicode meaning — a run of disconnected Arabic letters that
+ * reads as plausible Arabic. The app silently displayed text that was not the Quran, under a
+ * correctly-rendered basmala. Measured on a Pixel 9 Pro emulator, 2026-08-28; the file was present
+ * and byte-identical to the CDN's, so nothing about the download was wrong.
+ *
+ * Native therefore fetches `.ttf` and web keeps `.woff2` (~2.8× smaller, and browsers handle it).
+ * The BUNDLED patched six are TTF only — one file each, valid on every platform, and a woff2 copy
+ * would reintroduce exactly this bug for the six pages that are supposed to be the safe ones.
+ *
  * ⚠️ THE CACHE LIVES IN THE DOCUMENT DIRECTORY, NOT `Paths.cache` (the pre-fork choice, changed
  * deliberately). The OS may evict the cache directory under disk pressure, and an evicted page
  * font is a broken offline promise — a page the reader HAS visited would stop rendering in
@@ -47,15 +61,15 @@ import { MUSHAF_FONT_CDN_BASE } from '@/constants/mushaf';
 
 /**
  * Pages whose repaired fonts ship in the bundle. Keys are the page numbers; values are Metro
- * asset module ids (`require` of a `.woff2`, which `metro.config.js` lists in `assetExts`).
+ * asset module ids (`require` of a `.ttf`, which `metro.config.js` lists in `assetExts`).
  */
 const PATCHED_FONTS: Record<number, number> = {
-  154: require('@/assets/fonts/qpc-patched/QCF_P154.woff2'),
-  161: require('@/assets/fonts/qpc-patched/QCF_P161.woff2'),
-  166: require('@/assets/fonts/qpc-patched/QCF_P166.woff2'),
-  302: require('@/assets/fonts/qpc-patched/QCF_P302.woff2'),
-  472: require('@/assets/fonts/qpc-patched/QCF_P472.woff2'),
-  566: require('@/assets/fonts/qpc-patched/QCF_P566.woff2'),
+  154: require('@/assets/fonts/qpc-patched/QCF_P154.ttf'),
+  161: require('@/assets/fonts/qpc-patched/QCF_P161.ttf'),
+  166: require('@/assets/fonts/qpc-patched/QCF_P166.ttf'),
+  302: require('@/assets/fonts/qpc-patched/QCF_P302.ttf'),
+  472: require('@/assets/fonts/qpc-patched/QCF_P472.ttf'),
+  566: require('@/assets/fonts/qpc-patched/QCF_P566.ttf'),
 };
 
 /** The pages `PATCHED_FONTS` covers — exported so the test pins the exact set. */
@@ -84,9 +98,23 @@ export function getPageFontFamily(page: number): string {
   return `QCF_P${String(page).padStart(3, '0')}`;
 }
 
-/** CDN URL for a page's font. */
+/**
+ * The face format this platform can actually load. See the header: Android cannot parse WOFF2 and
+ * `Font.loadAsync` does not fail when it tries, so this is a correctness switch, not an
+ * optimisation. iOS takes TTF too, so native is one branch rather than two.
+ *
+ * ⚠️ A FUNCTION, NOT A MODULE-LOAD CONSTANT. `Platform.OS` is fixed in production, but a
+ * const evaluated at import time freezes the answer before any test can set the platform — which
+ * would leave the web branch permanently asserting the native extension, i.e. the one thing this
+ * split exists to keep apart would be untestable.
+ */
+function fontExt(): string {
+  return Platform.OS === 'web' ? 'woff2' : 'ttf';
+}
+
+/** CDN URL for a page's font, in this platform's format. */
 function getFontUrl(page: number): string {
-  return `${MUSHAF_FONT_CDN_BASE}/${getPageFontFamily(page)}.woff2`;
+  return `${MUSHAF_FONT_CDN_BASE}/${getPageFontFamily(page)}.${fontExt()}`;
 }
 
 /**
@@ -113,7 +141,7 @@ export async function loadPageFont(page: number): Promise<string> {
 
     // Native: document-directory cache, download on first visit, load from disk.
     const cacheDir = new Directory(Paths.document, FONT_CACHE_DIR);
-    const fontFile = new File(cacheDir, `${fontName}.woff2`);
+    const fontFile = new File(cacheDir, `${fontName}.${fontExt()}`);
     if (!fontFile.exists) {
       if (!cacheDir.exists) cacheDir.create({ intermediates: true });
       await File.downloadFileAsync(getFontUrl(page), fontFile, { idempotent: true });
