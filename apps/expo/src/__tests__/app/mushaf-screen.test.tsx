@@ -115,6 +115,7 @@ import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import type { ViewToken } from 'react-native';
 import Mushaf from '@/app/(tabs)/index';
 import { DURATIONS } from '@/constants/animation';
+import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 
 /** The most recent props the list was rendered with. */
 function listProps(): Record<string, unknown> {
@@ -135,10 +136,17 @@ function tapSurface() {
   act(() => tap.end?.());
 }
 
-/** Fire the screen's focus effect again — what a tab switch back to this screen does. */
+/**
+ * Fire the screen's focus effects again — what a tab switch back to this screen does.
+ *
+ * ⚠️ ALL OF THEM, NOT THE LAST ONE — see `read-screen.test.tsx` for the same note. Story 7-1 added
+ * a second `useFocusEffect` (the tracker that keeps an unfocused surface from writing the
+ * listening position), and "the last one" quietly stopped meaning "the resync".
+ */
 function refocus() {
-  const callback = mockFocusCallbacks[mockFocusCallbacks.length - 1];
-  act(() => callback?.());
+  act(() => {
+    for (const callback of mockFocusCallbacks) callback?.();
+  });
 }
 
 function chromeTouches(): unknown {
@@ -408,6 +416,77 @@ describe('the welcome-back banner (story 6-3)', () => {
     // …and the first genuine page turn dismisses it.
     settleOnPage(41);
     expect(screen.queryByTestId('welcome-back-banner')).toBeNull();
+  });
+});
+
+describe('the recitation moves the page, and lights one ayah (story 7-1)', () => {
+  const store = () => useAudioPlayerStore.getState();
+
+  beforeEach(() => act(() => store().clearPlayback()));
+  // The store is a module singleton — see `read-screen.test.tsx` for what leaks without this.
+  afterEach(() => act(() => store().clearPlayback()));
+
+  /** The seam story 6-2 built for exactly this and left unset. */
+  const activeKeyOnPage = (page: number) => {
+    const renderItem = listProps().renderItem as (info: { item: number }) => {
+      props: { children: { props: { activeVerseKey?: string | null } } };
+    };
+    return renderItem({ item: page }).props.children.props.activeVerseKey;
+  };
+
+  it('hands the page renderer the ayah the engine names', () => {
+    render(<Mushaf />);
+    expect(activeKeyOnPage(42)).toBeNull();
+
+    act(() => {
+      store().setTrack(2, 'husary', true);
+      store().setActiveVerse(255);
+    });
+    // Every page gets the same key; `MushafPage` matches it against its own words' locations, so
+    // only the page actually holding 2:255 lights anything.
+    expect(activeKeyOnPage(42)).toBe('2:255');
+  });
+
+  /**
+   * ⚠️ THE CRITERION: audio crossing a page boundary turns the page. The destination is a table
+   * read (2:255 is on page 42), never arithmetic on page numbers.
+   */
+  it('turns to the page holding the active ayah', () => {
+    render(<Mushaf />);
+    mockScrollToIndex.mockClear();
+
+    act(() => {
+      store().setTrack(2, 'husary', true);
+      store().setActiveVerse(255);
+    });
+    expect(mockScrollToIndex).toHaveBeenCalledWith({
+      index: TOTAL_PAGES - 42,
+      animated: true,
+    });
+  });
+
+  it('does NOT re-scroll while the recitation stays on the page already shown', () => {
+    render(<Mushaf />);
+    act(() => {
+      store().setTrack(2, 'husary', true);
+      store().setActiveVerse(255);
+    });
+    mockScrollToIndex.mockClear();
+
+    // 2:256 is on page 42 too. A scroll per ayah would make the pager twitch every few seconds.
+    act(() => store().setActiveVerse(256));
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('writes no position while playing, and one when playback stops', () => {
+    render(<Mushaf />);
+    act(() => store().setPlaybackState('playing'));
+    settleOnPage(300);
+    settleOnPage(301);
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+
+    act(() => store().setPlaybackState('paused'));
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
   });
 });
 

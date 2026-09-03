@@ -95,3 +95,7 @@ _bmad/render/
 
 # Playwright MCP scratch output (console logs / page snapshots) — never source
 .playwright-mcp/
+
+# Python bytecode caches from the BMAD skill scripts — never source
+__pycache__/
+*.pyc

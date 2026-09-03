@@ -24,6 +24,11 @@ import {
 import { addBookmark, removeBookmark, useBookmarks, usePreferences } from '@/lib/sync';
 import { type ReadingPositionPair, usePosition, verseKey } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
+import {
+  useActiveVerseKey,
+  usePlaybackControls,
+  usePlaybackStatus,
+} from '@/stores/audioPlayerStore';
 
 /**
  * READING MODE — the verse-by-verse surface (story 6-1; a TAB ROUTE since story 6-6).
@@ -122,6 +127,12 @@ export default function Read() {
   const { saved, reportVerse } = usePosition();
   const { data: preferences } = usePreferences();
   const { data: bookmarks } = useBookmarks();
+  // ⚠️ THREE SEPARATE SUBSCRIPTIONS, NOT ONE. `useActiveVerseKey` is the only one that moves per
+  // ayah; the controls are stable function references and the status changes a handful of times
+  // per listen. Selecting them together would re-derive all three on every ayah change.
+  const activeVerseKey = useActiveVerseKey();
+  const { playSurah, seekToVerse, pause, resume } = usePlaybackControls();
+  const playback = usePlaybackStatus();
 
   // ⚠️ THE PAIR IS RESOLVED ONCE PER FOCUS, AND BOTH HALVES COME FROM THE SAME READ. Within a
   // focused session the reader owns where they are: re-reading the row on every render would
@@ -148,6 +159,11 @@ export default function Read() {
   // The saved row, as a ref, for the same reason: the focus effect reads it at FOCUS time.
   const savedRef = useRef(saved);
   savedRef.current = saved;
+  // ⚠️ PLAYBACK, MIRRORED INTO A REF, for the `bookmarkIdsRef` reason exactly: `onPressVerse` is
+  // handed to every row and must stay identity-stable, or `VerseRow`'s memo stops working and the
+  // highlight starts re-rendering all 286 rows of Al-Baqarah.
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
 
   /**
    * ⚠️ THE FOCUS RESYNC — story 6-6's "one position, two renderers". Runs on every focus of this
@@ -237,6 +253,79 @@ export default function Read() {
     if (content.error !== null || isEmpty) show();
   }, [content.error, isEmpty, show]);
 
+  /**
+   * ⚠️ THE READING VIEW FOLLOWS THE RECITATION, INCLUDING ACROSS A SURAH BOUNDARY. The active key
+   * carries the surah, so a track change is handled here rather than by a second channel: the
+   * screen re-targets the new surah, its rows load, and the next run of this effect scrolls. The
+   * restore latch is CONSUMED on the way through — otherwise the restore effect would fight this
+   * one and scroll back to the saved verse the moment the new surah's rows arrived.
+   */
+  useEffect(() => {
+    /**
+     * ⚠️ ONLY WHILE PLAYING, AND THAT GUARD IS A FIX RATHER THAN A TIGHTENING. `pause()` leaves
+     * the active key set, and this effect also depends on `content.verses` — so after pausing,
+     * every later surah change (the index picker, a focus resync from the mushaf) re-ran it with
+     * the STALE key and dragged the reader straight back to the audio's surah, consuming the
+     * restore latch on the way. A paused recitation must not own where the reader is.
+     */
+    if (playback.playbackState !== 'playing') return;
+    if (!activeVerseKey) return;
+    const [audioSurah, audioVerse] = activeVerseKey.split(':').map(Number);
+    if (!Number.isInteger(audioSurah) || !Number.isInteger(audioVerse)) return;
+
+    if (audioSurah !== showing.current) {
+      showing.current = audioSurah;
+      visibleVerseRef.current = audioVerse;
+      restored.current = true;
+      setSurah(audioSurah);
+      return;
+    }
+    visibleVerseRef.current = audioVerse;
+    const index = content.verses.findIndex((v) => v.verse === audioVerse);
+    if (index < 0) return;
+    listRef.current?.scrollToIndex({ index, animated: true });
+    /**
+     * ⚠️ AND AGAIN NEXT FRAME ON THE ROWS' FIRST RUN — the recorded Android defect, which a
+     * track change walks straight into. When audio crosses into a new surah this effect fires as
+     * that surah's rows arrive, and FlashList has not MEASURED them yet, so `scrollToIndex`
+     * resolves against an ESTIMATE that on Android lands far past the real content and leaves a
+     * blank viewport. The restore effect above carries the same pair of calls for the same
+     * reason; a repeat scroll is idempotent, a missed one is a blank page.
+     */
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index, animated: false });
+    });
+  }, [activeVerseKey, content.verses, playback.playbackState]);
+
+  /**
+   * The one reading-position write a listening session makes. Fires when playback LEAVES the
+   * playing state — a pause, a stop, an error — so where the reader stopped listening becomes
+   * where they resume reading.
+   */
+  const wasPlaying = useRef(false);
+  /**
+   * ⚠️ ONLY THE FOCUSED SURFACE WRITES. Both reading tabs can be mounted at once, so without this
+   * a single pause fired BOTH stop-writes — and the mushaf's is the settled page's FIRST verse,
+   * which would land after the reading verse and overwrite it with an earlier ayah. The reader
+   * pauses at 2:255 and resumes at 2:253.
+   */
+  const focused = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      return () => {
+        focused.current = false;
+      };
+    }, [])
+  );
+  useEffect(() => {
+    const playing = playback.playbackState === 'playing';
+    if (wasPlaying.current && !playing && focused.current) {
+      reportVerse(showing.current, visibleVerseRef.current);
+    }
+    wasPlaying.current = playing;
+  }, [playback.playbackState, reportVerse]);
+
   const styles = useThemedStyles((theme) => ({
     screen: {
       flex: 1,
@@ -280,6 +369,14 @@ export default function Read() {
       if (!top) return;
       if (top.surah !== showing.current) return;
       visibleVerseRef.current = top.verse;
+      /**
+       * ⚠️ NOT WHILE THE RECITATION IS PLAYING (story 7-1). During playback the scrolling is the
+       * APP's, following the audio — so reporting it would turn an hour's listening into a synced
+       * reading-position write every few seconds. `usePosition` throttles to one write per verse
+       * CHANGE, which is exactly what an advancing recitation produces. The position is written
+       * once when playback stops, by the effect below.
+       */
+      if (playbackRef.current.playbackState === 'playing') return;
       // Reported every time. `usePosition` decides whether it is a write.
       reportVerse(top.surah, top.verse);
     },
@@ -318,6 +415,47 @@ export default function Read() {
     addBookmark({ id: Crypto.randomUUID(), surah, verse });
   }, []);
 
+  /**
+   * Tap-to-seek, story 7-1's half of the verse tap epic 6 reserved. Two cases and one rule: if
+   * this surah is already the loaded track, MOVE inside it; otherwise start it here. ⚠️ The pair
+   * comes from the ROW (see `toggleBookmark` for the defect that taught this), and everything
+   * else is read through a ref so the callback stays identity-stable for `VerseRow`'s memo.
+   */
+  const onPressVerse = useCallback(
+    (rowSurah: number, verse: number) => {
+      const { surah: trackSurah, playbackState } = playbackRef.current;
+      if (trackSurah === rowSurah && playbackState !== 'idle' && playbackState !== 'error') {
+        void seekToVerse(verse);
+        return;
+      }
+      void playSurah(rowSurah, verse);
+    },
+    [seekToVerse, playSurah]
+  );
+
+  /**
+   * ⚠️ A PLAYBACK FAILURE REVEALS THE CHROME, for the reason a failed mushaf page does: the error
+   * is drawn INSIDE the chrome, so leaving it hidden would put the message and its retry behind a
+   * tap the reader has no reason to make.
+   */
+  useEffect(() => {
+    if (playback.errorKey !== null) show();
+  }, [playback.errorKey, show]);
+
+  /** The chrome's transport: resume, pause, or start this surah where the reader is looking. */
+  const togglePlay = useCallback(() => {
+    const { surah: trackSurah, playbackState } = playbackRef.current;
+    if (playbackState === 'playing') {
+      void pause();
+      return;
+    }
+    if (trackSurah === showing.current && playbackState === 'paused') {
+      void resume();
+      return;
+    }
+    void playSurah(showing.current, visibleVerseRef.current);
+  }, [pause, resume, playSurah]);
+
   const goToSurah = useCallback((next: number) => {
     // Synchronously, BEFORE the scroll: the viewability callback that the scroll provokes must
     // already see the new surah as the one we are showing.
@@ -351,10 +489,12 @@ export default function Read() {
         fontSize={fontSize}
         bookmarked={bookmarkIds.has(verseKey(item.surah, item.verse))}
         onToggleBookmark={toggleBookmark}
+        highlighted={activeVerseKey === verseKey(item.surah, item.verse)}
+        onPressVerse={onPressVerse}
         testID={`verse-${item.surah}:${item.verse}`}
       />
     ),
-    [fontSize, bookmarkIds, toggleBookmark]
+    [fontSize, bookmarkIds, toggleBookmark, activeVerseKey, onPressVerse]
   );
 
   const title = content.meta?.nameTransliteration ?? null;
@@ -425,7 +565,14 @@ export default function Read() {
           )}
         </View>
       </GestureDetector>
-      <ReadingChrome reveal={reveal} title={title} mode="reading" />
+      <ReadingChrome
+        reveal={reveal}
+        title={title}
+        mode="reading"
+        playing={playback.playbackState === 'playing'}
+        onTogglePlay={togglePlay}
+        errorMessage={playback.errorKey ? t(playback.errorKey) : null}
+      />
     </View>
   );
 }

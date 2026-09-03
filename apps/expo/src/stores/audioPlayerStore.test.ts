@@ -1,261 +1,145 @@
 /**
- * audioPlayerStore — pure state/queue action tests (Story 19.2).
+ * `stores/audioPlayerStore.ts` — the pure state transitions (story 7-1).
  *
- * Covers the reducer-equivalent state transitions and the queue logic that was
- * the bulk of the old 1,805-LOC AudioPlayerContext suite: shuffle Fisher-Yates +
- * un-shuffle restore, queue bounds (next/previous index), cycleRepeatMode,
- * playbackCompleted, and the derived selectors. The imperative engine actions
- * (play/pause/seekTo…) are covered in useAudioPlayerEngine.test.tsx (they need the
- * expo-audio player); here we only exercise the pure store.
+ * The imperative half (`playSurah`, `seekToVerse`, …) is the engine's and is covered in
+ * `features/audio/hooks/useRecitationEngine.test.tsx`; here the registered slots are only checked
+ * for being inert before boot and replaceable after it.
  */
 
 import { act } from '@testing-library/react-native';
-import { type QueueState, useAudioPlayerStore } from './audioPlayerStore';
 
-const baseQueue = (overrides: Partial<QueueState> = {}): QueueState => ({
-  items: [
-    { bookId: 'b1', sectionType: 'summaryBrief' },
-    { bookId: 'b2', sectionType: 'summaryBrief' },
-    { bookId: 'b3', sectionType: 'summaryBrief' },
-  ],
-  currentIndex: 0,
-  source: 'collection',
-  sourceId: 'c1',
-  shuffleEnabled: false,
-  repeatMode: 'off',
-  originalOrder: [],
-  ...overrides,
-});
+import { useAudioPlayerStore } from './audioPlayerStore';
 
-const store = useAudioPlayerStore;
-
-beforeEach(() => {
+const reset = () =>
   act(() => {
-    store.setState(store.getInitialState(), true);
+    useAudioPlayerStore.getState().clearPlayback();
   });
-});
 
-describe('audioPlayerStore — initial state', () => {
-  it('starts idle with no track', () => {
-    const s = store.getState();
-    expect(s.currentBookId).toBeNull();
-    expect(s.currentSection).toBeNull();
+describe('audioPlayerStore — idle', () => {
+  beforeEach(reset);
+
+  it('starts with nothing playing and nothing highlighted', () => {
+    const s = useAudioPlayerStore.getState();
     expect(s.playbackState).toBe('idle');
-    expect(s.positionMs).toBe(0);
-    expect(s.playbackRate).toBe(1);
-    expect(s.volume).toBe(1);
-    expect(s.blocks).toBeNull();
-    expect(s.error).toBeNull();
-    expect(s.queue).toBeNull();
-    expect(s.sleepEndOfSection).toBe(false);
+    expect(s.surah).toBeNull();
+    expect(s.activeVerseKey).toBeNull();
+    expect(s.highlightAvailable).toBe(false);
+    expect(s.errorKey).toBeNull();
+  });
+
+  it('has inert engine actions before the engine registers, not missing ones', async () => {
+    // A play control pressed in the first frames must be a no-op, never a crash.
+    await expect(useAudioPlayerStore.getState().playSurah(1)).resolves.toBeUndefined();
+    await expect(useAudioPlayerStore.getState().abandonPlayback()).resolves.toBeUndefined();
   });
 });
 
-describe('audioPlayerStore — playback state transitions', () => {
-  it('playAudio sets the new track and loading state', () => {
+describe('audioPlayerStore — the active verse key', () => {
+  beforeEach(reset);
+
+  it('composes the key from the CURRENT track, so it can never name another surah', () => {
+    act(() => useAudioPlayerStore.getState().setTrack(36, 'husary', true));
+    act(() => useAudioPlayerStore.getState().setActiveVerse(12));
+    expect(useAudioPlayerStore.getState().activeVerseKey).toBe('36:12');
+  });
+
+  /**
+   * ⚠️ THE REGRESSION THIS PINS: without clearing on a track change, the OLD surah's ayah stays
+   * on screen over the NEW surah's text for every frame between `trackChanged` and the first
+   * status tick — a highlight confidently pointing at the wrong verse of the wrong surah.
+   */
+  it('clears the key on a track change rather than carrying it across', () => {
+    act(() => useAudioPlayerStore.getState().setTrack(1, 'husary', true));
+    act(() => useAudioPlayerStore.getState().setActiveVerse(7));
+    expect(useAudioPlayerStore.getState().activeVerseKey).toBe('1:7');
+
+    act(() => useAudioPlayerStore.getState().setTrack(2, 'husary', true));
+    expect(useAudioPlayerStore.getState().activeVerseKey).toBeNull();
+  });
+
+  /**
+   * ⚠️ MEASURED DATA, NOT A HYPOTHETICAL: `alafasy` publishes 1,088 of 6,236 rows without
+   * timings. Highlighting off a partial manifest parks the highlight on an early ayah for the
+   * whole track — worse than showing none.
+   */
+  it('publishes no key at all when the surah is not fully timed', () => {
+    act(() => useAudioPlayerStore.getState().setTrack(36, 'alafasy', false));
+    act(() => useAudioPlayerStore.getState().setActiveVerse(2));
+    expect(useAudioPlayerStore.getState().activeVerseKey).toBeNull();
+  });
+
+  it('publishes no key before a track exists', () => {
+    act(() => useAudioPlayerStore.getState().setActiveVerse(3));
+    expect(useAudioPlayerStore.getState().activeVerseKey).toBeNull();
+  });
+
+  it('clears the key when the engine reports no verse', () => {
+    act(() => useAudioPlayerStore.getState().setTrack(1, 'husary', true));
+    act(() => useAudioPlayerStore.getState().setActiveVerse(3));
+    act(() => useAudioPlayerStore.getState().setActiveVerse(null));
+    expect(useAudioPlayerStore.getState().activeVerseKey).toBeNull();
+  });
+});
+
+describe('audioPlayerStore — playback state and errors', () => {
+  beforeEach(reset);
+
+  it('moves through the playback states the engine reports', () => {
+    for (const state of ['loading', 'playing', 'buffering', 'paused'] as const) {
+      act(() => useAudioPlayerStore.getState().setPlaybackState(state));
+      expect(useAudioPlayerStore.getState().playbackState).toBe(state);
+    }
+  });
+
+  it('an error keeps the track, because the retry needs to know what failed', () => {
+    act(() => useAudioPlayerStore.getState().setTrack(18, 'husary', true));
+    act(() => useAudioPlayerStore.getState().setError('player:errors.playFailed'));
+
+    const s = useAudioPlayerStore.getState();
+    expect(s.playbackState).toBe('error');
+    expect(s.errorKey).toBe('player:errors.playFailed');
+    expect(s.surah).toBe(18);
+  });
+
+  it('clearing the error returns to idle', () => {
+    act(() => useAudioPlayerStore.getState().setError('player:errors.playFailed'));
+    act(() => useAudioPlayerStore.getState().setError(null));
+    expect(useAudioPlayerStore.getState().playbackState).toBe('idle');
+    expect(useAudioPlayerStore.getState().errorKey).toBeNull();
+  });
+
+  it('starting a new track clears a previous error', () => {
+    act(() => useAudioPlayerStore.getState().setError('player:errors.playFailed'));
+    act(() => useAudioPlayerStore.getState().setTrack(1, 'husary', true));
+    expect(useAudioPlayerStore.getState().errorKey).toBeNull();
+  });
+});
+
+describe('audioPlayerStore — engine registration', () => {
+  beforeEach(reset);
+
+  it('replaces the inert slots with the engine ones', async () => {
+    const playSurah = jest.fn().mockResolvedValue(undefined);
     act(() =>
-      store.getState().playAudio({
-        bookId: 'b1',
-        section: 'summaryBrief',
-        audioUrl: 'https://x/a.mp3',
-        durationMs: 60000,
+      useAudioPlayerStore.getState().registerEngineActions({
+        playSurah,
+        pause: jest.fn().mockResolvedValue(undefined),
+        resume: jest.fn().mockResolvedValue(undefined),
+        seekToVerse: jest.fn().mockResolvedValue(undefined),
+        stop: jest.fn().mockResolvedValue(undefined),
+        abandonPlayback: jest.fn().mockResolvedValue(undefined),
       })
     );
-    const s = store.getState();
-    expect(s.currentBookId).toBe('b1');
-    expect(s.currentSection).toBe('summaryBrief');
-    expect(s.currentAudioUrl).toBe('https://x/a.mp3');
-    expect(s.durationMs).toBe(60000);
-    expect(s.playbackState).toBe('loading');
-    expect(s.positionMs).toBe(0);
-    expect(s.blocks).toBeNull();
-    expect(s.error).toBeNull();
+
+    await useAudioPlayerStore.getState().playSurah(114);
+    expect(playSurah).toHaveBeenCalledWith(114);
   });
 
-  it('pause / resume toggle playbackState', () => {
-    act(() => store.getState().resumeAudio());
-    expect(store.getState().playbackState).toBe('playing');
-    act(() => store.getState().pauseAudio());
-    expect(store.getState().playbackState).toBe('paused');
-  });
-
-  it('stopAudio resets track + queue', () => {
-    act(() => {
-      store.getState().playAudio({
-        bookId: 'b1',
-        section: 'summaryBrief',
-        audioUrl: 'u',
-        durationMs: 1000,
-      });
-      store.getState().setQueue(baseQueue());
-      store.getState().stopAudio();
-    });
-    const s = store.getState();
-    expect(s.currentBookId).toBeNull();
-    expect(s.playbackState).toBe('idle');
-    expect(s.positionMs).toBe(0);
-    expect(s.durationMs).toBe(0);
-    expect(s.queue).toBeNull();
-  });
-
-  it('setError sets error + error state; clearError clears it', () => {
-    act(() => store.getState().setError('boom'));
-    expect(store.getState().error).toBe('boom');
-    expect(store.getState().playbackState).toBe('error');
-    act(() => store.getState().clearError());
-    expect(store.getState().error).toBeNull();
-  });
-
-  it('playbackCompleted parks at end + increments the completion counter', () => {
-    act(() => {
-      store.getState().setDuration(60000);
-      store.getState().resumeAudio();
-      store.getState().playbackCompleted();
-    });
-    const s = store.getState();
-    expect(s.playbackState).toBe('paused');
-    expect(s.positionMs).toBe(60000);
-    expect(s.sectionCompletedCount).toBe(1);
-  });
-});
-
-describe('audioPlayerStore — markSectionCompleted', () => {
-  it('bumps the completion counter ONLY — does not pause or move position', () => {
-    act(() => {
-      store.getState().setDuration(60000);
-      store.getState().setPosition(12345);
-      store.getState().resumeAudio();
-      store.getState().markSectionCompleted();
-    });
-    const s = store.getState();
-    // Unlike playbackCompleted, the next track is already playing — state untouched.
-    expect(s.sectionCompletedCount).toBe(1);
-    expect(s.playbackState).toBe('playing');
-    expect(s.positionMs).toBe(12345);
-  });
-});
-
-describe('audioPlayerStore — cycleRepeatMode', () => {
-  it('cycles off → all → one → off', () => {
-    act(() => store.getState().setQueue(baseQueue({ repeatMode: 'off' })));
-    act(() => store.getState().cycleRepeatMode());
-    expect(store.getState().queue?.repeatMode).toBe('all');
-    act(() => store.getState().cycleRepeatMode());
-    expect(store.getState().queue?.repeatMode).toBe('one');
-    act(() => store.getState().cycleRepeatMode());
-    expect(store.getState().queue?.repeatMode).toBe('off');
-  });
-});
-
-describe('audioPlayerStore — toggleShuffle', () => {
-  it('enabling shuffle keeps the current item at index 0 and stores originalOrder', () => {
-    act(() => store.getState().setQueue(baseQueue({ currentIndex: 1 })));
-    const original = store.getState().queue!.items;
-    const currentItem = original[1];
-
-    act(() => store.getState().toggleShuffle());
-    const q = store.getState().queue!;
-    expect(q.shuffleEnabled).toBe(true);
-    expect(q.currentIndex).toBe(0);
-    expect(q.items[0]).toEqual(currentItem);
-    // originalOrder preserved for restore
-    expect(q.originalOrder).toEqual(original);
-    // same set of items, no loss
-    expect(q.items).toHaveLength(original.length);
-    expect(new Set(q.items.map((i) => i.bookId))).toEqual(new Set(original.map((i) => i.bookId)));
-  });
-
-  it('disabling shuffle restores the original order and re-finds the current index', () => {
-    act(() => store.getState().setQueue(baseQueue({ currentIndex: 2 })));
-    const original = store.getState().queue!.items;
-    const currentItem = original[2];
-
-    act(() => store.getState().toggleShuffle()); // enable
-    act(() => store.getState().toggleShuffle()); // disable → restore
-
-    const q = store.getState().queue!;
-    expect(q.shuffleEnabled).toBe(false);
-    expect(q.items).toEqual(original);
-    expect(q.originalOrder).toEqual([]);
-    expect(q.items[q.currentIndex]).toEqual(currentItem);
-  });
-
-  it('no-ops with no queue', () => {
-    act(() => store.getState().toggleShuffle());
-    expect(store.getState().queue).toBeNull();
-  });
-});
-
-describe('audioPlayerStore — updateQueueItems', () => {
-  it('replaces items and originalOrder', () => {
-    act(() => store.getState().setQueue(baseQueue()));
-    const next = [{ bookId: 'z1', sectionType: 'summaryCore' }];
-    act(() => store.getState().updateQueueItems(next));
-    const q = store.getState().queue!;
-    expect(q.items).toEqual(next);
-    expect(q.originalOrder).toEqual(next);
-  });
-});
-
-describe('audioPlayerStore — sleep timer (Story 19.5)', () => {
-  it('setSleepTimer(ms) starts a timed sleep', () => {
-    act(() => store.getState().setSleepTimer(30 * 60_000));
-    const s = store.getState();
-    expect(s.sleepActive).toBe(true);
-    expect(s.sleepDurationMs).toBe(1_800_000);
-    expect(s.sleepRemainingMs).toBe(1_800_000);
-    expect(s.sleepEndOfSection).toBe(false);
-  });
-
-  it("setSleepTimer('end') sets end-of-section with no countdown", () => {
-    act(() => store.getState().setSleepTimer('end'));
-    const s = store.getState();
-    expect(s.sleepActive).toBe(true);
-    expect(s.sleepEndOfSection).toBe(true);
-    expect(s.sleepDurationMs).toBeNull();
-    expect(s.sleepRemainingMs).toBe(0);
-  });
-
-  it('setSleepRemaining writes the countdown, clamped to ≥ 0', () => {
-    act(() => store.getState().setSleepTimer(60_000));
-    act(() => store.getState().setSleepRemaining(45_000));
-    expect(store.getState().sleepRemainingMs).toBe(45_000);
-    act(() => store.getState().setSleepRemaining(-5));
-    expect(store.getState().sleepRemainingMs).toBe(0);
-  });
-
-  it('clearSleepTimer and setSleepTimer(null) turn everything off', () => {
-    act(() => store.getState().setSleepTimer('end'));
-    act(() => store.getState().clearSleepTimer());
-    let s = store.getState();
-    expect(s.sleepActive).toBe(false);
-    expect(s.sleepEndOfSection).toBe(false);
-    expect(s.sleepDurationMs).toBeNull();
-    expect(s.sleepRemainingMs).toBe(0);
-
-    act(() => store.getState().setSleepTimer(60_000));
-    act(() => store.getState().setSleepTimer(null));
-    s = store.getState();
-    expect(s.sleepActive).toBe(false);
-    expect(s.sleepDurationMs).toBeNull();
-  });
-
-  it('setSleepTimer with a non-positive duration cancels', () => {
-    act(() => store.getState().setSleepTimer(60_000));
-    act(() => store.getState().setSleepTimer(0));
-    expect(store.getState().sleepActive).toBe(false);
-    expect(store.getState().sleepDurationMs).toBeNull();
-  });
-
-  it('bumps sleepEpoch on each timed arm so re-arming the SAME duration re-latches (CR)', () => {
-    const epoch0 = store.getState().sleepEpoch;
-    act(() => store.getState().setSleepTimer(30 * 60_000));
-    const epoch1 = store.getState().sleepEpoch;
-    expect(epoch1).toBe(epoch0 + 1);
-    // Re-arm the identical duration — sleepDurationMs is unchanged, but the epoch
-    // MUST advance so the engine effect re-runs and re-anchors endTime.
-    act(() => store.getState().setSleepTimer(30 * 60_000));
-    expect(store.getState().sleepDurationMs).toBe(1_800_000);
-    expect(store.getState().sleepEpoch).toBe(epoch1 + 1);
+  /**
+   * `lib/accountTeardown.ts` reaches playback through this store rather than through the feature
+   * — `lib/ → features/` would be a `lint:layers` violation. That seam must keep existing.
+   */
+  it('exposes abandonPlayback for account teardown', () => {
+    expect(typeof useAudioPlayerStore.getState().abandonPlayback).toBe('function');
   });
 });

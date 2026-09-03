@@ -12,6 +12,7 @@ import 'react-native-reanimated';
 import { AlertHost } from '@/components/ui/AlertHost';
 import { ThemeCrossfade } from '@/components/ui/ThemeCrossfade';
 import { UTHMANI_WEB_FONT } from '@/constants/arabic';
+import { RecitationEngineHost } from '@/features/audio';
 import { initI18n } from '@/i18n';
 import { ensureAnonymousSession, useSession } from '@/lib/auth';
 import { validateConfig } from '@/lib/config';
@@ -189,10 +190,11 @@ function RootLayout() {
                 zero useAnalytics() consumers, and Cloud Quran ships zero third-party analytics
                 (PRD NFR8), so it was removed rather than emptied. */}
             <RootLayoutNav />
-            {/* story 5-1: the audio engine host mounted here in the source app. Cloud Quran's
-                engine arrives in epic 7 (surah tracks + per-ayah offsets) and re-mounts as a
-                null-rendering sibling in this exact position — NOT wrapped around the tree, so
-                its position ticks stay off the nav graph. */}
+            {/* story 7-1: the recitation engine, in the exact position story 5-1 reserved for it
+                — a null-rendering SIBLING of the nav tree, never wrapped around it, so its 100ms
+                status ticks stay off the nav graph. It gates nothing: the reciter preference is
+                seeded synchronously from MMKV and falls back to the shipped default. */}
+            <RecitationEngineHost />
             {/* Single mounted host for the imperative useAlert() native alert. */}
             <AlertHost />
           </KeyboardProvider>

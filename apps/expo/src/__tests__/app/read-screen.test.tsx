@@ -163,6 +163,7 @@ import { ARABIC_FONT_SIZE, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 // deleted; measuring the padding against a hand-typed number would leave the pair free to drift
 // apart in both directions at once.
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
+import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 
 type TestVerse = { surah: number; verse: number; textUthmani: string; textSimple: string };
 
@@ -194,10 +195,18 @@ function tapSurface() {
   act(() => tap.end?.());
 }
 
-/** Fire the screen's focus effect again — what a tab switch back to this screen does. */
+/**
+ * Fire the screen's focus effects again — what a tab switch back to this screen does.
+ *
+ * ⚠️ ALL OF THEM, NOT THE LAST ONE. This took the newest callback until story 7-1 added a SECOND
+ * `useFocusEffect` (the focus tracker that keeps an unfocused surface from writing the listening
+ * position), at which point "the last one" silently stopped meaning "the resync" and the 6-6
+ * resync cases went green against the wrong effect. A real focus runs every one of them.
+ */
 function refocus() {
-  const callback = mockFocusCallbacks[mockFocusCallbacks.length - 1];
-  act(() => callback?.());
+  act(() => {
+    for (const callback of mockFocusCallbacks) callback?.();
+  });
 }
 
 /**
@@ -403,6 +412,89 @@ describe('the position write', () => {
     reportVisible({ surah: 2, verse: 1, textUthmani: '', textSimple: '' });
     expect(mockSetReadingPosition).toHaveBeenCalledTimes(2);
     expect(mockSetReadingPosition.mock.calls[1][0]).toMatchObject({ surah: 2, verse: 1 });
+  });
+});
+
+describe('the recitation, and what it does to the position write (story 7-1)', () => {
+  const store = () => useAudioPlayerStore.getState();
+
+  beforeEach(() => {
+    act(() => store().clearPlayback());
+  });
+
+  // ⚠️ AND AFTER, TOO. The playback store is a module singleton: a test that leaves it `playing`
+  // — or holding an active verse key — suppresses the position write and re-targets the surah in
+  // every case that follows, in files that have nothing to do with audio.
+  afterEach(() => {
+    act(() => store().clearPlayback());
+  });
+
+  /**
+   * ⚠️ THE WRITE-BUDGET CRITERION. An hour of listening advances the verse every few seconds, and
+   * `usePosition` writes once per verse CHANGE — which is exactly what an advancing recitation
+   * produces. Left unguarded, one commute is hundreds of synced writes. The suppression is what
+   * makes "bounded by pause/stop, not by verse count" true.
+   */
+  it('writes NOTHING while the recitation is playing, however many verses pass', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    act(() => store().setPlaybackState('playing'));
+
+    for (const v of versesOf(1, 7)) reportVisible(v);
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+  });
+
+  it('writes ONCE when playback stops, at the verse the reader stopped on', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    act(() => store().setPlaybackState('playing'));
+    reportVisible(versesOf(1, 7)[4]); // 1:5 — recorded in the ref, not written
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+
+    act(() => store().setPlaybackState('paused'));
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+    expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ surah: 1, verse: 5 });
+  });
+
+  it('reports normally again once playback has stopped — the guard is not a mute button', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    act(() => store().setPlaybackState('playing'));
+    act(() => store().setPlaybackState('paused'));
+    mockSetReadingPosition.mockClear();
+
+    reportVisible(versesOf(1, 7)[2]);
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+    expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ surah: 1, verse: 3 });
+  });
+
+  it('highlights exactly the ayah the engine names, and only that one', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    act(() => {
+      store().setTrack(1, 'husary', true);
+      store().setActiveVerse(4);
+    });
+
+    const background = (verse: number) => {
+      const style = screen.getByTestId(`verse-1:${verse}`).props.style;
+      const parts = (Array.isArray(style) ? style.flat(2) : [style]).filter(Boolean);
+      return Object.assign({}, ...parts).backgroundColor;
+    };
+    const lit = [1, 2, 3, 4, 5, 6, 7].filter((v) => background(v) !== undefined);
+    expect(lit).toEqual([4]);
+  });
+
+  it('follows the recitation across a surah boundary — the reader does not stay behind', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    act(() => store().setPlaybackState('playing'));
+    act(() => {
+      store().setTrack(2, 'husary', true);
+      store().setActiveVerse(1);
+    });
+    // The screen re-targets the surah the audio moved to and loads its rows.
+    await screen.findByText('أية 2:1');
   });
 });
 

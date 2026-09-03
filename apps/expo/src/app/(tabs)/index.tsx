@@ -2,6 +2,7 @@ import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useFocusEffect } from 'expo-router';
 import { getFirstVerseForPage, getPageForVerse, SURAH_METADATA, TOTAL_PAGES } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
@@ -9,6 +10,11 @@ import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
+import {
+  useActiveVerseKey,
+  usePlaybackControls,
+  usePlaybackStatus,
+} from '@/stores/audioPlayerStore';
 
 /**
  * MUSHAF MODE — the 604-page facsimile surface (story 6-2), and THE HOME SURFACE since story
@@ -84,9 +90,14 @@ function openingPage(saved: ReadingPositionPair | null): number {
 }
 
 export default function Mushaf() {
+  const { t } = useTranslation();
   const reveal = useChromeReveal();
   const { saved, reportVerse } = usePosition('mushaf');
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // Three separate subscriptions, for `read.tsx`'s reason: only the key moves per ayah.
+  const activeVerseKey = useActiveVerseKey();
+  const { playSurah, pause, resume } = usePlaybackControls();
+  const playback = usePlaybackStatus();
 
   // Resolved once per focus — the reader owns where they are in between (see `read.tsx`).
   const [opening] = useState(() => openingPage(saved));
@@ -101,6 +112,10 @@ export default function Mushaf() {
   // The saved row at focus time, without re-creating the focus callback per render.
   const savedRef = useRef(saved);
   savedRef.current = saved;
+  // Playback in a ref: the viewability handler must stay identity-stable (FlashList's rule) and
+  // still be able to ask whether the page it is reporting was turned by the reader or by audio.
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
   const listRef = useRef<FlashListRef<number>>(null);
   /**
    * Which pages are currently in a failed state — shape 6 in the header. A SET rather than
@@ -165,11 +180,82 @@ export default function Mushaf() {
       }
       const first = getFirstVerseForPage(page);
       if (first.surah === 0) return; // out-of-range answer — nothing true to write
+      // ⚠️ NOT WHILE PLAYING — `read.tsx`'s reasoning, on this surface's cadence. An audio-driven
+      // page turn is the app moving, not the reader, and a long listen would otherwise write a
+      // position per page. The effect below writes once when playback stops.
+      if (playbackRef.current.playbackState === 'playing') return;
       // Reported every time. `usePosition` decides whether it is a write.
       reportVerse(first.surah, first.verse);
     },
     [reportVerse, show]
   );
+
+  /**
+   * ⚠️ THE PAGE FOLLOWS THE RECITATION (story 7-1). The active ayah's page is a table read, so
+   * this is a lookup and a comparison, not arithmetic on page numbers. Only a CHANGE of page
+   * scrolls — an ayah advancing within the page the reader is already on must not re-scroll it,
+   * or every few seconds the pager would twitch.
+   */
+  useEffect(() => {
+    if (!activeVerseKey) return;
+    const [surah, verse] = activeVerseKey.split(':').map(Number);
+    if (!Number.isInteger(surah) || !Number.isInteger(verse)) return;
+    const page = getPageForVerse(surah, verse);
+    if (page < 1 || page > TOTAL_PAGES || page === currentPageRef.current) return;
+    currentPageRef.current = page;
+    setCurrentPage(page);
+    listRef.current?.scrollToIndex({ index: pageToIndex(page), animated: true });
+  }, [activeVerseKey]);
+
+  /** The one position write a listening session makes here — `read.tsx`'s effect, same reason. */
+  const wasPlaying = useRef(false);
+  /**
+   * ⚠️ ONLY THE FOCUSED SURFACE WRITES — see `read.tsx` for the defect. This one is the more
+   * damaging half: a page's FIRST verse is earlier than wherever the reader actually paused, so
+   * an unfocused mushaf writing on the reading tab's pause moves them backwards.
+   */
+  const focused = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      return () => {
+        focused.current = false;
+      };
+    }, [])
+  );
+  useEffect(() => {
+    const playing = playback.playbackState === 'playing';
+    if (wasPlaying.current && !playing && focused.current) {
+      const first = getFirstVerseForPage(currentPageRef.current);
+      if (first.surah !== 0) reportVerse(first.surah, first.verse);
+    }
+    wasPlaying.current = playing;
+  }, [playback.playbackState, reportVerse]);
+
+  /**
+   * ⚠️ A PLAYBACK FAILURE REVEALS THE CHROME, for the reason a failed mushaf page does: the error
+   * is drawn INSIDE the chrome, so leaving it hidden would put the message and its retry behind a
+   * tap the reader has no reason to make.
+   */
+  useEffect(() => {
+    if (playback.errorKey !== null) show();
+  }, [playback.errorKey, show]);
+
+  /** The chrome's transport: resume, pause, or start the surah this page opens in. */
+  const togglePlay = useCallback(() => {
+    const { surah: trackSurah, playbackState } = playbackRef.current;
+    if (playbackState === 'playing') {
+      void pause();
+      return;
+    }
+    const here = getFirstVerseForPage(currentPageRef.current);
+    if (here.surah === 0) return;
+    if (trackSurah === here.surah && playbackState === 'paused') {
+      void resume();
+      return;
+    }
+    void playSurah(here.surah, here.verse);
+  }, [pause, resume, playSurah]);
 
   // Reveal the exit when the VISIBLE page fails — see the header for why not every page.
   const onPageErrorChange = useCallback(
@@ -202,10 +288,14 @@ export default function Mushaf() {
   const renderPage = useCallback(
     ({ item }: { item: number }) => (
       <View style={pageStyle}>
-        <MushafPage pageNumber={item} onErrorChange={onPageErrorChange} />
+        <MushafPage
+          pageNumber={item}
+          activeVerseKey={activeVerseKey}
+          onErrorChange={onPageErrorChange}
+        />
       </View>
     ),
-    [pageStyle, onPageErrorChange]
+    [pageStyle, onPageErrorChange, activeVerseKey]
   );
 
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);
@@ -237,7 +327,14 @@ export default function Mushaf() {
       {/* Sibling of the chrome, over the pager — NOT inside the reveal: the banner is not
           chrome, and it sits below the header zone so a revealed header never overlaps it. */}
       <WelcomeBackBanner dismissed={bannerDismissed} />
-      <ReadingChrome reveal={reveal} title={title} mode="mushaf" />
+      <ReadingChrome
+        reveal={reveal}
+        title={title}
+        mode="mushaf"
+        playing={playback.playbackState === 'playing'}
+        onTogglePlay={togglePlay}
+        errorMessage={playback.errorKey ? t(playback.errorKey) : null}
+      />
     </View>
   );
 }

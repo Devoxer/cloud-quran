@@ -33,6 +33,12 @@
  *      scrolls. It lives in `read.tsx`; the row is plain text again, and the row's tap is free
  *      for the story that has a use for it.
  *
+ * ⚠️ STORY 7-1 HAS NOW SPENT THE TAP THIS SHAPE WAS RESERVING, AND IT DID NOT SPEND IT ON THE
+ * ROW. The press is on the ARABIC TEXT alone (`onPressVerse`), not on the container — so the meta
+ * strip, the margins and every gap between rows remain the "elsewhere" the chrome gesture needs,
+ * and shape (2) is still the thing that must not come back. Like the bookmark control below, the
+ * press ALSO fires the surface's chrome toggle; that double-fire is named and accepted.
+ *
  * So the row CONTAINER has no `onPress` and renders a `View`, not a `Pressable`. Adding one back
  * re-opens (2): put the verse-level gesture in `read.tsx` beside the surface one, where the two
  * can be composed and one can be given priority over the other.
@@ -106,6 +112,19 @@ export interface VerseRowProps {
    * `read.tsx` passes one callback that reads its map through a ref.
    */
   onToggleBookmark: (surah: number, verse: number) => void;
+  /**
+   * Whether the recitation is on this ayah right now (story 7-1). A BOOLEAN on purpose: the
+   * screen compares the active key once and hands each row a primitive, so `memo` below stays
+   * effective and an ayah change re-renders exactly two rows — the one leaving and the one
+   * arriving — rather than all 286 of Al-Baqarah ten times a second.
+   */
+  highlighted?: boolean;
+  /**
+   * Play from — or seek to — this ayah (story 7-1). Called with the ROW's own `(surah, verse)`
+   * pair, for the reason spelled out on `surah` above. ⚠️ Must be IDENTITY-STABLE, same as
+   * `onToggleBookmark`: an unstable callback defeats the memo the highlight depends on.
+   */
+  onPressVerse?: (surah: number, verse: number) => void;
   testID?: string;
 }
 
@@ -116,6 +135,8 @@ function VerseRowInner({
   fontSize,
   bookmarked,
   onToggleBookmark,
+  highlighted = false,
+  onPressVerse,
   testID,
 }: VerseRowProps) {
   const { t } = useTranslation();
@@ -154,6 +175,15 @@ function VerseRowInner({
       textAlign: 'right',
       writingDirection: 'rtl',
     },
+    /**
+     * ⚠️ THE SAME TOKEN THE MUSHAF PAGE ALREADY HIGHLIGHTS WITH (`accent.faint`), so the two
+     * renderers say "here" in one visual language rather than two. It is a BACKGROUND, never a
+     * change to the text colour or weight: the Arabic must render identically whether or not
+     * audio is on it.
+     */
+    highlighted: {
+      backgroundColor: theme.colors.accent.faint,
+    },
   }));
 
   /**
@@ -168,7 +198,7 @@ function VerseRowInner({
   const badgeNumberSize = { fontSize: badgeUnit * BADGE_NUMBER_RATIO };
 
   return (
-    <View style={styles.row} testID={testID}>
+    <View style={[styles.row, highlighted && styles.highlighted]} testID={testID}>
       <View style={styles.meta}>
         {/* ⚠️ The FILLED state is `accent.primary` on `background.primary` — measured 2026-08-28
             at ≥ 4.05:1 on every palette × scheme against WCAG 1.4.11's 3:1 non-text bar, pinned
@@ -200,9 +230,21 @@ function VerseRowInner({
           <Text style={[styles.badgeNumber, badgeNumberSize]}>{verse}</Text>
         </View>
       </View>
-      <Text style={[styles.arabic, { fontSize, lineHeight: fontSize * ARABIC_LINE_HEIGHT }]}>
-        {stripDisplayMarks(text)}
-      </Text>
+      {/* ⚠️ THE PRESS IS ON THE TEXT, NOT ON THE ROW. The row's meta strip already holds the
+          bookmark control, and a press target wrapping both would make every bookmark tap also a
+          seek. `onPressVerse` is optional so a surface that has no player — the bookmarks list —
+          renders the same row with no press target at all. */}
+      <Pressable
+        onPress={onPressVerse ? () => onPressVerse(surah, verse) : undefined}
+        disabled={!onPressVerse}
+        accessibilityRole={onPressVerse ? 'button' : undefined}
+        accessibilityLabel={onPressVerse ? t('player:a11y.playFromVerse', { verse }) : undefined}
+        testID={`verse-text-${verse}`}
+      >
+        <Text style={[styles.arabic, { fontSize, lineHeight: fontSize * ARABIC_LINE_HEIGHT }]}>
+          {stripDisplayMarks(text)}
+        </Text>
+      </Pressable>
     </View>
   );
 }

@@ -253,6 +253,66 @@ describe('the row is text, not a control', () => {
   });
 });
 
+describe('the recitation highlight (story 7-1)', () => {
+  it('draws no highlight by default — an un-played row is unchanged', () => {
+    renderRow({ testID: 'row' });
+    expect(flatten(screen.getByTestId('row').props.style).backgroundColor).toBeUndefined();
+  });
+
+  it('fills the row with the SAME token the mushaf page highlights glyphs with', () => {
+    renderRow({ testID: 'row', highlighted: true });
+    // `accent.faint` in the default palette's light slice — a literal, so a token swap that
+    // silently changed the two surfaces' highlight apart would redden here.
+    expect(flatten(screen.getByTestId('row').props.style).backgroundColor).toBe(
+      'rgba(198, 93, 59, 0.12)'
+    );
+  });
+
+  /**
+   * ⚠️ The highlight must never change the Arabic itself. Colour, weight or family moving with
+   * playback would mean the Quran renders differently depending on whether audio is on it.
+   */
+  it('leaves the text colour, weight and face exactly as they were', () => {
+    renderRow({ highlighted: false });
+    const plain = styleOf('بِسْمِ');
+    screen.unmount();
+    renderRow({ highlighted: true });
+    const lit = styleOf('بِسْمِ');
+    expect(lit.color).toBe(plain.color);
+    expect(lit.fontFamily).toBe(plain.fontFamily);
+    expect(lit.fontWeight).toBe(plain.fontWeight);
+    expect(lit.fontSize).toBe(plain.fontSize);
+  });
+});
+
+describe('tap to play from a verse (story 7-1)', () => {
+  it('reports its OWN (surah, verse) pair, never a screen-held current surah', () => {
+    const onPressVerse = jest.fn();
+    // The row belongs to 18:4 while a screen mid-resync may believe it is showing surah 1.
+    renderRow({ surah: 18, verse: 4, onPressVerse });
+    fireEvent.press(screen.getByTestId('verse-text-4'));
+    expect(onPressVerse).toHaveBeenCalledWith(18, 4);
+  });
+
+  it('is a real button, announced as one, only when a surface offers playback', () => {
+    renderRow({ onPressVerse: jest.fn() });
+    // Two buttons now: the bookmark control and the verse text.
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+  });
+
+  /**
+   * The prop is optional so a surface with no player behind it renders plain text. Nothing ships
+   * in that shape today — `read.tsx` is `VerseRow`'s only consumer and always passes the handler
+   * (the bookmarks list has its own row) — so this pins the CONTRACT, not a live caller.
+   */
+  it('takes no press and announces no role when no handler is given', () => {
+    renderRow();
+    const text = screen.getByTestId('verse-text-1');
+    expect(text.props.accessibilityRole).toBeUndefined();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+});
+
 describe('memoization', () => {
   it('is a memo component, so a list-level state change does not re-render 286 rows', () => {
     // ⚠️ SILENTLY REMOVABLE UNTIL THIS CASE. `React.memo` leaves an observable marker — the same

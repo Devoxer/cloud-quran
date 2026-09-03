@@ -98,7 +98,10 @@
     "enableShuffle": "Activar aleatorio",
     "repeatModeOff": "Modo repetición: desactivado. Toca para repetir todo",
     "repeatModeAll": "Modo repetición: todo. Toca para repetir uno",
-    "repeatModeOne": "Modo repetición: uno. Toca para desactivar repetición"
+    "repeatModeOne": "Modo repetición: uno. Toca para desactivar repetición",
+    "playFromVerse": "Reproducir desde el versículo {{verse}}",
+    "playRecitation": "Reproducir recitación",
+    "pauseRecitation": "Pausar recitación"
   },
   "sleep": {
     "end": "Fin",

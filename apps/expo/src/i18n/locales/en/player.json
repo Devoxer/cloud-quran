@@ -98,7 +98,10 @@
     "enableShuffle": "Enable shuffle",
     "repeatModeOff": "Repeat mode: off. Tap to enable repeat all",
     "repeatModeAll": "Repeat mode: all. Tap to enable repeat one",
-    "repeatModeOne": "Repeat mode: one. Tap to disable repeat"
+    "repeatModeOne": "Repeat mode: one. Tap to disable repeat",
+    "playFromVerse": "Play from verse {{verse}}",
+    "playRecitation": "Play recitation",
+    "pauseRecitation": "Pause recitation"
   },
   "sleep": {
     "end": "End",

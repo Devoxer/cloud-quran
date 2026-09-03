@@ -53,8 +53,9 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { AppHeader, AppTabBar, HeaderActionButton } from '@/components/ui';
+import { AppHeader, AppTabBar, HeaderActionButton, InlineError } from '@/components/ui';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
+import { SPACING } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import type { ChromeReveal } from '../hooks/useChromeReveal';
 
@@ -64,10 +65,33 @@ export interface ReadingChromeProps {
   title: string | null;
   /** Which renderer mounts this chrome — decides where the mode toggle goes. */
   mode: 'reading' | 'mushaf';
+  /** Whether the recitation is currently playing — decides the transport glyph (story 7-1). */
+  playing?: boolean;
+  /**
+   * Start, pause or resume the recitation (story 7-1). Omitted → no transport control at all, so
+   * a surface without a player renders the header exactly as before.
+   */
+  onTogglePlay?: () => void;
+  /**
+   * A playback failure, already translated — an unreachable manifest offline is the expected
+   * instance. `null` when playback is healthy (story 7-1's review: the store carried an error key
+   * that no surface rendered, so a failed play was indistinguishable from a dead button).
+   */
+  errorMessage?: string | null;
 }
 
-export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
+export function ReadingChrome({
+  reveal,
+  title,
+  mode,
+  playing = false,
+  onTogglePlay,
+  errorMessage = null,
+}: ReadingChromeProps) {
   const { t } = useTranslation('navigation');
+  // A second, DEFAULT-namespace `t` for the transport's labels — the keys live in `player`, and
+  // the namespaced `t` above cannot take a prefixed key.
+  const { t: tAny } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
 
@@ -111,6 +135,30 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
           interactive={reveal.interactive}
           onTitlePress={openIndex}
           titleHint={t('index.titleHint')}
+          /**
+           * ⚠️ `trailing`, AND NEVER `headerRight` — the reserved-word gate. Under custom chrome
+           * there is no native header slot to reach for, which is the point: the defect that gate
+           * exists for is unwritable here rather than merely forbidden.
+           *
+           * ⚠️ IT RIDES THE REVEAL LIKE EVERYTHING ELSE IN THIS BAR. A transport pinned outside
+           * the chrome would be a second mechanism at a second speed — the `chrome-render-storm`
+           * shape. A listener who has hidden the chrome pauses from the lock screen, or taps once
+           * to bring it back.
+           */
+          trailing={
+            onTogglePlay ? (
+              <HeaderActionButton
+                name={playing ? 'pause' : 'play'}
+                onPress={onTogglePlay}
+                color={colors.accent.primary}
+                accessibilityLabel={tAny(
+                  playing ? 'player:a11y.pauseRecitation' : 'player:a11y.playRecitation'
+                )}
+                focusable={reveal.interactive}
+                testID="chrome-play-toggle"
+              />
+            ) : undefined
+          }
           leading={
             <HeaderActionButton
               name={mode === 'reading' ? 'view-agenda' : 'view-list'}
@@ -124,6 +172,18 @@ export function ReadingChrome({ reveal, title, mode }: ReadingChromeProps) {
             />
           }
         />
+        {/* ⚠️ UNDER THE BAR, INSIDE THE REVEALED CHROME. A playback failure is silent otherwise —
+            the reader presses play and the glyph flips back with no message, which reads as a
+            broken button rather than as "this reciter is not reachable right now". The retry is
+            the same handler as the transport: pressing it re-attempts the surah. */}
+        {errorMessage ? (
+          <InlineError
+            message={errorMessage}
+            onRetry={onTogglePlay}
+            style={styles.error}
+            testID="chrome-playback-error"
+          />
+        ) : null}
       </Animated.View>
 
       <Animated.View
@@ -146,6 +206,10 @@ const styles = StyleSheet.create({
   },
   top: {
     top: 0,
+  },
+  error: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
   },
   bottom: {
     bottom: 0,

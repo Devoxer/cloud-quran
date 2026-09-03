@@ -68,6 +68,7 @@ function loadRootLayout({
 } = {}) {
   let mod: { default: unknown } | undefined;
   let sentry: { init: jest.Mock; wrap: jest.Mock } | undefined;
+  let audioStore: { useAudioPlayerStore: { getState: () => { playSurah: unknown } } } | undefined;
   let ensureAnonymousSession: jest.Mock | undefined;
   let startSyncManagers: jest.Mock | undefined;
   let stopSyncManagers: jest.Mock | undefined;
@@ -134,6 +135,12 @@ function loadRootLayout({
       startSyncManagers,
       setSyncUserId,
       prefetchSyncReads,
+      // story 7-1: `<RecitationEngineHost />` reads the reciter preference. It is mocked to the
+      // EMPTY case on purpose — that is the cold-launch shape these boot cases are about, and it
+      // proves the host falls back to the shipped default rather than waiting for a row.
+      usePreferences: () => ({ data: undefined }),
+      DEFAULT_PREFERENCES: { reciterId: 'alafasy' },
+      setAudioPosition: jest.fn(),
     }));
     // ⚠️ The root layout wraps its children in `GestureHandlerRootView`, whose module reaches a
     // native `install()` that does not exist under Jest — the failure names
@@ -182,6 +189,11 @@ function loadRootLayout({
       isTelemetryEnabled: () => optIn,
     }));
     mod = require('@/app/_layout');
+    // ⚠️ THE ISOLATED REGISTRY'S COPY OF THE STORE. An outer `require` is a DIFFERENT module
+    // instance — the same trap this file already documents for `@sentry/react-native` — so an
+    // assertion about engine registration made against it reads the untouched inert actions and
+    // fails for entirely the wrong reason.
+    audioStore = require('@/stores/audioPlayerStore');
     // ⚠️ `react-test-renderer`, NOT `@testing-library/react-native`. RNTL registers its own
     // `beforeAll`/`afterEach` on import, and this runs inside a test body — Jest rejects that
     // with "Hooks cannot be defined inside tests", failing every case in the file including the
@@ -218,6 +230,7 @@ function loadRootLayout({
     syncQueryClient: syncQueryClient as { __isSyncModuleClient?: boolean },
     renderRoot: renderRoot as () => { toJSON: () => unknown },
     unmountRoot: unmountRoot as () => void,
+    audioStore: audioStore as NonNullable<typeof audioStore>,
   };
 }
 
@@ -503,5 +516,24 @@ describe('root layout — the Arabic face is loaded, and it cannot take the app 
     // If the rethrow had simply been deleted, the case above would pass for the wrong reason.
     const { renderRoot } = loadRootLayout({ fontFailure: 'boot' });
     expect(() => renderRoot()).toThrow('font request failed');
+  });
+});
+
+describe('root layout — the recitation engine is MOUNTED, not merely written (story 7-1)', () => {
+  /**
+   * ⚠️ THE ONE THING THE REST OF THE SUITE CANNOT SEE. `<RecitationEngineHost />` is the only
+   * caller of `registerEngineActions`, which replaces the store's INERT actions. Delete that one
+   * line from the layout and every gate stays green — the engine suite mounts the host itself,
+   * the store suite registers by hand, and both screen suites drive the store directly — while on
+   * device the play button, tap-to-seek and the lock screen all silently do nothing.
+   */
+  it('registers the engine actions, so playback controls are not inert', () => {
+    const { renderRoot, audioStore } = loadRootLayout();
+    const inert = audioStore.useAudioPlayerStore.getState().playSurah;
+
+    renderRoot();
+
+    expect(audioStore.useAudioPlayerStore.getState().playSurah).not.toBe(inert);
+    expect(typeof audioStore.useAudioPlayerStore.getState().playSurah).toBe('function');
   });
 });

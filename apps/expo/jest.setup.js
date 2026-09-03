@@ -275,11 +275,35 @@ jest.mock('expo-audio', () => {
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   };
 
+  // story 7-1: the PLAYLIST is the recitation engine's primitive (surah tracks), and it is a
+  // different native object from the single player above. A suite that mounts the app renders
+  // <RecitationEngineHost />, which is inert until something calls `playSurah` — but a suite that
+  // DOES press play must get an object rather than `undefined`.
+  const mockPlaylist = {
+    ...mockPlayer,
+    currentIndex: 0,
+    trackCount: 0,
+    sources: [],
+    next: jest.fn(),
+    previous: jest.fn(),
+    skipTo: jest.fn(),
+    add: jest.fn(),
+    insert: jest.fn(),
+    clear: jest.fn(),
+    destroy: jest.fn(),
+    setActiveForLockScreen: jest.fn(),
+    updateLockScreenMetadata: jest.fn(),
+    clearLockScreenControls: jest.fn(),
+  };
+
   return {
     useAudioPlayer: jest.fn(() => mockPlayer),
     createAudioPlayer: jest.fn(() => mockPlayer),
+    useAudioPlaylist: jest.fn(() => mockPlaylist),
+    createAudioPlaylist: jest.fn(() => mockPlaylist),
     setAudioModeAsync: jest.fn(() => Promise.resolve()),
     AudioPlayer: jest.fn(),
+    AudioPlaylist: jest.fn(),
     AudioStatus: {},
   };
 });
