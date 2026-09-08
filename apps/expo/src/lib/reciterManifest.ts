@@ -136,11 +136,12 @@ export function offsetOfVerse(
  *
  * ⚠️ THE HOLE THIS WAS WRITTEN FOR IS CLOSED, AND THE GUARD STAYS. The 2026-09-02 audit found
  * `alafasy` missing 1,088 of 6,236 rows (Ya-Sin alone 81 of 83) and `abdulkareem` 305 — the two
- * numbers this docblock used to quote as the live state. Story 7-2 repaired both at source on
- * 2026-09-08 (`alafasy` moved to the `qdc` pipeline path so its timings and its audio come from
- * one recording; `abdulkareem`'s audio was re-downloaded once the concat gate was made to refuse
- * a partial verse set), and all 40 reciters now parse to 6,236 usable windows. So this function
- * answers `true` everywhere today. It is not therefore dead: it reads the manifest THE DEVICE
+ * numbers this docblock used to quote as the live state. On 2026-09-08 `alafasy` was repaired at
+ * source (moved to the `qdc` pipeline path so its timings and its audio come from one recording)
+ * and `abdulkareem` was DELETED from the catalogue: its audio, not just its timings, was
+ * truncated in three surahs, and EveryAyah serves the missing verses undecodable, so there was
+ * nothing to rebuild it from. The 39 that ship all parse to 6,236 usable windows, so this
+ * function answers `true` everywhere today. It is not therefore dead: it reads the manifest THE DEVICE
  * HAS, which is the only copy that matters — a truncated download, a half-written cache file, or
  * a future reciter published before its timings are all the same shape, and the answer below is
  * the difference between no highlight and a wrong one.

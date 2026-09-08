@@ -2,11 +2,11 @@
  * The reciter catalogue (story 7-2).
  *
  * ⚠️ EVERY EXPECTATION HERE IS A LITERAL, AND THAT IS THE ENTIRE POINT OF THE FILE. The catalogue
- * is a claim about what the CDN publishes: forty ids, each of which must have a manifest and 114
+ * is a claim about what the CDN publishes: thirty-nine ids, each of which must have a manifest and 114
  * MP3s under `AUDIO_CDN_BASE`. A test that derived its expectation from `RECITERS` — counting the
  * array, mapping its own styles, asking it for the default — would agree with the array whatever
  * the array said, including after a rename that silently points the app at a voice the pipeline
- * has never published. So the forty ids are written out by hand: adding or renaming one has to be
+ * has never published. So the ids are written out by hand: adding or renaming one has to be
  * a deliberate edit HERE too, made by whoever also ran the pipeline.
  */
 
@@ -21,8 +21,10 @@ import {
 
 /**
  * The published ids, in catalogue order — murattal first (alphabetical by English name), then
- * mujawwad, then muallim. Verified against the live CDN on 2026-09-08: all forty return
- * `manifest.json` 200 and `001.mp3` 200, and all forty parse to 6,236 usable verse windows.
+ * mujawwad, then muallim. Verified against the live CDN on 2026-09-08: all thirty-nine return
+ * `manifest.json` 200 and `001.mp3` 200, and all thirty-nine parse to 6,236 usable verse windows.
+ * `abdulkareem` was the fortieth and is DELETED: its audio is truncated in three surahs and
+ * EveryAyah serves those verses undecodable, so there is nothing to rebuild it from.
  */
 const PUBLISHED_IDS = [
   'abdulbasit',
@@ -49,7 +51,6 @@ const PUBLISHED_IDS = [
   'alafasy',
   'minshawi',
   'tablawi',
-  'abdulkareem',
   'ayyoub',
   'jibreel',
   'qasim',
@@ -68,13 +69,13 @@ const PUBLISHED_IDS = [
 ];
 
 describe('the catalogue names exactly what the pipeline publishes', () => {
-  it('holds the forty published ids, in order', () => {
+  it('holds the thirty-nine published ids, in order', () => {
     expect(RECITERS.map((reciter) => reciter.id)).toEqual(PUBLISHED_IDS);
   });
 
   it('never names the same voice twice', () => {
     // A duplicate id would render two identical rows and make the selected-row check ambiguous.
-    expect(new Set(PUBLISHED_IDS).size).toBe(40);
+    expect(new Set(PUBLISHED_IDS).size).toBe(39);
   });
 
   it('offers exactly three styles, in the order the picker groups them', () => {
@@ -92,13 +93,13 @@ describe('the catalogue names exactly what the pipeline publishes', () => {
 
   it('carries the three styles in the counts the CDN publishes', () => {
     const count = (style: ReciterStyle) => RECITERS.filter((r) => r.style === style).length;
-    expect(count('murattal')).toBe(36);
+    expect(count('murattal')).toBe(35);
     expect(count('mujawwad')).toBe(3);
     expect(count('muallim')).toBe(1);
   });
 
   /**
-   * ⚠️ THE DELETED FLAG MUST STAY DELETED. `hasTimingData` was `true` on all forty rows, read by
+   * ⚠️ THE DELETED FLAG MUST STAY DELETED. `hasTimingData` was `true` on every row, read by
    * nothing, and false on two of them in reality; the data was repaired instead. Re-adding it
    * would re-create a hand-maintained assertion beside `isSurahTimed`, which measures.
    */

@@ -60,9 +60,9 @@ function search(query: string) {
 }
 
 describe('grouping — murattal, then mujawwad, then muallim', () => {
-  it('lists all forty voices under three headings', () => {
+  it('lists all thirty-nine voices under three headings', () => {
     const rows = buildReciterRows('');
-    expect(rows.filter((row) => row.kind === 'reciter')).toHaveLength(40);
+    expect(rows.filter((row) => row.kind === 'reciter')).toHaveLength(39);
     expect(rows.filter((row) => row.kind === 'style').map((row) => row.style)).toEqual([
       'murattal',
       'mujawwad',
@@ -77,14 +77,14 @@ describe('grouping — murattal, then mujawwad, then muallim', () => {
       row.kind === 'style' ? `#${row.style}` : row.reciter.style
     );
     expect(shape.slice(0, 3)).toEqual(['#murattal', 'murattal', 'murattal']);
-    expect(shape.slice(36, 41)).toEqual([
+    expect(shape.slice(35, 40)).toEqual([
       'murattal',
       '#mujawwad',
       'mujawwad',
       'mujawwad',
       'mujawwad',
     ]);
-    expect(shape.slice(41)).toEqual(['#muallim', 'muallim']);
+    expect(shape.slice(40)).toEqual(['#muallim', 'muallim']);
   });
 
   it('renders the headings and the rows', () => {

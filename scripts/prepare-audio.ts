@@ -202,13 +202,15 @@ const RECITERS: ReciterConfig[] = [
     downloadFormat: 'everyayah',
     everyAyahFolder: 'Mohammad_al_Tablaway_128kbps',
   },
-  {
-    id: 'abdulkareem',
-    slug: '',
-    qurancdnId: null,
-    downloadFormat: 'everyayah',
-    everyAyahFolder: 'Muhammad_AbdulKareem_128kbps',
-  },
+  /**
+   * ⚠️ `abdulkareem` (`Muhammad_AbdulKareem_128kbps`) IS DELETED, AND RE-ADDING IT WILL NOT WORK
+   * (owner call, 2026-09-08). Its published audio was truncated — Al-Baqarah ended at verse 55,
+   * Ar-Rum at 11, Ash-Shu'ara at 199 — because the concat below used to skip failed verse
+   * downloads. With that gate failing closed the rebuild refused exactly those three surahs:
+   * EveryAyah serves `002056.mp3`, `026200.mp3` and `030012.mp3` with an ID3 header and no
+   * decodable audio, so ffprobe rejects them and there is nothing to concatenate. The reciter
+   * comes back only if those three verses are sourced somewhere else — not by re-running this.
+   */
   {
     id: 'ayyoub',
     slug: '',

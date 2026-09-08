@@ -10,14 +10,23 @@
  * ⚠️ `hasTimingData` IS DELETED (story 7-2), AND IT WAS NEVER A MEASUREMENT. It was `true` on all
  * forty rows and read by nothing. The 2026-09-02 audit found it false on two of them — `alafasy`
  * (1,088 windows missing, Ya-Sin 81 of 83) and `abdulkareem` (305) — so the honest options were to
- * correct the flag or to repair the data. **The data was repaired on 2026-09-08**: `alafasy` moved
- * to the `qdc` pipeline path (its manifest had been built from EveryAyah durations while its audio
- * was QuranicAudio's file — 1,125 null windows *and* a ~0.7% drift), and `abdulkareem`'s audio was
- * re-downloaded after the pipeline's concat gate was made to fail closed on a partial verse set.
- * Re-audited against the live CDN the same day: all 40 return `manifest.json` and `001.mp3` 200,
- * all 40 carry 6,236 usable windows, and every sampled surah's final `timestamp_to` lands within
- * ~60ms of the served file's real duration. A flag that is true by construction on every row
- * discriminates nothing, so it is gone rather than restated.
+ * correct the flag or to repair the data. `alafasy` WAS repaired on 2026-09-08 and is complete:
+ * it moved to the `qdc` pipeline path, its manifest having been built from EveryAyah per-verse
+ * durations while its published audio was QuranicAudio's file — 1,125 null windows *and* a ~0.7%
+ * drift, so the highlight ran progressively ahead of the recitation.
+ *
+ * ⚠️ `abdulkareem` COULD NOT BE REPAIRED AND IS DELETED (owner call, 2026-09-08). Its published
+ * audio was TRUNCATED, not merely untimed — Al-Baqarah ended at verse 55 (14.3 minutes), Ar-Rum at
+ * verse 11, Ash-Shu'ara at 199 — because the pipeline skipped failed verse downloads and
+ * concatenated anyway. That gate now fails closed, and the rebuild then refused those three
+ * surahs: EveryAyah's own `002056`, `026200` and `030012` are served with an ID3 header and no
+ * decodable audio, so there is no source to rebuild them from. A reciter who cannot recite three
+ * surahs does not ship. Restoring it means finding those verses elsewhere, not re-running.
+ *
+ * So the shipped catalogue is 39, every one of them measured complete: all return `manifest.json`
+ * and `001.mp3` 200 and carry 6,236 usable windows, and every sampled surah's final `timestamp_to`
+ * lands within ~60ms of the served file's real duration. A flag that is true by construction on
+ * every row discriminates nothing, so it is gone rather than restated.
  *
  * The per-surah completeness question still has an owner at RUNTIME — `isSurahTimed` in
  * `lib/reciterManifest.ts`, which reads the manifest the device actually has rather than a
@@ -191,12 +200,6 @@ export const RECITERS: Reciter[] = [
     id: 'tablawi',
     nameArabic: 'محمد الطبلاوي',
     nameEnglish: 'Mohammad Al-Tablawi',
-    style: 'murattal',
-  },
-  {
-    id: 'abdulkareem',
-    nameArabic: 'محمد عبد الكريم',
-    nameEnglish: 'Muhammad Abdul-Kareem',
     style: 'murattal',
   },
   {
