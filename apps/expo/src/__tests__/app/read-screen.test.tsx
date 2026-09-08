@@ -84,6 +84,18 @@ jest.mock('react-native-gesture-handler', () => {
   return { __esModule: true, Gesture: { Tap }, GestureDetector, GestureHandlerRootView: View };
 });
 
+/**
+ * The header reservation every programmatic scroll subtracts, as a LITERAL — `CHROME_BAR_HEIGHT`
+ * (56) + the mocked `insets.top` (0) + `SPACING.md` (12). Written out rather than imported and
+ * summed, so a change to any of the three reddens this file and has to be looked at: computing it
+ * from the same constants the screen uses would restate the screen instead of checking it. A zero
+ * here is the regression it guards — `scrollToIndex` aligns to the viewport top, which is BEHIND
+ * the overlaying header, so the followed verse's first line was hidden under the bar. NEGATED at
+ * the call site: FlashList ADDS `viewOffset` to the target offset, so the positive value pushes
+ * the row further under the bar. A flipped sign is the failure this asserts against.
+ */
+const HEADER_INSET = 68;
+
 const mockScrollToIndex = jest.fn();
 const mockScrollToOffset = jest.fn();
 /** Captured on every render so a case can assert what the list was configured with. */
@@ -496,6 +508,28 @@ describe('the recitation, and what it does to the position write (story 7-1)', (
     // The screen re-targets the surah the audio moved to and loads its rows.
     await screen.findByText('أية 2:1');
   });
+
+  it('scrolls the followed verse BELOW the header, not under it', async () => {
+    // ⚠️ THE FIRST LINE USED TO BE LOST. The chrome overlays the list, and `scrollToIndex` aligns
+    // a row with the top of the VIEWPORT — behind the header — so each ayah the recitation
+    // reached parked its opening line under the bar. `viewOffset` is the whole fix; a call
+    // arriving without it, or with 0, is the regression.
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    mockScrollToIndex.mockClear();
+    act(() => store().setPlaybackState('playing'));
+    act(() => {
+      store().setTrack(1, 'husary', true);
+      store().setActiveVerse(5);
+    });
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 4,
+        animated: true,
+        viewOffset: -HEADER_INSET,
+      })
+    );
+  });
 });
 
 describe('the bookmark control (story 6-4)', () => {
@@ -569,7 +603,11 @@ describe('cold launch', () => {
     // offset from a height estimate.
     expect(mockGetSurahVerses).toHaveBeenCalledWith(2);
     await waitFor(() =>
-      expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 99, animated: false })
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 99,
+        animated: false,
+        viewOffset: -HEADER_INSET,
+      })
     );
   });
 
@@ -649,7 +687,11 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     await screen.findByText('أية 2:100');
     expect(mockGetSurahVerses).toHaveBeenCalledWith(2);
     await waitFor(() =>
-      expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 99, animated: false })
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 99,
+        animated: false,
+        viewOffset: -HEADER_INSET,
+      })
     );
   });
 
@@ -674,13 +716,21 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     const view = render(<Read />);
     await screen.findByText('أية 2:10');
     await waitFor(() =>
-      expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 9, animated: false })
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 9,
+        animated: false,
+        viewOffset: -HEADER_INSET,
+      })
     );
     mockReadingPositionRow.current = { surah: 2, verse: 255 };
     view.rerender(<Read />);
     refocus();
     await waitFor(() =>
-      expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 254, animated: false })
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 254,
+        animated: false,
+        viewOffset: -HEADER_INSET,
+      })
     );
   });
 
@@ -693,7 +743,11 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     const view = render(<Read />);
     await screen.findByText('أية 2:100');
     await waitFor(() =>
-      expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 99, animated: false })
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 99,
+        animated: false,
+        viewOffset: -HEADER_INSET,
+      })
     );
     mockReadingPositionRow.current = { surah: 2, verse: 1 };
     view.rerender(<Read />);

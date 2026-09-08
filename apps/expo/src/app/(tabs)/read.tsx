@@ -123,6 +123,22 @@ function openingPosition(saved: ReadingPositionPair | null): ReadingPositionPair
 export default function Read() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  /**
+   * ⚠️ THE HEADER OVERLAYS THE LIST, SO EVERY PROGRAMMATIC SCROLL MUST SUBTRACT IT. `paddingTop`
+   * keeps the chrome off the verses while the reader scrolls by hand, but `scrollToIndex` aligns
+   * the row with the top of the VIEWPORT — which is behind the header — so an auto-scroll parked
+   * the target verse's first line under the bar and the reader lost it. Passing this as
+   * `viewOffset` puts the row's top exactly where the padding would have. It is the same number
+   * as `paddingTop` for the same reason, so the two can never drift apart.
+   *
+   * ⚠️ IT IS PASSED NEGATED, AND THE SIGN IS THE WHOLE FIX. FlashList adds `viewOffset` to the
+   * target offset (`finalOffset += viewOffset` in `useRecyclerViewController`), so a POSITIVE
+   * value scrolls further down and drives the row deeper under the header — the opposite of what
+   * the name suggests, and measured doing exactly that on a six-line ayah while a three-line one
+   * looked fine. Subtracting is what lifts the row clear of the bar.
+   */
+  const headerInset = CHROME_BAR_HEIGHT + insets.top + SPACING.md;
+
   const reveal = useChromeReveal();
   const { saved, reportVerse } = usePosition();
   const { data: preferences } = usePreferences();
@@ -211,7 +227,7 @@ export default function Read() {
        * there instead. A resync AFTER that point can scroll immediately, because by then the
        * measurements are real.
        */
-      listRef.current?.scrollToIndex({ index, animated: false });
+      listRef.current?.scrollToIndex({ index, animated: false, viewOffset: -headerInset });
       // ⚠️ AND AGAIN ON THE NEXT FRAME — THE SECOND CALL IS THE FIX, NOT A BELT-AND-BRACES.
       // The first `scrollToIndex` runs the moment the rows arrive, before FlashList has MEASURED
       // any of them, so it scrolls to an ESTIMATED offset. On Android that estimate lands far
@@ -223,7 +239,7 @@ export default function Read() {
       // resync into a different surah (same mount, new rows) would wait for an event that never
       // comes again. A repeat scroll is idempotent; a missed one is a blank page.
       requestAnimationFrame(() => {
-        listRef.current?.scrollToIndex({ index, animated: false });
+        listRef.current?.scrollToIndex({ index, animated: false, viewOffset: -headerInset });
       });
       return;
     }
@@ -234,7 +250,7 @@ export default function Read() {
     // assumed mount geometry. `scrollToOffset(0)` is a no-op on a mounted-at-top list, so the
     // mount path is unchanged.
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, [content.loading, content.verses, content.surah, target]);
+  }, [content.loading, content.verses, content.surah, target, headerInset]);
 
   /**
    * ⚠️ A SURAH THAT READS CLEAN AND EMPTY IS ITS OWN STATE, NOT A BLANK SCREEN. `getSurahVerses`
@@ -283,7 +299,7 @@ export default function Read() {
     visibleVerseRef.current = audioVerse;
     const index = content.verses.findIndex((v) => v.verse === audioVerse);
     if (index < 0) return;
-    listRef.current?.scrollToIndex({ index, animated: true });
+    listRef.current?.scrollToIndex({ index, animated: true, viewOffset: -headerInset });
     /**
      * ⚠️ AND AGAIN NEXT FRAME ON THE ROWS' FIRST RUN — the recorded Android defect, which a
      * track change walks straight into. When audio crosses into a new surah this effect fires as
@@ -293,9 +309,9 @@ export default function Read() {
      * reason; a repeat scroll is idempotent, a missed one is a blank page.
      */
     requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index, animated: false });
+      listRef.current?.scrollToIndex({ index, animated: false, viewOffset: -headerInset });
     });
-  }, [activeVerseKey, content.verses, playback.playbackState]);
+  }, [activeVerseKey, content.verses, playback.playbackState, headerInset]);
 
   /**
    * The one reading-position write a listening session makes. Fires when playback LEAVES the
@@ -345,10 +361,10 @@ export default function Read() {
   const listContentStyle = useMemo(
     () => ({
       ...screenContentStyle('main'),
-      paddingTop: CHROME_BAR_HEIGHT + insets.top + SPACING.md,
+      paddingTop: headerInset,
       paddingBottom: CHROME_BAR_HEIGHT + insets.bottom + SPACING.xxl,
     }),
-    [insets.top, insets.bottom]
+    [headerInset, insets.bottom]
   );
 
   /**
