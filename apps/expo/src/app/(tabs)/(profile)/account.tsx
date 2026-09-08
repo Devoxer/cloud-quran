@@ -25,9 +25,11 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
+import { RECITERS, resolveReciterId } from '@/features/audio';
 import { isPlaceholderEmail, signOut, useSession } from '@/lib/auth';
 import { setString } from '@/lib/clipboard';
 import { haptics } from '@/lib/haptics';
+import { usePreferences } from '@/lib/sync';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 /** How long the "copied" confirmation replaces the copy affordance. */
@@ -38,6 +40,14 @@ export default function AccountScreen() {
   const styles = useStyles();
   const router = useRouter();
   const { data: session } = useSession();
+  const { data: preferences } = usePreferences();
+
+  // The row's subtitle names the voice that would actually play — RESOLVED, so a row holding a
+  // withdrawn id reads "Mishary Rashid Al-Afasy" like the picker does, rather than a raw id or a
+  // blank line. `resolveReciterId` guarantees membership, so the lookup always finds someone.
+  const currentReciter = RECITERS.find(
+    (reciter) => reciter.id === resolveReciterId(preferences?.reciterId)
+  );
 
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,9 +174,20 @@ export default function AccountScreen() {
             reading surfaces were REMOVED here — the real doors exist now (the Mushaf and Read
             tabs, and the mode toggle in the reading chrome), which is what those rows were
             waiting for. epic-6-context said 6.1's, then 6.3's; it was this story's. */}
-        {/* story 6-5: FIRST in the group, above Privacy. It is the row a reader looks for
-            most often (the reading look and the Quran text size), and the two below it are
-            things you visit once. */}
+        {/* story 7-2: above Appearance. Listening is the primary engagement mode this app is
+            built around, so the voice sits above the look; both are things a reader changes
+            more than once, unlike the three below them. */}
+        <SettingsRow
+          icon="musical-notes-outline"
+          label={t('profile:rows.recitation')}
+          description={currentReciter?.nameEnglish}
+          trailing="chevron"
+          onPress={() => router.push('/recitation')}
+          accessibilityLabel={t('profile:a11y.recitation')}
+          testID="recitation-row"
+        />
+        {/* story 6-5: above Privacy. It is the row a reader looks for most often (the reading
+            look and the Quran text size), and the two below it are things you visit once. */}
         <SettingsRow
           icon="color-palette-outline"
           label={t('profile:rows.appearance')}

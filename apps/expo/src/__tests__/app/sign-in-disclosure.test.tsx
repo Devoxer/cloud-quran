@@ -49,6 +49,11 @@ jest.mock('@/lib/auth', () => ({
     typeof email === 'string' && email.startsWith('temp@'),
 }));
 
+// story 7-2: `account.tsx` now names the reader's current reciter on its Recitation row, so the
+// screen reads `usePreferences()`. This file mounts it bare — no `QueryClientProvider` — and what
+// that row says belongs to the picker's own suite, so the query module is stubbed to "no row yet".
+jest.mock('@/lib/sync', () => ({ usePreferences: () => ({ data: null }) }));
+
 // The native Apple button is an iOS-only native view whose enum constants are absent in Jest.
 // Stubbing it keeps this file about WHETHER the screen renders, not about how it draws.
 jest.mock('expo-apple-authentication', () => ({

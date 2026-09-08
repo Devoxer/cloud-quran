@@ -11,13 +11,20 @@
  * nothing to wait for. `root-layout-boot.test.tsx` scans the root layout for exactly this shape.
  */
 
-import { DEFAULT_PREFERENCES, usePreferences } from '@/lib/sync';
+import { usePreferences } from '@/lib/sync';
+import { resolveReciterId } from '../data/reciters';
 import { useRecitationEngine } from '../hooks/useRecitationEngine';
 
 export function RecitationEngineHost(): null {
   const { data } = usePreferences();
-  // ⚠️ `||`, not `??` — the worker's column is a 1–64 character string, so an empty one is a 422
-  // the outbox drops, and it must never reach the CDN as `/audio//001.mp3` either.
-  useRecitationEngine(data?.reciterId || DEFAULT_PREFERENCES.reciterId);
+  /**
+   * ⚠️ RESOLVED, NOT MERELY DEFAULTED (story 7-2). This used to be
+   * `data?.reciterId || DEFAULT_PREFERENCES.reciterId`, which covers the empty string and nothing
+   * else — so a row holding `'nope'` (another device, an older build, a withdrawn voice) went
+   * straight to the CDN as `/audio/nope/manifest.json` and the reader got fifteen seconds of
+   * loading followed by an error, on every press, for as long as the row said so.
+   * `resolveReciterId` answers membership of the catalogue instead of truthiness.
+   */
+  useRecitationEngine(resolveReciterId(data?.reciterId));
   return null;
 }

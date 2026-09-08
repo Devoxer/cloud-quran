@@ -50,12 +50,22 @@ const FFPROBE_WORKERS = 8;
 const RECITERS: ReciterConfig[] = [
   // EveryAyah format — per-verse download + ffprobe timing + ffmpeg concat
   // Re-sourced from QDC (9 reciters)
+  /**
+   * ⚠️ `qdc`, NOT `everyayah`, AND THE MISMATCH IS WHAT BROKE IT (measured 2026-09-08). The MP3s
+   * published for this reciter are QuranicAudio's own surah files — byte-identical to
+   * `${QDC_BASE}/mishari_al_afasy/murattal/{n}.mp3` — but the manifest beside them had been built
+   * from EveryAyah's per-verse durations, i.e. timings for a DIFFERENT recording. Two defects
+   * followed: 1,125 of 6,236 windows published as `null` (37 surahs, Ya-Sin 2 of 83), and a ~0.7%
+   * compression in the rest, so the highlight ran progressively ahead of the audio — 326ms adrift
+   * by the end of Al-Fatihah alone. The QuranCDN timing API times exactly the file we serve and
+   * now returns zero nulls, so this reciter's manifest comes from there. Keep the two halves on
+   * ONE source: a `qdc` reciter takes QuranicAudio audio and QuranCDN timings, together.
+   */
   {
     id: 'alafasy',
     slug: 'mishari_al_afasy/murattal',
     qurancdnId: 7,
-    downloadFormat: 'everyayah',
-    everyAyahFolder: 'Alafasy_128kbps',
+    downloadFormat: 'qdc',
   },
   {
     id: 'sudais',
@@ -646,12 +656,26 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
       console.log(`  Surah ${surah}/114: downloading ${verseCount} verses...`);
       await downloadEveryAyahVerses(reciter, surah, verseCount);
 
-      // Verify at least the first verse file was downloaded
-      const firstVerse = resolve(versesDir, `${sss}001.mp3`);
-      if (!existsSync(firstVerse)) {
-        console.log(`  ⚠️ Surah ${surah}/114: no verse files downloaded, skipping`);
-        manifest[String(surah)] = [];
-        continue;
+      /**
+       * ⚠️ EVERY VERSE, NOT JUST THE FIRST — THIS GATE SHIPPED TRUNCATED QURAN AUDIO.
+       * `downloadEveryAyahVerses` SKIPS a verse whose download fails and logs a warning, so a
+       * handful of transient 5xx used to leave a partial verse set that the concat below happily
+       * turned into a short MP3 with a matching short manifest — internally consistent, and
+       * missing revelation. Measured on `abdulkareem` 2026-09-08: Al-Baqarah published as 14.3
+       * minutes ending at verse 55, Ar-Rum as 2.6 minutes ending at verse 11, Ash-Shu'ara ending
+       * at 199 — and every gate in this repo was blind to it, because nothing compares a
+       * published duration against the surah it claims to be. Refusing the surah outright is the
+       * only safe answer: an absent surah is visible, a truncated one is not.
+       */
+      const missing: number[] = [];
+      for (let verse = 1; verse <= verseCount; verse++) {
+        const file = resolve(versesDir, `${sss}${padVerse(verse)}.mp3`);
+        if (!existsSync(file) || statSync(file).size === 0) missing.push(verse);
+      }
+      if (missing.length > 0) {
+        throw new Error(
+          `${missing.length}/${verseCount} verse files missing or empty (first: ${missing[0]}) — refusing to concatenate a partial surah`
+        );
       }
 
       // 1b. Probe durations

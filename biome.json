@@ -15,6 +15,7 @@
       "!apps/marketing/**",
       "!_bmad/**",
       "!**/.claude/**",
+      "!**/.agents/**",
       "!**/.github/**",
       "!**/docs/**",
       "!**/_bmad-output/**",

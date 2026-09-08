@@ -11,13 +11,20 @@ import { act, render } from '@testing-library/react-native';
 import { createAudioPlaylist } from 'expo-audio';
 import { AppState } from 'react-native';
 
+import { loadReciterManifest } from '@/lib/reciterManifest';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { RecitationEngineHost } from '../components/RecitationEngineHost';
 
 const mockSetAudioPosition = jest.fn();
+/**
+ * The reader's chosen reciter, MUTABLE — story 7-2's switch is driven by re-rendering the host
+ * after moving this, which is exactly how the preference reaches the engine in production (a
+ * picker write, or a background sync pull, re-renders `usePreferences()`'s subscriber).
+ */
+let mockReciterId = 'husary';
 jest.mock('@/lib/sync', () => ({
   DEFAULT_PREFERENCES: { reciterId: 'alafasy' },
-  usePreferences: () => ({ data: { reciterId: 'husary' } }),
+  usePreferences: () => ({ data: { reciterId: mockReciterId } }),
   setAudioPosition: (...args: unknown[]) => mockSetAudioPosition(...args),
 }));
 
@@ -68,6 +75,8 @@ interface FakePlaylist {
 }
 
 let playlist: FakePlaylist;
+/** The mounted host, so a preference change can be delivered by re-rendering it. */
+let view: ReturnType<typeof render>;
 /** The engine's AppState subscriber, captured so backgrounding can be driven. */
 let appStateListener: ((state: string) => void) | undefined;
 let createdWith: { sources: { uri: string; name: string }[]; updateInterval: number; loop: string };
@@ -147,7 +156,9 @@ beforeEach(() => {
       return { remove: jest.fn() } as never;
     });
   mockManifestFails = false;
+  mockReciterId = 'husary';
   mockSetAudioPosition.mockClear();
+  (loadReciterManifest as jest.Mock).mockClear();
   playlist = makePlaylist();
   (createAudioPlaylist as jest.Mock).mockImplementation((options: typeof createdWith) => {
     createdWith = options;
@@ -156,8 +167,22 @@ beforeEach(() => {
   act(() => {
     useAudioPlayerStore.getState().clearPlayback();
   });
-  render(<RecitationEngineHost />);
+  view = render(<RecitationEngineHost />);
 });
+
+/**
+ * Move the reader's reciter preference and let the engine see it.
+ *
+ * The host re-renders with the new value, which is the only channel the switch has — the engine's
+ * boot effect never re-runs, deliberately (re-running it would rebuild the playlist and
+ * re-register every action mid-listen).
+ */
+const switchReciter = async (id: string) => {
+  mockReciterId = id;
+  await act(async () => {
+    view.rerender(<RecitationEngineHost />);
+  });
+};
 
 const engine = () => useAudioPlayerStore.getState();
 
@@ -572,5 +597,146 @@ describe('tap-to-seek resumes, it does not just move the marker', () => {
       await engine().seekToVerse(5);
     });
     expect(playlist.play).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⚠️ 7-1 STOPPED PLAYBACK HERE, AND THAT WAS A PLACEHOLDER RATHER THAN A BEHAVIOUR. Story 7-2's
+ * switch keeps the ayah and the play/pause state: the reader hears the same words in a different
+ * voice, which is the entire feature.
+ */
+describe('changing the reciter mid-listen', () => {
+  it('re-plays the SAME ayah in the new voice, still playing', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(12); // settles on 1:3
+    playlist = makePlaylist();
+
+    await switchReciter('ghamidi');
+
+    // The new voice's URLs, not the old one's — the ref moves before anything is built.
+    expect(createdWith.sources[0].uri).toContain('/ghamidi/001.mp3');
+    expect(loadReciterManifest).toHaveBeenLastCalledWith('ghamidi');
+    // 1:3 starts at 11,565ms; the player speaks SECONDS.
+    expect(playlist.seekTo).toHaveBeenCalledWith(11.565);
+    expect(playlist.play).toHaveBeenCalled();
+    expect(playlist.pause).not.toHaveBeenCalled();
+    expect(engine().reciterId).toBe('ghamidi');
+    // The state settles on the new voice's first status tick, exactly as a fresh press does.
+    await tick(12);
+    expect(engine().playbackState).toBe('playing');
+    expect(engine().activeVerseKey).toBe('1:3');
+  });
+
+  it('leaves a PAUSED listener paused — a preference change is not a play request', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(12);
+    await act(async () => {
+      await engine().pause();
+    });
+    playlist = makePlaylist();
+
+    await switchReciter('ghamidi');
+
+    expect(createdWith.sources[0].uri).toContain('/ghamidi/001.mp3');
+    expect(playlist.seekTo).toHaveBeenCalledWith(11.565);
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().playbackState).toBe('paused');
+  });
+
+  it('starts nothing when nothing was loaded', async () => {
+    const built = (createAudioPlaylist as jest.Mock).mock.calls.length;
+    await switchReciter('ghamidi');
+    expect((createAudioPlaylist as jest.Mock).mock.calls.length).toBe(built);
+    expect(engine().playbackState).toBe('idle');
+    expect(engine().surah).toBeNull();
+  });
+
+  it('the new voice is the one that plays on the NEXT press, with no track loaded', async () => {
+    // The ref is the whole change in the idle case, and this is what proves it took.
+    await switchReciter('ghamidi');
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    expect(createdWith.sources[0].uri).toContain('/ghamidi/001.mp3');
+  });
+
+  it('saves where the OLD voice got to before the swap', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(12);
+    mockSetAudioPosition.mockClear();
+
+    await switchReciter('ghamidi');
+
+    // Recorded against `husary`, the voice the reader was actually listening to.
+    expect(mockSetAudioPosition).toHaveBeenCalledWith({
+      surah: 1,
+      verse: 3,
+      reciterId: 'husary',
+    });
+  });
+
+  /**
+   * ⚠️ A PARTLY-TIMED SURAH RESUMES AT AYAH 1, the same rule `savePosition` follows. The tick
+   * writes `currentVerse` even when highlighting is off, so for surah 2 (286 ayahs, 2 windows in
+   * the fixture) the ref holds a confidently wrong ayah — seeking the NEW reciter there would
+   * move the reader somewhere they never were.
+   */
+  it('does not carry an untimed surah`s wrong ayah into the new voice', async () => {
+    await act(async () => {
+      await engine().playSurah(2);
+    });
+    await tick(12);
+    playlist = makePlaylist();
+
+    await switchReciter('ghamidi');
+
+    expect(playlist.seekTo).not.toHaveBeenCalled();
+    expect(playlist.play).toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ `playSurah` BOUNCES OFF `loading`, so a second choice arriving inside the first switch's
+   * manifest fetch would silently do nothing — leaving the app playing a voice the settings
+   * screen showed as unselected. The switch re-reads the ref after each attempt.
+   */
+  it('lands on the LAST choice when two arrive in quick succession', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(12);
+
+    // Both preference values delivered before the first switch's async work can settle.
+    mockReciterId = 'ghamidi';
+    view.rerender(<RecitationEngineHost />);
+    mockReciterId = 'qatami';
+    await act(async () => {
+      view.rerender(<RecitationEngineHost />);
+    });
+
+    expect(createdWith.sources[0].uri).toContain('/qatami/001.mp3');
+    expect(engine().reciterId).toBe('qatami');
+  });
+
+  it('an unusable manifest for the new voice is an error state, not silence', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(12);
+    await act(async () => {
+      await engine().pause();
+    });
+    mockManifestFails = true;
+
+    await switchReciter('ghamidi');
+
+    // ⚠️ The pause that follows a paused switch must NOT overwrite the error the retry needs.
+    expect(engine().playbackState).toBe('error');
+    expect(engine().errorKey).toBe('player:errors.playFailed');
   });
 });

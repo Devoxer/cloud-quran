@@ -53,6 +53,7 @@
     "version": "Versión",
     "signIn": "Iniciar sesión",
     "yourData": "Tus datos",
+    "recitation": "Recitación",
     "appearance": "Apariencia"
   },
   "signOutDialog": {
@@ -129,7 +130,8 @@
     "syncToggle": "Sincronizar con mi cuenta",
     "appearance": "Apariencia",
     "readingTheme": "Tema de lectura",
-    "fontSize": "Tamaño del texto coránico"
+    "fontSize": "Tamaño del texto coránico",
+    "recitation": "Recitación"
   },
   "language": {
     "footnote": "Define menús y narración en este dispositivo. Las descargas mantienen su idioma original.",

@@ -53,6 +53,7 @@
     "version": "Version",
     "signIn": "Sign In",
     "yourData": "Your Data",
+    "recitation": "Recitation",
     "appearance": "Appearance"
   },
   "signOutDialog": {
@@ -129,7 +130,8 @@
     "syncToggle": "Sync to my account",
     "appearance": "Appearance",
     "readingTheme": "Reading theme",
-    "fontSize": "Quran text size"
+    "fontSize": "Quran text size",
+    "recitation": "Recitation"
   },
   "language": {
     "footnote": "Sets menus and narration on this device. Downloads keep the language they were made in.",

@@ -144,8 +144,8 @@ class SeekGuard {
  * @param selectedReciterId The reader's chosen reciter, from their synced preferences. It arrives
  *   as a PARAMETER and is mirrored into a ref rather than into the effect's deps: re-running the
  *   effect on a preference change would rebuild the playlist and re-register the engine actions
- *   in the middle of a listen. Switching voices mid-playback is story 7.2's, and it will drive it
- *   through `playSurah`, not through a remount.
+ *   in the middle of a listen. Story 7-2's voice switch drives the change through `playSurah`
+ *   from a SECOND effect (the last one in this file), never through a remount.
  */
 export function useRecitationEngine(selectedReciterId: string): void {
   const playlist = useRef<AudioPlaylist | null>(null);
@@ -159,6 +159,21 @@ export function useRecitationEngine(selectedReciterId: string): void {
   const guard = useRef(new SeekGuard());
   /** When the playlist last reported progress — the load watchdog's clock. */
   const lastLoadedAt = useRef(0);
+  /**
+   * `savePosition`, published out of the boot effect so the voice switch below can call it.
+   *
+   * The function closes over the refs above and over the store, so it cannot be hoisted out of
+   * that effect without dragging half of it along; a ref is the smallest honest seam. Inert until
+   * the boot effect runs, which is the same window in which every engine action is inert.
+   */
+  const savePositionRef = useRef<() => void>(() => {});
+  /**
+   * `startPlayback`, published for the same reason and with one difference that matters: it does
+   * NOT carry `playSurah`'s bounce-off-`loading` press guard. See its own docblock.
+   */
+  const startPlaybackRef = useRef<(surah: number, verse?: number) => Promise<void>>(async () => {});
+  /** True while a voice switch is mid-flight — see the switch effect for what it prevents. */
+  const switching = useRef(false);
 
   useEffect(() => {
     // SSR / web prerender: `createAudioPlaylist` reaches for `Audio`, which does not exist in
@@ -171,10 +186,12 @@ export function useRecitationEngine(selectedReciterId: string): void {
      * Write where the listener got to. NEVER per tick — see this function's callers.
      *
      * ⚠️ AN UNTIMED SURAH SAVES AYAH 1, NOT THE LOOKUP'S ANSWER. `verseAtMs` answers truthfully
-     * over whatever windows a partial manifest holds, which for Ya-Sin under `alafasy` (81 of 83
-     * rows missing) means "ayah 2" for fifteen minutes. Storing that would make a RESUME land in
-     * the wrong place, so the same rule the highlight follows applies here: no confident wrong
-     * answer. The surah is known, so "this surah, from the top" is the honest claim.
+     * over whatever windows a partial manifest holds — with 81 of Ya-Sin's 83 rows missing, that
+     * is "ayah 2" for fifteen minutes. (That was `alafasy`'s published state until story 7-2
+     * repaired the data; the shape survives its cause, because a truncated download produces it
+     * too.) Storing it would make a RESUME land in the wrong place, so the same rule the
+     * highlight follows applies here: no confident wrong answer. The surah is known, so "this
+     * surah, from the top" is the honest claim.
      */
     const savePosition = () => {
       const surah = currentSurah.current;
@@ -185,6 +202,7 @@ export function useRecitationEngine(selectedReciterId: string): void {
       if (verse === null) return;
       setAudioPosition({ surah, verse, reciterId: reciter });
     };
+    savePositionRef.current = savePosition;
 
     /** Point the store, and the lock screen, at the track the playlist just moved to. */
     const adoptTrack = (index: number) => {
@@ -295,52 +313,69 @@ export function useRecitationEngine(selectedReciterId: string): void {
       return loaded;
     };
 
+    /**
+     * Build the playlist for surahs `surah`…114 and start it, optionally at an ayah.
+     *
+     * ⚠️ THE PRESS GUARD IS DELIBERATELY NOT HERE — it lives on `actions.playSurah`, one level
+     * up (story 7-2). The two callers want opposite things from a rebuild already in flight: a
+     * reader jabbing play must NOT restart the surah, while a reader who has just chosen a
+     * different reciter must get that reciter even if the previous choice is still loading. With
+     * the guard inside this function the voice switch could only ever re-enter it after a status
+     * tick had moved the state off `loading`, which is never true immediately after a rebuild —
+     * so the second of two quick choices silently did nothing and the app played a voice its own
+     * settings screen showed as unselected. The switch serializes itself instead (`switching`).
+     */
+    const startPlayback = async (surah: number, verse?: number) => {
+      const reciter = reciterId.current;
+      if (!reciter) return;
+      // A surah outside the book would build an EMPTY source list and hand the store a track
+      // that does not exist. This is reached from a row press and a page lookup, both of which
+      // can be wrong before their own guards run.
+      if (!Number.isInteger(surah) || surah < 1 || surah > SURAH_COUNT) return;
+      store.getState().setPlaybackState('loading');
+      lastLoadedAt.current = Date.now();
+      try {
+        const timings = await ensureManifest(reciter);
+        teardown();
+
+        startSurah.current = surah;
+        const player = createAudioPlaylist({
+          sources: buildSources(reciter, surah),
+          updateInterval: PLAYLIST_TICK_MS,
+          loop: 'none',
+        });
+        playlist.current = player;
+        player.addListener('playlistStatusUpdate', onStatus);
+        player.addListener('trackChanged', onTrackChanged);
+        player.setActiveForLockScreen(true);
+
+        currentSurah.current = surah;
+        currentVerse.current = null;
+        store.getState().setTrack(surah, reciter, isSurahTimed(timings, surah));
+
+        if (verse !== undefined && verse > 1) {
+          const offset = offsetOfVerse(timings, surah, verse);
+          if (offset !== null) {
+            guard.current.arm(offset, Date.now());
+            await player.seekTo(offset / 1000);
+          }
+        }
+        player.play();
+      } catch (error) {
+        captureException(error, { context: 'recitation.playSurah', surah });
+        store.getState().setError('player:errors.playFailed');
+      }
+    };
+    startPlaybackRef.current = startPlayback;
+
     const actions = {
       playSurah: async (surah: number, verse?: number) => {
-        const reciter = reciterId.current;
-        if (!reciter) return;
-        // A surah outside the book would build an EMPTY source list and hand the store a track
-        // that does not exist. `playSurah` is reached from a row press and a page lookup, both of
-        // which can be wrong before their own guards run.
-        if (!Number.isInteger(surah) || surah < 1 || surah > SURAH_COUNT) return;
-        const store_ = store.getState();
         // ⚠️ A SECOND PRESS WHILE THE FIRST IS STILL LOADING WOULD TEAR THE PLAYLIST DOWN AND
         // REBUILD IT — the surah audibly restarts, and the reader's own impatience is what
-        // caused it. `loading` is a state a press must bounce off, not one it can re-enter.
-        if (store_.playbackState === 'loading') return;
-        store_.setPlaybackState('loading');
-        lastLoadedAt.current = Date.now();
-        try {
-          const timings = await ensureManifest(reciter);
-          teardown();
-
-          startSurah.current = surah;
-          const player = createAudioPlaylist({
-            sources: buildSources(reciter, surah),
-            updateInterval: PLAYLIST_TICK_MS,
-            loop: 'none',
-          });
-          playlist.current = player;
-          player.addListener('playlistStatusUpdate', onStatus);
-          player.addListener('trackChanged', onTrackChanged);
-          player.setActiveForLockScreen(true);
-
-          currentSurah.current = surah;
-          currentVerse.current = null;
-          store.getState().setTrack(surah, reciter, isSurahTimed(timings, surah));
-
-          if (verse !== undefined && verse > 1) {
-            const offset = offsetOfVerse(timings, surah, verse);
-            if (offset !== null) {
-              guard.current.arm(offset, Date.now());
-              await player.seekTo(offset / 1000);
-            }
-          }
-          player.play();
-        } catch (error) {
-          captureException(error, { context: 'recitation.playSurah', surah });
-          store.getState().setError('player:errors.playFailed');
-        }
+        // caused it. `loading` is a state a PRESS must bounce off, not one it can re-enter; the
+        // voice switch reaches `startPlayback` directly and is serialized by its own flag.
+        if (store.getState().playbackState === 'loading') return;
+        await startPlayback(surah, verse);
       },
 
       pause: async () => {
@@ -428,22 +463,68 @@ export function useRecitationEngine(selectedReciterId: string): void {
   }, []);
 
   /**
-   * The preference can resolve after boot (a first launch that then syncs) or change later. The
-   * cached manifest goes with it — it belongs to the old voice.
+   * THE VOICE SWITCH (story 7-2) — the reciter moved, so the same ayah is re-played in the new
+   * voice and the play/pause state is preserved.
    *
-   * ⚠️ AND ANY PLAYING TRACK IS STOPPED, because this is not always a user action. The value comes
-   * from `usePreferences()`, so a background sync pull can move it mid-listen; dropping the
-   * manifest alone left the OLD reciter's audio playing with highlighting silently dead (the tick
-   * returns early on `!timings`) until the next `playSurah`. Stopping is honest and saves the
-   * position on the way out. Switching voices mid-playback while KEEPING the position is story
-   * 7.2's, and it will drive it through `playSurah`.
+   * ⚠️ IT REPLACED A `stop()`, WHICH WAS 7-1's HONEST PLACEHOLDER AND IS NOT THE FEATURE. The
+   * preference arrives from `usePreferences()`, so a background sync pull can move it mid-listen
+   * as easily as the picker can; dropping the manifest alone left the OLD reciter's audio playing
+   * with highlighting silently dead (the tick returns early on `!timings`). Stopping was the
+   * truthful answer while nothing could switch. Now the picker exists, and stopping the
+   * recitation because the reader chose a different reciter would be absurd.
+   *
+   * ⚠️ THE REF IS UPDATED BEFORE ANY AWAIT, AND `playSurah` READS IT. Everything imperative in
+   * this file resolves the reciter through `reciterId.current` — `buildSources`, `ensureManifest`,
+   * `setTrack`, `savePosition`. Assigning it first is therefore the whole switch for a session
+   * with nothing loaded, and it is also what makes the re-play below build the NEW voice's URLs.
+   * `manifest.current` is nulled with it: a manifest belongs to one reciter.
+   *
+   * ⚠️ THE VERSE COMES FROM THE SAME RULE `savePosition` FOLLOWS — the tick's answer only when the
+   * surah is fully timed, ayah 1 otherwise. `currentVerse.current` is written on every tick even
+   * when `highlightAvailable` is false, so for a partly-timed surah it holds a confidently wrong
+   * ayah (the "parked on 36:2 for fifteen minutes" shape), and seeking the NEW reciter there would
+   * move the reader somewhere they never were.
+   *
+   * ⚠️ AND A SECOND SWITCH ARRIVING MID-FLIGHT IS SERIALIZED RATHER THAN DROPPED. `playSurah`
+   * deliberately bounces off `playbackState === 'loading'` (a second press must not audibly
+   * restart the surah) — so a reader tapping two reciters inside one manifest fetch would have
+   * had the second tap silently do nothing, leaving the app playing a voice its own settings
+   * screen showed as unselected. The loop re-reads `reciterId.current` after each attempt and
+   * runs again if it moved, so the LAST choice is the one that ends up playing.
    */
   useEffect(() => {
     if (reciterId.current === selectedReciterId) return;
+    const state = useAudioPlayerStore.getState();
+    const surah = state.surah;
+    const wasPlaying = state.playbackState === 'playing';
+    const verse = (state.highlightAvailable ? currentVerse.current : 1) ?? 1;
+    // Before the ref moves: this write belongs to the voice the reader was listening to.
+    savePositionRef.current();
     reciterId.current = selectedReciterId;
     manifest.current = null;
-    if (useAudioPlayerStore.getState().surah !== null) {
-      void useAudioPlayerStore.getState().stop();
-    }
+    // Nothing loaded — the ref is the whole change, and the next `playSurah` uses it.
+    if (surah === null) return;
+    if (switching.current) return;
+
+    void (async () => {
+      switching.current = true;
+      try {
+        let target = reciterId.current;
+        for (;;) {
+          await startPlaybackRef.current(surah, verse);
+          // Loaded, not started: the reader was paused, and a preference change must not become
+          // an unrequested sound. `playSurah` always plays, so the pause is applied after it —
+          // but NEVER over a failure, because `pause()` sets `playbackState` and would overwrite
+          // the error the retry surface is waiting to render.
+          if (!wasPlaying && useAudioPlayerStore.getState().playbackState !== 'error') {
+            await useAudioPlayerStore.getState().pause();
+          }
+          if (reciterId.current === target) break;
+          target = reciterId.current;
+        }
+      } finally {
+        switching.current = false;
+      }
+    })();
   }, [selectedReciterId]);
 }

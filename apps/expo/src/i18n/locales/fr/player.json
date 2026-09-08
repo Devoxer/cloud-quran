@@ -108,5 +108,15 @@
     "hoursMinutes": "{{hours}} h {{minutes}} min",
     "minutes": "{{minutes}} min",
     "seconds": "{{seconds}} s"
+  },
+  "reciters": {
+    "searchPlaceholder": "Rechercher un récitateur",
+    "styles": {
+      "murattal": "Murattal",
+      "mujawwad": "Mujawwad",
+      "muallim": "Muallim"
+    },
+    "emptyTitle": "Aucun récitateur trouvé",
+    "emptyBody": "Essayez un autre nom, en anglais ou en arabe."
   }
 }

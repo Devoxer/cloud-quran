@@ -40,6 +40,7 @@ const TITLE_KEYS = {
   feedback: 'titles.feedback',
   'privacy-settings': 'titles.privacy',
   appearance: 'titles.appearance',
+  recitation: 'titles.recitation',
 } as const;
 type TitleKey = (typeof TITLE_KEYS)[keyof typeof TITLE_KEYS];
 

@@ -11,4 +11,13 @@
  */
 
 export { RecitationEngineHost } from './components/RecitationEngineHost';
-export { RECITERS, type Reciter } from './data/reciters';
+// ── story 7-2: the voice surface, plus the catalogue helpers a settings row needs ──
+export { buildReciterRows, ReciterPicker, type ReciterRow } from './components/ReciterPicker';
+export {
+  DEFAULT_RECITER_ID,
+  RECITER_STYLES,
+  RECITERS,
+  type Reciter,
+  type ReciterStyle,
+  resolveReciterId,
+} from './data/reciters';
