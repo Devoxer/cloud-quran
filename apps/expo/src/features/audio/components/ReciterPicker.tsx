@@ -1,5 +1,5 @@
 /**
- * ReciterPicker — the voice surface: forty reciters, grouped by style, one of them chosen
+ * ReciterPicker — the voice surface: 39 reciters, grouped by style, one of them chosen
  * (story 7-2).
  *
  * ⚠️ IT RENDERS NO HEADER, AND THAT IS THE SHELL'S JOB. The `(profile)` group mounts `AppHeader`
@@ -29,7 +29,7 @@
  *
  * Grouping and filtering are `buildReciterRows`, exported and unit-tested as a pure function —
  * a rendered list can only be asserted one row at a time, and the property that matters here is
- * the ORDER of forty of them.
+ * the ORDER of all of them.
  */
 
 import { FlashList } from '@shopify/flash-list';
@@ -74,13 +74,23 @@ function fold(value: string): string {
     .trim();
 }
 
-/** Whether this reciter answers to `query` — by English name, Arabic name, or catalogue id. */
+/**
+ * Whether this reciter answers to `query` — by English name, Arabic name, or catalogue id.
+ *
+ * ⚠️ THE ARABIC SIDE IS FOLDED TOO, AND SKIPPING IT BROKE SEVEN NAMES. `fold` runs NFD, which
+ * decomposes أ (U+0623) into ا + U+0654 — and U+0654 sits ABOVE the stripped U+0300–U+036F range,
+ * so it survives. Comparing that decomposed needle against the catalogue's NFC-composed
+ * `nameArabic` could never match: typing أحمد returned the empty state for Ahmed Al-Ajmi, and the
+ * same for Abu Bakr Al-Shatri, Ahmed Neana, Akram Al-Alaqimy, Ayman Sowaid, Ibrahim Akhdar and
+ * Muhammad Ayyoub — 7 of 39. Both sides go through the same fold, so the forms agree by
+ * construction rather than by luck of which letters a name happens to use.
+ */
 function matches(reciter: Reciter, query: string): boolean {
   if (query === '') return true;
   return (
     fold(reciter.nameEnglish).includes(query) ||
     fold(reciter.id).includes(query) ||
-    reciter.nameArabic.includes(query)
+    fold(reciter.nameArabic).includes(query)
   );
 }
 
@@ -139,7 +149,7 @@ export function ReciterPicker() {
         description={reciter.nameArabic}
         // ⚠️ `selected` is what carries the choice to VoiceOver and TalkBack. The checkmark glyph
         // below has no semantics of its own, so without this an assistive-tech reader cannot tell
-        // which of forty rows is the one in force.
+        // which of 39 rows is the one in force.
         selected={selected}
         trailing={
           selected ? <Icon name="checkmark" size={20} color={colors.accent.primary} /> : undefined

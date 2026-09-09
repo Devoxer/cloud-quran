@@ -459,6 +459,31 @@ describe('the door — and the chrome it must not draw', () => {
     expect(mockPush).toHaveBeenCalledWith('/appearance');
   });
 
+  /**
+   * ⚠️ THE RECITATION ROW IS THE PICKER'S ONLY DOOR (story 7-2), AND NOTHING TESTED IT. A second
+   * entry point is Ask-First in that story's spec, so deleting this row — or mis-targeting its
+   * push — makes the whole voice surface unreachable from the app, and `ReciterPicker.test.tsx`
+   * cannot see it because it renders the component directly rather than through the route.
+   */
+  it('the settings home has a Recitation row that pushes /recitation', () => {
+    render(<AccountScreen />);
+    fireEvent.press(screen.getByTestId('recitation-row'));
+    expect(mockPush).toHaveBeenCalledWith('/recitation');
+  });
+
+  it('the Recitation row names the reciter in force, resolving an unknown one to the default', () => {
+    mockPreferences = { reciterId: 'ghamidi' };
+    const chosen = render(<AccountScreen />);
+    expect(screen.getByTestId('recitation-row')).toHaveTextContent(/Saad Al-Ghamidi/);
+    chosen.unmount();
+
+    // A row left holding a withdrawn id (`abdulkareem` was deleted in 7-2) must read as the
+    // default the engine will actually play, never as a blank subtitle.
+    mockPreferences = { reciterId: 'abdulkareem' };
+    render(<AccountScreen />);
+    expect(screen.getByTestId('recitation-row')).toHaveTextContent(/Mishary Rashid Al-Afasy/);
+  });
+
   it('the screen writes no native header control and no headerShown', () => {
     // ⚠️ SOURCE-SCANNED, because a rendered test cannot see an option that is merely PASSED.
     // The `(profile)` layout owns the header (`AppHeader`) and the tab bar; a screen reaching for

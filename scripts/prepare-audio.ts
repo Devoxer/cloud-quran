@@ -536,6 +536,44 @@ async function probeVerseDuration(filePath: string): Promise<number> {
   return durationMs;
 }
 
+/**
+ * Which of a surah's verse files are unusable — the ONE answer to "may this surah be published?".
+ *
+ * ⚠️ IT IS A HELPER BECAUSE THERE ARE THREE GATES, AND FIXING ONE FIXED NOTHING. The defect that
+ * published a 14.3-minute Al-Baqarah was a first-verse-only check; replacing it inline left two
+ * siblings deciding the same question the old way — the per-surah resume branch (concat present +
+ * verse 1 present → re-probe and keep the EXISTING mp3) and the whole-reciter skip (`length > 0`
+ * rather than `length === verseCount`). A re-run over a directory a partial run left behind would
+ * then re-publish the truncated audio beside a now-complete manifest, which is worse than the
+ * original defect: the two halves would agree.
+ *
+ * ⚠️ AND IT PROBES, RATHER THAN TRUSTING SIZE. EveryAyah serves `002056`, `026200` and `030012`
+ * for `abdulkareem` with a real ID3 header and no decodable audio — non-zero bytes, so any
+ * size test passes them. Duration is the only property that answers the question being asked.
+ */
+async function missingVerses(
+  reciter: ReciterConfig,
+  surahNumber: number,
+  verseCount: number
+): Promise<number[]> {
+  const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
+  const sss = padSurah(surahNumber);
+  const missing: number[] = [];
+  for (let verse = 1; verse <= verseCount; verse++) {
+    const file = resolve(versesDir, `${sss}${padVerse(verse)}.mp3`);
+    if (!existsSync(file) || statSync(file).size === 0) {
+      missing.push(verse);
+      continue;
+    }
+    try {
+      if ((await probeVerseDuration(file)) <= 0) missing.push(verse);
+    } catch {
+      missing.push(verse);
+    }
+  }
+  return missing;
+}
+
 // Probe durations of all verses in a surah (parallel, batched)
 async function probeAllVerseDurations(
   reciter: ReciterConfig,
@@ -624,7 +662,11 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
       const allConcatsExist =
         surahKeys.length === TOTAL_SURAHS &&
         surahKeys.every((s) => existsSync(resolve(dir, `${padSurah(Number(s))}.mp3`)));
-      const allSurahsHaveTiming = surahKeys.every((s) => existing[s].length > 0);
+      // ⚠️ `length > 0` WAS THE BUG'S ACCOMPLICE — a 55-entry Al-Baqarah is non-empty. Complete
+      // means every ayah the surah actually has.
+      const allSurahsHaveTiming = surahKeys.every(
+        (s) => existing[s].length === SURAH_METADATA[Number(s) - 1]?.verseCount
+      );
       if (allConcatsExist && allSurahsHaveTiming) {
         console.log(`  ✅ ${reciter.id}: already processed (manifest + 114 MP3s valid), skipping`);
         return existing;
@@ -642,15 +684,22 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
     const sss = padSurah(surah);
     const outputMp3 = resolve(dir, `${sss}.mp3`);
 
-    // Check if concat already exists AND verse files exist for probing
+    // ⚠️ THE RESUME BRANCH RUNS THE SAME GATE. Trusting an existing concat because verse 1 is on
+    // disk is exactly how a truncated mp3 survives a re-run — and the re-run would pair it with a
+    // COMPLETE manifest, so the two halves would agree and nothing downstream could tell.
     const firstVerseFile = resolve(versesDir, `${sss}001.mp3`);
     if (existsSync(outputMp3) && statSync(outputMp3).size > 0 && existsSync(firstVerseFile)) {
-      // Concat and verse files both exist — just probe for manifest
-      process.stdout.write(`  Surah ${surah}/114: concat exists, probing durations...`);
-      const durations = await probeAllVerseDurations(reciter, surah, verseCount);
-      manifest[String(surah)] = generateManifestFromDurations(surah, durations);
-      process.stdout.write(` ${verseCount} verses\n`);
-      continue;
+      process.stdout.write(`  Surah ${surah}/114: concat exists, verifying verse set...`);
+      const missing = await missingVerses(reciter, surah, verseCount);
+      if (missing.length === 0) {
+        const durations = await probeAllVerseDurations(reciter, surah, verseCount);
+        manifest[String(surah)] = generateManifestFromDurations(surah, durations);
+        process.stdout.write(` ${verseCount} verses\n`);
+        continue;
+      }
+      // Incomplete: drop the stale concat and fall through to a full re-download.
+      process.stdout.write(` ${missing.length} unusable, rebuilding\n`);
+      rmSync(outputMp3, { force: true });
     }
 
     try {
@@ -669,14 +718,10 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
        * published duration against the surah it claims to be. Refusing the surah outright is the
        * only safe answer: an absent surah is visible, a truncated one is not.
        */
-      const missing: number[] = [];
-      for (let verse = 1; verse <= verseCount; verse++) {
-        const file = resolve(versesDir, `${sss}${padVerse(verse)}.mp3`);
-        if (!existsSync(file) || statSync(file).size === 0) missing.push(verse);
-      }
+      const missing = await missingVerses(reciter, surah, verseCount);
       if (missing.length > 0) {
         throw new Error(
-          `${missing.length}/${verseCount} verse files missing or empty (first: ${missing[0]}) — refusing to concatenate a partial surah`
+          `${missing.length}/${verseCount} verse files missing, empty or undecodable (first: ${missing[0]}) — refusing to concatenate a partial surah`
         );
       }
 
@@ -694,6 +739,10 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
       manifest[String(surah)] = generateManifestFromDurations(surah, durations);
     } catch (err) {
       console.error(`  ⚠️ Surah ${surah}/114 failed: ${err instanceof Error ? err.message : err}`);
+      // ⚠️ AND THE STALE CONCAT GOES WITH IT. Leaving a previous run's truncated mp3 on disk
+      // hands phase 3 a file to upload for a surah this run just refused — the empty manifest
+      // entry would turn highlighting off while the short audio still played.
+      rmSync(outputMp3, { force: true });
       manifest[String(surah)] = [];
     }
   }

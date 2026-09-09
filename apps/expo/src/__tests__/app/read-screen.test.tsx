@@ -529,6 +529,16 @@ describe('the recitation, and what it does to the position write (story 7-1)', (
         viewOffset: -HEADER_INSET,
       })
     );
+    /**
+     * ⚠️ EVERY CALL, NOT JUST ONE MATCHING CALL. Each scroll is a PAIR — an immediate one and a
+     * `requestAnimationFrame` repeat — and the repeat runs last, so it decides where the row
+     * actually lands. `toHaveBeenCalledWith` is satisfied by any one matching call, so deleting
+     * the offset from the rAF call left this suite green while reinstating the whole defect;
+     * that was demonstrated on both scroll paths before this assertion existed.
+     */
+    for (const [arg] of mockScrollToIndex.mock.calls) {
+      expect(arg).toMatchObject({ viewOffset: -HEADER_INSET });
+    }
   });
 });
 

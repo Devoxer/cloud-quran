@@ -150,6 +150,17 @@ class SeekGuard {
 export function useRecitationEngine(selectedReciterId: string): void {
   const playlist = useRef<AudioPlaylist | null>(null);
   const manifest = useRef<ReciterManifest | null>(null);
+  /**
+   * ⚠️ WHICH RECITER `manifest.current` ACTUALLY BELONGS TO — and it is not decoration.
+   * `ensureManifest` used to validate its cache with `reciterId.current === reciter`, two values
+   * that are equal by construction at every call site, so the guard could never say no. With two
+   * quick switches the first reciter's load is still in flight when the second is chosen; it then
+   * assigns `manifest.current` after its await, and the second call returns that manifest for the
+   * new voice. Measured: voice B's audio playing against voice A's windows — a confidently wrong
+   * highlight on the Quran, which is the one thing `isSurahTimed` exists to prevent. The manifest
+   * has to carry its own identity; the ref that requested it cannot vouch for it.
+   */
+  const manifestReciter = useRef<string | null>(null);
   const reciterId = useRef<string | null>(selectedReciterId);
   /** The surah at playlist index 0 — `currentIndex + startSurah` is the surah being played. */
   const startSurah = useRef(1);
@@ -307,9 +318,16 @@ export function useRecitationEngine(selectedReciterId: string): void {
     };
 
     const ensureManifest = async (reciter: string): Promise<ReciterManifest> => {
-      if (manifest.current && reciterId.current === reciter) return manifest.current;
+      if (manifest.current && manifestReciter.current === reciter) return manifest.current;
       const loaded = await loadReciterManifest(reciter);
-      manifest.current = loaded;
+      // ⚠️ ONLY IF THIS IS STILL THE VOICE WE WANT. A load that resolves after the reader has
+      // chosen again belongs to nobody: publishing it would hand the new reciter the old one's
+      // windows. The caller still gets `loaded` — it is the right answer to the question IT
+      // asked — but the shared ref keeps whatever the current choice put there.
+      if (reciterId.current === reciter) {
+        manifest.current = loaded;
+        manifestReciter.current = reciter;
+      }
       return loaded;
     };
 
@@ -334,9 +352,16 @@ export function useRecitationEngine(selectedReciterId: string): void {
       if (!Number.isInteger(surah) || surah < 1 || surah > SURAH_COUNT) return;
       store.getState().setPlaybackState('loading');
       lastLoadedAt.current = Date.now();
+      /**
+       * ⚠️ TORN DOWN BEFORE THE AWAIT, NOT AFTER IT. The frozen matrix says a failed switch leaves
+       * "previous voice already stopped", and with `teardown()` below the fetch neither half was
+       * true: a manifest that 404s or times out reached the `catch` with the OLD playlist still
+       * audible, and even on the happy path the previous voice kept sounding for the whole fetch
+       * while the picker already showed the new one selected.
+       */
+      teardown();
       try {
         const timings = await ensureManifest(reciter);
-        teardown();
 
         startSurah.current = surah;
         const player = createAudioPlaylist({
@@ -502,6 +527,7 @@ export function useRecitationEngine(selectedReciterId: string): void {
     savePositionRef.current();
     reciterId.current = selectedReciterId;
     manifest.current = null;
+    manifestReciter.current = null;
     // Nothing loaded — the ref is the whole change, and the next `playSurah` uses it.
     if (surah === null) return;
     if (switching.current) return;

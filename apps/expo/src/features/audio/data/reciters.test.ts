@@ -75,7 +75,10 @@ describe('the catalogue names exactly what the pipeline publishes', () => {
 
   it('never names the same voice twice', () => {
     // A duplicate id would render two identical rows and make the selected-row check ambiguous.
-    expect(new Set(PUBLISHED_IDS).size).toBe(39);
+    // ⚠️ ON `RECITERS`, NOT ON THE LITERAL LIST. Asserting `new Set(PUBLISHED_IDS).size` restated
+    // the array this file wrote three lines up: no edit to the catalogue could ever redden it.
+    // The array that can grow a duplicate is the shipped one.
+    expect(new Set(RECITERS.map((r) => r.id)).size).toBe(39);
   });
 
   it('offers exactly three styles, in the order the picker groups them', () => {

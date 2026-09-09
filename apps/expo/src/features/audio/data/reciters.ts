@@ -1,14 +1,14 @@
 /**
- * The reciter catalogue — the 40 voices this app publishes (story 3-8; reshaped by story 7-2).
+ * The reciter catalogue — the 39 voices this app publishes (story 3-8; reshaped by story 7-2).
  *
  * ⚠️ THIS LIST IS A CLAIM ABOUT THE CDN, NOT A WISH LIST. Every id here must have
  * `{id}/manifest.json` and `{id}/001.mp3`…`114.mp3` published under `AUDIO_CDN_BASE`; naming a
  * voice the pipeline does not publish gives the reader a row that loads forever and then errors.
- * `reciters.test.ts` writes the forty ids out as LITERALS for exactly that reason — a test that
+ * `reciters.test.ts` writes every id out as a LITERAL for exactly that reason — a test that
  * derived them from this array could only ever agree with itself.
  *
  * ⚠️ `hasTimingData` IS DELETED (story 7-2), AND IT WAS NEVER A MEASUREMENT. It was `true` on all
- * forty rows and read by nothing. The 2026-09-02 audit found it false on two of them — `alafasy`
+ * every row and read by nothing. The 2026-09-02 audit found it false on two of them — `alafasy`
  * (1,088 windows missing, Ya-Sin 81 of 83) and `abdulkareem` (305) — so the honest options were to
  * correct the flag or to repair the data. `alafasy` WAS repaired on 2026-09-08 and is complete:
  * it moved to the `qdc` pipeline path, its manifest having been built from EveryAyah per-verse

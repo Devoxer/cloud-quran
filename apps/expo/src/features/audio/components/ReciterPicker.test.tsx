@@ -2,7 +2,7 @@
  * The reciter picker — grouping, the search filter, the write, and the empty state (story 7-2).
  *
  * ⚠️ THE GROUPING IS ASSERTED ON THE PURE FUNCTION, NOT ON THE RENDERED LIST. What matters about
- * forty rows is their ORDER, and a rendered virtualized list can only be interrogated one testID
+ * 39 rows is their ORDER, and a rendered virtualized list can only be interrogated one testID
  * at a time — a test that fetched three rows and found them present would pass with the other
  * thirty-seven in any order, or missing. `buildReciterRows` returns the list as data, so the
  * expectation can be a literal sequence.
@@ -23,7 +23,7 @@ jest.mock('@/lib/sync', () => ({
 
 /**
  * ⚠️ THE GLOBAL FLASHLIST MOCK IS A REAL `FlatList`, WHICH VIRTUALIZES — it renders about ten
- * rows and nothing below them, so `reciter-row-alafasy` (row 23 of 44) simply is not in the tree.
+ * rows and nothing below them, so `reciter-row-alafasy` (row 22 of 42) simply is not in the tree.
  * A non-virtualizing stand-in is the house answer (`surahs-screen.test.tsx` does the same for the
  * 114-row index); the alternative is a suite that can only ever assert on the first ten voices.
  */
@@ -125,6 +125,16 @@ describe('the search filter', () => {
       .filter((row) => row.kind === 'reciter')
       .map((row) => row.reciter.id);
     expect(ids).toEqual(['husary', 'husary-mujawwad', 'husary-muallim']);
+  });
+
+  it('matches an Arabic name whose letters DECOMPOSE — the case the other one cannot see', () => {
+    // ⚠️ `الحصري` is NFD-stable, so the sibling test above passes whether or not the two sides are
+    // normalized the same way. `أحمد` is not: NFD splits أ into ا + U+0654, which sits ABOVE the
+    // stripped U+0300–U+036F range and survives the fold. Comparing that against an NFC-composed
+    // catalogue matched nothing — 7 of 39 names were unfindable in Arabic while the suite was green.
+    expect(
+      buildReciterRows('أحمد').map((row) => (row.kind === 'style' ? row.style : row.reciter.id))
+    ).toEqual(['murattal', 'ajmi', 'neana']);
   });
 
   it('drops a heading whose whole style filtered out', () => {

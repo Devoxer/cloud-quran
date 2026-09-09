@@ -105,4 +105,3 @@ __pycache__/
 # installer — so it is not source. `.agents/skills/instantdb/` predates it and stays tracked;
 # gitignore does not untrack a file git already knows about.
 .agents/
-!.agents/skills/instantdb/
