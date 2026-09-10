@@ -98,7 +98,8 @@
     "pageLoadingA11y": "Page {{page}}, chargement",
     "pageErrorA11y": "Page {{page}}, échec du chargement",
     "pageErrorTitle": "Impossible de charger cette page",
-    "pageErrorBody": "Sa police n'est pas encore sur cet appareil. Vérifiez votre connexion et réessayez."
+    "pageErrorBody": "Sa police n'est pas encore sur cet appareil. Vérifiez votre connexion et réessayez.",
+    "toggleChrome": "Afficher ou masquer les barres"
   },
   "bookmarks": {
     "add": "Ajouter un signet",

@@ -41,45 +41,6 @@ jest.mock('expo-router', () => {
   };
 });
 
-/**
- * Every tap gesture the screen built, with its chained configuration and its handlers.
- * ⚠️ `finalize` ARRIVED WITH STORY 7-6 and is not decoration: it is the edge that resets the
- * empty-area latch on a FAILED tap (a drag), so a mock without it models a gesture whose
- * suppression never clears.
- */
-const mockTaps: { settings: string[]; end?: () => void; finalize?: () => void }[] = [];
-
-jest.mock('react-native-gesture-handler', () => {
-  // ⚠️ NO TYPE ANNOTATIONS INSIDE THIS FACTORY — Jest's hoisting guard rejects any identifier it
-  // does not recognise as in-scope, and a TypeScript parameter type is an identifier to it.
-  const { View } = require('react-native');
-  const Tap = () => {
-    const gesture: any = { settings: [] };
-    const setting =
-      (name: string) =>
-      (...args: unknown[]) => {
-        gesture.settings.push(`${name}(${args.map(String).join(',')})`);
-        return gesture;
-      };
-    gesture.cancelsTouchesInView = setting('cancelsTouchesInView');
-    gesture.runOnJS = setting('runOnJS');
-    gesture.maxDuration = setting('maxDuration');
-    gesture.maxDistance = setting('maxDistance');
-    gesture.onEnd = (callback: any) => {
-      gesture.end = callback;
-      return gesture;
-    };
-    gesture.onFinalize = (callback: any) => {
-      gesture.finalize = callback;
-      return gesture;
-    };
-    mockTaps.push(gesture);
-    return gesture;
-  };
-  const GestureDetector = ({ children }: any) => children;
-  return { __esModule: true, Gesture: { Tap }, GestureDetector, GestureHandlerRootView: View };
-});
-
 const mockScrollToIndex = jest.fn();
 /** Captured on every render so a case can assert what the list was configured with. */
 const mockListProps: Record<string, unknown>[] = [];
@@ -119,6 +80,8 @@ jest.mock('@/lib/mushafFonts', () => ({
   preloadAdjacentPageFonts: (page: number) => mockPreload(page),
 }));
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import type { ViewToken } from 'react-native';
@@ -140,15 +103,14 @@ function settleOnPage(page: number) {
 }
 
 /**
- * Tap the surface — the screen's ONE gesture, and the chrome's only reveal.
- * ⚠️ BOTH EDGES, IN HARDWARE ORDER — see `read-screen.test.tsx` for why `onFinalize` matters.
+ * Press the page's HEADER BAND — the mushaf's chrome toggle since 2026-09-10.
+ *
+ * ⚠️ THE SCREEN BUILDS NO GESTURE AT ALL ANY MORE, so there is nothing here to fake. The bands
+ * live inside `MushafPage` (driven for real in `MushafPage.test.tsx`); the list mock renders no
+ * items, so what this file checks is the SCREEN half — that the page is handed a working toggle.
  */
-function tapSurface() {
-  const tap = mockTaps[mockTaps.length - 1];
-  act(() => {
-    tap.end?.();
-    tap.finalize?.();
-  });
+function tapBand() {
+  act(() => pageProps(42).onToggleChrome?.());
 }
 
 /**
@@ -158,7 +120,7 @@ function tapSurface() {
 function pageProps(page: number): {
   activeVerseKey?: string | null;
   onPressVerse?: (surah: number, verse: number) => void;
-  onInteractionStart?: () => void;
+  onToggleChrome?: () => void;
 } {
   const renderItem = listProps().renderItem as (info: { item: number }) => {
     props: { children: { props: Record<string, unknown> } };
@@ -185,7 +147,7 @@ function chromeTouches(): unknown {
 }
 
 async function revealChrome() {
-  tapSurface();
+  tapBand();
   await waitFor(() => expect(chromeTouches()).toBe('box-none'));
 }
 
@@ -221,16 +183,9 @@ async function expectChromeStayedHidden() {
   expect(chromeTouches()).toBe('none');
 }
 
-/** A drag that started somewhere and never recognised — RNGH runs `onFinalize` alone. */
-function dragSurface() {
-  const tap = mockTaps[mockTaps.length - 1];
-  act(() => tap.finalize?.());
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   mockListProps.length = 0;
-  mockTaps.length = 0;
   mockFocusCallbacks.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
@@ -393,7 +348,7 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
   });
 });
 
-describe('the chrome, and the gesture that reveals it', () => {
+describe('the chrome, and the two bands that toggle it', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     fakeTimers = true;
@@ -408,52 +363,35 @@ describe('the chrome, and the gesture that reveals it', () => {
     expect(chromeTouches()).toBe('none');
   });
 
-  it('toggles on a tap; a swipe never toggles (nothing but the tap is wired to the reveal)', async () => {
+  it('toggles: the band reveals it, and the band puts it away again', async () => {
     render(<Mushaf />);
     await revealChrome();
-    // The screen wires no scroll/drag callback to the reveal at all — the recognizer failing on
-    // movement is what separates swipe from tap, and that half is native (simulator smoke).
-    tapSurface();
-    expect(chromeTouches()).toBe('none');
-  });
-
-  it('configures the tap so it cannot cancel the RN touches underneath it', () => {
-    render(<Mushaf />);
-    const tap = mockTaps[mockTaps.length - 1];
-    expect(tap.settings).toContain('cancelsTouchesInView(false)');
-    expect(tap.settings).toContain('runOnJS(true)');
-    expect(tap.end).toBeInstanceOf(Function);
-  });
-
-  it('does NOT toggle when a word took the touch — the empty-area rule', async () => {
-    // ⚠️ THE LIST MOCK RENDERS NO ITEMS (see the file header), so the word press itself is driven
-    // in `MushafPage.test.tsx`. What is checked here is the SCREEN half: the reporter the page is
-    // handed really suppresses this screen's chrome tap. ⚠️ ASSERTED THROUGH A SETTLE — a bare
-    // `expect(chromeTouches()).toBe('none')` also passes while the chrome is still fading IN, so
-    // it stayed green with the suppression removed entirely (7-6's review mutated it).
-    render(<Mushaf />);
-    act(() => pageProps(42).onInteractionStart?.());
-    tapSurface();
+    tapBand();
     await expectChromeStayedHidden();
   });
 
-  it('…and is armed again for the next tap', async () => {
-    // MUTATION: never reset the latch. One word press would kill the chrome tap for the session.
-    render(<Mushaf />);
-    act(() => pageProps(42).onInteractionStart?.());
-    tapSurface();
-    await revealChrome();
+  it('builds NO gesture recogniser — the bands are the whole mechanism', () => {
+    // ⚠️ THE REGRESSION THIS GUARDS IS RE-ADDING THE SURFACE TAP. While one existed, RNGH's
+    // recogniser and RN's responder both saw every touch, and only their dispatch order decided
+    // whether a word press ALSO toggled the chrome — 2-4 leaks per 14 synthetic taps, measured on
+    // a Pixel 9 Pro 2026-09-10 and logged in `deferred-work.md`. One touch system is what makes
+    // that race unwritable rather than merely unlikely, so a recogniser reappearing on this
+    // screen is the thing to catch.
+    const source = readFileSync(join(__dirname, '..', '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
+    // ⚠️ MATCH THE CALL, NOT THE NAME — the docblock explains at length why the recogniser went
+    // and names both symbols, so a bare substring scan fails on its own prose.
+    expect(source).not.toMatch(/<GestureDetector/);
+    expect(source).not.toMatch(/useSurfaceTap\(/);
   });
 
-  it('leaves no residue when a PAGE TURN starts on a word — the dominant gesture here', async () => {
-    // ⚠️ THIS IS THE MUSHAF'S COMMON CASE, NOT AN EDGE ONE. A horizontal drag beginning on a word
-    // IS the page turn, so the `onFinalize` reset exists mostly for this surface. MUTATION: reset
-    // in `onEnd` instead — a drag never reaches `onEnd`, so the flag survives the turn and eats
-    // the reader's next chrome tap, and the chrome appears to have stopped working after one swipe.
+  it('hands the page a seek and a chrome toggle that are separate props', () => {
+    // A word press cannot reach the chrome even by accident: the page is given two callbacks and
+    // wires them to different things (the words, and the two bands).
     render(<Mushaf />);
-    act(() => pageProps(42).onInteractionStart?.());
-    dragSurface();
-    await revealChrome();
+    const props = pageProps(42);
+    expect(props.onPressVerse).toBeInstanceOf(Function);
+    expect(props.onToggleChrome).toBeInstanceOf(Function);
+    expect(props.onPressVerse).not.toBe(props.onToggleChrome);
   });
 
   it('names the settled page’s surah — and not the page number, which the page itself draws', async () => {
@@ -538,12 +476,10 @@ describe('tap-to-seek on the facsimile (story 7-6)', () => {
   });
   afterEach(() => act(() => store().clearPlayback()));
 
-  it('hands every page a press handler and a press-in reporter', () => {
-    // MUTATION: forget either prop in `renderPage`. The facsimile would silently keep the
-    // "no tap handling here" behaviour `MushafPage`'s docblock recorded until this story.
+  it('hands every page the seek and the chrome toggle', () => {
     render(<Mushaf />);
     expect(typeof pageProps(42).onPressVerse).toBe('function');
-    expect(typeof pageProps(42).onInteractionStart).toBe('function');
+    expect(typeof pageProps(42).onToggleChrome).toBe('function');
   });
 
   it('STARTS the pressed word’s surah when nothing is playing', () => {

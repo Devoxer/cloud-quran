@@ -98,7 +98,8 @@
     "pageLoadingA11y": "Page {{page}}, loading",
     "pageErrorA11y": "Page {{page}}, failed to load",
     "pageErrorTitle": "This page could not be loaded",
-    "pageErrorBody": "Its font is not on this device yet. Check your connection and try again."
+    "pageErrorBody": "Its font is not on this device yet. Check your connection and try again.",
+    "toggleChrome": "Show or hide the toolbars"
   },
   "bookmarks": {
     "add": "Add bookmark",

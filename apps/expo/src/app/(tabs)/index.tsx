@@ -4,16 +4,9 @@ import { getFirstVerseForPage, getPageForVerse, SURAH_METADATA, TOTAL_PAGES } fr
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
-import { GestureDetector } from 'react-native-gesture-handler';
 
 import { useVerseSeek } from '@/features/audio';
-import {
-  MushafPage,
-  ReadingChrome,
-  useChromeReveal,
-  useSurfaceTap,
-  WelcomeBackBanner,
-} from '@/features/reading';
+import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -63,13 +56,15 @@ import {
  *    jumps to that verse's page. That is what makes the toggle mean "same place, different
  *    renderer".
  *
- * 5. **THE TAP IS THE SAME RNGH GESTURE AS `read.tsx`**, `.cancelsTouchesInView(false)` and all
- *    — a drag fails the recognizer, which is how a page-turn swipe is distinguished from a
- *    chrome tap. The chrome is a SIBLING of the detector, one driver, no second animation source.
- *    ⚠️ Since story 7-6 "the same gesture" is literal: both surfaces build it through
- *    `useSurfaceTap`, which also carries the empty-area rule — a press on a WORD seeks the
- *    recitation and leaves the chrome alone, while the margins, the page header and the page
- *    number still toggle it.
+ * 5. **THERE IS NO SURFACE GESTURE ON THIS SCREEN, AND THAT IS THE 2026-09-10 CHANGE.** Stories
+ *    6-2 through 7-6 put an RNGH tap over the whole pager; the owner replaced it with TWO BANDS
+ *    inside the page — its header strip and its page number — which `MushafPage` draws as plain
+ *    `Pressable`s. A word press seeks; everything else on the page does nothing. Two things fall
+ *    out, both recorded in that file: the cross-system race 7-6 logged is now unwritable (one
+ *    touch system, RN's responder, decides alone), and an inter-word gap tap no longer flips the
+ *    chrome — under 7-6 roughly one tap in three across a line did. A page-turn swipe is a
+ *    ScrollView drag that the bands' `Pressable`s release, exactly as a button inside any list.
+ *    `read.tsx` keeps `useSurfaceTap`: its surface has real empty areas and no equivalent bands.
  *
  * 6. **A PAGE THAT FAILS reveals the chrome — on BOTH edges, and only for the page the reader is
  *    LOOKING at.** FlashList renders neighbours off-screen; offline, an uncached neighbour fails
@@ -149,9 +144,6 @@ export default function Mushaf() {
     screen: {
       flex: 1,
       backgroundColor: theme.colors.background.primary,
-    },
-    surface: {
-      flex: 1,
     },
   }));
 
@@ -278,9 +270,14 @@ export default function Mushaf() {
     [show]
   );
 
-  /** One tap gesture for the whole surface — `read.tsx`'s shape, now literally the same hook. */
+  /**
+   * ⚠️ NO SURFACE GESTURE HERE — the chrome toggle lives on TWO BANDS inside the page (its header
+   * strip and its page number), and `MushafPage` owns them. See that file's docblock for what
+   * removing the recogniser bought: the cross-system race is unwritable, and an inter-word gap
+   * tap no longer flips the chrome. `read.tsx` still uses `useSurfaceTap`; its surface has large
+   * genuine empty areas and no equivalent bands.
+   */
   const { toggle } = reveal;
-  const { gesture: surfaceTap, onChildPressIn } = useSurfaceTap(toggle);
 
   /**
    * Tap-to-seek on the facsimile (story 7-6). The SAME rule the reading rows use — seek inside
@@ -304,11 +301,11 @@ export default function Mushaf() {
           activeVerseKey={activeVerseKey}
           onErrorChange={onPageErrorChange}
           onPressVerse={onPressVerse}
-          onInteractionStart={onChildPressIn}
+          onToggleChrome={toggle}
         />
       </View>
     ),
-    [pageStyle, onPageErrorChange, activeVerseKey, onPressVerse, onChildPressIn]
+    [pageStyle, onPageErrorChange, activeVerseKey, onPressVerse, toggle]
   );
 
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);
@@ -320,28 +317,24 @@ export default function Mushaf() {
 
   return (
     <View style={styles.screen} testID="mushaf-surface">
-      <GestureDetector gesture={surfaceTap}>
-        <View style={styles.surface} testID="mushaf-tap-surface">
-          <FlashList
-            ref={listRef}
-            data={PAGE_DATA}
-            renderItem={renderPage}
-            keyExtractor={keyExtractor}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={pageToIndex(opening)}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={VIEWABILITY_CONFIG}
-            /* ⚠️ NO `delaysContentTouches` HERE EITHER — see `read.tsx` for the whole answer.
-               The question bites hardest on this list, because it IS the page pager: every word
-               press starts inside a scroll view that is deciding about a page turn. Fabric's
-               scroll view already sets it to NO unconditionally, and RN 0.85 forwards no such
-               prop from JS. */
-            testID="mushaf-list"
-          />
-        </View>
-      </GestureDetector>
+      <FlashList
+        ref={listRef}
+        data={PAGE_DATA}
+        renderItem={renderPage}
+        keyExtractor={keyExtractor}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        initialScrollIndex={pageToIndex(opening)}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={VIEWABILITY_CONFIG}
+        /* ⚠️ NO `delaysContentTouches` HERE EITHER — see `read.tsx` for the whole answer.
+           The question bites hardest on this list, because it IS the page pager: every word
+           press starts inside a scroll view that is deciding about a page turn. Fabric's
+           scroll view already sets it to NO unconditionally, and RN 0.85 forwards no such
+           prop from JS. */
+        testID="mushaf-list"
+      />
       {/* Sibling of the chrome, over the pager — NOT inside the reveal: the banner is not
           chrome, and it sits below the header zone so a revealed header never overlaps it. */}
       <WelcomeBackBanner dismissed={bannerDismissed} />

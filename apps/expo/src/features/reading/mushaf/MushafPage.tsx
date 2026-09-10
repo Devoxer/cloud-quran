@@ -29,29 +29,36 @@
  * reads it. The highlight seam matches `activeVerseKey + ':'` against `location` so `"2:1"`
  * cannot match `2:15:x`; audio wiring itself is story 7-1's, this prop is the seam it plugs into.
  *
- * ── ⚠️ TAP-TO-SEEK IS HERE NOW (story 7-6), AND THE PARAGRAPH THIS REPLACES SAID IT WAS NOT ──
+ * ── ⚠️ THIS PAGE OWNS ITS OWN TOUCHES — THERE IS NO SURFACE GESTURE ABOVE IT ────────────────
  *
- * The chrome tap is still ONE RNGH gesture over the whole surface, owned by `(tabs)/index.tsx`
- * through `useSurfaceTap` — the pre-fork's `Pressable` + `isScrolling` discrimination is still
- * the broken shape 6-1 measured, and nothing here rebuilds it. What is new is a press on each
- * WORD, which seeks the recitation to that word's ayah.
+ * Story 7-6 gave the mushaf a word press (seek) under an RNGH tap that toggled the chrome
+ * everywhere else. ⚠️ **That surface gesture is GONE (owner call 2026-09-10) and must not come
+ * back.** Two bands toggle the chrome — the page header strip and the page number — and nothing
+ * else on the page does. Everything here follows from that:
  *
- * ⚠️ IT ADDS NO VIEWS. `onPress`/`onPressIn` go on the per-word `<Text>` that already exists
+ * ⚠️ NO CROSS-SYSTEM RACE IS POSSIBLE ANY MORE, which is the real prize. 7-6's suppression had
+ * RNGH's recogniser and RN's responder both seeing one touch, with only their dispatch order
+ * deciding whether a word press also toggled the chrome — measured leaking 2-4 times per 14
+ * synthetic taps and logged in `deferred-work.md`. With one touch system left on this screen,
+ * RN's responder decides alone: the deepest view that wants the touch gets it, always.
+ *
+ * ⚠️ AND THE INTER-WORD GAPS STOP TOGGLING. The `' '` separators belong to the LINE, not to any
+ * word (they must, or a highlight bleeds across them), so under 7-6 a tap landing between two
+ * words was an "empty area" and flipped the chrome — measured at roughly one tap in three across
+ * a line. Now a gap tap does nothing, which is the honest answer for a facsimile.
+ *
+ * ⚠️ THE WORD PRESS ADDS NO VIEWS. `onPress` goes on the per-word `<Text>` that already exists
  * inside the line's `<Text>`. Wrapping words in `View`s or `GestureDetector`s would break the
- * justified RTL line the facsimile depends on — the words are nested text nodes in one flow, not
- * boxes.
+ * justified RTL line the facsimile depends on — the words are nested text nodes in one flow.
  *
  * ⚠️ THE PRESS REPORTS `location`, LIKE THE HIGHLIGHT DOES — first two segments of
  * `"surah:verse:word"`. `verseRange` is the drifted display metadata nothing here may read.
  *
- * ⚠️ IT ALSO FIRES `onInteractionStart` ON PRESS-IN, which is how a word press stops ALSO
- * toggling the chrome (see `useSurfaceTap`: touch-down latch, read at the tap's touch-up).
- *
  * ⚠️ NO PER-WORD `accessibilityRole` OR LABEL, DELIBERATELY. `word.qpcV1` is QPC glyph ENCODING —
  * codepoints into a per-page font, not readable Arabic — so announcing ~150 buttons per page
  * would read as noise and bury the page's own label. The accessible route to the same action is
- * the reading surface's `verse-text-{verse}` button, which is labelled with its ayah. That is why
- * this story adds no new string.
+ * the reading surface's `verse-text-{verse}` button, which is labelled with its ayah. The two
+ * chrome bands DO carry a role and a label, because they are real controls with no sibling.
  *
  * ⚠️ THE U+06DF STRIP DOES NOT APPLY HERE. `word.qpcV1` is QPC glyph ENCODING — codepoints into a
  * per-page font — not Uthmani text in the KFGQPC face; and the two strings this file does set in
@@ -62,7 +69,7 @@ import type { MushafLine } from 'quran-data';
 import { SURAH_COUNT, SURAH_METADATA } from 'quran-data';
 import { Fragment, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorView } from '@/components/ui';
 import { UTHMANI_FONT_FAMILY } from '@/constants/arabic';
@@ -115,12 +122,11 @@ export interface MushafPageProps {
    */
   onPressVerse?: (surah: number, verse: number) => void;
   /**
-   * "A word took this touch" — fired on press-IN, so the surface's chrome tap suppresses itself
-   * for that touch (see `useSurfaceTap`). Optional, and only ever fired on a word that
-   * `onPressVerse` has actually made pressable — see the render for why the two are gated
-   * together rather than independently.
+   * Flip the chrome. ⚠️ WIRED TO THE PAGE HEADER STRIP AND THE PAGE NUMBER ONLY — those two bands
+   * are the mushaf's whole chrome-toggle surface (owner call 2026-09-10). Optional; a page with
+   * no chrome behind it draws both bands as plain, unpressable text.
    */
-  onInteractionStart?: () => void;
+  onToggleChrome?: () => void;
 }
 
 const useStyles = () =>
@@ -202,7 +208,7 @@ export function MushafPage({
   activeVerseKey,
   onErrorChange,
   onPressVerse,
-  onInteractionStart,
+  onToggleChrome,
 }: MushafPageProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -255,7 +261,6 @@ export function MushafPage({
           title={t('common:mushaf.pageErrorTitle')}
           message={t('common:mushaf.pageErrorBody')}
           onAction={reload}
-          onActionPressIn={onInteractionStart}
           fullScreen
           testID={`mushaf-page-retry-${pageNumber}`}
         />
@@ -295,7 +300,6 @@ export function MushafPage({
       activePrefix={activePrefix}
       styles={styles}
       onPressVerse={onPressVerse}
-      onInteractionStart={onInteractionStart}
     />
   ));
 
@@ -305,7 +309,17 @@ export function MushafPage({
       accessibilityLabel={t('common:mushaf.pageA11y', { page: pageNumber, name: surahName })}
       testID={`mushaf-page-${pageNumber}`}
     >
-      <MushafPageHeader pageNumber={pageNumber} surahNumber={surahNumber} />
+      {/* ⚠️ BAND ONE OF TWO. `Pressable`, not a gesture: with no surface recogniser left on this
+          screen there is no second touch system to race, so RN's responder decides alone. */}
+      <Pressable
+        onPress={onToggleChrome}
+        disabled={!onToggleChrome}
+        accessibilityRole={onToggleChrome ? 'button' : undefined}
+        accessibilityLabel={onToggleChrome ? t('common:mushaf.toggleChrome') : undefined}
+        testID={`mushaf-chrome-band-header-${pageNumber}`}
+      >
+        <MushafPageHeader pageNumber={pageNumber} surahNumber={surahNumber} />
+      </Pressable>
       {isSpecialPage ? (
         <View style={styles.specialPageContent}>
           <View style={styles.specialPageFrame} testID="mushaf-special-frame">
@@ -315,8 +329,16 @@ export function MushafPage({
       ) : (
         <View style={styles.pageContent}>{lines}</View>
       )}
-      {/* A bare numeral — no run of two letters, so `lint:i18n` correctly leaves it alone. */}
-      <Text style={styles.pageNumber}>{pageNumber}</Text>
+      {/* Band two. A bare numeral — no run of two letters, so `lint:i18n` leaves the text alone. */}
+      <Pressable
+        onPress={onToggleChrome}
+        disabled={!onToggleChrome}
+        accessibilityRole={onToggleChrome ? 'button' : undefined}
+        accessibilityLabel={onToggleChrome ? t('common:mushaf.toggleChrome') : undefined}
+        testID={`mushaf-chrome-band-footer-${pageNumber}`}
+      >
+        <Text style={styles.pageNumber}>{pageNumber}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -364,7 +386,6 @@ function MushafLineView({
   activePrefix,
   styles,
   onPressVerse,
-  onInteractionStart,
 }: MushafLineViewProps) {
   if (line.type === 'surah-header') {
     const surahNumber = Number.parseInt(line.surah ?? '0', 10);
@@ -438,7 +459,6 @@ function MushafLineView({
               // seek — swallow the touch and suppress the chrome while doing nothing at all.
               // `VerseRow` avoids the same trap with `disabled={!onPressVerse}`.
               onPress={at ? () => onPressVerse?.(at.surah, at.verse) : undefined}
-              onPressIn={at ? onInteractionStart : undefined}
               // ⚠️ iOS DRAWS A PRESS HIGHLIGHT OVER PRESSABLE TEXT BY DEFAULT — a grey rectangle
               // flashing across a facsimile whose whole premise is faithful rendering.
               suppressHighlighting
