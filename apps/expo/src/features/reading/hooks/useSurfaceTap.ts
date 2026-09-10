@@ -59,7 +59,10 @@ export interface SurfaceTap {
 }
 
 /**
- * @param toggle the chrome's `toggle` — identity-stable, so the gesture is built once.
+ * @param toggle the chrome's `toggle` — i.e. `revealFor(null)`, "reveal with NOTHING selected"
+ *   since story 7-8. Identity-stable, so the gesture is built once. ⚠️ It must stay the
+ *   no-selection entry point: this gesture fires exactly where no child took the touch, which is
+ *   the definition of an empty area, and an empty area names no ayah.
  */
 export function useSurfaceTap(toggle: () => void): SurfaceTap {
   // A ref, not state: the flag is read inside a gesture callback in the same touch, and a

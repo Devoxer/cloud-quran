@@ -293,17 +293,70 @@ describe('the recitation highlight (story 7-1)', () => {
   });
 });
 
-describe('tap to play from a verse (story 7-1)', () => {
-  it('reports its OWN (surah, verse) pair, never a screen-held current surah', () => {
-    const onPressVerse = jest.fn();
-    // The row belongs to 18:4 while a screen mid-resync may believe it is showing surah 1.
-    renderRow({ surah: 18, verse: 4, onPressVerse });
-    fireEvent.press(screen.getByTestId('verse-text-4'));
-    expect(onPressVerse).toHaveBeenCalledWith(18, 4);
+describe('the selection outline (story 7-8)', () => {
+  it('draws a TRANSPARENT border by default, so selecting one cannot re-wrap the Arabic', () => {
+    // ⚠️ THE BOX MUST BE IDENTICAL IN BOTH STATES. A `borderWidth` that appeared with the
+    // selection would inset the text by 1.5pt on every side the moment a reader pressed a verse
+    // — i.e. selecting an ayah would re-flow it. MUTATION: move `borderWidth` into the selected
+    // style; the two widths below stop agreeing.
+    renderRow({ testID: 'row' });
+    const plain = flatten(screen.getByTestId('row').props.style);
+    expect(plain.borderColor).toBe('transparent');
+    screen.unmount();
+    renderRow({ testID: 'row', selected: true });
+    const chosen = flatten(screen.getByTestId('row').props.style);
+    expect(chosen.borderWidth).toBe(plain.borderWidth);
+    expect(chosen.borderWidth).toBeGreaterThan(0);
   });
 
-  it('is a real button, announced as one, only when a surface offers playback', () => {
-    renderRow({ onPressVerse: jest.fn() });
+  it('carries the geometry story 7-8 added to EVERY row, as literals', () => {
+    // ⚠️ THE ROW REFLOWED, AND THIS RECORDS BY HOW MUCH. Before 7-8 there was no border here at
+    // all, so every row — selected or not — is now 3pt taller and 3pt narrower in its text column
+    // than it was in 7-6, and the recitation highlight became rounded along with the outline.
+    // Literals, not the constants the component reads: a case that restates `SELECTION_BORDER_
+    // WIDTH` would survive a change to it, which is exactly the drift this is here to catch.
+    renderRow({ testID: 'row' });
+    const style = flatten(screen.getByTestId('row').props.style);
+    expect(style.borderWidth).toBe(1.5);
+    expect(style.borderRadius).toBe(8);
+  });
+
+  it('outlines in `accent.soft` — an OUTLINE, never a second fill', () => {
+    // A literal, so a token swap reddens here rather than quietly changing which colour the
+    // contrast gate was measuring. `accent.soft` in the default palette's light slice.
+    renderRow({ testID: 'row', selected: true });
+    expect(flatten(screen.getByTestId('row').props.style).borderColor).toBe('#B14E2F');
+  });
+
+  it('coexists with the recitation FILL on the same ayah — two channels, not two fills', () => {
+    // The case the whole "outline, never a second fill" decision exists for: the recited ayah and
+    // the selected one are frequently the same. MUTATION: draw the selection as a background;
+    // one of these two assertions loses to the other.
+    renderRow({ testID: 'row', selected: true, highlighted: true });
+    const style = flatten(screen.getByTestId('row').props.style);
+    expect(style.backgroundColor).toBe('rgba(198, 93, 59, 0.12)');
+    expect(style.borderColor).toBe('#B14E2F');
+  });
+
+  it('announces the selection as STATE, not only as a colour', () => {
+    renderRow({ onSelectVerse: jest.fn(), selected: true });
+    expect(screen.getByTestId('verse-text-1').props.accessibilityState).toMatchObject({
+      selected: true,
+    });
+  });
+});
+
+describe('tap to SELECT a verse (story 7-1, reversed by 7-8 — it no longer plays)', () => {
+  it('reports its OWN (surah, verse) pair, never a screen-held current surah', () => {
+    const onSelectVerse = jest.fn();
+    // The row belongs to 18:4 while a screen mid-resync may believe it is showing surah 1.
+    renderRow({ surah: 18, verse: 4, onSelectVerse });
+    fireEvent.press(screen.getByTestId('verse-text-4'));
+    expect(onSelectVerse).toHaveBeenCalledWith(18, 4);
+  });
+
+  it('is a real button, announced as one, only when a surface offers a selection', () => {
+    renderRow({ onSelectVerse: jest.fn() });
     // Two buttons now: the bookmark control and the verse text.
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
@@ -327,7 +380,7 @@ describe('the chrome must not toggle when this row takes the touch (story 7-6)',
     // touch UP, so one physically precedes the other and the latch is settled when it is read.
     // A latch built on `onPress` would be a race between two touch systems.
     const onInteractionStart = jest.fn();
-    renderRow({ onPressVerse: jest.fn(), onInteractionStart });
+    renderRow({ onSelectVerse: jest.fn(), onInteractionStart });
     fireEvent(screen.getByTestId('verse-text-1'), 'pressIn');
     expect(onInteractionStart).toHaveBeenCalledTimes(1);
   });
@@ -354,7 +407,7 @@ describe('the chrome must not toggle when this row takes the touch (story 7-6)',
   it('renders unchanged with no reporter — the bookmarks list has no surface gesture', () => {
     // The prop is optional; `features/bookmarks` renders its own rows, and `read.tsx` is
     // `VerseRow`'s only consumer, so this pins the CONTRACT.
-    renderRow({ onPressVerse: jest.fn() });
+    renderRow({ onSelectVerse: jest.fn() });
     expect(() => fireEvent(screen.getByTestId('verse-text-1'), 'pressIn')).not.toThrow();
     expect(screen.getByTestId('verse-text-1')).toBeTruthy();
   });

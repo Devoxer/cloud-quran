@@ -19,6 +19,14 @@ const mockCanGoBack = jest.fn<boolean, []>(() => true);
 
 /** Every focus callback the screen registered — the LAST one is the live screen's. */
 const mockFocusCallbacks: (() => void)[] = [];
+/**
+ * Every CLEANUP those callbacks returned — i.e. what a BLUR runs (story 7-8's review).
+ *
+ * ⚠️ THE MOCK DISCARDED THESE, so the blur edge was unreachable from any test — and blur is what
+ * clears the selection when the MODE TOGGLE navigates away, the one navigation that leaves this
+ * screen's chrome revealed behind the other renderer.
+ */
+const mockBlurCallbacks: (void | (() => void))[] = [];
 
 jest.mock('expo-router', () => {
   const React = require('react');
@@ -32,10 +40,10 @@ jest.mock('expo-router', () => {
       dismissAll: jest.fn(),
     }),
     useSegments: () => ['(tabs)'],
-    useFocusEffect: (callback: () => void) => {
+    useFocusEffect: (callback: () => void | (() => void)) => {
       React.useEffect(() => {
         mockFocusCallbacks.push(callback);
-        callback();
+        mockBlurCallbacks.push(callback());
       }, [callback]);
     },
   };
@@ -69,12 +77,22 @@ const mockReadingPositionRow = {
 const mockAudioPositionRow = {
   current: null as { surah: number; verse: number; reciterId: string } | null,
 };
+/** The chrome row's bookmark reader (story 7-8). */
+const mockAddBookmark = jest.fn();
+const mockRemoveBookmark = jest.fn();
+const mockBookmarksRow = { current: [] as { id: string; surah: number; verse: number }[] };
 
 jest.mock('@/lib/sync', () => ({
   setReadingPosition: (...args: unknown[]) => mockSetReadingPosition(...args),
   useReadingPosition: () => ({ data: mockReadingPositionRow.current }),
   useAudioPosition: () => ({ data: mockAudioPositionRow.current }),
   usePreferences: () => ({ data: null }),
+  // ⚠️ THE CHROME'S FOOTER READS BOOKMARKS SINCE STORY 7-8 — `ChromeVerseRow`'s control acts on
+  // the SELECTED pair, so the mushaf now mounts a bookmark reader it never had. Mocked, like
+  // every other sync door in this file; the row's own behaviour is `ChromeVerseRow.test.tsx`'s.
+  addBookmark: (...args: unknown[]) => mockAddBookmark(...args),
+  removeBookmark: (...args: unknown[]) => mockRemoveBookmark(...args),
+  useBookmarks: () => ({ data: mockBookmarksRow.current }),
 }));
 
 const mockPreload = jest.fn<Promise<void>, [number]>(() => Promise.resolve());
@@ -124,7 +142,8 @@ function tapBand() {
  */
 function pageProps(page: number): {
   activeVerseKey?: string | null;
-  onPressVerse?: (surah: number, verse: number) => void;
+  onSelectVerse?: (surah: number, verse: number) => void;
+  selectedVerseKey?: string | null;
   onToggleChrome?: () => void;
 } {
   const renderItem = listProps().renderItem as (info: { item: number }) => {
@@ -142,7 +161,14 @@ function pageProps(page: number): {
  */
 function refocus() {
   act(() => {
-    for (const callback of mockFocusCallbacks) callback?.();
+    for (const callback of mockFocusCallbacks) mockBlurCallbacks.push(callback?.());
+  });
+}
+
+/** Run every cleanup those focus callbacks returned — what leaving this tab does. */
+function blur() {
+  act(() => {
+    for (const cleanup of mockBlurCallbacks) if (typeof cleanup === 'function') cleanup();
   });
 }
 
@@ -192,6 +218,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockListProps.length = 0;
   mockFocusCallbacks.length = 0;
+  mockBlurCallbacks.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
   mockAudioPositionRow.current = null;
@@ -390,14 +417,14 @@ describe('the chrome, and the two bands that toggle it', () => {
     expect(source).not.toMatch(/useSurfaceTap\(/);
   });
 
-  it('hands the page a seek and a chrome toggle that are separate props', () => {
-    // A word press cannot reach the chrome even by accident: the page is given two callbacks and
-    // wires them to different things (the words, and the two bands).
+  it('hands the page a SELECT and a chrome toggle that are separate props', () => {
+    // A word press cannot reach the chrome's no-selection path even by accident: the page is
+    // given two callbacks and wires them to different things (the words, and the two bands).
     render(<Mushaf />);
     const props = pageProps(42);
-    expect(props.onPressVerse).toBeInstanceOf(Function);
+    expect(props.onSelectVerse).toBeInstanceOf(Function);
     expect(props.onToggleChrome).toBeInstanceOf(Function);
-    expect(props.onPressVerse).not.toBe(props.onToggleChrome);
+    expect(props.onSelectVerse).not.toBe(props.onToggleChrome);
   });
 
   it('names the settled page’s surah — and not the page number, which the page itself draws', async () => {
@@ -459,7 +486,7 @@ describe('the welcome-back banner (story 6-3)', () => {
   });
 });
 
-describe('tap-to-seek on the facsimile (story 7-6)', () => {
+describe('a word press SELECTS its ayah — and makes no sound (story 7-8)', () => {
   const store = () => useAudioPlayerStore.getState();
   const playSurah = jest.fn(async () => {});
   const seekToVerse = jest.fn(async () => {});
@@ -482,28 +509,61 @@ describe('tap-to-seek on the facsimile (story 7-6)', () => {
   });
   afterEach(() => act(() => store().clearPlayback()));
 
-  it('hands every page the seek and the chrome toggle', () => {
+  it('hands every page the selector and the chrome toggle', () => {
     render(<Mushaf />);
-    expect(typeof pageProps(42).onPressVerse).toBe('function');
+    expect(typeof pageProps(42).onSelectVerse).toBe('function');
     expect(typeof pageProps(42).onToggleChrome).toBe('function');
   });
 
-  it('STARTS the pressed word’s surah when nothing is playing', () => {
+  it('⚠️ STARTS NOTHING — the whole story, as one case', () => {
+    // ⚠️ 7-6 WIRED THIS TO `useVerseSeek`, WHICH PLAYS IN EVERY STATE THAT IS NOT ALREADY
+    // PLAYING. On the app's primary surface, where every word is a press target, that made a
+    // mistap one tap from recitation out loud — from a cold launch and from paused. MUTATION:
+    // hand `useVerseSeek()` back to `onSelectVerse`; both assertions below redden.
     render(<Mushaf />);
-    act(() => pageProps(42).onPressVerse?.(2, 255));
-    expect(playSurah).toHaveBeenCalledWith(2, 255);
+    act(() => pageProps(42).onSelectVerse?.(2, 255));
+    expect(playSurah).not.toHaveBeenCalled();
     expect(seekToVerse).not.toHaveBeenCalled();
   });
 
-  it('SEEKS inside the track when that surah is already loaded — the shared rule', () => {
-    render(<Mushaf />);
+  it('…and does not seek even when that surah is the loaded track', () => {
+    // The other half of the rule it used to run: with the track loaded, 7-6 seeked inside it.
     act(() => {
       store().setTrack(2, 'husary', true);
       store().setPlaybackState('playing');
     });
-    act(() => pageProps(42).onPressVerse?.(2, 255));
-    expect(seekToVerse).toHaveBeenCalledWith(255);
+    render(<Mushaf />);
+    act(() => pageProps(42).onSelectVerse?.(2, 255));
+    expect(seekToVerse).not.toHaveBeenCalled();
     expect(playSurah).not.toHaveBeenCalled();
+  });
+
+  it('reveals the chrome and marks the pressed ayah as the selected one', async () => {
+    render(<Mushaf />);
+    act(() => pageProps(42).onSelectVerse?.(2, 255));
+    await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+    // The page is told which ayah to underline, in the same `"{surah}:{verse}"` shape the
+    // highlight uses — `MushafPage` matches both against `location` prefixes.
+    expect(pageProps(42).selectedVerseKey).toBe('2:255');
+  });
+
+  it('a BAND press reveals the chrome with NOTHING selected', async () => {
+    // MUTATION: route the bands through `revealFor(pair)`. A band names no ayah, so the row would
+    // then act on whichever verse happened to be selected last.
+    render(<Mushaf />);
+    tapBand();
+    await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+    expect(pageProps(42).selectedVerseKey).toBeNull();
+  });
+
+  it('the selection goes when the chrome does — one lifetime, not two', async () => {
+    render(<Mushaf />);
+    act(() => pageProps(42).onSelectVerse?.(2, 255));
+    await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+    // The dismiss chevron is `toggle`, which is `revealFor(null)`.
+    fireEvent.press(screen.getByTestId('chrome-dismiss'));
+    await waitFor(() => expect(chromeTouches()).toBe('none'));
+    expect(pageProps(42).selectedVerseKey).toBeNull();
   });
 
   it('keeps the page renderer identity-stable across a page turn', () => {
@@ -550,9 +610,22 @@ describe('the transport’s COLD press — resume where the listening stopped (s
    * dwells rather than latches, so an unconditional band tap on a second press dismisses the bars
    * and the press lands on nothing (`read-screen.test.tsx` carries the same helper).
    */
+  /**
+   * Press whichever transport the chrome is currently showing.
+   *
+   * ⚠️ THERE IS EXACTLY ONE, AND WHICH ONE MOVED IN STORY 7-8. The HEADER's play is
+   * resume-from-cold (7-7's resolver); once a track is loaded the footer's mini player draws the
+   * transport instead and the header YIELDS, because two controls with the same label were two
+   * implementations of one thing. So a case that pressed `chrome-play-toggle` unconditionally was
+   * pressing a control that no longer exists in the second half of a listening session. The
+   * assertion below is what keeps this helper from papering over a state with NO transport.
+   */
   async function pressPlay() {
     if (chromeTouches() !== 'box-none') await revealChrome();
-    fireEvent.press(screen.getByTestId('chrome-play-toggle'));
+    const header = screen.queryByTestId('chrome-play-toggle');
+    const mini = screen.queryByTestId('chrome-mini-transport');
+    expect([header, mini].filter(Boolean)).toHaveLength(1);
+    fireEvent.press((header ?? mini) as NonNullable<typeof header>);
   }
 
   /** The engine's own sequence — `loading` before `setTrack`, exactly as `startPlayback` runs. */
@@ -812,5 +885,45 @@ describe('a page that fails reveals the chrome — for the page the reader is ON
     act(() => pageOnError()(42));
     await settle();
     expect(chromeTouches()).toBe('box-none');
+  });
+});
+
+/**
+ * ⚠️ THE SELECTION CANNOT OUTLIVE WHAT IT POINTS AT (story 7-8's review) — and a mushaf page turn
+ * is the fastest way to lose sight of it, because a settled page changes nothing about `visible`.
+ */
+describe('the selection cannot outlive what it points at (story 7-8 review)', () => {
+  it('a settled PAGE clears it — the ayah was on the page the reader turned away from', async () => {
+    // MUTATION: drop `clearSelection()` from the viewability handler. The row keeps offering
+    // play-from-here for a verse two pages back, bounded only by the 5s dwell.
+    render(<Mushaf />);
+    act(() => pageProps(1).onSelectVerse?.(1, 3));
+    await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+    expect(pageProps(1).selectedVerseKey).toBe('1:3');
+
+    settleOnPage(42);
+    expect(pageProps(42).selectedVerseKey).toBeNull();
+  });
+
+  it('BLUR clears it — the mode toggle leaves this chrome revealed behind the other renderer', () => {
+    render(<Mushaf />);
+    act(() => pageProps(1).onSelectVerse?.(1, 3));
+    expect(pageProps(1).selectedVerseKey).toBe('1:3');
+    blur();
+    expect(pageProps(1).selectedVerseKey).toBeNull();
+  });
+
+  it('a SECOND WORD of the already-selected ayah re-arms — it does NOT throw the chrome away', async () => {
+    // ⚠️ THE MUSHAF CASE THE FIRST CUT GOT WRONG. `samePair` matches at AYAH granularity and a
+    // verse is many words, so "a repeat press dismisses" meant pressing another word of the verse
+    // you are acting on lost the chrome and the selection mid-decision. Only an EMPTY press —
+    // one of the two bands — dismisses. MUTATION: restore the dismissal; both assertions redden.
+    render(<Mushaf />);
+    act(() => pageProps(42).onSelectVerse?.(2, 255));
+    await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+
+    act(() => pageProps(42).onSelectVerse?.(2, 255));
+    expect(chromeTouches()).toBe('box-none');
+    expect(pageProps(42).selectedVerseKey).toBe('2:255');
   });
 });

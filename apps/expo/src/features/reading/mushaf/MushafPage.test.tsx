@@ -277,6 +277,79 @@ describe('the highlight seam', () => {
   });
 });
 
+/**
+ * ⚠️ THE SELECTION SEAM (story 7-8) — the SAME prefix mechanism, a DIFFERENT channel.
+ *
+ * A word is a nested `<Text>` inside the line's justified RTL flow, and on iOS a nested Text is
+ * an attributed-string range: border styles are not applied to ranges, backgrounds are. So the
+ * selection is a text decoration, which is the only outline channel that exists here — and it has
+ * to be a different channel from the highlight, because the recited ayah and the selected one are
+ * frequently the same word.
+ */
+describe('the selection seam (story 7-8)', () => {
+  it('underlines exactly the selected verse’s words', async () => {
+    render(<MushafPage pageNumber={40} selectedVerseKey="2:1" />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(styleOfGlyph('ﭑ').textDecorationLine).toBe('underline');
+    expect(styleOfGlyph('ﭒ').textDecorationLine).toBe('underline');
+  });
+
+  it('does NOT let "2:1" match 2:15 — the same `+ \':\'` guard the highlight uses', async () => {
+    // MUTATION: compare against the bare key. Selecting 2:1 would underline all of 2:15's words.
+    render(<MushafPage pageNumber={40} selectedVerseKey="2:1" />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(styleOfGlyph('ﭓ').textDecorationLine).toBeUndefined();
+  });
+
+  it('underlines nothing with no selection', async () => {
+    render(<MushafPage pageNumber={40} />);
+    await screen.findByTestId('mushaf-page-40');
+    for (const glyph of ['ﭑ', 'ﭒ', 'ﭓ']) {
+      expect(styleOfGlyph(glyph).textDecorationLine).toBeUndefined();
+    }
+  });
+
+  it('draws ONE continuous stroke across an ayah, not one dash per word', async () => {
+    // ⚠️ THE SEAM THIS STORY USED TO REJECT A SECOND FILL, ARRIVING IN THE CHANNEL THAT REPLACED
+    // IT. The `' '` separators are raw children of the LINE — they must be, or a background
+    // highlight bleeds across them — so the underline drew as a row of disconnected dashes until
+    // a selected gap joined it. A decoration is not a fill; carrying it across the gap is what
+    // makes one ayah read as one stroke. MUTATION: drop `bridged`; the gap loses its decoration.
+    render(<MushafPage pageNumber={40} selectedVerseKey="2:1" />);
+    await screen.findByTestId('mushaf-page-40');
+    const gap = screen.getByTestId('mushaf-gap-2:1:2');
+    const style = gap.props.style;
+    const flat = Object.assign(
+      {},
+      ...(Array.isArray(style) ? style.flat(3) : [style]).filter(Boolean)
+    );
+    expect(flat.textDecorationLine).toBe('underline');
+  });
+
+  it('…and stops at the ayah BOUNDARY — the gap into an unselected word stays plain', async () => {
+    // Anti-vacuity for the case above: bridging every gap would join 2:1's stroke to 2:15's, i.e.
+    // underline the whole line whenever any of its ayat is selected. `2:15:1` follows a SELECTED
+    // word on page 40's fixture line, so its gap is exactly the boundary.
+    render(<MushafPage pageNumber={40} selectedVerseKey="2:1" />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(screen.queryByTestId('mushaf-gap-2:15:1')).toBeNull();
+  });
+
+  it('coexists with the recitation FILL on the SAME word — two channels, never two fills', async () => {
+    // The overlap the whole decision exists for. MUTATION: draw the selection as a second
+    // background; one of these two assertions loses to the other and the blend nobody authored
+    // is what the reader sees.
+    render(<MushafPage pageNumber={40} activeVerseKey="2:1" selectedVerseKey="2:1" />);
+    await screen.findByTestId('mushaf-page-40');
+    const style = styleOfGlyph('ﭑ');
+    expect(style.backgroundColor).toBe('rgba(198, 93, 59, 0.12)');
+    expect(style.textDecorationLine).toBe('underline');
+    // The decoration's colour is `accent.soft`, as a literal — the token the contrast gate holds
+    // at ≥3:1 over this very fill on all twelve palette slices.
+    expect(style.textDecorationColor).toBe('#B14E2F');
+  });
+});
+
 describe('the error surface', () => {
   it('is a real surface with a retry that actually retries, and it reports BOTH edges', async () => {
     const onErrorChange = jest.fn();
@@ -316,27 +389,28 @@ describe('the error surface', () => {
 });
 
 /**
- * ⚠️ TAP-TO-SEEK ON THE FACSIMILE (story 7-6). The word `<Text>` nodes already existed for the
- * highlight; this story gives them `onPress`/`onPressIn` and nothing else — no wrapper views, no
- * gesture detectors, because a word is a nested text node inside a justified RTL line and boxing
- * it breaks the page.
+ * ⚠️ THE WORD PRESS (story 7-6, and a SELECTION rather than a seek since 7-8). The word `<Text>`
+ * nodes already existed for the highlight; 7-6 gave them `onPress` and nothing else — no wrapper
+ * views, no gesture detectors, because a word is a nested text node inside a justified RTL line
+ * and boxing it breaks the page. 7-8 changed only what the press MEANS: it selects the ayah the
+ * word belongs to, and nothing on this page reaches the audio engine any more.
  */
 describe('the word press', () => {
   it('reports the pair from `location`, not from the line it sits on', async () => {
-    const onPressVerse = jest.fn();
-    render(<MushafPage pageNumber={40} onPressVerse={onPressVerse} />);
+    const onSelectVerse = jest.fn();
+    render(<MushafPage pageNumber={40} onSelectVerse={onSelectVerse} />);
     await screen.findByTestId('mushaf-page-40');
     // ⚠️ THE THIRD WORD IS 2:15's, ON A LINE WHOSE `verseRange` READS "2:1-2:15". A press that
     // took the range — or the line's first verse — would seek to 2:1 and the recitation would
     // jump backwards fourteen ayahs.
     fireEvent.press(screen.getByText('ﭓ'));
-    expect(onPressVerse).toHaveBeenCalledWith(2, 15);
+    expect(onSelectVerse).toHaveBeenCalledWith(2, 15);
   });
 
   it('…and a DRIFTED `verseRange` cannot move it — the 565-line defect, as a press', async () => {
     // MUTATION: parse `line.verseRange` instead of `word.location`. 565 committed lines carried a
     // drifted range before story 6-2 regenerated the data, so this is not a hypothetical.
-    const onPressVerse = jest.fn();
+    const onSelectVerse = jest.fn();
     mockGetPageLayout.mockResolvedValue({
       page: 50,
       lines: [
@@ -349,10 +423,10 @@ describe('the word press', () => {
         },
       ],
     } as MushafPageLayout);
-    render(<MushafPage pageNumber={50} onPressVerse={onPressVerse} />);
+    render(<MushafPage pageNumber={50} onSelectVerse={onSelectVerse} />);
     await screen.findByTestId('mushaf-page-50');
     fireEvent.press(screen.getByText('ﭔ'));
-    expect(onPressVerse).toHaveBeenCalledWith(2, 255);
+    expect(onSelectVerse).toHaveBeenCalledWith(2, 255);
   });
 
   it('toggles the chrome from the page HEADER band, and from the page NUMBER band', async () => {
@@ -369,17 +443,17 @@ describe('the word press', () => {
     expect(onToggleChrome).toHaveBeenCalledTimes(2);
   });
 
-  it('leaves a WORD press to the seek alone — it never toggles the chrome', async () => {
+  it('leaves a WORD press to the SELECTION alone — it never toggles the chrome', async () => {
     // MUTATION: put `onToggleChrome` back on the word `<Text>`. This is the whole point of the
     // change: a press on the Quran moves the recitation and does nothing else.
     const onToggleChrome = jest.fn();
-    const onPressVerse = jest.fn();
+    const onSelectVerse = jest.fn();
     render(
-      <MushafPage pageNumber={40} onPressVerse={onPressVerse} onToggleChrome={onToggleChrome} />
+      <MushafPage pageNumber={40} onSelectVerse={onSelectVerse} onToggleChrome={onToggleChrome} />
     );
     await screen.findByTestId('mushaf-page-40');
     fireEvent.press(screen.getByText('ﭑ'));
-    expect(onPressVerse).toHaveBeenCalledTimes(1);
+    expect(onSelectVerse).toHaveBeenCalledTimes(1);
     expect(onToggleChrome).not.toHaveBeenCalled();
   });
 
@@ -396,12 +470,12 @@ describe('the word press', () => {
     ).toBeUndefined();
   });
 
-  it('exposes no press on a basmala row — there is no ayah there to seek to', async () => {
+  it('exposes no press on a basmala row — there is no ayah there to select', async () => {
     // The layout's `basmala` and `surah-header` rows carry no `words`, so they are the boundary
     // of what is pressable — and since the bands became the only chrome control, a press there
     // does nothing at all rather than flipping the chrome.
-    const onPressVerse = jest.fn();
-    render(<MushafPage pageNumber={40} onPressVerse={onPressVerse} />);
+    const onSelectVerse = jest.fn();
+    render(<MushafPage pageNumber={40} onSelectVerse={onSelectVerse} />);
     await screen.findByTestId('mushaf-page-40');
     expect(screen.getByText(BASMALA_TEXT).props.onPress).toBeUndefined();
     expect(screen.getByText(SURAH_METADATA[1].nameArabic).props.onPress).toBeUndefined();
@@ -416,10 +490,10 @@ describe('the word press', () => {
     expect(() => fireEvent.press(screen.getByText('ﭑ'))).not.toThrow();
   });
 
-  it('takes NO touch at all without `onPressVerse`', async () => {
+  it('takes NO touch at all without `onSelectVerse`', async () => {
     // ⚠️ RN `Text` BECOMES PRESSABLE ON `onPressIn` ALONE, which is how an unconditionally-wired
     // handler once made every word swallow the touch while doing nothing. `VerseRow` avoids the
-    // same trap with `disabled={!onPressVerse}`.
+    // same trap with `disabled={!onSelectVerse}`.
     render(<MushafPage pageNumber={40} />);
     await screen.findByTestId('mushaf-page-40');
     expect(screen.getByText('ﭑ').props.onPress).toBeUndefined();
@@ -431,7 +505,7 @@ describe('the word press', () => {
     // so `'0:0:1'` produced `playSurah(0, 0)` — a request for a surah that does not exist —
     // rather than a word that simply takes no touch. A page whose data is wrong must be inert,
     // never confidently wrong about the Quran.
-    const onPressVerse = jest.fn();
+    const onSelectVerse = jest.fn();
     mockGetPageLayout.mockResolvedValue({
       page: 51,
       lines: [
@@ -448,20 +522,20 @@ describe('the word press', () => {
         },
       ],
     } as MushafPageLayout);
-    render(<MushafPage pageNumber={51} onPressVerse={onPressVerse} />);
+    render(<MushafPage pageNumber={51} onSelectVerse={onSelectVerse} />);
     await screen.findByTestId('mushaf-page-51');
     for (const glyph of ['ﭕ', 'ﭖ']) {
       expect(screen.getByText(glyph).props.onPress).toBeUndefined();
     }
     // …and the good word beside them still works, so the guard is a filter and not an off switch.
     fireEvent.press(screen.getByText('ﭗ'));
-    expect(onPressVerse).toHaveBeenCalledWith(2, 255);
-    expect(onPressVerse).toHaveBeenCalledTimes(1);
+    expect(onSelectVerse).toHaveBeenCalledWith(2, 255);
+    expect(onSelectVerse).toHaveBeenCalledTimes(1);
   });
 
   it('does not draw iOS’s press highlight over the facsimile', async () => {
     // A grey rectangle flashing across a page whose whole premise is faithful rendering.
-    render(<MushafPage pageNumber={40} onPressVerse={jest.fn()} />);
+    render(<MushafPage pageNumber={40} onSelectVerse={jest.fn()} />);
     await screen.findByTestId('mushaf-page-40');
     expect(screen.getByText('ﭑ').props.suppressHighlighting).toBe(true);
   });

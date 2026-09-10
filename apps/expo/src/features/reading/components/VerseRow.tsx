@@ -33,10 +33,17 @@
  *      scrolls. It lives in `read.tsx`; the row is plain text again, and the row's tap is free
  *      for the story that has a use for it.
  *
- * ⚠️ STORY 7-1 HAS NOW SPENT THE TAP THIS SHAPE WAS RESERVING, AND IT DID NOT SPEND IT ON THE
- * ROW. The press is on the ARABIC TEXT alone (`onPressVerse`), not on the container — so the meta
- * strip, the margins and every gap between rows remain the "elsewhere" the chrome gesture needs,
- * and shape (2) is still the thing that must not come back.
+ * ⚠️ STORY 7-1 SPENT THE TAP THIS SHAPE WAS RESERVING, AND STORY 7-8 CHANGED WHAT IT BUYS. The
+ * press is on the ARABIC TEXT alone (`onSelectVerse`), not on the container — so the meta strip,
+ * the margins and every gap between rows remain the "elsewhere" the chrome gesture needs, and
+ * shape (2) is still the thing that must not come back.
+ *
+ * ⚠️ AND THAT PRESS NO LONGER MAKES A SOUND. Under 7-1 it was `onPressVerse` → `useVerseSeek`,
+ * which STARTS playback in every state that is not already playing — so a mistap in a mosque was
+ * one tap, from a cold launch and from paused, on a reading-first app. It now SELECTS the ayah:
+ * the chrome reveals with this row outlined, and the contextual row inside the footer carries
+ * play-from-here and the bookmark. Two taps to sound, deliberately (owner, 2026-09-10). Nothing
+ * in this file may reach the audio engine again.
  *
  * So the row CONTAINER has no `onPress` and renders a `View`, not a `Pressable`. Adding one back
  * re-opens (2): put the verse-level gesture in `read.tsx` beside the surface one, where the two
@@ -72,6 +79,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { Icon } from '@/components/ui';
 import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
+import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_WEIGHT } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
@@ -91,6 +99,26 @@ const BADGE_BORDER_WIDTH = 1.5;
 /** Bookmark glyph size + the slop that carries its touch target to the 44pt HIG minimum. */
 const BOOKMARK_ICON_SIZE = 20;
 const BOOKMARK_HIT_SLOP = 12;
+
+/**
+ * The selection outline's stroke (story 7-8).
+ *
+ * ⚠️ THE BORDER IS ALWAYS THERE; ONLY ITS COLOUR CHANGES. A `borderWidth` that appears with the
+ * selection would inset the Arabic by 1.5pt on every side the moment a reader pressed a verse —
+ * i.e. selecting an ayah would RE-WRAP it mid-press. `'transparent'` when unselected costs
+ * nothing to draw and makes the box identical in both states, which is the same discipline the
+ * chrome's "revealing must not shift content" criterion is written from.
+ *
+ * ⚠️ AND THE READING COLUMN DID REFLOW ONCE, WHEN THIS ARRIVED — SAY IT PLAINLY RATHER THAN
+ * IMPLYING OTHERWISE. Before story 7-8 the row had no border at all, so every row is now 3pt
+ * taller and 3pt narrower in its text column than it was in 7-6, for every reader and whether or
+ * not anything is selected. That was accepted: 1.5pt per side is under a pixel of Arabic at any
+ * shipped font size, and the alternative — shaving the horizontal padding off the `SPACING` scale
+ * to compensate — trades a measured token for an unmeasured one. The same change gave the row
+ * `RADII.sm`, which rounds the RECITATION highlight as well as the outline; that is deliberate,
+ * so the two cues share one shape. `VerseRow.test.tsx` pins all three numbers as literals.
+ */
+const SELECTION_BORDER_WIDTH = 1.5;
 
 export interface VerseRowProps {
   /**
@@ -130,11 +158,29 @@ export interface VerseRowProps {
    */
   highlighted?: boolean;
   /**
-   * Play from — or seek to — this ayah (story 7-1). Called with the ROW's own `(surah, verse)`
-   * pair, for the reason spelled out on `surah` above. ⚠️ Must be IDENTITY-STABLE, same as
-   * `onToggleBookmark`: an unstable callback defeats the memo the highlight depends on.
+   * SELECT this ayah (story 7-8) — reveal the chrome with this verse as the thing the contextual
+   * row acts on. Called with the ROW's own `(surah, verse)` pair, for the reason spelled out on
+   * `surah` above. ⚠️ Must be IDENTITY-STABLE, same as `onToggleBookmark`: an unstable callback
+   * defeats the memo the highlight depends on.
+   *
+   * ⚠️ IT MUST NOT REACH THE AUDIO ENGINE, AND IT DID UNTIL 7-8. Under 7-1 this was
+   * `onPressVerse` wired straight to `useVerseSeek`, whose `seekToVerse` calls `play()` in any
+   * state that is not already playing — so on a reading-first app every verse press was one tap
+   * from sound, from a cold launch and from paused. Sound now happens only when the reader
+   * presses a play control; the row's play control is one press away and names the ayah.
    */
-  onPressVerse?: (surah: number, verse: number) => void;
+  onSelectVerse?: (surah: number, verse: number) => void;
+  /**
+   * Whether this ayah is the SELECTED one — draws the outline (story 7-8). A boolean for
+   * `highlighted`'s reason: the screen compares once and hands each row a primitive, so `memo`
+   * below stays effective.
+   *
+   * ⚠️ AN OUTLINE, NEVER A SECOND FILL. It has to coexist with `highlighted`'s `accent.faint`
+   * background on the same ayah — two translucent fills blend into a third colour nobody authors
+   * and nobody measures, while the text on top still owes the contrast gate an answer. A border
+   * is a different CHANNEL, so the overlap needs nothing new.
+   */
+  selected?: boolean;
   /**
    * "A child took this touch" — fired on press-IN by BOTH of this row's controls (story 7-6), so
    * the surface's chrome tap can suppress itself for that touch. ⚠️ It must be `onPressIn` and
@@ -154,7 +200,8 @@ function VerseRowInner({
   bookmarked,
   onToggleBookmark,
   highlighted = false,
-  onPressVerse,
+  onSelectVerse,
+  selected = false,
   onInteractionStart,
   testID,
 }: VerseRowProps) {
@@ -164,6 +211,10 @@ function VerseRowInner({
     row: {
       paddingVertical: SPACING.md,
       paddingHorizontal: SPACING.lg,
+      // See `SELECTION_BORDER_WIDTH`: the stroke is permanent, the colour is what moves.
+      borderWidth: SELECTION_BORDER_WIDTH,
+      borderColor: 'transparent',
+      borderRadius: RADII.sm,
     },
     // The pre-fork meta row: bookmark control at the visual LEFT, ayah badge at the RIGHT (the
     // Arabic below is right-aligned, so the badge stays column-aligned with the verse it labels).
@@ -203,6 +254,17 @@ function VerseRowInner({
     highlighted: {
       backgroundColor: theme.colors.accent.faint,
     },
+    /**
+     * ⚠️ `accent.soft`, AND THE GATE IS WHAT PICKED IT (story 7-8). The outline is a non-text
+     * component, so WCAG 1.4.11's 3:1 applies — and it must clear that on the PAGE and on the
+     * `accent.faint` fill above, because the recited ayah and the selected one are often the
+     * same. `accent.soft` measures 4.40–11.29 over that fill across all twelve palette slices;
+     * `accent.primary` measures 3.50 on terracotta·light. Both are pinned in
+     * `palettes.contrast.test.ts`.
+     */
+    selected: {
+      borderColor: theme.colors.accent.soft,
+    },
   }));
 
   /**
@@ -217,7 +279,10 @@ function VerseRowInner({
   const badgeNumberSize = { fontSize: badgeUnit * BADGE_NUMBER_RATIO };
 
   return (
-    <View style={[styles.row, highlighted && styles.highlighted]} testID={testID}>
+    <View
+      style={[styles.row, highlighted && styles.highlighted, selected && styles.selected]}
+      testID={testID}
+    >
       <View style={styles.meta}>
         {/* ⚠️ The FILLED state is `accent.primary` on `background.primary` — measured 2026-08-28
             at ≥ 4.05:1 on every palette × scheme against WCAG 1.4.11's 3:1 non-text bar, pinned
@@ -251,19 +316,22 @@ function VerseRowInner({
         </View>
       </View>
       {/* ⚠️ THE PRESS IS ON THE TEXT, NOT ON THE ROW. The row's meta strip already holds the
-          bookmark control, and a press target wrapping both would make every bookmark tap also a
-          seek. `onPressVerse` is optional so a surface that has no player — the bookmarks list —
-          renders the same row with no press target at all. */}
+          bookmark control, and a press target wrapping both would make every bookmark tap also
+          select. `onSelectVerse` is optional so a surface that has no chrome to select into —
+          the bookmarks list — renders the same row with no press target at all. */}
       <Pressable
-        onPress={onPressVerse ? () => onPressVerse(surah, verse) : undefined}
-        // ⚠️ REPORTED EVEN WHEN `onPressVerse` IS ABSENT — but `disabled` below stops the
+        onPress={onSelectVerse ? () => onSelectVerse(surah, verse) : undefined}
+        // ⚠️ REPORTED EVEN WHEN `onSelectVerse` IS ABSENT — but `disabled` below stops the
         // Pressable taking the touch at all in that case, so this only ever fires on a surface
-        // that offers playback. The two flags stay independent on purpose: a row could gain a
-        // press with no seek behind it, and it would still owe the surface the suppression.
+        // that offers a selection. The two flags stay independent on purpose: a row could gain a
+        // press with nothing behind it, and it would still owe the surface the suppression.
         onPressIn={onInteractionStart}
-        disabled={!onPressVerse}
-        accessibilityRole={onPressVerse ? 'button' : undefined}
-        accessibilityLabel={onPressVerse ? t('player:a11y.playFromVerse', { verse }) : undefined}
+        disabled={!onSelectVerse}
+        accessibilityRole={onSelectVerse ? 'button' : undefined}
+        accessibilityLabel={onSelectVerse ? t('player:a11y.selectVerse', { verse }) : undefined}
+        // The current state, as state — a screen reader otherwise never hears which ayah the
+        // contextual row is acting on.
+        accessibilityState={onSelectVerse ? { selected } : undefined}
         testID={`verse-text-${verse}`}
       >
         <Text style={[styles.arabic, { fontSize, lineHeight: fontSize * ARABIC_LINE_HEIGHT }]}>

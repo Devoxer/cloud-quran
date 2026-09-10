@@ -31,10 +31,10 @@
  *
  * ── ⚠️ THIS PAGE OWNS ITS OWN TOUCHES — THERE IS NO SURFACE GESTURE ABOVE IT ────────────────
  *
- * Story 7-6 gave the mushaf a word press (seek) under an RNGH tap that toggled the chrome
- * everywhere else. ⚠️ **That surface gesture is GONE (owner call 2026-09-10) and must not come
- * back.** Two bands toggle the chrome — the page header strip and the page number — and nothing
- * else on the page does. Everything here follows from that:
+ * Story 7-6 gave the mushaf a word press (a seek, until story 7-8 made it a SELECTION) under an
+ * RNGH tap that toggled the chrome everywhere else. ⚠️ **That surface gesture is GONE (owner call
+ * 2026-09-10) and must not come back.** Two bands toggle the chrome — the page header strip and
+ * the page number — and nothing else on the page does. Everything here follows from that:
  *
  * ⚠️ NO CROSS-SYSTEM RACE IS POSSIBLE ANY MORE, which is the real prize. 7-6's suppression had
  * RNGH's recogniser and RN's responder both seeing one touch, with only their dispatch order
@@ -59,6 +59,13 @@
  * would read as noise and bury the page's own label. The accessible route to the same action is
  * the reading surface's `verse-text-{verse}` button, which is labelled with its ayah. The two
  * chrome bands DO carry a role and a label, because they are real controls with no sibling.
+ *
+ * ⚠️ SINCE STORY 7-8 THE WORD PRESS SELECTS RATHER THAN SEEKS, AND NOTHING HERE MAKES A SOUND.
+ * 7-6 wired it to `useVerseSeek`, which plays whenever the player is not already playing — so on
+ * the app's PRIMARY surface, where every word is a press target, a mistap was one tap from
+ * recitation out loud. The pressed word's ayah is now selected (`onSelectVerse`), the chrome
+ * reveals with its words underlined (`selectedVerseKey`), and the contextual row in the footer is
+ * the only path from a verse to audio.
  *
  * ⚠️ THE U+06DF STRIP DOES NOT APPLY HERE. `word.qpcV1` is QPC glyph ENCODING — codepoints into a
  * per-page font — not Uthmani text in the KFGQPC face; and the two strings this file does set in
@@ -113,14 +120,28 @@ export interface MushafPageProps {
    */
   onErrorChange?: (page: number, failed: boolean) => void;
   /**
-   * Play from — or seek to — the ayah a pressed WORD belongs to (story 7-6). Called with the pair
-   * parsed out of that word's `location`, never with anything the screen believes it is showing.
-   * ⚠️ Must be IDENTITY-STABLE: this component is rendered from FlashList's `renderPage`, whose
-   * own identity is what keeps every page from re-rendering per turn. Optional — and it is what
-   * makes a word pressable AT ALL: without it no word takes a touch, so a page with no player
-   * behind it renders plain glyphs.
+   * SELECT the ayah a pressed WORD belongs to (story 7-8; it was a SEEK in 7-6). Called with the
+   * pair parsed out of that word's `location`, never with anything the screen believes it is
+   * showing — a word carries exact verse identity, so a press selects the whole ayah it belongs
+   * to. ⚠️ Must be IDENTITY-STABLE: this component is rendered from FlashList's `renderPage`,
+   * whose own identity is what keeps every page from re-rendering per turn. Optional — and it is
+   * what makes a word pressable AT ALL: without it no word takes a touch, so a page with no
+   * chrome behind it renders plain glyphs.
+   *
+   * ⚠️ IT MUST NOT REACH THE AUDIO ENGINE. 7-6 wired this to `useVerseSeek`, which starts
+   * playback in any state that is not already playing — and 7-6 had just made every word on the
+   * app's primary surface a press target, so a mistap was one tap from sound out loud. The row
+   * inside the chrome's footer is where a verse turns into audio now.
    */
-  onPressVerse?: (surah: number, verse: number) => void;
+  onSelectVerse?: (surah: number, verse: number) => void;
+  /**
+   * The SELECTED ayah — `"{surah}:{verse}"`, or null (story 7-8). Its words draw the selection
+   * underline. ⚠️ A DIFFERENT CHANNEL FROM `activeVerseKey`'S FILL, on purpose: the recited ayah
+   * and the selected one are frequently the same, and two stacked translucent backgrounds blend
+   * into a third colour nobody authored — worse here than in reading mode, because inline words
+   * are individually painted spans and stacked fills also SEAM between them.
+   */
+  selectedVerseKey?: string | null;
   /**
    * Flip the chrome. ⚠️ WIRED TO THE PAGE HEADER STRIP AND THE PAGE NUMBER ONLY — those two bands
    * are the mushaf's whole chrome-toggle surface (owner call 2026-09-10). Optional; a page with
@@ -193,6 +214,31 @@ const useStyles = () =>
     highlightedWord: {
       backgroundColor: theme.colors.accent.faint,
     },
+    /**
+     * The selection, on an inline span (story 7-8).
+     *
+     * ⚠️ AN UNDERLINE RATHER THAN A BORDER, AND THAT IS A PLATFORM FACT, NOT A PREFERENCE. These
+     * words are nested `<Text>` nodes inside the line's justified RTL flow — on iOS a nested Text
+     * is an attributed-string RANGE, and border styles are simply not applied to ranges (a
+     * background colour IS, which is why the highlight above works). Wrapping each word in a
+     * `View` to get a real border would take it out of the line flow and break the facsimile. A
+     * text decoration is the outline channel that exists here.
+     *
+     * ⚠️ `textDecorationColor` IS iOS + WEB ONLY — ANDROID DRAWS THE UNDERLINE IN `text.primary`,
+     * THE WORD'S OWN COLOUR, AND THAT PAIR IS GATED TOO. `palettes.contrast.test.ts` measures
+     * BOTH the authored `accent.soft` and the Android fallback against the page and against the
+     * `accent.faint` fill, so the colour a reader actually sees on the app's primary surface is
+     * measured on every palette slice rather than assumed from the one platform that honours the
+     * token. It degrades to a visible underline rather than to nothing, and it is still not a
+     * fill, so the "never a second fill" rule holds on all three.
+     *
+     * ⚠️ AND IT DRAWS AS ONE STROKE, NOT ONE DASH PER WORD — see `bridged` in the line renderer.
+     */
+    selectedWord: {
+      textDecorationLine: 'underline' as const,
+      textDecorationStyle: 'solid' as const,
+      textDecorationColor: theme.colors.accent.soft,
+    },
     pageNumber: {
       color: theme.colors.text.secondary,
       fontSize: FONT_SIZE.caption,
@@ -207,7 +253,8 @@ export function MushafPage({
   pageNumber,
   activeVerseKey,
   onErrorChange,
-  onPressVerse,
+  onSelectVerse,
+  selectedVerseKey,
   onToggleChrome,
 }: MushafPageProps) {
   const { t } = useTranslation();
@@ -290,6 +337,8 @@ export function MushafPage({
   const surahNumber = firstLocation ? Number.parseInt(firstLocation.split(':')[0], 10) : 1;
   const surahName = SURAH_METADATA[surahNumber - 1]?.nameTransliteration ?? '';
   const activePrefix = activeVerseKey ? `${activeVerseKey}:` : null;
+  // The same `+ ':'` guard the highlight uses — without it "2:1" matches every word of 2:15.
+  const selectedPrefix = selectedVerseKey ? `${selectedVerseKey}:` : null;
 
   const lines = layout.lines.map((line) => (
     <MushafLineView
@@ -298,8 +347,9 @@ export function MushafPage({
       fontFamily={fontFamily}
       glyphFontSize={glyphFontSize}
       activePrefix={activePrefix}
+      selectedPrefix={selectedPrefix}
       styles={styles}
-      onPressVerse={onPressVerse}
+      onSelectVerse={onSelectVerse}
     />
   ));
 
@@ -349,12 +399,12 @@ interface MushafLineViewProps {
   glyphFontSize: number;
   /** `activeVerseKey + ':'`, pre-built once per page — or null when nothing highlights. */
   activePrefix: string | null;
+  /** `selectedVerseKey + ':'`, same shape — or null when nothing is selected (story 7-8). */
+  selectedPrefix: string | null;
   /** The page's themed styles — passed down so this stays a HOOKLESS function (see header). */
   styles: MushafStyles;
-  /** Seek to a pressed word's ayah. A PROP, not a hook — the renderer stays hookless. */
-  onPressVerse?: (surah: number, verse: number) => void;
-  /** Press-in reporter, for the chrome's empty-area rule. Also a prop, for the same reason. */
-  onInteractionStart?: () => void;
+  /** Select a pressed word's ayah. A PROP, not a hook — the renderer stays hookless. */
+  onSelectVerse?: (surah: number, verse: number) => void;
 }
 
 /**
@@ -384,8 +434,9 @@ function MushafLineView({
   fontFamily,
   glyphFontSize,
   activePrefix,
+  selectedPrefix,
   styles,
-  onPressVerse,
+  onSelectVerse,
 }: MushafLineViewProps) {
   if (line.type === 'surah-header') {
     const surahNumber = Number.parseInt(line.surah ?? '0', 10);
@@ -443,12 +494,33 @@ function MushafLineView({
       {line.words.map((word, i) => {
         // The `+ ':'` in the prefix is what stops "2:1" matching 2:15's words.
         const isActive = activePrefix !== null && word.location.startsWith(activePrefix);
+        const isSelected = selectedPrefix !== null && word.location.startsWith(selectedPrefix);
+        /**
+         * ⚠️ THE SEPARATOR JOINS THE UNDERLINE WHEN BOTH ITS NEIGHBOURS ARE SELECTED, AND THAT
+         * IS THE WHOLE POINT OF THE CHANNEL (story 7-8's review). The separators are raw children
+         * of the LINE so a background highlight cannot bleed across them — which for a
+         * DECORATION meant the selection drew as a row of disconnected dashes, one per word,
+         * exactly the seaming the story used to reject a second fill. A decoration is not a fill:
+         * carrying it across the gap is what makes one ayah read as one stroke.
+         */
+        const bridged =
+          isSelected &&
+          i > 0 &&
+          selectedPrefix !== null &&
+          (line.words?.[i - 1]?.location.startsWith(selectedPrefix) ?? false);
         // Parsed per word from `location` — the same ground truth the highlight above reads.
-        const at = onPressVerse ? verseAt(word.location) : null;
+        const at = onSelectVerse ? verseAt(word.location) : null;
         return (
           <Fragment key={word.location}>
-            {/* The separator sits OUTSIDE the word's Text so a highlight never bleeds into it. */}
-            {i > 0 && ' '}
+            {/* Outside the word's Text so a highlight never bleeds into it — see `bridged`. */}
+            {i > 0 &&
+              (bridged ? (
+                <Text style={styles.selectedWord} testID={`mushaf-gap-${word.location}`}>
+                  {' '}
+                </Text>
+              ) : (
+                ' '
+              ))}
             <Text
               // ⚠️ HANDLERS ON THE EXISTING `<Text>`, NO WRAPPER. A `View` or a
               // `GestureDetector` here would take the word out of the line's justified RTL flow
@@ -457,12 +529,16 @@ function MushafLineView({
               // `Text` becomes pressable on `onPressIn` ALONE, so an unconditional reporter made
               // a word with an unparseable `location` — or a page handed a reporter and no
               // seek — swallow the touch and suppress the chrome while doing nothing at all.
-              // `VerseRow` avoids the same trap with `disabled={!onPressVerse}`.
-              onPress={at ? () => onPressVerse?.(at.surah, at.verse) : undefined}
+              // `VerseRow` avoids the same trap with `disabled={!onSelectVerse}`.
+              onPress={at ? () => onSelectVerse?.(at.surah, at.verse) : undefined}
               // ⚠️ iOS DRAWS A PRESS HIGHLIGHT OVER PRESSABLE TEXT BY DEFAULT — a grey rectangle
               // flashing across a facsimile whose whole premise is faithful rendering.
               suppressHighlighting
-              style={[{ fontFamily, fontSize: glyphFontSize }, isActive && styles.highlightedWord]}
+              style={[
+                { fontFamily, fontSize: glyphFontSize },
+                isActive && styles.highlightedWord,
+                isSelected && styles.selectedWord,
+              ]}
               testID={`mushaf-word-${word.location}`}
             >
               {word.qpcV1}

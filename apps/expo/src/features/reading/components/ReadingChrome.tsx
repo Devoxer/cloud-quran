@@ -48,7 +48,7 @@
  */
 
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -56,8 +56,11 @@ import Animated from 'react-native-reanimated';
 import { AppHeader, AppTabBar, HeaderActionButton, InlineError } from '@/components/ui';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { SPACING } from '@/constants/spacing';
+import { ReciterSheet } from '@/features/audio';
 import { useTheme } from '@/lib/theme';
+import { usePlaybackStatus } from '@/stores/audioPlayerStore';
 import type { ChromeReveal } from '../hooks/useChromeReveal';
+import { ChromeVerseRow, chromeRowFace } from './ChromeVerseRow';
 
 export interface ReadingChromeProps {
   reveal: ChromeReveal;
@@ -94,6 +97,40 @@ export function ReadingChrome({
   const { t: tAny } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  /**
+   * ⚠️ THE SHEET'S STATE LIVES HERE, NOT IN THE ROW THAT OPENS IT, BECAUSE THE SHEET IS RENDERED
+   * OUTSIDE BOTH BARS. Inside the footer it would inherit the reveal's opacity and its
+   * `pointerEvents`, so the 5-second dwell would fade the reader's open sheet away mid-scroll and
+   * make it untouchable — a bar's animation deciding the fate of a modal that is not part of it.
+   */
+  const [recitersOpen, setRecitersOpen] = useState(false);
+  /**
+   * ⚠️ THE SHEET ALSO SUSPENDS THE DWELL. A reader picking a voice is USING the chrome; without
+   * the hold they came back from a 39-row list to no bars and no selection, five seconds after
+   * they opened it. Releasing it arms a full fresh dwell rather than resuming a spent one.
+   */
+  const { holdDwell, keepAlive, selectedVerse, interactive } = reveal;
+  const openReciters = useCallback(() => {
+    setRecitersOpen(true);
+    holdDwell(true);
+  }, [holdDwell]);
+  const closeReciters = useCallback(() => {
+    setRecitersOpen(false);
+    holdDwell(false);
+  }, [holdDwell]);
+
+  /**
+   * ⚠️ THE HEADER TRANSPORT YIELDS TO THE ROW'S (story 7-8's review). With a track loaded and
+   * nothing selected BOTH drew, both announced `player:a11y.playRecitation`, and they were two
+   * implementations of one thing. Their scopes differ and that is what decides which survives:
+   * the header's play is "resume where I left off listening" (7-7's resolver), which is only
+   * meaningful when nothing is playing; the row's is "control what is playing". So the row wins
+   * whenever it is drawing a transport, and `chromeRowFace` is the ONE place that question is
+   * answered — asking it twice is how the two would drift apart again.
+   */
+  const playback = usePlaybackStatus();
+  const rowFace = chromeRowFace(selectedVerse, playback.playbackState, playback.surah);
+  const headerTransport = rowFace === 'player' ? undefined : onTogglePlay;
 
   // See the header for all three: `box-none` rather than `auto`, keyed on `interactive` rather
   // than `visible`, and the accessibility tree hidden alongside the touch tree.
@@ -147,10 +184,10 @@ export function ReadingChrome({
            */
           trailing={
             <View style={[styles.trailing, !reveal.interactive && styles.inert]}>
-              {onTogglePlay ? (
+              {headerTransport ? (
                 <HeaderActionButton
                   name={playing ? 'pause' : 'play'}
-                  onPress={onTogglePlay}
+                  onPress={headerTransport}
                   color={colors.accent.primary}
                   accessibilityLabel={tAny(
                     playing ? 'player:a11y.pauseRecitation' : 'player:a11y.playRecitation'
@@ -210,8 +247,21 @@ export function ReadingChrome({
         {...offscreen}
         testID="reading-chrome-footer"
       >
+        {/* ⚠️ INSIDE THE FOOTER, ABOVE THE TAB BAR — one bar, one driver, no second animation
+            (story 7-8). The row draws verse actions when an ayah is selected, the mini player
+            when audio is loaded and nothing is, and nothing at all otherwise; a footer with no
+            row is byte-identical to the pre-7-8 one. */}
+        <ChromeVerseRow
+          selected={selectedVerse}
+          interactive={interactive}
+          onOpenReciters={openReciters}
+          onInteract={keepAlive}
+        />
         <AppTabBar interactive={reveal.interactive} />
       </Animated.View>
+
+      {/* Outside both bars, deliberately — see `recitersOpen` above. */}
+      <ReciterSheet open={recitersOpen} onClose={closeReciters} />
     </>
   );
 }

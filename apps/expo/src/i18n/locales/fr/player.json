@@ -101,7 +101,9 @@
     "repeatModeOne": "Mode répétition : un seul. Appuyez pour désactiver la répétition",
     "playFromVerse": "Lire à partir du verset {{verse}}",
     "playRecitation": "Lire la récitation",
-    "pauseRecitation": "Mettre en pause la récitation"
+    "pauseRecitation": "Mettre en pause la récitation",
+    "selectVerse": "Sélectionner le verset {{verse}}",
+    "chooseReciter": "Choisir un récitateur"
   },
   "sleep": {
     "end": "Fin",
@@ -117,6 +119,8 @@
       "muallim": "Muallim"
     },
     "emptyTitle": "Aucun récitateur trouvé",
-    "emptyBody": "Essayez un autre nom, en anglais ou en arabe."
-  }
+    "emptyBody": "Essayez un autre nom, en anglais ou en arabe.",
+    "sheetTitle": "Récitateur"
+  },
+  "nowPlayingVerse": "{{name}} · {{verse}}"
 }

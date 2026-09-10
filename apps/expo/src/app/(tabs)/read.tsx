@@ -12,7 +12,7 @@ import { ErrorView } from '@/components/ui';
 import { clampArabicFontSize } from '@/constants/arabic';
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
-import { useResumeListening, useVerseSeek } from '@/features/audio';
+import { useResumeListening } from '@/features/audio';
 import {
   nextSurah,
   prevSurah,
@@ -82,6 +82,14 @@ import {
  *    story 7-6 the gesture and its empty-area rule live in `useSurfaceTap`, shared with the
  *    mushaf: a press on the Arabic or on the bookmark control no longer ALSO toggles the chrome
  *    (6-4 named that double-fire and accepted it; the owner reversed the call on 2026-09-09).
+ *
+ * 6. **A VERSE PRESS SELECTS, AND NOTHING ON THIS SCREEN STARTS AUDIO ANY MORE** (story 7-8).
+ *    Pressing the Arabic reveals the chrome with that ayah OUTLINED; the empty-area tap reveals
+ *    it with nothing selected. Both go through `useChromeReveal`, which holds the selection so it
+ *    cannot outlive the bars. The only path from a verse to sound is the contextual row inside
+ *    the footer — 7-1's `onPressVerse` → `useVerseSeek` wiring is gone from here, because
+ *    `seekToVerse` plays whenever the player is not already playing and a reading app must not
+ *    make noise on a mistap.
  */
 
 /**
@@ -151,7 +159,7 @@ export default function Read() {
   // The saved row, as a ref, for the same reason: the focus effect reads it at FOCUS time.
   const savedRef = useRef(saved);
   savedRef.current = saved;
-  // ⚠️ PLAYBACK, MIRRORED INTO A REF, for the `bookmarkIdsRef` reason exactly: `onPressVerse` is
+  // ⚠️ PLAYBACK, MIRRORED INTO A REF, for the `bookmarkIdsRef` reason exactly: `onSelectVerse` is
   // handed to every row and must stay identity-stable, or `VerseRow`'s memo stops working and the
   // highlight starts re-rendering all 286 rows of Al-Baqarah.
   const playbackRef = useRef(playback);
@@ -164,16 +172,21 @@ export default function Read() {
    * another device synced — the screen re-targets and the restore effect below re-applies it.
    * If nothing moved, nothing happens, which is what keeps a plain tab switch from scrolling.
    */
+  const { clearSelection } = reveal;
   useFocusEffect(
     useCallback(() => {
       const fresh = openingPosition(savedRef.current);
       if (fresh.surah === showing.current && fresh.verse === visibleVerseRef.current) return;
+      // ⚠️ THE SELECTION DIES WITH THE AYAH IT POINTS AT (story 7-8's review). A resync jumps the
+      // reader somewhere else without touching the chrome, so the row would go on offering
+      // play-from-here and a bookmark for a verse that is no longer on screen.
+      clearSelection();
       showing.current = fresh.surah;
       visibleVerseRef.current = fresh.verse;
       restored.current = false;
       setTarget(fresh);
       setSurah(fresh.surah);
-    }, [])
+    }, [clearSelection])
   );
 
   useEffect(() => {
@@ -340,8 +353,14 @@ export default function Read() {
       focused.current = true;
       return () => {
         focused.current = false;
+        // ⚠️ AND THE SELECTION GOES WITH THE SURFACE (story 7-8's review). The MODE TOGGLE is the
+        // one navigation that leaves this screen's chrome revealed — it is a plain `navigate`, so
+        // nothing here unmounts — and coming back to a row acting on an ayah the reader chose two
+        // renderers ago is the wrong-surah class in a new place. Blur is the edge that covers the
+        // toggle, a tab switch and a push in one rule.
+        clearSelection();
       };
-    }, [])
+    }, [clearSelection])
   );
   useEffect(() => {
     const playing = playback.playbackState === 'playing';
@@ -442,13 +461,22 @@ export default function Read() {
   }, []);
 
   /**
-   * Tap-to-seek, story 7-1's half of the verse tap epic 6 reserved — and since 7-6 the rule lives
-   * in `useVerseSeek`, shared with the mushaf's word press so the `idle`/`error` guard has one
-   * home rather than two that can drift. ⚠️ The pair still comes from the ROW (see
-   * `toggleBookmark` for the defect that taught this), and the hook's callback is
-   * identity-stable, which is what `VerseRow`'s memo needs.
+   * ⚠️ A VERSE PRESS SELECTS; IT DOES NOT PLAY (story 7-8). Story 7-1 wired this straight to
+   * `useVerseSeek`, whose `seekToVerse` calls `play()` in any state that is not already playing —
+   * so on a reading app every press of the Arabic was one tap from sound, including from a cold
+   * launch and from paused. It now reveals the chrome with this ayah selected, and the row inside
+   * the footer carries play-from-here. THIS SCREEN NO LONGER TOUCHES THE AUDIO ENGINE FOR A
+   * VERSE.
+   *
+   * ⚠️ The pair still comes from the ROW (see `toggleBookmark` for the defect that taught this),
+   * and this callback is identity-stable — `revealFor` is a `useCallback` with no dependencies —
+   * which is what `VerseRow`'s memo needs.
    */
-  const onPressVerse = useVerseSeek();
+  const { revealFor } = reveal;
+  const onSelectVerse = useCallback(
+    (surah: number, verse: number) => revealFor({ surah, verse }),
+    [revealFor]
+  );
 
   /**
    * ⚠️ A PLAYBACK FAILURE REVEALS THE CHROME, for the reason a failed mushaf page does: the error
@@ -488,22 +516,37 @@ export default function Read() {
     void playSurah(start.surah, start.verse);
   }, [pause, resume, playSurah, resolveListeningStart]);
 
-  const goToSurah = useCallback((next: number) => {
-    // Synchronously, BEFORE the scroll: the viewability callback that the scroll provokes must
-    // already see the new surah as the one we are showing.
-    showing.current = next;
-    visibleVerseRef.current = FIRST_VERSE;
-    setSurah(next);
-    listRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, []);
+  const goToSurah = useCallback(
+    (next: number) => {
+      // The selected ayah belonged to the surah being left — see the focus resync above.
+      clearSelection();
+      // Synchronously, BEFORE the scroll: the viewability callback that the scroll provokes must
+      // already see the new surah as the one we are showing.
+      showing.current = next;
+      visibleVerseRef.current = FIRST_VERSE;
+      setSurah(next);
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    },
+    [clearSelection]
+  );
 
   /**
    * ⚠️ ONE TAP GESTURE FOR THE WHOLE SURFACE — see the file header for the two shapes this
    * replaces and why each failed. Built by `useSurfaceTap`, which also owns the empty-area rule:
    * `onChildPressIn` goes to every row, and a touch that starts on one suppresses the toggle.
+   *
+   * ⚠️ `toggle` IS `revealFor(null)` SINCE STORY 7-8 — "reveal with NOTHING selected". This
+   * gesture fires exactly where no child took the touch, which is the definition of an empty
+   * area, and an empty area names no ayah to act on.
    */
   const { toggle } = reveal;
   const { gesture: surfaceTap, onChildPressIn } = useSurfaceTap(toggle);
+
+  /** The selected ayah as a key, compared ONCE here so each row takes a boolean (story 7-8) —
+   *  the `highlighted` discipline, for the reason `VerseRow`'s memo docblock spells out. */
+  const selectedKey = reveal.selectedVerse
+    ? verseKey(reveal.selectedVerse.surah, reveal.selectedVerse.verse)
+    : null;
 
   const renderItem = useCallback(
     ({ item }: { item: Verse }) => (
@@ -515,12 +558,21 @@ export default function Read() {
         bookmarked={bookmarkIds.has(verseKey(item.surah, item.verse))}
         onToggleBookmark={toggleBookmark}
         highlighted={activeVerseKey === verseKey(item.surah, item.verse)}
-        onPressVerse={onPressVerse}
+        selected={selectedKey === verseKey(item.surah, item.verse)}
+        onSelectVerse={onSelectVerse}
         onInteractionStart={onChildPressIn}
         testID={`verse-${item.surah}:${item.verse}`}
       />
     ),
-    [fontSize, bookmarkIds, toggleBookmark, activeVerseKey, onPressVerse, onChildPressIn]
+    [
+      fontSize,
+      bookmarkIds,
+      toggleBookmark,
+      activeVerseKey,
+      selectedKey,
+      onSelectVerse,
+      onChildPressIn,
+    ]
   );
 
   const title = content.meta?.nameTransliteration ?? null;

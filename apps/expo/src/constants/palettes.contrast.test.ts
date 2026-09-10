@@ -28,12 +28,34 @@
  */
 import { TAB_INDICATOR_ALPHA as INDICATOR_ALPHA } from '@/components/ui/AppTabBar';
 import { blendOver, contrastRatio, meetsContrast } from '@/lib/color';
-import { PALETTE_NAMES, PALETTES } from './palettes';
+import { PALETTE_NAMES, PALETTES, type PaletteSlice } from './palettes';
 
 const AAA_PRIMARY = 7;
 const AA_BODY = 4.5;
 const AA_LARGE = 3;
 const SCHEMES = ['light', 'dark'] as const;
+
+/**
+ * The colour a highlighted verse's background ACTUALLY IS — `accent.faint` composited over the
+ * page (story 7-8).
+ *
+ * ⚠️ `accent.faint` IS AN `rgba(…)` STRING, AND FEEDING ONE TO `contrastRatio` DOES NOT ERROR: it
+ * returns the neutral `1`, i.e. "identical colours", which reads as a failing pair rather than as
+ * a bad call. `blendOver` takes a hex plus an alpha, so the token is parsed into those two halves
+ * here — the same move the tab-bar indicator makes below, one token over.
+ */
+function highlightFill(s: PaletteSlice): string {
+  const parts = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/.exec(s.accent.faint);
+  // ⚠️ THROW RATHER THAN FALL BACK. Returning the unparsed token would let every measurement
+  // below score against an `rgba(…)` string, which `contrastRatio` reads as the neutral 1 — a
+  // number, not an error. That is this repo's recorded malformed-hex failure exactly: the
+  // dangerous shape produces a believable value instead of stopping.
+  if (!parts) throw new Error(`accent.faint is not an rgba() token: ${s.accent.faint}`);
+  const hex = `#${[parts[1], parts[2], parts[3]]
+    .map((channel) => Number(channel).toString(16).padStart(2, '0'))
+    .join('')}`;
+  return blendOver(hex, s.background.primary, Number(parts[4]));
+}
 
 describe('palette contrast (AC-3 accessibility gate)', () => {
   for (const name of PALETTE_NAMES) {
@@ -61,6 +83,38 @@ describe('palette contrast (AC-3 accessibility gate)', () => {
 
         it('text.onAccent on accent.primary ≥ 3 (button labels = large text)', () => {
           expect(meetsContrast(s.text.onAccent, s.accent.primary, AA_LARGE)).toBe(true);
+        });
+
+        it('the SELECTION OUTLINE clears 3:1 on the page AND on the audio highlight (story 7-8)', () => {
+          // ⚠️ TWO SURFACES, BECAUSE THE OUTLINE HAS TO SURVIVE THE OVERLAP. A selected ayah that
+          // is ALSO the one being recited carries `accent.faint` as a FILL underneath it, so the
+          // outline is measured against the colour actually rendered there — not against the bare
+          // page, which is the easier of the two on every slice. The outline is `accent.soft`
+          // (the accent's foreground strength): measured 2026-09-10 at 4.40–11.29 over the
+          // highlight, floor terracotta·light. `accent.primary` was the other candidate and
+          // measures 3.50 there — inside the bar, but with a third of the headroom.
+          expect(meetsContrast(s.accent.soft, s.background.primary, AA_LARGE)).toBe(true);
+          expect(meetsContrast(s.accent.soft, highlightFill(s), AA_LARGE)).toBe(true);
+        });
+
+        it('…and ANDROID’s fallback colour clears the same two bars', () => {
+          // ⚠️ ANDROID IGNORES `textDecorationColor`. The mushaf draws the selection as a text
+          // decoration (a nested `<Text>` cannot take a border), and on Android that underline
+          // renders in the WORD's colour — `text.primary`. Measuring only the authored token
+          // would leave the colour most readers of the primary surface actually see unmeasured.
+          expect(meetsContrast(s.text.primary, s.background.primary, AA_LARGE)).toBe(true);
+          expect(meetsContrast(s.text.primary, highlightFill(s), AA_LARGE)).toBe(true);
+        });
+
+        it('…and the highlight it is measured over is a real, PARSED surface', () => {
+          // Anti-vacuity for the two cases above, the `blendOver` shape. ⚠️ THE HEX ASSERTION IS
+          // THE POINT, NOT THE INEQUALITY: a `highlightFill` that failed OPEN would return the
+          // raw `rgba(…)` token, which is never equal to a hex background — so the inequality
+          // alone passes on a broken parse while every ratio above silently scores against
+          // `contrastRatio`'s neutral 1. The helper throws now, and this pins the shape it must
+          // return for that throw to be reachable.
+          expect(highlightFill(s)).toMatch(/^#[0-9a-f]{6}$/i);
+          expect(highlightFill(s).toLowerCase()).not.toBe(s.background.primary.toLowerCase());
         });
 
         it('accent.primary on background.primary ≥ 3 (bookmark indicator, WCAG 1.4.11)', () => {

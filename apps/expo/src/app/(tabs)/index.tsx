@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
 
-import { useResumeListening, useVerseSeek } from '@/features/audio';
+import { useResumeListening } from '@/features/audio';
 import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
@@ -60,7 +60,9 @@ import {
  * 5. **THERE IS NO SURFACE GESTURE ON THIS SCREEN, AND THAT IS THE 2026-09-10 CHANGE.** Stories
  *    6-2 through 7-6 put an RNGH tap over the whole pager; the owner replaced it with TWO BANDS
  *    inside the page — its header strip and its page number — which `MushafPage` draws as plain
- *    `Pressable`s. A word press seeks; everything else on the page does nothing. Two things fall
+ *    `Pressable`s. A word press SELECTS its ayah (story 7-8 — it was a seek in 7-6, and nothing
+ *    on this screen starts audio any more); everything else on the page does nothing. The bands
+ *    reveal the chrome with NOTHING selected, because a band names no ayah. Two things fall
  *    out, both recorded in that file: the cross-system race 7-6 logged is now unwritable (one
  *    touch system, RN's responder, decides alone), and an inter-word gap tap no longer flips the
  *    chrome — under 7-6 roughly one tap in three across a line did. A page-turn swipe is a
@@ -132,7 +134,7 @@ export default function Mushaf() {
    * that has since loaded does not flash the bars.
    */
   const failedPages = useRef(new Set<number>());
-  const { show } = reveal;
+  const { show, clearSelection } = reveal;
   /**
    * Story 6-3: the welcome-back banner's screen-driven dismissal. Flipped where `moved.current`
    * first becomes true — a REAL page move, not the restore settling — because "gone on page
@@ -154,12 +156,16 @@ export default function Mushaf() {
     useCallback(() => {
       const fresh = openingPage(savedRef.current);
       if (fresh === currentPageRef.current) return;
+      // ⚠️ THE SELECTION DIES WITH THE AYAH IT POINTS AT (story 7-8's review). A resync turns to
+      // another page without touching the chrome, so the row would go on offering
+      // play-from-here for a verse that is no longer drawn.
+      clearSelection();
       restoreTarget.current = fresh;
       moved.current = false;
       currentPageRef.current = fresh;
       setCurrentPage(fresh);
       listRef.current?.scrollToIndex({ index: pageToIndex(fresh), animated: false });
-    }, [])
+    }, [clearSelection])
   );
 
   // ±2 neighbour fonts, re-aimed on every settled page (and at the opening page on mount).
@@ -173,6 +179,10 @@ export default function Mushaf() {
     ({ viewableItems }: { viewableItems: ViewToken<number>[] }) => {
       const page = viewableItems[0]?.item;
       if (typeof page !== 'number') return;
+      // A SETTLED page is a move — the selected ayah was on the page the reader turned away from
+      // (story 7-8's review). Cheap: `clearSelection` returns the same state when nothing is
+      // selected, so an ordinary page turn re-renders nothing extra.
+      if (page !== currentPageRef.current) clearSelection();
       currentPageRef.current = page;
       setCurrentPage(page);
       // The OTHER edge of the failure reveal — see `failedPages` above for why one is not enough.
@@ -191,7 +201,7 @@ export default function Mushaf() {
       // Reported every time. `usePosition` decides whether it is a write.
       reportVerse(first.surah, first.verse);
     },
-    [reportVerse, show]
+    [reportVerse, show, clearSelection]
   );
 
   /**
@@ -246,8 +256,11 @@ export default function Mushaf() {
       focused.current = true;
       return () => {
         focused.current = false;
+        // ⚠️ AND THE SELECTION GOES WITH THE SURFACE — see `read.tsx` for the mode-toggle case
+        // this blur edge is the one rule for.
+        clearSelection();
       };
-    }, [])
+    }, [clearSelection])
   );
   useEffect(() => {
     const playing = playback.playbackState === 'playing';
@@ -311,15 +324,30 @@ export default function Mushaf() {
    * removing the recogniser bought: the cross-system race is unwritable, and an inter-word gap
    * tap no longer flips the chrome. `read.tsx` still uses `useSurfaceTap`; its surface has large
    * genuine empty areas and no equivalent bands.
+   *
+   * ⚠️ THE BANDS ARE THE EMPTY AREA, so they reveal with NOTHING selected (story 7-8) — `toggle`
+   * is `revealFor(null)`.
    */
-  const { toggle } = reveal;
+  const { toggle, revealFor } = reveal;
 
   /**
-   * Tap-to-seek on the facsimile (story 7-6). The SAME rule the reading rows use — seek inside
-   * the loaded track, otherwise start this surah here — so the `idle`/`error` guard cannot drift
-   * between the two surfaces. Identity-stable, which is what `renderPage` below needs.
+   * ⚠️ A WORD PRESS SELECTS ITS AYAH; IT DOES NOT PLAY IT (story 7-8). Story 7-6 wired this to
+   * `useVerseSeek`, which starts playback in any state that is not already playing — and 7-6 had
+   * just made every word on the app's PRIMARY surface a press target, so a mistap was one tap
+   * from recitation out loud. A word carries exact verse identity (`words[].location`), so the
+   * press selects the whole ayah it belongs to and the chrome's row is where that becomes audio.
+   * Identity-stable, which is what `renderPage` below needs.
    */
-  const onPressVerse = useVerseSeek();
+  const onSelectVerse = useCallback(
+    (surah: number, verse: number) => revealFor({ surah, verse }),
+    [revealFor]
+  );
+
+  /** The selected ayah as a key, in the same `"{surah}:{verse}"` shape `activeVerseKey` uses —
+   *  `MushafPage` matches it against `location` prefixes, exactly as it does the highlight. */
+  const selectedVerseKey = reveal.selectedVerse
+    ? `${reveal.selectedVerse.surah}:${reveal.selectedVerse.verse}`
+    : null;
 
   // Every item is exactly one screen — which is what makes `pagingEnabled` page cleanly and
   // `initialScrollIndex` exact (shape 2). Geometry, not theme, so it lives inline.
@@ -334,13 +362,14 @@ export default function Mushaf() {
         <MushafPage
           pageNumber={item}
           activeVerseKey={activeVerseKey}
+          selectedVerseKey={selectedVerseKey}
           onErrorChange={onPageErrorChange}
-          onPressVerse={onPressVerse}
+          onSelectVerse={onSelectVerse}
           onToggleChrome={toggle}
         />
       </View>
     ),
-    [pageStyle, onPageErrorChange, activeVerseKey, onPressVerse, toggle]
+    [pageStyle, onPageErrorChange, activeVerseKey, selectedVerseKey, onSelectVerse, toggle]
   );
 
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);

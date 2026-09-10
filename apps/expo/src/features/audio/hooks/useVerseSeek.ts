@@ -7,13 +7,20 @@
  * than the loaded track, and `error` is a state a track is still loaded in — so a caller that
  * seeks without checking both leaves the reader pressing an ayah and hearing nothing.
  *
- * It lives in `features/audio` because this feature owns the store's semantics, and both callers
- * are routes, so `routes → features` stays the legal direction.
+ * ⚠️ ITS BEHAVIOUR IS UNCHANGED AND ITS CALLERS ARE NOT — READ THIS BEFORE WIRING IT TO A PRESS.
+ * Until story 7-8 both reading surfaces called it directly from a verse press and from a mushaf
+ * word press, which is exactly how "any tap on the Quran is one tap from sound" happened: the
+ * branch below STARTS playback for anything that is not the loaded track, and `error`/`idle` are
+ * two of the states it starts from. Its only caller now is the chrome's `ChromeVerseRow` play
+ * control, where the reader has deliberately asked for audio. A verse press SELECTS; it must
+ * never reach this hook again.
  *
- * ⚠️ THE RETURNED CALLBACK IS IDENTITY-STABLE, and that is load-bearing rather than hygiene. It
- * is handed to every `VerseRow` (whose `memo` is what keeps an ayah change from re-rendering all
- * 286 rows of Al-Baqarah) and to `MushafPage` through a `useCallback`'d `renderPage` (whose
- * identity is what keeps FlashList from re-rendering every page per turn).
+ * It lives in `features/audio` because this feature owns the store's semantics, and its caller
+ * is `features/reading` through that feature's public barrel.
+ *
+ * ⚠️ THE RETURNED CALLBACK IS IDENTITY-STABLE. It was load-bearing when every `VerseRow` and
+ * every `MushafPage` held one (the memo that keeps an ayah change from re-rendering all 286 rows
+ * of Al-Baqarah); with a single caller it is now merely correct, and cheap to keep.
  *
  * ⚠️ SO IT READS THE STATUS IMPERATIVELY, AND SUBSCRIBES TO NOTHING. The volatile half — the
  * loaded surah and the playback state, which move several times per listen — is read from

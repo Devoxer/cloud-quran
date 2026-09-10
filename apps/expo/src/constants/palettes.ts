@@ -65,6 +65,15 @@ export const PALETTE_NAMES: readonly PaletteName[] = [
  * (string-valued, never `as const` — a non-terracotta palette's hexes must stay
  * assignable). `accent.faint`/`accent.soft` are the tinted-badge pair (faint = fill,
  * soft = glyph); `text.onAccent` is the readable-on-accent label color.
+ *
+ * ⚠️ `accent.soft` IS ALSO THE VERSE-SELECTION OUTLINE (story 7-8), AND THERE IS DELIBERATELY NO
+ * SEPARATE TOKEN FOR IT. The outline has to clear WCAG 1.4.11's 3:1 non-text bar on the page AND
+ * on `accent.faint` composited over the page — the overlap where a selected ayah is also the one
+ * being recited — and every candidate that clears both on all twelve slices is a hue this file
+ * already authors. `accent.soft` measured 4.40–11.29 over the highlight (floor terracotta·light)
+ * against `accent.primary`'s 3.50, so it is the one with headroom. A thirteenth token holding a
+ * byte-for-byte copy of it would be indirection, not authorship. `palettes.contrast.test.ts`
+ * gates the outline on both surfaces; tune the hue, never the bar.
  */
 export interface PaletteSlice {
   background: { primary: string; secondary: string; tertiary: string };

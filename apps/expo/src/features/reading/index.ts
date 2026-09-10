@@ -8,6 +8,9 @@
 
 // `CHROME_BAR_HEIGHT` moved to `@/constants/navigation` in story 6-6 — the height is the
 // app-wide chrome's, not this feature's, now that `AppHeader`/`AppTabBar` share it.
+// story 7-8: the contextual row is mounted BY `ReadingChrome`; it is exported for its own test
+// and for a future surface that carries chrome, never for a screen to mount a second copy.
+export { ChromeVerseRow, type ChromeVerseRowProps } from './components/ChromeVerseRow';
 export { ReadingChrome, type ReadingChromeProps } from './components/ReadingChrome';
 // story 6-3: `NextSurahButton` is deleted — `SurahNavigator` is prev + next, both ends wrapping.
 export { nextSurah, prevSurah, SurahNavigator } from './components/SurahNavigator';

@@ -13,6 +13,8 @@
 export { RecitationEngineHost } from './components/RecitationEngineHost';
 // ── story 7-2: the voice surface, plus the catalogue helpers a settings row needs ──
 export { buildReciterRows, ReciterPicker, type ReciterRow } from './components/ReciterPicker';
+// ── story 7-8: the same picker, embedded in a sheet the chrome's player row opens ──
+export { ReciterSheet, type ReciterSheetProps } from './components/ReciterSheet';
 export {
   DEFAULT_RECITER_ID,
   RECITER_STYLES,

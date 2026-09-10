@@ -168,12 +168,21 @@ export function useActiveVerseKey(): string | null {
   return useAudioPlayerStore((s) => s.activeVerseKey);
 }
 
-/** Playback status for a control that draws play vs pause. Never includes the per-tick key. */
+/**
+ * Playback status for a control that draws play vs pause. Never includes the per-tick key.
+ *
+ * ⚠️ `reciterId` IS THE LOADED TRACK'S VOICE, AND IT IS NOT `preferences.reciterId` (story 7-8's
+ * review). The preference is what the NEXT track will use; this is what is playing NOW, and the
+ * two disagree for the whole of any track that outlives a preference change — so a mini player
+ * reading the preference labels the recitation with a voice nobody is hearing. Same wrong-source
+ * class 7-2's review recorded on the picker's same-value guard.
+ */
 export function usePlaybackStatus() {
   return useAudioPlayerStore(
     useShallow((s) => ({
       playbackState: s.playbackState,
       surah: s.surah,
+      reciterId: s.reciterId,
       errorKey: s.errorKey,
     }))
   );

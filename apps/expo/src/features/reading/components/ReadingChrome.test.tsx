@@ -23,7 +23,7 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { AccessibilityInfo, Pressable, Text } from 'react-native';
 
 const mockBack = jest.fn();
@@ -42,8 +42,27 @@ jest.mock('expo-router', () => ({
   useSegments: () => ['(tabs)', 'read'],
 }));
 
+/**
+ * ⚠️ THE FOOTER REACHES THE QUERY MODULE SINCE STORY 7-8 — it carries `ChromeVerseRow`, whose
+ * bookmark and reciter controls read the cache through real `useQuery` hooks. The app mounts the
+ * `QueryClientProvider` in `app/_layout.tsx`; this file mounts one component, so without the mock
+ * every render below throws "No QueryClient set". The ROW's own behaviour is
+ * `ChromeVerseRow.test.tsx`'s subject; what this file needs is for it to render.
+ */
+const mockBookmarks: { id: string; surah: number; verse: number }[] = [];
+jest.mock('@/lib/sync', () => ({
+  addBookmark: jest.fn(),
+  removeBookmark: jest.fn(),
+  // `ReciterPicker` (inside the sheet) writes the chosen voice through this.
+  patchPreferences: jest.fn(),
+  useBookmarks: () => ({ data: mockBookmarks }),
+  usePreferences: () => ({ data: null }),
+}));
+
 import { DURATIONS } from '@/constants/animation';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
+import { ReciterSheet } from '@/features/audio';
+import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { CHROME_DWELL_MS, type ChromeReveal, useChromeReveal } from '../hooks/useChromeReveal';
 import { ReadingChrome, type ReadingChromeProps } from './ReadingChrome';
 
@@ -140,6 +159,11 @@ describe('one driver', () => {
     const ui = join(__dirname, '..', '..', '..', 'components', 'ui');
     read(join(ui, 'AppHeader.tsx'));
     read(join(ui, 'AppTabBar.tsx'));
+    // ⚠️ AND THE SHEET THE CHROME MOUNTS, WHICH LIVES IN ANOTHER FEATURE (story 7-8). The walk
+    // covers `features/reading`; `ReciterSheet` is in `features/audio`, so a driver added there
+    // would be a second animation inside the chrome that this count could not see — exactly the
+    // blind spot 6-6 closed by reaching into `components/ui` for the two bars.
+    read(join(__dirname, '..', '..', 'audio', 'components', 'ReciterSheet.tsx'));
     return out.join('\n');
   }
 
@@ -161,6 +185,7 @@ describe('one driver', () => {
     expect(all).toMatch(/export function useSurah/);
     expect(all).toMatch(/export function AppHeader/);
     expect(all).toMatch(/export function AppTabBar/);
+    expect(all).toMatch(/export function ReciterSheet/);
   });
 
   it('both animated styles come off that one value', () => {
@@ -427,6 +452,11 @@ describe('the dismiss chevron (2026-09-10)', () => {
     const reveal: ChromeReveal = {
       visible: true,
       interactive: true,
+      selectedVerse: null,
+      revealFor: () => {},
+      clearSelection: () => {},
+      keepAlive: () => {},
+      holdDwell: () => {},
       toggle: () => {},
       show: () => {},
       headerStyle: {},
@@ -666,5 +696,262 @@ describe('the dwell (story 7-6)', () => {
     screen.unmount();
     expect(() => act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 2))).not.toThrow();
     expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+/**
+ * ⚠️ THE SELECTED VERSE (story 7-8) — held by the reveal, so it cannot outlive the bars.
+ *
+ * ⚠️ THIS BLOCK DRIVES THE HOOK DIRECTLY, LIKE THE DWELL BLOCK ABOVE AND FOR THE SAME REASON: it
+ * needs fake timers to reach `CHROME_DWELL_MS`, and RN's `Pressability` does not fire under them.
+ * `revealFor` is the same entry point a verse press uses, and everything asserted is read off the
+ * RENDERED chrome — the row the footer draws, not a flag.
+ */
+describe('the selection (story 7-8)', () => {
+  let reveal: ChromeReveal;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** Reveal for a pair (or for nothing) and let the animation settle. */
+  function press(pair: { surah: number; verse: number } | null) {
+    act(() => reveal.revealFor(pair));
+    act(() => jest.advanceTimersByTime(DURATIONS.standard));
+  }
+
+  /** What the footer's contextual row says, or null when it draws nothing. */
+  function rowLabel(): string | null {
+    const node = screen.queryByTestId('chrome-verse-label', ANY);
+    return node ? (node.props.children as string) : null;
+  }
+
+  it('a verse press reveals the bars AND selects that ayah', () => {
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBe('Al-Baqarah · 255');
+  });
+
+  it('an EMPTY press reveals the bars with nothing selected', () => {
+    // MUTATION: have `toggle` keep the previous selection. An empty area names no ayah, so the
+    // row would then act on a verse the reader did not press.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press(null);
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBeNull();
+  });
+
+  it('a press on ANOTHER ayah moves the selection and keeps the bars up', () => {
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    press({ surah: 2, verse: 256 });
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBe('Al-Baqarah · 256');
+  });
+
+  it('…and RE-ARMS the dwell, so moving the selection does not inherit the old countdown', () => {
+    // ⚠️ THE CASE THE `visible`-KEYED EFFECT COULD NOT PASS. Moving the selection leaves `visible`
+    // true, so an effect keyed on it alone would keep the ORIGINAL five seconds running and take
+    // the bars away mid-decision. MUTATION: drop `chrome.token` from the dwell effect's deps.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    // Most of the first dwell spent…
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS - DURATIONS.standard - 1));
+    press({ surah: 2, verse: 256 });
+    // …and now past where the FIRST dwell would have fired. A fresh one is counting.
+    act(() => jest.advanceTimersByTime(DURATIONS.standard + 2));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBe('Al-Baqarah · 256');
+  });
+
+  it('the DWELL takes the selection with the bars', () => {
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+    expect(rowLabel()).toBeNull();
+  });
+
+  it('pressing the SAME ayah again RE-ARMS rather than dismissing — the mushaf-word case', () => {
+    // ⚠️ THIS CASE ASSERTED THE OPPOSITE FOR ONE ROUND, AND THE OPPOSITE WAS A DEFECT. `samePair`
+    // matches at AYAH granularity, and on the mushaf an ayah is many words — so "a repeat press
+    // dismisses" meant pressing a second word of the verse you are acting on threw away the
+    // chrome and the selection mid-decision. Only an EMPTY press dismisses now. MUTATION: restore
+    // the dismissal; the first assertion reddens.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    // Most of the dwell spent…
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS - DURATIONS.standard - 1));
+    act(() => reveal.revealFor({ surah: 2, verse: 255 }));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBe('Al-Baqarah · 255');
+    // …and it re-armed, so the ORIGINAL countdown no longer decides.
+    act(() => jest.advanceTimersByTime(DURATIONS.standard + 2));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  });
+
+  it('a row control RE-ARMS the dwell — the bars must not vanish under the reader’s finger', () => {
+    // ⚠️ ONLY `revealFor` USED TO BUMP THE TOKEN, so pressing the row's play or bookmark left
+    // whatever was left of the original five seconds running. The story named this as its open
+    // question; the row existing is what answers it. MUTATION: drop `keepAlive`'s bump.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS - DURATIONS.standard - 1));
+    act(() => reveal.keepAlive());
+    act(() => jest.advanceTimersByTime(DURATIONS.standard + 2));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBe('Al-Baqarah · 255');
+  });
+
+  it('a HELD dwell does not fire at all, and releasing it starts a FULL fresh one', () => {
+    // The reciter sheet's hold. A reader picking a voice is using the chrome; coming back to no
+    // bars and no selection is the failure. MUTATION: make `holdDwell` a no-op.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => reveal.holdDwell(true));
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 4));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    expect(rowLabel()).toBe('Al-Baqarah · 255');
+
+    act(() => reveal.holdDwell(false));
+    // A FULL dwell, not the remainder of a spent one.
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS - 1));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    act(() => jest.advanceTimersByTime(2));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+  });
+
+  it('`clearSelection` drops the ayah and LEAVES the bars — the position-change exit', () => {
+    // ⚠️ THE SELECTION DIES WITH THE AYAH AS WELL AS WITH THE BARS. A surah change, a settled
+    // mushaf page, a focus resync and the mode toggle all move the reader without touching
+    // `visible`; the screens call this. MUTATION: make it clear `visible` too, and the reader
+    // loses their chrome every time the recitation turns a page.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => reveal.clearSelection());
+    expect(rowLabel()).toBeNull();
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  });
+
+  it('an empty press while the bars are up dismisses them, selection and all', () => {
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => reveal.revealFor(null));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+    expect(rowLabel()).toBeNull();
+  });
+
+  it('the dismiss chevron clears it too — `toggle` IS `revealFor(null)`', () => {
+    // MUTATION: give `toggle` its own setter that only flips `visible`. The bars would go and the
+    // selection would survive into the next reveal — the orphan state the one-object shape exists
+    // to make unwritable.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => reveal.toggle());
+    expect(rowLabel()).toBeNull();
+    press(null);
+    expect(rowLabel()).toBeNull();
+  });
+
+  it('`show()` — the error exit — clears it and stays put', () => {
+    // Every `show()` caller is a FAILURE surface whose message is drawn inside the chrome. A
+    // verse the reader selected before the failure is not what that chrome is about, and the
+    // reveal must not dwell away underneath the message.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    press({ surah: 2, verse: 255 });
+    act(() => reveal.show());
+    expect(rowLabel()).toBeNull();
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 4));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  });
+
+  it('never survives the bars, whichever exit was taken — the one rule, stated once', () => {
+    // Anti-vacuity for the five cases above: a selection is only ever readable while the chrome
+    // is up. MUTATION: hold the selection in a second `useState` and clear it from an effect —
+    // every case above can still pass while one exit forgets.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    for (const dismiss of [
+      () => reveal.toggle(),
+      () => jest.advanceTimersByTime(CHROME_DWELL_MS),
+      () => reveal.revealFor(null),
+    ]) {
+      press({ surah: 2, verse: 255 });
+      expect(reveal.selectedVerse).toMatchObject({ surah: 2, verse: 255 });
+      act(() => dismiss());
+      expect(reveal.visible).toBe(false);
+      expect(reveal.selectedVerse).toBeNull();
+    }
+  });
+});
+
+/**
+ * ⚠️ THE RECITER SHEET — MOUNTED HERE, OUTSIDE BOTH BARS (story 7-8).
+ *
+ * Nothing verified this until the review: `ChromeVerseRow` only reports that the reader asked for
+ * the picker, so deleting the `<ReciterSheet>` element, hard-coding `open={false}`, or wiring
+ * `onOpenReciters` to `closeReciters` left every case green. These drive the real element.
+ */
+describe('the reciter sheet (story 7-8)', () => {
+  /** The chrome with a loaded track, which is the only state that draws the reciter control. */
+  function revealWithTrack() {
+    act(() => {
+      useAudioPlayerStore.getState().setTrack(18, 'alafasy', true);
+      useAudioPlayerStore.getState().setPlaybackState('playing');
+    });
+    render(<Harness />);
+    return reveal();
+  }
+
+  afterEach(() => act(() => useAudioPlayerStore.getState().clearPlayback()));
+
+  it('opens on the row’s reciter control and closes again', async () => {
+    await revealWithTrack();
+    expect(screen.queryByTestId('reciter-sheet')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('chrome-reciter'));
+    expect(screen.getByTestId('reciter-sheet')).toBeTruthy();
+    // The list itself, not just the wrapper — the sheet exists to host `ReciterPicker`.
+    expect(screen.getByTestId('reciter-picker')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('reciter-sheet-close'));
+    expect(screen.queryByTestId('reciter-sheet')).toBeNull();
+  });
+
+  it('renders OUTSIDE the animated footer, which is the whole placement argument', async () => {
+    // ⚠️ THE FAILURE THIS PINS. Inside the footer's `Animated.View` the sheet inherits the
+    // reveal's opacity and `pointerEvents`, so the 5s dwell would fade the reader's open sheet
+    // away and make it untouchable — a bar's animation deciding the fate of a modal that is not
+    // part of it. MUTATION: move the element inside the footer; this reddens while the case
+    // above stays green.
+    await revealWithTrack();
+    fireEvent.press(screen.getByTestId('chrome-reciter'));
+    expect(screen.getByTestId('reciter-sheet', ANY)).toBeTruthy();
+    expect(
+      within(screen.getByTestId('reading-chrome-footer', ANY)).queryByTestId('reciter-sheet')
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId('reading-chrome-header', ANY)).queryByTestId('reciter-sheet')
+    ).toBeNull();
+  });
+
+  it('gives the picker a BOUNDED box, on the wide branch as well as the narrow one', () => {
+    // ⚠️ `snapPoints` IS IGNORED AT ≥768pt — `BottomSheet` renders a dialog card whose body is
+    // `flexShrink: 1, minHeight: 0`, i.e. the content-MEASURED host that collapses a `flex: 1`
+    // `FlashList` (the Thread-H3 class `BottomSheet.tsx` documents). So the sheet's own detent
+    // covers phones and nothing else, and the explicit height is what makes the claim true on
+    // iPad, Android tablet and wide web. MUTATION: drop the height; this reddens.
+    render(<ReciterSheet open onClose={() => {}} />);
+    const style = screen.getByTestId('reciter-sheet-body').props.style;
+    const flat = Object.assign(
+      {},
+      ...(Array.isArray(style) ? style.flat(3) : [style]).filter(Boolean)
+    );
+    expect(typeof flat.height).toBe('number');
+    expect(flat.height).toBeGreaterThan(0);
   });
 });

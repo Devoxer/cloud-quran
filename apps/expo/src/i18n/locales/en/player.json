@@ -101,7 +101,9 @@
     "repeatModeOne": "Repeat mode: one. Tap to disable repeat",
     "playFromVerse": "Play from verse {{verse}}",
     "playRecitation": "Play recitation",
-    "pauseRecitation": "Pause recitation"
+    "pauseRecitation": "Pause recitation",
+    "selectVerse": "Select verse {{verse}}",
+    "chooseReciter": "Choose reciter"
   },
   "sleep": {
     "end": "End",
@@ -117,6 +119,8 @@
       "muallim": "Muallim"
     },
     "emptyTitle": "No reciters found",
-    "emptyBody": "Try another name, in English or Arabic."
-  }
+    "emptyBody": "Try another name, in English or Arabic.",
+    "sheetTitle": "Reciter"
+  },
+  "nowPlayingVerse": "{{name}} · {{verse}}"
 }
