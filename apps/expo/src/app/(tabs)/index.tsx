@@ -5,13 +5,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
 
-import { useVerseSeek } from '@/features/audio';
+import { useResumeListening, useVerseSeek } from '@/features/audio';
 import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import {
   useActiveVerseKey,
+  useAudioPlayerStore,
   usePlaybackControls,
   usePlaybackStatus,
 } from '@/stores/audioPlayerStore';
@@ -87,7 +88,7 @@ function pageToIndex(page: number): number {
 /**
  * The page this screen targets — the saved pair resolved as a PAIR. A pair the map does not hold
  * answers -1, which clamps to page 1; there is no half-trusted surah or verse for the clamp to
- * miss (the family of defects `read.tsx`'s `openingPosition` documents).
+ * miss (the family of defects `lib/usePosition.ts`'s `clampPosition` documents).
  */
 function openingPage(saved: ReadingPositionPair | null): number {
   if (!saved) return 1;
@@ -198,19 +199,41 @@ export default function Mushaf() {
    * this is a lookup and a comparison, not arithmetic on page numbers. Only a CHANGE of page
    * scrolls — an ayah advancing within the page the reader is already on must not re-scroll it,
    * or every few seconds the pager would twitch.
+   *
+   * ⚠️ AND IT FOLLOWS THE TRACK, NOT ONLY THE AYAH KEY (story 7-7) — `read.tsx` carries the full
+   * note. The store leaves `activeVerseKey` NULL for a whole track whose manifest cannot name
+   * every ayah, so before this story a resume into such a surah would have left the reader
+   * hearing one surah while looking at another. The track's own surah opens at its first ayah,
+   * which is the page `savePosition` would have stored for it anyway.
    */
   useEffect(() => {
-    if (!activeVerseKey) return;
-    const [surah, verse] = activeVerseKey.split(':').map(Number);
-    if (!Number.isInteger(surah) || !Number.isInteger(verse)) return;
+    let surah: number | null = null;
+    let verse: number | null = null;
+    if (activeVerseKey) {
+      const [keySurah, keyVerse] = activeVerseKey.split(':').map(Number);
+      if (Number.isInteger(keySurah) && Number.isInteger(keyVerse)) {
+        surah = keySurah;
+        verse = keyVerse;
+      }
+    }
+    if (surah === null) {
+      surah = playback.surah;
+      verse = 1;
+    }
+    if (surah === null || verse === null) return;
     const page = getPageForVerse(surah, verse);
     if (page < 1 || page > TOTAL_PAGES || page === currentPageRef.current) return;
     currentPageRef.current = page;
     setCurrentPage(page);
     listRef.current?.scrollToIndex({ index: pageToIndex(page), animated: true });
-  }, [activeVerseKey]);
+  }, [activeVerseKey, playback.surah]);
 
-  /** The one position write a listening session makes here — `read.tsx`'s effect, same reason. */
+  /**
+   * The one position write a listening session makes here — `read.tsx`'s effect, same reason, and
+   * since story 7-7 with the same exception: a session the saved listening row RELOCATED writes
+   * nothing, because the page under the reader is the audio's rather than theirs. See
+   * `sessionRelocated` on the playback store.
+   */
   const wasPlaying = useRef(false);
   /**
    * ⚠️ ONLY THE FOCUSED SURFACE WRITES — see `read.tsx` for the defect. This one is the more
@@ -228,7 +251,8 @@ export default function Mushaf() {
   );
   useEffect(() => {
     const playing = playback.playbackState === 'playing';
-    if (wasPlaying.current && !playing && focused.current) {
+    const relocated = useAudioPlayerStore.getState().sessionRelocated;
+    if (wasPlaying.current && !playing && focused.current && !relocated) {
       const first = getFirstVerseForPage(currentPageRef.current);
       if (first.surah !== 0) reportVerse(first.surah, first.verse);
     }
@@ -244,21 +268,32 @@ export default function Mushaf() {
     if (playback.errorKey !== null) show();
   }, [playback.errorKey, show]);
 
-  /** The chrome's transport: resume, pause, or start the surah this page opens in. */
+  /**
+   * Where a COLD press lands is not this screen's decision either (story 7-7) — the SAME resolver
+   * `read.tsx` uses, so the saved listening position wins over the settled page on both surfaces
+   * and there is one rule rather than two that can drift. See `useResumeListening`.
+   */
+  const resolveListeningStart = useResumeListening();
+
+  /** The chrome's transport: resume, pause, or start where the reader left off listening. */
   const togglePlay = useCallback(() => {
     const { surah: trackSurah, playbackState } = playbackRef.current;
     if (playbackState === 'playing') {
       void pause();
       return;
     }
+    // `{0, 0}` for a page the map cannot resolve — carried as the FALLBACK rather than checked
+    // here, because a page this screen cannot name is no reason to refuse a saved listening
+    // position that names itself perfectly well. The guard moves to the resolver's answer.
     const here = getFirstVerseForPage(currentPageRef.current);
-    if (here.surah === 0) return;
-    if (trackSurah === here.surah && playbackState === 'paused') {
+    if (trackSurah === here.surah && here.surah !== 0 && playbackState === 'paused') {
       void resume();
       return;
     }
-    void playSurah(here.surah, here.verse);
-  }, [pause, resume, playSurah]);
+    const start = resolveListeningStart(here);
+    if (start.surah === 0) return; // no usable row AND no usable page — nothing true to play
+    void playSurah(start.surah, start.verse);
+  }, [pause, resume, playSurah, resolveListeningStart]);
 
   // Reveal the exit when the VISIBLE page fails — see the header for why not every page.
   const onPageErrorChange = useCallback(

@@ -149,6 +149,10 @@ const mockSetReadingPosition = jest.fn();
 const mockAddBookmark = jest.fn();
 const mockRemoveBookmark = jest.fn();
 const mockReadingPositionRow = { current: null as { surah: number; verse: number } | null };
+/** The saved LISTENING row (story 7-7) — a different thing from the reading one above. */
+const mockAudioPositionRow = {
+  current: null as { surah: number; verse: number; reciterId: string } | null,
+};
 const mockPreferencesRow = { current: null as { fontSize?: number } | null };
 type TestBookmark = { id: string; surah: number; verse: number };
 const mockBookmarksRow = { current: [] as TestBookmark[] };
@@ -158,6 +162,7 @@ jest.mock('@/lib/sync', () => ({
   addBookmark: (...args: unknown[]) => mockAddBookmark(...args),
   removeBookmark: (...args: unknown[]) => mockRemoveBookmark(...args),
   useReadingPosition: () => ({ data: mockReadingPositionRow.current }),
+  useAudioPosition: () => ({ data: mockAudioPositionRow.current }),
   usePreferences: () => ({ data: mockPreferencesRow.current }),
   useBookmarks: () => ({ data: mockBookmarksRow.current }),
 }));
@@ -313,6 +318,7 @@ beforeEach(() => {
   mockFocusCallbacks.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
+  mockAudioPositionRow.current = null;
   mockPreferencesRow.current = null;
   mockBookmarksRow.current = [];
   mockRandomUUID.mockReturnValue('uuid-under-test');
@@ -621,6 +627,200 @@ describe('the recitation, and what it does to the position write (story 7-1)', (
     for (const [arg] of mockScrollToIndex.mock.calls) {
       expect(arg).toMatchObject({ viewOffset: -HEADER_INSET });
     }
+  });
+});
+
+describe('the transport’s COLD press — resume where the listening stopped (story 7-7)', () => {
+  const store = () => useAudioPlayerStore.getState();
+  const playSurah = jest.fn(async () => {});
+  const resume = jest.fn(async () => {});
+  const pause = jest.fn(async () => {});
+
+  beforeEach(() => {
+    // See `fakeTimers` above: every case here reveals the chrome to reach the transport, and the
+    // chrome dwells.
+    jest.useFakeTimers();
+    fakeTimers = true;
+    playSurah.mockClear();
+    resume.mockClear();
+    pause.mockClear();
+    act(() => {
+      store().clearPlayback();
+      // What `RecitationEngineHost` does at boot; before it the actions are inert, by design.
+      store().registerEngineActions({
+        playSurah,
+        resume,
+        pause,
+        seekToVerse: async () => {},
+        stop: async () => {},
+        abandonPlayback: async () => {},
+      });
+    });
+  });
+  afterEach(() => {
+    act(() => store().clearPlayback());
+    fakeTimers = false;
+    jest.useRealTimers();
+  });
+
+  /**
+   * Reveal the chrome and press its play control — the only way to the transport.
+   *
+   * ⚠️ THE REVEAL IS CONDITIONAL, BECAUSE THE CHROME DWELLS RATHER THAN LATCHES. A case that
+   * presses twice reaches the second press with the bars sometimes still up (story 7-6's 5s
+   * dwell, whether it has elapsed depends on how many `waitFor`s ran in between) — and an
+   * unconditional tap DISMISSES them, so the press then lands on nothing.
+   */
+  async function pressPlay() {
+    if (chromeTouches() !== 'box-none') await revealChrome();
+    fireEvent.press(screen.getByTestId('chrome-play-toggle'));
+  }
+
+  /**
+   * ⚠️ THE ENGINE'S OWN SEQUENCE, NOT A CONVENIENT ONE. `playSurah` is a mock here, so nothing
+   * moves the store unless a case moves it — and a case that presses play and then asserts about
+   * a listening session without this is asserting about a session that never began. `loading`
+   * comes BEFORE `setTrack` because `startPlayback` orders it that way, and `highlightAvailable`
+   * false is the truncated-manifest track that leaves `activeVerseKey` null for its whole life.
+   */
+  function engineStarts(surah: number, verse: number | null, timed = true) {
+    act(() => {
+      store().setPlaybackState('loading');
+      store().setTrack(surah, 'husary', timed);
+      if (timed && verse !== null) store().setActiveVerse(verse);
+      store().setPlaybackState('playing');
+    });
+  }
+
+  /**
+   * ⚠️ THE FROZEN CRITERION. The reading position and the listening position are DIFFERENT
+   * things, and until this story only one of them survived a restart: the row was written at
+   * every pause and stop, synced, pulled by the other device — and read by nothing. A relaunch
+   * showed the reading position with playback idle, so pressing play started over from whatever
+   * verse the reader happened to be scrolled to.
+   */
+  it('starts at the SAVED LISTENING verse, not the one on screen', async () => {
+    mockReadingPositionRow.current = { surah: 1, verse: 1 };
+    mockAudioPositionRow.current = { surah: 2, verse: 100, reciterId: 'husary' };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(2, 100);
+  });
+
+  it('starts where the reader is LOOKING when there is no saved listening row', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    reportVisible(versesOf(1, 7)[4]); // the reader scrolled to 1:5
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(1, 5);
+  });
+
+  /**
+   * ⚠️ A FAILED PRESS MUST NOT COST THE READER THE ROW — and the failure that matters leaves NO
+   * track behind. `startPlayback` sets `loading`, tears down, and only then awaits the manifest,
+   * so an offline press reaches `setError` with `surah` still null. Nothing but `clearPlayback`
+   * returns the store to `idle` and the chrome offers no stop, so a gate that asked for `idle`
+   * answered the on-screen verse for the rest of the process: reconnect, press the error
+   * surface's Retry, and the recitation silently starts somewhere the reader never chose.
+   */
+  it('keeps the saved row for the error surface’s RETRY after a failed press', async () => {
+    mockAudioPositionRow.current = { surah: 2, verse: 100, reciterId: 'husary' };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(2, 100);
+    // Offline: loading, then the catch — with no `setTrack` in between.
+    act(() => {
+      store().setPlaybackState('loading');
+      store().setError('player:errors.playFailed');
+    });
+    expect(store().surah).toBeNull();
+    playSurah.mockClear();
+
+    fireEvent.press(await screen.findByTestId('chrome-playback-error-retry'));
+    expect(playSurah).toHaveBeenCalledWith(2, 100);
+  });
+
+  /**
+   * ⚠️ THE SECOND PRESS IS `resume()`, NOT A RE-READ. A paused track is THIS session's position;
+   * consulting the row again would rewind the reader to wherever the last session stopped. It is
+   * reachable only because the surface FOLLOWED the resumed track — the branch compares the
+   * loaded surah against the one on screen.
+   */
+  it('resumes in place on the second press, without consulting the row', async () => {
+    mockAudioPositionRow.current = { surah: 2, verse: 100, reciterId: 'husary' };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+
+    await pressPlay();
+    engineStarts(2, 100);
+    await screen.findByText('أية 2:100');
+    act(() => store().setPlaybackState('paused'));
+    playSurah.mockClear();
+
+    await pressPlay();
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(playSurah).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ THE SURFACE FOLLOWS THE TRACK EVEN WHEN NOTHING CAN HIGHLIGHT. The store leaves
+   * `activeVerseKey` null for a whole track whose manifest cannot name every ayah — `isSurahTimed`
+   * exists for exactly that — and before this story that was harmless, because a cold press always
+   * played the surah on screen. A resume can start any surah, so following the KEY alone would
+   * leave the reader hearing Al-Kahf while looking at Al-Fatihah.
+   */
+  it('follows a resumed track whose surah has no usable timings', async () => {
+    mockAudioPositionRow.current = { surah: 18, verse: 23, reciterId: 'husary' };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+
+    await pressPlay();
+    engineStarts(18, null, false);
+    expect(store().activeVerseKey).toBeNull();
+    await screen.findByText('أية 18:1');
+  });
+
+  /**
+   * ⚠️ THE FROZEN BOUNDARY: "resuming playback must not write one" — and it is one PAUSE later
+   * that the write happens, not at the press. Story 7-1 writes the reading position when playback
+   * leaves `playing`, which was the reader's own pair while audio could only start from what was
+   * on screen. After a resume it is the audio's, and writing it moves the reader somewhere they
+   * never went. The whole path has to run for this to mean anything: an assertion made against a
+   * `playSurah` mock that never starts a session is green with the behaviour entirely broken.
+   */
+  it('writes NO reading position when the session was resumed somewhere else', async () => {
+    mockAudioPositionRow.current = { surah: 2, verse: 100, reciterId: 'husary' };
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+
+    await pressPlay();
+    engineStarts(2, 100);
+    await screen.findByText('أية 2:100'); // the surface followed — the write would be 2:100
+    mockSetReadingPosition.mockClear();
+
+    act(() => store().setPlaybackState('paused'));
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+  });
+
+  /** Anti-vacuity: 7-1's write is suppressed for a RESUME, not switched off. */
+  it('still writes it when the session started where the reader already was', async () => {
+    render(<Read />);
+    await screen.findByText('أية 1:7');
+    reportVisible(versesOf(1, 7)[4]); // 1:5 — where the reader is, and where the press starts
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(1, 5);
+    engineStarts(1, 6); // the recitation moved on by one ayah
+    mockSetReadingPosition.mockClear();
+
+    act(() => store().setPlaybackState('paused'));
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+    expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ surah: 1, verse: 6 });
   });
 });
 

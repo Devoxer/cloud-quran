@@ -54,6 +54,22 @@ export interface RecitationState {
   highlightAvailable: boolean;
   playbackState: PlaybackState;
   /**
+   * Whether the loaded session began by MOVING the reader — story 7-7's resume answered the saved
+   * listening row instead of the verse on screen.
+   *
+   * ⚠️ IT LIVES ON THE SESSION, NOT ON A SCREEN, AND THAT IS THE POINT. Both reading surfaces
+   * write the reading position when playback leaves `playing` (story 7-1: "where you stopped
+   * listening is where you resume reading"), which was true of every session that could exist
+   * then — audio always started from what was on screen. A resumed session's pair is the AUDIO's,
+   * so that write would move the reader somewhere they never went, which 7-7's frozen boundary
+   * forbids. The reader can resume from the mushaf's transport and pause on the reading tab, so a
+   * per-screen ref would give the other surface the wrong answer. Set once per session start, by
+   * `useResumeListening` — the only place that sees both the fallback and the answer — and reset
+   * by `clearPlayback` along with the rest of the session, because a session that no longer
+   * exists relocated nobody.
+   */
+  sessionRelocated: boolean;
+  /**
    * A translation KEY, never a sentence — the surface renders it.
    *
    * ⚠️ A LITERAL UNION, NOT `string`. The surfaces pass this straight to `t()`, whose key type is
@@ -91,6 +107,8 @@ interface RecitationStore extends RecitationState, EngineActions {
   setActiveVerse: (verse: number | null) => void;
   setPlaybackState: (state: PlaybackState) => void;
   setError: (errorKey: PlaybackErrorKey | null) => void;
+  /** Record how the session about to load began — see `sessionRelocated` (story 7-7). */
+  setSessionRelocated: (relocated: boolean) => void;
   /** Back to idle, keeping nothing. The engine calls this after `stop`. */
   clearPlayback: () => void;
   registerEngineActions: (actions: EngineActions) => void;
@@ -111,6 +129,7 @@ const idleState: RecitationState = {
   activeVerseKey: null,
   highlightAvailable: false,
   playbackState: 'idle',
+  sessionRelocated: false,
   errorKey: null,
 };
 
@@ -130,6 +149,8 @@ export const useAudioPlayerStore = create<RecitationStore>((set) => ({
     })),
 
   setPlaybackState: (playbackState) => set({ playbackState }),
+
+  setSessionRelocated: (sessionRelocated) => set({ sessionRelocated }),
 
   // An error state keeps the track: the retry the surface offers needs to know what failed.
   setError: (errorKey) => set({ errorKey, playbackState: errorKey ? 'error' : 'idle' }),

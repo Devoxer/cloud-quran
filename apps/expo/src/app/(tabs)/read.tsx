@@ -1,7 +1,7 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
-import { SURAH_COUNT, SURAH_METADATA, type Verse } from 'quran-data';
+import { SURAH_METADATA, type Verse } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, type ViewToken } from 'react-native';
@@ -12,7 +12,7 @@ import { ErrorView } from '@/components/ui';
 import { clampArabicFontSize } from '@/constants/arabic';
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
-import { useVerseSeek } from '@/features/audio';
+import { useResumeListening, useVerseSeek } from '@/features/audio';
 import {
   nextSurah,
   prevSurah,
@@ -24,10 +24,11 @@ import {
   VerseRow,
 } from '@/features/reading';
 import { addBookmark, removeBookmark, useBookmarks, usePreferences } from '@/lib/sync';
-import { type ReadingPositionPair, usePosition, verseKey } from '@/lib/usePosition';
+import { openingPosition, usePosition, verseKey } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import {
   useActiveVerseKey,
+  useAudioPlayerStore,
   usePlaybackControls,
   usePlaybackStatus,
 } from '@/stores/audioPlayerStore';
@@ -65,8 +66,9 @@ import {
  *    own tab bar, and it is the SAME height constant, so there is no second number to drift.
  *
  * 4. **THE TARGET PAIR IS RESOLVED AS A PAIR, AND RE-RESOLVED ONLY ON FOCUS.** `openingPosition`
- *    clamps the saved row into the book as one value (the three half-trust defects it closes are
- *    documented on it). While this screen is focused the reader owns where they are — a sync
+ *    clamps the saved row into the book as one value — it lives in `lib/usePosition.ts` since
+ *    story 7-7 gave the listening resume the same clamp, and the three half-trust defects it
+ *    closes are documented there. While this screen is focused the reader owns where they are — a sync
  *    arriving mid-read never yanks them. But a tab switch or mode toggle is a NAVIGATION: on
  *    focus the saved pair is re-resolved, and if the other renderer moved it, this one jumps to
  *    match — one position, two renderers, which is what makes the mushaf↔reading toggle mean
@@ -90,40 +92,8 @@ import {
  */
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 } as const;
 
-/** Where a reader with no saved position anywhere starts. */
-const FIRST_SURAH = 1;
+/** The verse a surah change lands on. */
 const FIRST_VERSE = 1;
-
-/**
- * The pair this screen targets — clamped into the book, and clamped as a PAIR.
- *
- * ⚠️ THE SAVED ROW IS UNTRUSTED INPUT. It comes out of MMKV, it can be written by a newer build,
- * it survives a downgrade, and it can be corrupt. Three defects came from trusting parts of it:
- *
- *   • the surah was locked on the first render while the VERSE was read again on a later one, so
- *     a row arriving one render late (`{18, 4}` after an initial `null`) opened Al-Fatihah and
- *     scrolled to its fourth ayah — the reader landed on 1:4 instead of 18:4;
- *   • an out-of-range verse (`{1, 999}`) was range-checked by the restore effect and NOT by the
- *     chrome, which rendered `Page -1 · 1:999` to the reader;
- *   • an out-of-range surah (`{200, 1}`) reached `getSurahVerses`, which answers `[]` — a blank
- *     screen with no verses, no error, and no next-surah control to escape by.
- *
- * So the whole pair is resolved in one place. An out-of-range surah resets the VERSE too: a
- * verse number from a surah that does not exist means nothing in the surah we fall back to.
- * ⚠️ The worker bounds these values on the way in; this clamp is about the copy already on the
- * device, which no server check has ever seen.
- */
-function openingPosition(saved: ReadingPositionPair | null): ReadingPositionPair {
-  const top = { surah: FIRST_SURAH, verse: FIRST_VERSE };
-  if (!saved) return top;
-  const { surah, verse } = saved;
-  if (!Number.isInteger(surah) || surah < FIRST_SURAH || surah > SURAH_COUNT) return top;
-  const verseCount = SURAH_METADATA[surah - 1]?.verseCount ?? FIRST_VERSE;
-  if (!Number.isInteger(verse) || verse < FIRST_VERSE || verse > verseCount) {
-    return { surah, verse: FIRST_VERSE };
-  }
-  return { surah, verse };
-}
 
 export default function Read() {
   const { t } = useTranslation();
@@ -157,8 +127,9 @@ export default function Read() {
 
   // ⚠️ THE PAIR IS RESOLVED ONCE PER FOCUS, AND BOTH HALVES COME FROM THE SAME READ. Within a
   // focused session the reader owns where they are: re-reading the row on every render would
-  // yank them back each time another device synced. See `openingPosition` for why reading the
-  // surah on one render and the verse on another is a defect and not a detail.
+  // yank them back each time another device synced. See `clampPosition` in `lib/usePosition.ts`
+  // (which `openingPosition` is the top-of-the-book wrapper around) for why reading the surah
+  // on one render and the verse on another is a defect and not a detail.
   const [target, setTarget] = useState(() => openingPosition(saved));
   const [surah, setSurah] = useState(target.surah);
   const content = useSurah(surah);
@@ -275,11 +246,22 @@ export default function Read() {
   }, [content.error, isEmpty, show]);
 
   /**
-   * ⚠️ THE READING VIEW FOLLOWS THE RECITATION, INCLUDING ACROSS A SURAH BOUNDARY. The active key
-   * carries the surah, so a track change is handled here rather than by a second channel: the
-   * screen re-targets the new surah, its rows load, and the next run of this effect scrolls. The
-   * restore latch is CONSUMED on the way through — otherwise the restore effect would fight this
-   * one and scroll back to the saved verse the moment the new surah's rows arrived.
+   * ⚠️ THE READING VIEW FOLLOWS THE RECITATION, INCLUDING ACROSS A SURAH BOUNDARY: the screen
+   * re-targets the new surah, its rows load, and the next run of this effect scrolls. The restore
+   * latch is CONSUMED on the way through — otherwise the restore effect would fight this one and
+   * scroll back to the saved verse the moment the new surah's rows arrived.
+   *
+   * ⚠️ AND IT FOLLOWS THE TRACK, NOT ONLY THE AYAH KEY (story 7-7). Until this story the effect
+   * read `activeVerseKey` alone, which the store leaves NULL for the whole track whenever
+   * `highlightAvailable` is false — a surah whose downloaded manifest is incomplete, the case
+   * `isSurahTimed` exists for. That was survivable while a cold press always played the surah on
+   * screen, because audio and screen could not then disagree. A resume can start ANY surah, so an
+   * untimed one would leave the reader hearing Al-Kahf while looking at Al-Fatihah, with no
+   * highlight and no explanation. The track's surah is known even when the ayah is not, so the
+   * surah is what the screen follows in that case — and where the ayah IS known it still follows
+   * that too. (It also makes `togglePlay`'s `resume()` branch reachable after a resume: it
+   * compares the loaded track against the surah on screen, which was only ever false because the
+   * screen had failed to follow.)
    */
   useEffect(() => {
     /**
@@ -290,17 +272,30 @@ export default function Read() {
      * restore latch on the way. A paused recitation must not own where the reader is.
      */
     if (playback.playbackState !== 'playing') return;
-    if (!activeVerseKey) return;
-    const [audioSurah, audioVerse] = activeVerseKey.split(':').map(Number);
-    if (!Number.isInteger(audioSurah) || !Number.isInteger(audioVerse)) return;
+
+    // The ayah, when the manifest can name one; otherwise only the track's surah is knowable.
+    let audioSurah: number | null = null;
+    let audioVerse: number | null = null;
+    if (activeVerseKey) {
+      const [keySurah, keyVerse] = activeVerseKey.split(':').map(Number);
+      if (Number.isInteger(keySurah) && Number.isInteger(keyVerse)) {
+        audioSurah = keySurah;
+        audioVerse = keyVerse;
+      }
+    }
+    if (audioSurah === null) audioSurah = playback.surah;
+    if (audioSurah === null) return;
 
     if (audioSurah !== showing.current) {
       showing.current = audioSurah;
-      visibleVerseRef.current = audioVerse;
+      // An untimed track names no ayah, so the honest landing is the top of its surah — the same
+      // claim `savePosition` makes when it stores ayah 1 rather than a lookup it cannot trust.
+      visibleVerseRef.current = audioVerse ?? FIRST_VERSE;
       restored.current = true;
       setSurah(audioSurah);
       return;
     }
+    if (audioVerse === null) return; // already on the track's surah, and no ayah to scroll to
     visibleVerseRef.current = audioVerse;
     const index = content.verses.findIndex((v) => v.verse === audioVerse);
     if (index < 0) return;
@@ -316,12 +311,21 @@ export default function Read() {
     requestAnimationFrame(() => {
       listRef.current?.scrollToIndex({ index, animated: false, viewOffset: -headerInset });
     });
-  }, [activeVerseKey, content.verses, playback.playbackState, headerInset]);
+  }, [activeVerseKey, playback.surah, content.verses, playback.playbackState, headerInset]);
 
   /**
    * The one reading-position write a listening session makes. Fires when playback LEAVES the
    * playing state — a pause, a stop, an error — so where the reader stopped listening becomes
    * where they resume reading.
+   *
+   * ⚠️ EXCEPT AFTER A RESUME THAT MOVED THE READER (story 7-7, frozen boundary: "resuming
+   * playback must not write one"). 7-1 wrote this unconditionally, which was true of every
+   * session it could see: audio always started from what was on screen, so the pair this writes
+   * was the reader's own. A resumed session's pair is the AUDIO's — the screen followed it there
+   * — and writing it would move the reader to a place they never went, one pause after a press
+   * that was careful not to. `sessionRelocated` on the playback store is the session's own verdict rather
+   * than a per-screen ref, because the reader can resume from the mushaf's transport and pause
+   * here.
    */
   const wasPlaying = useRef(false);
   /**
@@ -341,7 +345,8 @@ export default function Read() {
   );
   useEffect(() => {
     const playing = playback.playbackState === 'playing';
-    if (wasPlaying.current && !playing && focused.current) {
+    const relocated = useAudioPlayerStore.getState().sessionRelocated;
+    if (wasPlaying.current && !playing && focused.current && !relocated) {
       reportVerse(showing.current, visibleVerseRef.current);
     }
     wasPlaying.current = playing;
@@ -454,7 +459,17 @@ export default function Read() {
     if (playback.errorKey !== null) show();
   }, [playback.errorKey, show]);
 
-  /** The chrome's transport: resume, pause, or start this surah where the reader is looking. */
+  /**
+   * ⚠️ WHERE A COLD PRESS LANDS IS NOT THIS SCREEN'S DECISION (story 7-7). The saved LISTENING
+   * position is a different thing from the reading position — that is the epic's criterion — so
+   * the first press after a relaunch resumes where the recitation stopped rather than where the
+   * reader happens to be scrolled. `useResumeListening` owns the row, its clamp and the "is
+   * anything loaded?" question, so the mushaf's transport gets the identical rule instead of a
+   * second copy of it. Identity-stable, so this callback stays stable for the chrome.
+   */
+  const resolveListeningStart = useResumeListening();
+
+  /** The chrome's transport: resume, pause, or start where the reader left off listening. */
   const togglePlay = useCallback(() => {
     const { surah: trackSurah, playbackState } = playbackRef.current;
     if (playbackState === 'playing') {
@@ -465,8 +480,13 @@ export default function Read() {
       void resume();
       return;
     }
-    void playSurah(showing.current, visibleVerseRef.current);
-  }, [pause, resume, playSurah]);
+    // Nothing loaded: the saved listening pair if there is a usable one, else what is on screen.
+    const start = resolveListeningStart({
+      surah: showing.current,
+      verse: visibleVerseRef.current,
+    });
+    void playSurah(start.surah, start.verse);
+  }, [pause, resume, playSurah, resolveListeningStart]);
 
   const goToSurah = useCallback((next: number) => {
     // Synchronously, BEFORE the scroll: the viewability callback that the scroll provokes must

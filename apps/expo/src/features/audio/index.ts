@@ -21,5 +21,7 @@ export {
   type ReciterStyle,
   resolveReciterId,
 } from './data/reciters';
+// ── story 7-7: where a COLD press starts — the saved listening position, read back at last ──
+export { useResumeListening } from './hooks/useResumeListening';
 // ── story 7-6: the one seek-or-start rule, shared by both reading surfaces ──
 export { useVerseSeek, type VerseSeek } from './hooks/useVerseSeek';

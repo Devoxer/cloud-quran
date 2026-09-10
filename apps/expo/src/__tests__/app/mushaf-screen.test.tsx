@@ -65,10 +65,15 @@ const mockSetReadingPosition = jest.fn();
 const mockReadingPositionRow = {
   current: null as { surah: number; verse: number; updatedAt?: number } | null,
 };
+/** The saved LISTENING row (story 7-7) — a different thing from the reading one above. */
+const mockAudioPositionRow = {
+  current: null as { surah: number; verse: number; reciterId: string } | null,
+};
 
 jest.mock('@/lib/sync', () => ({
   setReadingPosition: (...args: unknown[]) => mockSetReadingPosition(...args),
   useReadingPosition: () => ({ data: mockReadingPositionRow.current }),
+  useAudioPosition: () => ({ data: mockAudioPositionRow.current }),
   usePreferences: () => ({ data: null }),
 }));
 
@@ -189,6 +194,7 @@ beforeEach(() => {
   mockFocusCallbacks.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
+  mockAudioPositionRow.current = null;
 });
 
 describe('the reversed pager', () => {
@@ -507,6 +513,174 @@ describe('tap-to-seek on the facsimile (story 7-6)', () => {
     const before = listProps().renderItem;
     settleOnPage(41);
     expect(listProps().renderItem).toBe(before);
+  });
+});
+
+describe('the transport’s COLD press — resume where the listening stopped (story 7-7)', () => {
+  const store = () => useAudioPlayerStore.getState();
+  const playSurah = jest.fn(async () => {});
+  const resume = jest.fn(async () => {});
+
+  beforeEach(() => {
+    // The chrome dwells (story 7-6) and every case here reveals it to reach the transport.
+    jest.useFakeTimers();
+    fakeTimers = true;
+    playSurah.mockClear();
+    resume.mockClear();
+    act(() => {
+      store().clearPlayback();
+      store().registerEngineActions({
+        playSurah,
+        resume,
+        pause: async () => {},
+        seekToVerse: async () => {},
+        stop: async () => {},
+        abandonPlayback: async () => {},
+      });
+    });
+  });
+  afterEach(() => {
+    act(() => store().clearPlayback());
+    fakeTimers = false;
+    jest.useRealTimers();
+  });
+
+  /**
+   * Reveal the chrome and press its play control. ⚠️ The reveal is CONDITIONAL — the chrome
+   * dwells rather than latches, so an unconditional band tap on a second press dismisses the bars
+   * and the press lands on nothing (`read-screen.test.tsx` carries the same helper).
+   */
+  async function pressPlay() {
+    if (chromeTouches() !== 'box-none') await revealChrome();
+    fireEvent.press(screen.getByTestId('chrome-play-toggle'));
+  }
+
+  /** The engine's own sequence — `loading` before `setTrack`, exactly as `startPlayback` runs. */
+  function engineStarts(surah: number, verse: number | null, timed = true) {
+    act(() => {
+      store().setPlaybackState('loading');
+      store().setTrack(surah, 'husary', timed);
+      if (timed && verse !== null) store().setActiveVerse(verse);
+      store().setPlaybackState('playing');
+    });
+  }
+
+  /**
+   * ⚠️ THE SAME RULE AS `read.tsx`, THROUGH THE SAME RESOLVER. Two copies of this branch is what
+   * `useVerseSeek` was extracted to prevent, and the failure of a drifted copy here is silent:
+   * the reader presses play and hears the page they are on instead of where they stopped.
+   */
+  it('starts at the SAVED LISTENING verse, not the settled page’s first one', async () => {
+    mockAudioPositionRow.current = { surah: 18, verse: 23, reciterId: 'husary' };
+    render(<Mushaf />);
+    settleOnPage(42); // whose first verse is 2:253 — deliberately not the answer
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(18, 23);
+  });
+
+  /**
+   * ⚠️ THE LITERAL, NOT `getFirstVerseForPage(42)`. Computing the expectation from the very
+   * function the screen calls restates the call instead of checking it — the repo's standing rule
+   * — and page 42's first verse is 2:253, which the case above already names in prose.
+   */
+  it('starts at the settled page’s first verse when there is no saved listening row', async () => {
+    render(<Mushaf />);
+    settleOnPage(42);
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(2, 253);
+  });
+
+  /**
+   * ⚠️ AN UNRESOLVABLE PAGE IS NOT A REASON TO REFUSE A GOOD ROW. `getFirstVerseForPage` answers
+   * `{0, 0}` for a page the map does not hold, and the first cut checked that BEFORE consulting
+   * the resolver — so a screen that could not name its own page suppressed a saved listening
+   * position that named itself perfectly well. The guard belongs on the resolver's answer.
+   */
+  it('resumes the saved row even when the settled page cannot be resolved', async () => {
+    mockAudioPositionRow.current = { surah: 18, verse: 23, reciterId: 'husary' };
+    render(<Mushaf />);
+    settleOnPage(0);
+
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(18, 23);
+  });
+
+  it('plays nothing when neither the page nor a row can name a verse', async () => {
+    render(<Mushaf />);
+    settleOnPage(0);
+
+    await pressPlay();
+    expect(playSurah).not.toHaveBeenCalled();
+  });
+
+  it('resumes in place on the second press, without consulting the row', async () => {
+    mockAudioPositionRow.current = { surah: 18, verse: 23, reciterId: 'husary' };
+    render(<Mushaf />);
+    settleOnPage(42);
+
+    await pressPlay();
+    engineStarts(18, 23);
+    act(() => store().setPlaybackState('paused'));
+    playSurah.mockClear();
+
+    await pressPlay();
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(playSurah).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ THE PAGER FOLLOWS THE TRACK EVEN WHEN NOTHING CAN HIGHLIGHT — `read.tsx`'s note, on this
+   * surface. A track whose manifest cannot name every ayah leaves `activeVerseKey` null for its
+   * whole life, so following the KEY alone would leave the reader hearing Al-Kahf while looking
+   * at page 42. Al-Kahf's first ayah is on page 293.
+   */
+  it('turns to a resumed track’s page when its surah has no usable timings', async () => {
+    mockAudioPositionRow.current = { surah: 18, verse: 23, reciterId: 'husary' };
+    render(<Mushaf />);
+    settleOnPage(42);
+    await pressPlay();
+    mockScrollToIndex.mockClear();
+
+    engineStarts(18, null, false);
+    expect(store().activeVerseKey).toBeNull();
+    expect(mockScrollToIndex).toHaveBeenCalledWith({
+      index: TOTAL_PAGES - 293,
+      animated: true,
+    });
+  });
+
+  /**
+   * ⚠️ THE FROZEN BOUNDARY, ONE PAUSE LATER. This surface's stop-write is the more damaging half
+   * — it writes the settled page's FIRST verse — so a resumed session pausing here would move the
+   * reader to the top of a page they never turned to.
+   */
+  it('writes NO reading position when the session was resumed somewhere else', async () => {
+    mockAudioPositionRow.current = { surah: 18, verse: 23, reciterId: 'husary' };
+    render(<Mushaf />);
+    settleOnPage(42);
+    await pressPlay();
+    engineStarts(18, 23);
+    settleOnPage(293); // the pager followed the audio
+    mockSetReadingPosition.mockClear();
+
+    act(() => store().setPlaybackState('paused'));
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+  });
+
+  /** Anti-vacuity: 7-1's write is suppressed for a RESUME, not switched off. */
+  it('still writes it when the session started on the page the reader was on', async () => {
+    render(<Mushaf />);
+    settleOnPage(42);
+    await pressPlay();
+    expect(playSurah).toHaveBeenCalledWith(2, 253);
+    engineStarts(2, 255);
+    settleOnPage(43); // the recitation carried the reader on a page — a write, once it stops
+    mockSetReadingPosition.mockClear();
+
+    act(() => store().setPlaybackState('paused'));
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
   });
 });
 
