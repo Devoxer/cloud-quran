@@ -64,12 +64,14 @@ function renderRow(selected: { surah: number; verse: number } | null = null) {
       selected={selected}
       interactive
       onOpenReciters={mockOpenReciters}
+      onOpenPlaybackOptions={mockOpenPlaybackOptions}
       onInteract={mockInteract}
     />
   );
 }
 
 const mockOpenReciters = jest.fn();
+const mockOpenPlaybackOptions = jest.fn();
 /** `useChromeReveal`'s `keepAlive` — every control here owes it a call. */
 const mockInteract = jest.fn();
 
@@ -339,6 +341,7 @@ describe('it goes inert with the rest of the bar', () => {
         selected={selected}
         interactive={interactive}
         onOpenReciters={mockOpenReciters}
+        onOpenPlaybackOptions={mockOpenPlaybackOptions}
         onInteract={mockInteract}
       />
     );
@@ -394,5 +397,106 @@ describe('it goes inert with the rest of the bar', () => {
     });
     renderRow(null);
     expect(screen.getByTestId('chrome-mini-player').props.accessibilityLabel).toBeUndefined();
+  });
+});
+
+/**
+ * The overflow control, which is also the sleep indicator (story 7-4).
+ *
+ * ⚠️ IT BELONGS TO THE MINI PLAYER ONLY. The verse face is scoped to one ayah — speed and a
+ * sleep timer are scoped to the recitation — so putting it there would be the "two bars of
+ * everything" clutter the single row exists to avoid.
+ */
+describe('the playback-options control', () => {
+  /** Load a track, which is the only state that draws the mini player. */
+  const loadTrack = () =>
+    act(() => {
+      store().setTrack(18, 'alafasy', true);
+      store().setPlaybackState('playing');
+    });
+
+  afterEach(() => act(() => store().clearSleepTimer()));
+
+  /**
+   * The SF glyph the control actually renders with — `VerseRow.test`'s idiom, and for its two
+   * reasons: the icon is deliberately a11y-hidden (the Pressable carries the label), and the
+   * suite runs on the iOS platform, so `Icon` resolves through the registry's `sf` half.
+   */
+  const glyph = (): unknown => {
+    const frame = screen.getByTestId('chrome-playback-options-icon', {
+      includeHiddenElements: true,
+    });
+    return (frame.props as { children: { props: { name?: unknown } } }).children.props.name;
+  };
+
+  it('appears in the mini player and NOT in the verse face', () => {
+    loadTrack();
+    renderRow(null);
+    expect(screen.getByTestId('chrome-playback-options')).toBeTruthy();
+    screen.unmount();
+
+    // Selecting an ayah swaps the face; the control goes with it.
+    renderRow({ surah: 18, verse: 10 });
+    expect(screen.queryByTestId('chrome-playback-options')).toBeNull();
+  });
+
+  it('asks for the sheet, and re-arms the dwell like every other control here', () => {
+    loadTrack();
+    renderRow(null);
+    fireEvent.press(screen.getByTestId('chrome-playback-options'));
+    expect(mockOpenPlaybackOptions).toHaveBeenCalledTimes(1);
+    expect(mockInteract).toHaveBeenCalled();
+  });
+
+  it('is the plain overflow while nothing is armed', () => {
+    loadTrack();
+    renderRow(null);
+    expect(glyph()).toBe('ellipsis');
+    expect(screen.queryByTestId('chrome-sleep-countdown')).toBeNull();
+  });
+
+  it('becomes the moon, with a countdown, while a duration is armed', () => {
+    loadTrack();
+    renderRow(null);
+    act(() => store().setSleepTimer(30 * 60_000));
+
+    expect(glyph()).toBe('moon');
+    expect(screen.getByTestId('chrome-sleep-countdown').props.children).toBe('30m');
+  });
+
+  it('follows the countdown down, and back to nothing when it is cancelled', () => {
+    loadTrack();
+    renderRow(null);
+    act(() => store().setSleepTimer(30 * 60_000));
+    // What the engine's clock publishes as the timer runs.
+    act(() => store().setSleepRemaining(12 * 60_000));
+    expect(screen.getByTestId('chrome-sleep-countdown').props.children).toBe('12m');
+
+    act(() => store().clearSleepTimer());
+    expect(screen.queryByTestId('chrome-sleep-countdown')).toBeNull();
+    expect(glyph()).toBe('ellipsis');
+  });
+
+  it('says “End” for an end-of-surah timer, which has no countdown to show', () => {
+    loadTrack();
+    renderRow(null);
+    act(() => store().setSleepTimer('surah'));
+    expect(screen.getByTestId('chrome-sleep-countdown').props.children).toBe('End');
+  });
+
+  it('goes inert with the bar, in the DOM tab order as well as the touch tree', () => {
+    // See the reciter control's case: `focusable` alone is not read by react-native-web.
+    loadTrack();
+    render(
+      <ChromeVerseRow
+        selected={null}
+        interactive={false}
+        onOpenReciters={mockOpenReciters}
+        onOpenPlaybackOptions={mockOpenPlaybackOptions}
+        onInteract={mockInteract}
+      />
+    );
+    expect(screen.getByTestId('chrome-playback-options').props.tabIndex).toBe(-1);
+    expect(screen.getByTestId('chrome-playback-options').props.focusable).toBe(false);
   });
 });

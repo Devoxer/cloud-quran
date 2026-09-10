@@ -67,3 +67,71 @@ export function surahAudioUrl(reciterId: string, surah: number): string {
 export function reciterManifestUrl(reciterId: string): string {
   return `${AUDIO_CDN_BASE}/${reciterId}/manifest.json`;
 }
+
+/**
+ * ── Speed (story 7-4) ────────────────────────────────────────────────────────────────────────
+ *
+ * The bounds live HERE rather than in the feature because two layers need them and they may not
+ * import each other: `stores/audioPlayerStore.ts` clamps at the store's door, and
+ * `features/audio/lib/playbackPrefs.ts` clamps what it reads back off the device. `constants/` is
+ * the one home both are allowed to reach (`lint:layers` rule 5).
+ */
+
+/** Slowest rate offered. Below this the recitation is not comprehensible as recitation. */
+export const SPEED_MIN = 0.5;
+
+/**
+ * Fastest rate offered — and the platform ceiling, not merely a taste one. iOS clamps the
+ * playlist rate to `max(0.1, min(rate, 2.0))` and Android to `coerceIn(0.1f, 2.0f)`, so a larger
+ * number here would be silently ignored by the native side and the UI would show a rate nobody
+ * is hearing.
+ */
+export const SPEED_MAX = 2;
+
+/** Normal speed — what an unset, unreadable or corrupt stored value resolves to. */
+export const SPEED_DEFAULT = 1;
+
+/**
+ * The ONE door every rate passes through, at the store and again at the MMKV read.
+ *
+ * ⚠️ IT TAKES `unknown` ON PURPOSE. Its two callers are a UI control and a value read back off
+ * the device, and the second can be anything at all — a string written by an older build, a
+ * `NaN`, a key some other feature happened to use. A clamp that assumed `number` would let
+ * `NaN` through both comparisons (`NaN < min` and `NaN > max` are both false) and hand the native
+ * player a rate it answers by going silent.
+ */
+export function clampSpeed(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return SPEED_DEFAULT;
+  const bounded = Math.min(SPEED_MAX, Math.max(SPEED_MIN, value));
+  // Two decimals: the selector's step is 0.05, and floating-point drift on 0.1 increments would
+  // otherwise store `1.7999999999999998` and render it as `1.80x` — a value that never round-trips.
+  return Math.round(bounded * 100) / 100;
+}
+
+/**
+ * ── Sleep timer (story 7-4) ──────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * How often the armed sleep timer is answered when the status stream is NOT running.
+ *
+ * ⚠️ IT IS A CLOCK, NOT THE TIMER. The deadline is an absolute wall-clock instant, so this
+ * interval decides only how promptly a lapsed deadline is NOTICED and how often the countdown
+ * label moves — never how much time has passed. That is the whole reason a backgrounded app,
+ * whose JS timers are throttled or suspended outright, still pauses on time: playback keeps the
+ * 100ms status stream alive in the background, and either clock compares against the same
+ * absolute instant.
+ */
+export const SLEEP_TICK_MS = 1000;
+
+/**
+ * How far before the end of a surah an armed "end of surah" timer pauses.
+ *
+ * ⚠️ IT MUST BEAT THE NATIVE AUTO-ADVANCE, WHICH IS THE WHOLE POINT OF THE OPTION. The playlist
+ * rolls into surah *n+1* by itself (story 7-1's queue), so a timer that reacted to the track
+ * CHANGE would already be a second into the next surah — the frozen matrix's "pauses at the END
+ * of the current surah, not the next track change". Half a second at a 100ms tick leaves five
+ * chances to catch the boundary, and what it costs is the tail of the closing file, which is
+ * silence.
+ */
+export const SLEEP_END_LEAD_MS = 500;

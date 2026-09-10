@@ -29,7 +29,7 @@
     "share": "Compartir",
     "sleepTimer": "Temporizador de apagado",
     "set": "Establecer",
-    "endOfSection": "Fin de la sección",
+    "endOfSurah": "Fin de la sura",
     "turnOff": "Desactivar",
     "playbackSpeed": "Velocidad de reproducción",
     "narrationVoice": "Voz de narración",
@@ -91,7 +91,7 @@
     "showPlayerControls": "Mostrar controles del reproductor",
     "showPlayerControlsHint": "Restaura el encabezado y los controles de reproducción",
     "setSleepTimer": "Configurar temporizador de apagado",
-    "sleepEndOfSection": "Apagar al final de la sección",
+    "sleepEndOfSurah": "Apagar al final de la sura",
     "turnOffSleepTimer": "Desactivar temporizador de apagado",
     "tapToJump": "Toca para ir a esta parte",
     "disableShuffle": "Desactivar aleatorio",
@@ -110,6 +110,9 @@
     "hoursMinutes": "{{hours}} h {{minutes}} min",
     "minutes": "{{minutes}} min",
     "seconds": "{{seconds}} s"
+  },
+  "options": {
+    "sheetTitle": "Reproducción"
   },
   "reciters": {
     "searchPlaceholder": "Buscar recitadores",

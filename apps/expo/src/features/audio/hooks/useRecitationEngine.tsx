@@ -31,6 +31,18 @@
  * ⚠️ THE PLAYER SPEAKS SECONDS AND THE MANIFEST SPEAKS MILLISECONDS. The conversion happens on
  * the two lines below that touch `currentTime` and `seekTo`, and nowhere else in the app.
  *
+ * ── Speed and the sleep timer are BOTH answered here (story 7-4) ─────────────────────────────
+ *
+ * The rate is applied to the native playlist and persisted to device-local MMKV from ONE store
+ * subscription, and asserted again on every playlist build. The sleep timer is an absolute
+ * wall-clock deadline answered by two clocks — this file's 100ms status stream, which is the one
+ * that survives backgrounding, and a 1s interval that exists for the states the status stream
+ * does not reach (armed while paused, and a countdown label that has to move). "End of surah" is
+ * a third thing again: it pauses BEFORE the boundary, because the playlist advances by itself.
+ *
+ * ⚠️ `savePosition` ALREADY RUNS ON PAUSE, so a sleep-timer pause writes the listening position
+ * for free. There is no second write here, and adding one would double the store's busiest path.
+ *
  * ── Why no `useState` anywhere in here ───────────────────────────────────────────────────────
  *
  * Every mutable value is a ref, and the host renders `null`. A hook that re-rendered on playback
@@ -52,6 +64,8 @@ import {
   LOAD_TIMEOUT_MS,
   PLAYLIST_TICK_MS,
   SEEK_GUARD_TIMEOUT_MS,
+  SLEEP_END_LEAD_MS,
+  SLEEP_TICK_MS,
   surahAudioUrl,
 } from '@/constants/audio';
 import { addBreadcrumb, captureException } from '@/lib/errors';
@@ -64,6 +78,7 @@ import {
 } from '@/lib/reciterManifest';
 import { setAudioPosition } from '@/lib/sync';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
+import { readStoredSpeed, writeStoredSpeed } from '../lib/playbackPrefs';
 
 /**
  * Background playback and lock-screen transport. Best-effort: the OSStatus failures here happen
@@ -215,6 +230,94 @@ export function useRecitationEngine(selectedReciterId: string): void {
     };
     savePositionRef.current = savePosition;
 
+    /**
+     * Tell the native player the rate (story 7-4).
+     *
+     * ⚠️ IT IS A PROPERTY, NOT `setPlaybackRate(rate, pitchCorrection)`. That two-argument call is
+     * `AudioPlayer`'s; `AudioPlaylist` — which is what this engine drives — exposes only a
+     * `playbackRate` property and no `shouldCorrectPitch` at all. PITCH CORRECTION IS ON ANYWAY,
+     * on all three platforms, because each one's default is to preserve it: Android goes through
+     * ExoPlayer's `setPlaybackSpeed` (`PlaybackParameters(speed, pitch = 1f)`), iOS through
+     * `AVPlayerItem`'s spectral time-pitch algorithm, and web through `HTMLMediaElement`'s
+     * `preservesPitch`, which defaults to true. There is no knob to turn on, and no knob that
+     * could be left off.
+     *
+     * ⚠️ AND IT APPLIES WHETHER OR NOT PLAYBACK IS RUNNING — the defect the epic names. iOS's
+     * playlist stores the value as `currentRate` and starts the next `play()` at it even when the
+     * assignment lands while paused; Android and web apply it to a paused element directly. So
+     * the rate does not need playback to exist, and this is never gated on `playing`.
+     *
+     * Best-effort by design: the only failure the API can produce is a throw from a player that
+     * has just been torn down, and every new playlist is given the rate at build time, so a
+     * transient failure heals on the next track rather than needing to be reported.
+     */
+    const applyRate = (rate: number) => {
+      const player = playlist.current;
+      if (!player) return;
+      try {
+        player.playbackRate = rate;
+      } catch (error) {
+        addBreadcrumb('ui', 'playback rate not applied', {
+          rate,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    /**
+     * The 1s clock, live only while a timed sleep is armed.
+     *
+     * ⚠️ IT IS THE SECOND CLOCK, NOT THE ONLY ONE. The 100ms status stream answers the deadline
+     * too (see `onStatus`), and that is the one that fires on time while the app is backgrounded
+     * — a JS interval there is throttled or suspended outright. This one exists for the states
+     * the status stream does not cover: a timer armed while PAUSED still has to expire, and a
+     * countdown label still has to move.
+     */
+    let sleepClock: ReturnType<typeof setInterval> | null = null;
+    const stopSleepClock = () => {
+      if (sleepClock) clearInterval(sleepClock);
+      sleepClock = null;
+    };
+
+    /**
+     * Answer the armed sleep timer against the WALL CLOCK. Called from both clocks and on
+     * foregrounding; safe to call at any time, including with nothing armed.
+     */
+    const evaluateSleep = () => {
+      const state = store.getState();
+      const deadline = state.sleepDeadline;
+      if (deadline === null) return;
+      const left = deadline - Date.now();
+      if (left > 0) {
+        // ⚠️ ONLY WHEN THE DISPLAYED SECOND MOVES. This runs ten times a second under playback,
+        // and the label it feeds is rendered inside the chrome row; publishing per tick would
+        // re-render that row ten times a second to show the same "12m". `usePosition`'s rule.
+        const shown = Math.ceil(left / 1000) * 1000;
+        if (shown !== state.sleepRemainingMs) state.setSleepRemaining(shown);
+        return;
+      }
+      state.clearSleepTimer();
+      // ⚠️ EXPIRING WHILE ALREADY PAUSED IS A NO-OP, and calling `pause()` anyway would not be
+      // one: it writes the listening position and sets the playback state, so a timer lapsing
+      // over a paused reader would overwrite where they actually stopped.
+      if (state.playbackState !== 'playing') return;
+      void store.getState().pause();
+    };
+
+    /**
+     * Pause at the end of the current surah, which is what "end of surah" means (story 7-4).
+     *
+     * The playlist advances by itself, so this has to happen BEFORE the boundary rather than in
+     * reaction to it — `SLEEP_END_LEAD_MS` is that margin, and `onTrackChanged` carries the
+     * defensive copy for the case where the boundary was crossed anyway (a surah whose duration
+     * the status stream never reported).
+     */
+    const fireEndOfSurah = () => {
+      store.getState().clearSleepTimer();
+      if (store.getState().playbackState !== 'playing') return;
+      void store.getState().pause();
+    };
+
     /** Point the store, and the lock screen, at the track the playlist just moved to. */
     const adoptTrack = (index: number) => {
       const surah = startSurah.current + index;
@@ -231,6 +334,33 @@ export function useRecitationEngine(selectedReciterId: string): void {
     const onStatus = (status: AudioPlaylistStatus) => {
       const player = playlist.current;
       if (!player) return;
+
+      /**
+       * ⚠️ THE SLEEP TIMER IS ANSWERED FROM THIS TICK FIRST, WHICH IS WHAT MAKES THE
+       * BACKGROUNDED CRITERION TRUE. Under background playback this stream keeps arriving every
+       * 100ms while the app's own interval is throttled or suspended, so this — not the 1s clock
+       * — is what pauses a 30-minute timer on time with the phone in a pocket. Both compare
+       * against the same absolute deadline, so it does not matter which one gets there first.
+       */
+      evaluateSleep();
+
+      /**
+       * ⚠️ BEFORE THE BOUNDARY, NOT AT IT. `loop: 'none'` still auto-advances mid-queue, so a
+       * timer that waited for `trackChanged` would already be a second into the next surah. The
+       * `didJustFinish` half covers the last track in the queue (An-Nas), which produces no
+       * track change at all.
+       */
+      if (
+        store.getState().sleepEndOfSurah &&
+        (status.didJustFinish ||
+          (status.playing &&
+            status.duration > 0 &&
+            status.currentTime * 1000 >= status.duration * 1000 - SLEEP_END_LEAD_MS))
+      ) {
+        fireEndOfSurah();
+        return;
+      }
+
       const state = store.getState();
 
       /**
@@ -299,6 +429,15 @@ export function useRecitationEngine(selectedReciterId: string): void {
       // four moments a listening position is written.
       savePosition();
       adoptTrack(currentIndex);
+      /**
+       * ⚠️ THE DEFENSIVE HALF OF "END OF SURAH", for the boundary the lead never saw. The status
+       * stream reports `duration: 0` until a track is prepared, so a surah whose duration never
+       * arrived would sail past the check in `onStatus` — and the frozen matrix's answer for
+       * "surah end unknown" is a FALLBACK, not a shrug. Pausing here is one boundary late by a
+       * fraction of a second, which is where the reader asked to stop; a duration fallback would
+       * pause somewhere that is not a boundary at all.
+       */
+      if (store.getState().sleepEndOfSurah) fireEndOfSurah();
     };
 
     const teardown = () => {
@@ -373,6 +512,13 @@ export function useRecitationEngine(selectedReciterId: string): void {
         player.addListener('playlistStatusUpdate', onStatus);
         player.addListener('trackChanged', onTrackChanged);
         player.setActiveForLockScreen(true);
+        /**
+         * ⚠️ EVERY NEW PLAYLIST IS BORN AT THE READER'S RATE. A rate applied only on CHANGE
+         * would be lost by the rebuild that starts every surah and every voice switch, so a
+         * reader who chose 1.5x would hear 1.0x again the moment they pressed play on anything.
+         * Before `play()`, so the first frame of audio is already at the right speed.
+         */
+        applyRate(store.getState().speed);
 
         currentSurah.current = surah;
         currentVerse.current = null;
@@ -474,15 +620,57 @@ export function useRecitationEngine(selectedReciterId: string): void {
     store.getState().registerEngineActions(actions);
     void configureAudioMode();
 
+    /**
+     * ⚠️ THE SAVED RATE IS SEEDED BEFORE THE SUBSCRIPTION, NOT THROUGH IT. MMKV is synchronous,
+     * so this puts the reader's rate in the store during the boot effect — before any press can
+     * reach `playSurah` — and seeding first means the write-back below never fires for a value
+     * that came off the device in the first place.
+     */
+    store.getState().setSpeed(readStoredSpeed());
+
+    /**
+     * The engine's one store subscription (story 7-4).
+     *
+     * ⚠️ IMPERATIVE, NOT A SELECTOR HOOK. `useAudioPlayerStore(s => s.speed)` in this hook would
+     * re-render `RecitationEngineHost` — which mounts at the app root — on every rate change and
+     * on every arm of a sleep timer. This file's standing rule is that it holds refs and renders
+     * nothing; a subscription keeps that true.
+     *
+     * ⚠️ AND PERSISTENCE LIVES HERE, WHICH IS WHY THERE IS ONLY ONE WRITER. A control that wrote
+     * MMKV itself and then set the store could succeed at one and not the other; going through
+     * the store means "what is stored", "what the store says" and "what the player was told" are
+     * the same event.
+     */
+    const unsubscribe = store.subscribe((next, previous) => {
+      if (next.speed !== previous.speed) {
+        applyRate(next.speed);
+        writeStoredSpeed(next.speed);
+      }
+      if (next.sleepDeadline !== previous.sleepDeadline) {
+        stopSleepClock();
+        if (next.sleepDeadline !== null) sleepClock = setInterval(evaluateSleep, SLEEP_TICK_MS);
+      }
+    });
+
     // Backgrounding is the fourth moment a position is written: a listener who swipes the app
     // away never presses pause, and the process can be killed without another event.
     const onAppState = (next: AppStateStatus) => {
-      if (next !== 'active') savePosition();
+      if (next !== 'active') {
+        savePosition();
+        return;
+      }
+      // ⚠️ AND COMING BACK IS WHEN A SUSPENDED CLOCK HAS TO SETTLE UP. With playback stopped the
+      // OS can freeze this app's timers entirely; the deadline is absolute, so the first thing
+      // to do on return is ask whether it has passed — not to resume counting from where the
+      // interval left off, which would be twenty minutes ago.
+      evaluateSleep();
     };
     const subscription = AppState.addEventListener('change', onAppState);
 
     return () => {
       subscription.remove();
+      unsubscribe();
+      stopSleepClock();
       teardown();
     };
   }, []);

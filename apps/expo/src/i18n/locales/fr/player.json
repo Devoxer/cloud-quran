@@ -29,7 +29,7 @@
     "share": "Partager",
     "sleepTimer": "Minuterie de veille",
     "set": "Régler",
-    "endOfSection": "Fin de section",
+    "endOfSurah": "Fin de la sourate",
     "turnOff": "Désactiver",
     "playbackSpeed": "Vitesse de lecture",
     "narrationVoice": "Voix de narration",
@@ -91,7 +91,7 @@
     "showPlayerControls": "Afficher les commandes du lecteur",
     "showPlayerControlsHint": "Rétablit l'en-tête et les commandes de lecture",
     "setSleepTimer": "Régler la minuterie de veille",
-    "sleepEndOfSection": "Veille à la fin de la section",
+    "sleepEndOfSurah": "Veille à la fin de la sourate",
     "turnOffSleepTimer": "Désactiver la minuterie de veille",
     "tapToJump": "Appuyez pour accéder à cette partie",
     "disableShuffle": "Désactiver le mode aléatoire",
@@ -110,6 +110,9 @@
     "hoursMinutes": "{{hours}} h {{minutes}} min",
     "minutes": "{{minutes}} min",
     "seconds": "{{seconds}} s"
+  },
+  "options": {
+    "sheetTitle": "Lecture"
   },
   "reciters": {
     "searchPlaceholder": "Rechercher un récitateur",

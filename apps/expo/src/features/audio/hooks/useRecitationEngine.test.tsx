@@ -48,6 +48,20 @@ const mockFixture = {
   ],
 };
 
+/**
+ * The device's stored rate, MUTABLE — a "relaunch" in this suite is a remount of the host with a
+ * different value here, which is exactly the channel a real relaunch uses (a synchronous MMKV
+ * read inside the boot effect).
+ */
+let mockStoredSpeed = 1;
+const mockWriteSpeed = jest.fn((speed: number) => {
+  mockStoredSpeed = speed;
+});
+jest.mock('../lib/playbackPrefs', () => ({
+  readStoredSpeed: () => mockStoredSpeed,
+  writeStoredSpeed: (speed: number) => mockWriteSpeed(speed),
+}));
+
 let mockManifestFails = false;
 jest.mock('@/lib/reciterManifest', () => {
   const actual = jest.requireActual('@/lib/reciterManifest');
@@ -63,6 +77,8 @@ jest.mock('@/lib/reciterManifest', () => {
 interface FakePlaylist {
   currentTime: number;
   playing: boolean;
+  /** The native playlist's rate is a PROPERTY, not a `setPlaybackRate(rate, pitch)` call. */
+  playbackRate: number;
   listeners: Record<string, ((payload: never) => void)[]>;
   play: jest.Mock;
   pause: jest.Mock;
@@ -86,6 +102,7 @@ function makePlaylist(): FakePlaylist {
   return {
     currentTime: 0,
     playing: false,
+    playbackRate: 1,
     listeners,
     play: jest.fn(function (this: FakePlaylist) {
       playlist.playing = true;
@@ -157,6 +174,9 @@ beforeEach(() => {
     });
   mockManifestFails = false;
   mockReciterId = 'husary';
+  // Before the render below: the boot effect reads this synchronously.
+  mockStoredSpeed = 1;
+  mockWriteSpeed.mockClear();
   mockSetAudioPosition.mockClear();
   (loadReciterManifest as jest.Mock).mockClear();
   playlist = makePlaylist();
@@ -738,5 +758,333 @@ describe('changing the reciter mid-listen', () => {
     // ⚠️ The pause that follows a paused switch must NOT overwrite the error the retry needs.
     expect(engine().playbackState).toBe('error');
     expect(engine().errorKey).toBe('player:errors.playFailed');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// story 7-4 — speed and the sleep timer
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+describe('speed', () => {
+  it('applies to the native playlist the moment it changes, while playing', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(3);
+    expect(playlist.playing).toBe(true);
+
+    act(() => engine().setSpeed(1.5));
+
+    expect(playlist.playbackRate).toBe(1.5);
+  });
+
+  /**
+   * ⚠️ THE DEFECT THE EPIC NAMES, AS ONE CASE. The pre-fork build applied the rate only while
+   * playing, so a listener who paused, chose 2.0x and resumed heard 1.0x. MUTATION: gate
+   * `applyRate` on `playbackState === 'playing'`; this reddens and the case above stays green.
+   */
+  it('applies while PAUSED, and resuming does not undo it', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(3);
+    await act(async () => {
+      await engine().pause();
+    });
+    expect(engine().playbackState).toBe('paused');
+
+    act(() => engine().setSpeed(2));
+
+    expect(playlist.playbackRate).toBe(2);
+    // Setting a rate is not a transport command: it must not start anything.
+    expect(playlist.play).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await engine().resume();
+    });
+    expect(playlist.playbackRate).toBe(2);
+  });
+
+  it('survives a relaunch, and is in place BEFORE the first press', async () => {
+    // The reader's last session left 1.5 on the device; the app is started again.
+    mockStoredSpeed = 1.5;
+    view.unmount();
+    view = render(<RecitationEngineHost />);
+
+    // Not "after the first play" — the store already says so with nothing loaded at all.
+    expect(engine().speed).toBe(1.5);
+
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    expect(playlist.playbackRate).toBe(1.5);
+  });
+
+  /**
+   * ⚠️ EVERY PLAYLIST IS BORN AT THE RATE, which is not the same claim as "a change is applied".
+   * `playSurah` tears the playlist down and builds a new one, so a rate applied only on change
+   * would be silently lost by the next surah and by every voice switch. MUTATION: delete the
+   * `applyRate` call in `startPlayback`; the first case stays green and this reddens.
+   */
+  it('a rebuilt playlist starts at the reader’s rate, not at 1.0', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    // A tick, so the state leaves `loading` — a press that lands there is deliberately bounced.
+    await tick(3);
+    act(() => engine().setSpeed(0.75));
+
+    // A different surah — a whole new native playlist.
+    playlist = makePlaylist();
+    await act(async () => {
+      await engine().playSurah(36);
+    });
+    expect(playlist.playbackRate).toBe(0.75);
+  });
+
+  it('is persisted on change, so the next launch reads it back', () => {
+    act(() => engine().setSpeed(1.25));
+    expect(mockWriteSpeed).toHaveBeenCalledWith(1.25);
+  });
+
+  it.each([
+    ['above the ceiling', 4, 2],
+    ['below the floor', 0.1, 0.5],
+    ['a NaN', Number.NaN, 1],
+  ])('clamps %s at the store’s door', (_label, requested, expected) => {
+    act(() => engine().setSpeed(requested));
+    expect(engine().speed).toBe(expected);
+  });
+
+  it('does not disturb the highlight — position is MEDIA time, so the lookup is unchanged', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    act(() => engine().setSpeed(1.5));
+    // 1:3 runs 11,565–16,137ms of the file. At 1.5x the reader reaches it sooner in wall-clock
+    // terms, but the manifest is keyed on the file's own clock, which is what `currentTime` is.
+    await tick(12);
+    expect(engine().activeVerseKey).toBe('1:3');
+  });
+});
+
+describe('the sleep timer', () => {
+  const MINUTE = 60_000;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    act(() => engine().clearSleepTimer());
+    jest.useRealTimers();
+  });
+
+  /** Move the WALL CLOCK without running any timer — what backgrounding looks like from here. */
+  const advanceWallClock = (ms: number) => {
+    jest.setSystemTime(Date.now() + ms);
+  };
+
+  const play = async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(3);
+  };
+
+  it('pauses when a duration elapses, and clears itself', async () => {
+    await play();
+    act(() => engine().setSleepTimer(30 * MINUTE));
+    expect(engine().sleepRemainingMs).toBe(30 * MINUTE);
+
+    advanceWallClock(30 * MINUTE + 1000);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().playbackState).toBe('paused');
+    expect(engine().sleepDeadline).toBeNull();
+    expect(engine().sleepRemainingMs).toBe(0);
+  });
+
+  /**
+   * ⚠️ THE WHOLE REASON THE DEADLINE IS ABSOLUTE. A countdown ticked by the app stops counting
+   * when the app is backgrounded — which is exactly when a sleep timer matters. Here NO clock
+   * runs at all: only the wall clock moves, and the timer still fires on the first thing that
+   * asks. MUTATION: store a remaining-ms value decremented per tick; this reddens.
+   */
+  it('fires on wall-clock time, not on foreground ticks', async () => {
+    await play();
+    act(() => engine().setSleepTimer(30 * MINUTE));
+
+    // Twenty minutes of a backgrounded app: no intervals, no status ticks, just elapsed time.
+    advanceWallClock(20 * MINUTE);
+    await act(async () => {
+      appStateListener?.('background');
+    });
+    expect(engine().playbackState).toBe('playing');
+
+    // Eleven more, then the app comes back — past the deadline with zero ticks in between.
+    advanceWallClock(11 * MINUTE);
+    await act(async () => {
+      appStateListener?.('active');
+    });
+
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().sleepDeadline).toBeNull();
+  });
+
+  it('the status stream answers it too, which is what fires it under background PLAYBACK', async () => {
+    // Playing in the background is the case where JS intervals are throttled but the native
+    // status stream keeps arriving. No interval is run here — only a tick.
+    await play();
+    act(() => engine().setSleepTimer(5 * MINUTE));
+    advanceWallClock(5 * MINUTE + 1);
+
+    await tick(4);
+
+    expect(playlist.pause).toHaveBeenCalled();
+  });
+
+  it('expiring over an ALREADY PAUSED player is a no-op that still clears the timer', async () => {
+    await play();
+    await act(async () => {
+      await engine().pause();
+    });
+    const pausesBefore = playlist.pause.mock.calls.length;
+    mockSetAudioPosition.mockClear();
+
+    act(() => engine().setSleepTimer(MINUTE));
+    advanceWallClock(MINUTE + 1000);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(engine().sleepDeadline).toBeNull();
+    // ⚠️ NOT MERELY "no crash": `pause()` writes the listening position, so firing over a paused
+    // reader would overwrite where they actually stopped with wherever the last tick landed.
+    expect(playlist.pause).toHaveBeenCalledTimes(pausesBefore);
+    expect(mockSetAudioPosition).not.toHaveBeenCalled();
+  });
+
+  it('cancelling clears the timer and leaves playback alone', async () => {
+    await play();
+    act(() => engine().setSleepTimer(30 * MINUTE));
+    act(() => engine().clearSleepTimer());
+
+    advanceWallClock(31 * MINUTE);
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(playlist.pause).not.toHaveBeenCalled();
+    expect(engine().playbackState).toBe('playing');
+  });
+
+  it('publishes the countdown once per SECOND, not once per status tick', async () => {
+    await play();
+    act(() => engine().setSleepTimer(2 * MINUTE));
+
+    // Ten status ticks inside the same second: the label must not move ten times.
+    const before = engine().sleepRemainingMs;
+    for (let i = 0; i < 10; i++) await tick(3 + i / 100);
+    expect(engine().sleepRemainingMs).toBe(before);
+
+    advanceWallClock(1500);
+    await tick(4);
+    expect(engine().sleepRemainingMs).toBeLessThan(before);
+  });
+
+  /**
+   * ⚠️ AT THE BOUNDARY, NOT AFTER IT. The playlist auto-advances by itself (7-1's queue), so a
+   * timer that reacted to `trackChanged` would already be inside the next surah. MUTATION: move
+   * the check into `onTrackChanged` alone; this reddens.
+   */
+  it('“end of surah” pauses BEFORE the track changes', async () => {
+    await play();
+    act(() => engine().setSleepTimer('surah'));
+    expect(engine().sleepEndOfSurah).toBe(true);
+
+    // The tick helper reports a 60s track; 59.6s is inside the half-second lead.
+    await tick(59.6);
+
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().playbackState).toBe('paused');
+    expect(engine().sleepEndOfSurah).toBe(false);
+    // Still surah 1 — nothing advanced.
+    expect(engine().surah).toBe(1);
+  });
+
+  it('“end of surah” does not fire in the middle of one', async () => {
+    await play();
+    act(() => engine().setSleepTimer('surah'));
+    await tick(30);
+    expect(playlist.pause).not.toHaveBeenCalled();
+    expect(engine().sleepEndOfSurah).toBe(true);
+  });
+
+  it('…and still stops if the boundary is crossed anyway', async () => {
+    // The status stream reports `duration: 0` until a track is prepared, so a surah whose
+    // duration never arrived would sail past the lead. The track change is the fallback.
+    await play();
+    act(() => engine().setSleepTimer('surah'));
+    await changeTrack(1);
+
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().sleepEndOfSurah).toBe(false);
+  });
+
+  it('a stop takes the armed timer with it', async () => {
+    // ⚠️ A TIMER ARMED AGAINST A SESSION THAT NO LONGER EXISTS WOULD FIRE INTO THE NEXT ONE —
+    // the inherited engine's recorded 24.20 defect. `clearPlayback` resets the sleep block; it
+    // does NOT reset the speed, which is a device preference rather than session state.
+    await play();
+    act(() => engine().setSpeed(1.5));
+    act(() => engine().setSleepTimer(30 * MINUTE));
+
+    await act(async () => {
+      await engine().stop();
+    });
+
+    expect(engine().sleepDeadline).toBeNull();
+    expect(engine().sleepEndOfSurah).toBe(false);
+    expect(engine().speed).toBe(1.5);
+  });
+});
+
+/**
+ * ⚠️ VERIFICATION, NOT CONSTRUCTION (story 7-4's last task). Continuous playback across a surah
+ * boundary and the stop at An-Nas are 7-1's playlist shape — `loop: 'none'` over surahs *n…114* —
+ * and this story adds nothing to them. These two cases exist so that "verified" is a thing the
+ * suite says rather than a thing a story report claims.
+ */
+describe('continuous playback (verified, not built)', () => {
+  it('rolls into the next surah with no timer armed', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(3);
+    expect(engine().sleepEndOfSurah).toBe(false);
+
+    await changeTrack(1);
+
+    expect(engine().surah).toBe(2);
+    expect(playlist.pause).not.toHaveBeenCalled();
+  });
+
+  it('stops at the end of An-Nas instead of wrapping to Al-Fatihah', async () => {
+    // 112…114, so index 2 finishing IS the end of the book. What the existing end-of-book case
+    // does not say, and this one does: where the store is left. Wrapping would leave surah 1.
+    await act(async () => {
+      await engine().playSurah(112);
+    });
+    await tick(1);
+    expect(createdWith.loop).toBe('none');
+
+    await tick(46, { didJustFinish: true, index: 2, playing: false });
+
+    expect(engine().playbackState).toBe('paused');
+    expect(engine().surah).not.toBe(1);
   });
 });

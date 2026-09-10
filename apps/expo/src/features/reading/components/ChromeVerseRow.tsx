@@ -42,6 +42,7 @@ import { HeaderActionButton, Icon } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { RECITERS, resolveReciterId, useVerseSeek } from '@/features/audio';
+import { formatSleepRemaining } from '@/lib/formatTime';
 import { addBookmark, removeBookmark, useBookmarks } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 import type { VersePair } from '@/lib/usePosition';
@@ -52,6 +53,7 @@ import {
   useActiveVerseKey,
   usePlaybackControls,
   usePlaybackStatus,
+  useSleepTimer,
 } from '@/stores/audioPlayerStore';
 
 /** The bookmark glyph, matching `VerseRow`'s control so one action looks like one action. */
@@ -91,6 +93,8 @@ export interface ChromeVerseRowProps {
   interactive: boolean;
   /** Open the reciter sheet. `ReadingChrome` owns the sheet itself (see the header). */
   onOpenReciters: () => void;
+  /** Open the speed / sleep-timer sheet (story 7-4). Owned by `ReadingChrome` for the same reason. */
+  onOpenPlaybackOptions: () => void;
   /**
    * Re-arm the chrome's dwell — `useChromeReveal`'s `keepAlive`. ⚠️ EVERY CONTROL HERE CALLS IT.
    * Without it the bars could vanish in the instant after the reader pressed play or bookmark,
@@ -103,6 +107,7 @@ export function ChromeVerseRow({
   selected,
   interactive,
   onOpenReciters,
+  onOpenPlaybackOptions,
   onInteract,
 }: ChromeVerseRowProps) {
   const { t } = useTranslation();
@@ -115,6 +120,12 @@ export function ChromeVerseRow({
   // the status ten times a second for a row that draws three glyphs.
   const activeVerseKey = useActiveVerseKey();
   const playback = usePlaybackStatus();
+  /**
+   * ⚠️ A THIRD SUBSCRIPTION, AND IT MOVES ONCE A SECOND — but only while a timer is armed, and
+   * only in whole seconds (the engine buckets the countdown before publishing it). The row draws
+   * four glyphs and a label; a second is not a tick rate.
+   */
+  const sleep = useSleepTimer();
   const { pause, resume, playSurah } = usePlaybackControls();
 
   /**
@@ -152,6 +163,11 @@ export function ChromeVerseRow({
     onInteract();
     onOpenReciters();
   }, [onInteract, onOpenReciters]);
+
+  const openPlaybackOptions = useCallback(() => {
+    onInteract();
+    onOpenPlaybackOptions();
+  }, [onInteract, onOpenPlaybackOptions]);
 
   /**
    * The mini player's transport: pause what is playing, resume what is paused, retry what failed.
@@ -302,6 +318,44 @@ export function ChromeVerseRow({
       <Text style={styles.label} numberOfLines={1} testID="chrome-now-playing">
         {nowPlaying}
       </Text>
+      {/**
+       * ⚠️ ONE CONTROL, WHICH IS ALSO THE SLEEP INDICATOR (story 7-4). The row's whole doctrine is
+       * "the thing you are acting on right now" — a separate moon badge beside an ellipsis would
+       * be two glyphs for one subject in a bar that already carries four things, and the badge
+       * would be an indicator nobody can press while the control beside it is the only place the
+       * timer can be cancelled. Armed, the glyph BECOMES the moon and the countdown sits next to
+       * it; unarmed, it is the plain overflow. Either way one press opens the sheet that owns it.
+       */}
+      <Pressable
+        onPress={openPlaybackOptions}
+        hitSlop={CONTROL_HIT_SLOP}
+        accessibilityRole="button"
+        accessibilityLabel={
+          sleep.active
+            ? t('player:a11y.sleepTimerActive', {
+                label: formatSleepRemaining(sleep.remainingMs, sleep.endOfSurah),
+              })
+            : t('player:a11y.moreOptions')
+        }
+        focusable={interactive}
+        // See the bookmark control: `focusable` alone is inert in the DOM tab order.
+        tabIndex={interactive ? 0 : -1}
+        style={styles.options}
+        testID="chrome-playback-options"
+      >
+        <Icon
+          name={sleep.active ? 'moon-outline' : 'ellipsis-horizontal'}
+          size={RECITER_ICON_SIZE}
+          color={sleep.active ? colors.accent.primary : colors.text.secondary}
+          accessibilityElementsHidden
+          testID="chrome-playback-options-icon"
+        />
+        {sleep.active ? (
+          <Text style={styles.sleepLabel} numberOfLines={1} testID="chrome-sleep-countdown">
+            {formatSleepRemaining(sleep.remainingMs, sleep.endOfSurah)}
+          </Text>
+        ) : null}
+      </Pressable>
       <HeaderActionButton
         name={playing ? 'pause' : 'play'}
         onPress={toggleTransport}
@@ -360,5 +414,16 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       color: theme.colors.text.secondary,
       flexShrink: 1,
+    },
+    options: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.xs,
+    },
+    /** The countdown rides the accent, like the moon beside it — one armed thing, one colour. */
+    sleepLabel: {
+      fontSize: FONT_SIZE.caption,
+      fontWeight: FONT_WEIGHT.semibold,
+      color: theme.colors.accent.primary,
     },
   }));

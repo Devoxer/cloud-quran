@@ -31,6 +31,8 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
 
+import { clampSpeed, SPEED_DEFAULT } from '@/constants/audio';
+
 /** Where playback is. `error` is a state a surface can offer a retry from, not a thrown thing. */
 export type PlaybackState = 'idle' | 'loading' | 'playing' | 'paused' | 'buffering' | 'error';
 
@@ -77,6 +79,33 @@ export interface RecitationState {
    * render as its own raw text to the reader.
    */
   errorKey: PlaybackErrorKey | null;
+  /**
+   * When the armed sleep timer expires, as an ABSOLUTE wall-clock instant (`Date.now()` ms), or
+   * null when no timed sleep is armed.
+   *
+   * ⚠️ AN INSTANT, NOT A COUNTDOWN, AND THAT IS THE WHOLE DESIGN. A remaining-ms value ticked
+   * down by the app stops counting the moment the app is backgrounded — which is precisely when
+   * a sleep timer matters, because the reader has put the phone down. A deadline compared
+   * against the wall clock survives it: whichever clock notices first (the 100ms status stream
+   * that keeps running under background playback, or the 1s interval when nothing is playing)
+   * reads the same instant and answers the same way.
+   */
+  sleepDeadline: number | null;
+  /** True when the armed timer is "pause at the end of the CURRENT surah" rather than a duration. */
+  sleepEndOfSurah: boolean;
+  /**
+   * The armed timer's FULL length in ms, or null. Distinct from what is left of it, and both are
+   * needed: the countdown renders the remainder, while the control that armed it has to keep
+   * showing which option is running — and ten minutes into a 30-minute timer the remainder
+   * matches no option at all.
+   */
+  sleepDurationMs: number | null;
+  /**
+   * What the countdown label shows, in ms — republished by the engine only when the displayed
+   * SECOND moves, never per status tick (`activeVerseKey`'s discipline, same reason: a chrome row
+   * that re-rendered ten times a second would be the cost this store exists to avoid).
+   */
+  sleepRemainingMs: number;
 }
 
 /**
@@ -103,12 +132,39 @@ export interface EngineActions {
 }
 
 interface RecitationStore extends RecitationState, EngineActions {
+  /**
+   * The playback rate, 0.5–2.0 (story 7-4).
+   *
+   * ⚠️ IT IS NOT PART OF `idleState`, AND THAT IS DELIBERATE. Speed is a device preference that
+   * outlives every session — a reader who stops the recitation has not asked to go back to 1.0x,
+   * and a `clearPlayback` that reset it would leave the store saying 1.0 while MMKV still said
+   * 1.5, so the next launch would silently contradict the one before it. The sleep fields ARE in
+   * `idleState`, for the opposite reason: a timer armed against a session that no longer exists
+   * would fire into the next one.
+   */
+  speed: number;
   setTrack: (surah: number, reciterId: string, highlightAvailable: boolean) => void;
   setActiveVerse: (verse: number | null) => void;
   setPlaybackState: (state: PlaybackState) => void;
   setError: (errorKey: PlaybackErrorKey | null) => void;
   /** Record how the session about to load began — see `sessionRelocated` (story 7-7). */
   setSessionRelocated: (relocated: boolean) => void;
+  /** Set the playback rate. Clamped at the door — see `clampSpeed`. */
+  setSpeed: (speed: number) => void;
+  /**
+   * Arm, replace or cancel the sleep timer. `number` = that many ms from now; `'surah'` = pause
+   * at the end of the current surah; `null` = off.
+   *
+   * ⚠️ ONE SETTER FOR BOTH KINDS, WHICH IS WHAT MAKES A BAD STATE UNREACHABLE. Arming a duration
+   * clears end-of-surah and arming end-of-surah clears the deadline, so "30 minutes AND at the
+   * end of the surah" — two answers to one question, with no rule for which wins — is not a
+   * state the store can be put into by any sequence of presses.
+   */
+  setSleepTimer: (arg: number | 'surah' | null) => void;
+  /** Republish the countdown label's value. The engine's clock owns this; nothing else calls it. */
+  setSleepRemaining: (ms: number) => void;
+  /** Turn off any sleep timer. `setSleepTimer(null)`, named for the call sites that read better. */
+  clearSleepTimer: () => void;
   /** Back to idle, keeping nothing. The engine calls this after `stop`. */
   clearPlayback: () => void;
   registerEngineActions: (actions: EngineActions) => void;
@@ -131,11 +187,17 @@ const idleState: RecitationState = {
   playbackState: 'idle',
   sessionRelocated: false,
   errorKey: null,
+  sleepDeadline: null,
+  sleepEndOfSurah: false,
+  sleepDurationMs: null,
+  sleepRemainingMs: 0,
 };
 
 export const useAudioPlayerStore = create<RecitationStore>((set) => ({
   ...idleState,
   ...inertEngineActions,
+  // See the field's docblock: NOT in `idleState`, so a stop cannot reset the reader's rate.
+  speed: SPEED_DEFAULT,
 
   setTrack: (surah, reciterId, highlightAvailable) =>
     // The key is cleared on a track change: the previous surah's ayah must never linger over the
@@ -151,6 +213,48 @@ export const useAudioPlayerStore = create<RecitationStore>((set) => ({
   setPlaybackState: (playbackState) => set({ playbackState }),
 
   setSessionRelocated: (sessionRelocated) => set({ sessionRelocated }),
+
+  setSpeed: (speed) => set({ speed: clampSpeed(speed) }),
+
+  setSleepTimer: (arg) =>
+    set(() => {
+      if (arg === 'surah') {
+        return {
+          sleepEndOfSurah: true,
+          sleepDeadline: null,
+          sleepDurationMs: null,
+          sleepRemainingMs: 0,
+        };
+      }
+      // A non-positive duration is "off", not "already expired": a zero-length timer that armed
+      // and then fired would pause the recitation the instant the reader asked for it.
+      if (typeof arg === 'number' && arg > 0) {
+        // The countdown is seeded HERE rather than waiting for the first clock tick — otherwise
+        // the row reads "" for up to a second after a press that was supposed to arm something.
+        return {
+          sleepEndOfSurah: false,
+          sleepDeadline: Date.now() + arg,
+          sleepDurationMs: arg,
+          sleepRemainingMs: arg,
+        };
+      }
+      return {
+        sleepEndOfSurah: false,
+        sleepDeadline: null,
+        sleepDurationMs: null,
+        sleepRemainingMs: 0,
+      };
+    }),
+
+  setSleepRemaining: (ms) => set({ sleepRemainingMs: Math.max(0, ms) }),
+
+  clearSleepTimer: () =>
+    set({
+      sleepEndOfSurah: false,
+      sleepDeadline: null,
+      sleepDurationMs: null,
+      sleepRemainingMs: 0,
+    }),
 
   // An error state keeps the track: the retry the surface offers needs to know what failed.
   setError: (errorKey) => set({ errorKey, playbackState: errorKey ? 'error' : 'idle' }),
@@ -184,6 +288,57 @@ export function usePlaybackStatus() {
       surah: s.surah,
       reciterId: s.reciterId,
       errorKey: s.errorKey,
+    }))
+  );
+}
+
+/**
+ * The playback rate, for the control that sets it and nothing else (story 7-4).
+ *
+ * ⚠️ THE ENGINE DOES NOT READ IT THROUGH A HOOK. It subscribes to the store imperatively, so a
+ * rate change costs one native property assignment and ZERO re-renders of the app root — see
+ * `useRecitationEngine`'s "no useState anywhere in here" note.
+ */
+export function usePlaybackSpeed(): number {
+  return useAudioPlayerStore((s) => s.speed);
+}
+
+/** What a sleep-timer indicator or control needs. `active` is either kind of timer. */
+export interface SleepTimerView {
+  active: boolean;
+  endOfSurah: boolean;
+  /** The armed timer's full length — what a control shows as chosen. Null for end-of-surah. */
+  durationMs: number | null;
+  /** What is left of it — what a countdown shows. */
+  remainingMs: number;
+}
+
+/**
+ * The sleep-timer subscription — deliberately narrow, and deliberately NOT carrying the deadline.
+ *
+ * A consumer re-renders on an arm, a cancel and once per second while a duration counts down;
+ * never on the ten-per-second position ticks. Handing out `sleepDeadline` as well would add a
+ * field that changes at exactly the same moments and tempt a surface into doing its own
+ * arithmetic against `Date.now()` — a second clock, disagreeing with the engine's by a frame.
+ */
+export function useSleepTimer(): SleepTimerView {
+  return useAudioPlayerStore(
+    useShallow((s) => ({
+      active: s.sleepDeadline !== null || s.sleepEndOfSurah,
+      endOfSurah: s.sleepEndOfSurah,
+      durationMs: s.sleepDurationMs,
+      remainingMs: s.sleepRemainingMs,
+    }))
+  );
+}
+
+/** Stable action references for the playback-options sheet (story 7-4). */
+export function usePlaybackOptionActions() {
+  return useAudioPlayerStore(
+    useShallow((s) => ({
+      setSpeed: s.setSpeed,
+      setSleepTimer: s.setSleepTimer,
+      clearSleepTimer: s.clearSleepTimer,
     }))
   );
 }

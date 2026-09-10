@@ -29,7 +29,7 @@
     "share": "Share",
     "sleepTimer": "Sleep Timer",
     "set": "Set",
-    "endOfSection": "End of section",
+    "endOfSurah": "End of surah",
     "turnOff": "Turn Off",
     "playbackSpeed": "Playback Speed",
     "narrationVoice": "Narration Voice",
@@ -91,7 +91,7 @@
     "showPlayerControls": "Show player controls",
     "showPlayerControlsHint": "Restores the header and playback controls",
     "setSleepTimer": "Set sleep timer",
-    "sleepEndOfSection": "Sleep at end of section",
+    "sleepEndOfSurah": "Sleep at end of surah",
     "turnOffSleepTimer": "Turn off sleep timer",
     "tapToJump": "Tap to jump to this part",
     "disableShuffle": "Disable shuffle",
@@ -110,6 +110,9 @@
     "hoursMinutes": "{{hours}}h {{minutes}}m",
     "minutes": "{{minutes}}m",
     "seconds": "{{seconds}}s"
+  },
+  "options": {
+    "sheetTitle": "Playback"
   },
   "reciters": {
     "searchPlaceholder": "Search reciters",

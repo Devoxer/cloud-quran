@@ -56,7 +56,7 @@ import Animated from 'react-native-reanimated';
 import { AppHeader, AppTabBar, HeaderActionButton, InlineError } from '@/components/ui';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { SPACING } from '@/constants/spacing';
-import { ReciterSheet } from '@/features/audio';
+import { PlaybackOptionsSheet, ReciterSheet } from '@/features/audio';
 import { useTheme } from '@/lib/theme';
 import { usePlaybackStatus } from '@/stores/audioPlayerStore';
 import type { ChromeReveal } from '../hooks/useChromeReveal';
@@ -116,6 +116,25 @@ export function ReadingChrome({
   }, [holdDwell]);
   const closeReciters = useCallback(() => {
     setRecitersOpen(false);
+    holdDwell(false);
+  }, [holdDwell]);
+
+  /**
+   * ⚠️ THE SECOND SHEET, WITH THE SAME TWO RULES AND FOR THE SAME TWO REASONS (story 7-4):
+   * mounted outside both bars, and holding the dwell while it is open. A reader dragging a speed
+   * slider is USING the chrome, and a slider that faded away mid-drag would be the reciter list's
+   * defect with a worse ending — the rate they were left at is the one they stopped on.
+   *
+   * The two sheets are separate booleans rather than one "which sheet" value: both are opened
+   * from the same row, only ever one at a time, and a union would buy a state machine to say so.
+   */
+  const [playbackOptionsOpen, setPlaybackOptionsOpen] = useState(false);
+  const openPlaybackOptions = useCallback(() => {
+    setPlaybackOptionsOpen(true);
+    holdDwell(true);
+  }, [holdDwell]);
+  const closePlaybackOptions = useCallback(() => {
+    setPlaybackOptionsOpen(false);
     holdDwell(false);
   }, [holdDwell]);
 
@@ -255,6 +274,7 @@ export function ReadingChrome({
           selected={selectedVerse}
           interactive={interactive}
           onOpenReciters={openReciters}
+          onOpenPlaybackOptions={openPlaybackOptions}
           onInteract={keepAlive}
         />
         <AppTabBar interactive={reveal.interactive} />
@@ -262,6 +282,7 @@ export function ReadingChrome({
 
       {/* Outside both bars, deliberately — see `recitersOpen` above. */}
       <ReciterSheet open={recitersOpen} onClose={closeReciters} />
+      <PlaybackOptionsSheet open={playbackOptionsOpen} onClose={closePlaybackOptions} />
     </>
   );
 }

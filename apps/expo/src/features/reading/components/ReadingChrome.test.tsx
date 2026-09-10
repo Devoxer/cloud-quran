@@ -164,6 +164,9 @@ describe('one driver', () => {
     // would be a second animation inside the chrome that this count could not see — exactly the
     // blind spot 6-6 closed by reaching into `components/ui` for the two bars.
     read(join(__dirname, '..', '..', 'audio', 'components', 'ReciterSheet.tsx'));
+    // …and the SECOND such sheet (story 7-4), for the same reason. Listing them one at a time is
+    // the weak part of this walk, so both are named in the anti-vacuity case below.
+    read(join(__dirname, '..', '..', 'audio', 'components', 'PlaybackOptionsSheet.tsx'));
     return out.join('\n');
   }
 
@@ -186,6 +189,7 @@ describe('one driver', () => {
     expect(all).toMatch(/export function AppHeader/);
     expect(all).toMatch(/export function AppTabBar/);
     expect(all).toMatch(/export function ReciterSheet/);
+    expect(all).toMatch(/export function PlaybackOptionsSheet/);
   });
 
   it('both animated styles come off that one value', () => {
@@ -953,5 +957,92 @@ describe('the reciter sheet (story 7-8)', () => {
     );
     expect(typeof flat.height).toBe('number');
     expect(flat.height).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * ⚠️ THE PLAYBACK-OPTIONS SHEET — MOUNTED HERE TOO, OUTSIDE BOTH BARS (story 7-4).
+ *
+ * The same three claims the reciter sheet's cases pin, for the same three reasons: the row only
+ * ASKS, the sheet must not live inside an animated bar, and its body needs a bound because
+ * `snapPoints` is ignored at ≥768pt.
+ */
+describe('the playback-options sheet (story 7-4)', () => {
+  /** The chrome with a loaded track — the only state that draws the mini player's controls. */
+  function revealWithTrack() {
+    act(() => {
+      useAudioPlayerStore.getState().setTrack(18, 'alafasy', true);
+      useAudioPlayerStore.getState().setPlaybackState('playing');
+    });
+    render(<Harness />);
+    return reveal();
+  }
+
+  afterEach(() =>
+    act(() => {
+      useAudioPlayerStore.getState().clearSleepTimer();
+      useAudioPlayerStore.getState().clearPlayback();
+    })
+  );
+
+  it('opens on the row’s overflow control and closes again', async () => {
+    await revealWithTrack();
+    expect(screen.queryByTestId('playback-options-sheet')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('chrome-playback-options'));
+    // The controls themselves, not just the wrapper — the sheet exists to host them.
+    expect(screen.getByTestId('playback-options-speed')).toBeTruthy();
+    expect(screen.getByTestId('playback-options-sleep-surah')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('playback-options-close'));
+    expect(screen.queryByTestId('playback-options-body')).toBeNull();
+  });
+
+  it('renders OUTSIDE the animated bars, which is the whole placement argument', async () => {
+    // ⚠️ INSIDE THE FOOTER IT INHERITS THE REVEAL'S OPACITY, so the 5s dwell would fade a speed
+    // slider away mid-drag and leave the reader at whatever rate they had reached. MUTATION:
+    // move the element inside the footer; this reddens while the case above stays green.
+    await revealWithTrack();
+    fireEvent.press(screen.getByTestId('chrome-playback-options'));
+    expect(
+      within(screen.getByTestId('reading-chrome-footer', ANY)).queryByTestId(
+        'playback-options-body'
+      )
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId('reading-chrome-header', ANY)).queryByTestId(
+        'playback-options-body'
+      )
+    ).toBeNull();
+  });
+
+  it('holds the dwell while it is open, and releases it on close', () => {
+    // ⚠️ A READER CHOOSING A SPEED IS USING THE CHROME. Without the hold they come back from the
+    // sheet to no bars — and, unlike the reciter list, possibly mid-drag. MUTATION: drop the
+    // `holdDwell` calls; the sheet's own cases stay green and this reddens.
+    //
+    // Fake timers and the `capture` harness, the dwell block's idiom — see its header.
+    jest.useFakeTimers();
+    try {
+      let live: ChromeReveal | undefined;
+      act(() => {
+        useAudioPlayerStore.getState().setTrack(18, 'alafasy', true);
+        useAudioPlayerStore.getState().setPlaybackState('playing');
+      });
+      render(<Harness capture={(r) => (live = r)} />);
+      act(() => live?.toggle());
+      act(() => jest.advanceTimersByTime(DURATIONS.standard));
+      expect(touchesOf('reading-chrome-header')).toBe('box-none');
+
+      fireEvent.press(screen.getByTestId('chrome-playback-options'));
+      act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 3));
+      expect(touchesOf('reading-chrome-header')).toBe('box-none');
+
+      fireEvent.press(screen.getByTestId('playback-options-close'));
+      act(() => jest.advanceTimersByTime(CHROME_DWELL_MS + DURATIONS.standard + 100));
+      expect(touchesOf('reading-chrome-header')).toBe('none');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
