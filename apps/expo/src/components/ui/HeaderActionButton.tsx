@@ -45,7 +45,13 @@ export function HeaderActionButton({
       disabled={disabled}
       // 32pt box + hitSlop 6 = the 44pt HIG touch target.
       hitSlop={6}
-      style={({ pressed }) => [styles.button, pressed && !disabled && styles.pressed]}
+      style={({ pressed }) => [
+        styles.button,
+        pressed && !disabled && styles.pressed,
+        // ⚠️ IN THE STYLE, NOT THE PROP — `props.pointerEvents` is deprecated in RN 0.85 and
+        // warns on every render.
+        !focusable && styles.inert,
+      ]}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
@@ -59,6 +65,17 @@ export function HeaderActionButton({
 }
 
 const styles = StyleSheet.create({
+  /**
+   * ⚠️ THE FOURTH TREE: DOM HIT-TESTING. `focusable` already rides the chrome's `interactive`
+   * flag, but on web a DISMISSED bar's buttons stayed clickable anyway — react-native-web's
+   * `box-none` hands children `pointer-events: auto`, and a child's own `auto` beats a parent's
+   * `none` in CSS. On the mushaf those invisible buttons sit exactly over the page header band
+   * that reveals the chrome: measured 2026-09-10, 7 of 7 probe points across that band hit a
+   * chrome control instead of the band. Inert on native too, where it is simply redundant.
+   */
+  inert: {
+    pointerEvents: 'none',
+  },
   button: {
     width: HEADER_ACTION_BUTTON_SIZE,
     height: HEADER_ACTION_BUTTON_SIZE,

@@ -50,7 +50,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { AppHeader, AppTabBar, HeaderActionButton, InlineError } from '@/components/ui';
@@ -146,18 +146,36 @@ export function ReadingChrome({
            * to bring it back.
            */
           trailing={
-            onTogglePlay ? (
+            <View style={[styles.trailing, !reveal.interactive && styles.inert]}>
+              {onTogglePlay ? (
+                <HeaderActionButton
+                  name={playing ? 'pause' : 'play'}
+                  onPress={onTogglePlay}
+                  color={colors.accent.primary}
+                  accessibilityLabel={tAny(
+                    playing ? 'player:a11y.pauseRecitation' : 'player:a11y.playRecitation'
+                  )}
+                  focusable={reveal.interactive}
+                  testID="chrome-play-toggle"
+                />
+              ) : null}
+              {/* ⚠️ THE ONLY VISIBLE WAY OUT, AND THAT IS WHY IT EXISTS (owner call 2026-09-10).
+                  Revealed chrome COVERS whatever revealed it — the mushaf's header band sits
+                  under this very bar, and the footer band under the tab bar's pills — so the only
+                  thing still showing is Quran text, which seeks. Dismissal therefore rested on
+                  two invisible affordances: the dwell, and a tap falling through `box-none` onto
+                  a band the reader cannot see. A chevron is the affordance those two lacked.
+                  `toggle` rather than a new `hide`: this control is reachable only while
+                  `interactive`, which is only true while the chrome is up. */}
               <HeaderActionButton
-                name={playing ? 'pause' : 'play'}
-                onPress={onTogglePlay}
+                name="chevron-up"
+                onPress={reveal.toggle}
                 color={colors.accent.primary}
-                accessibilityLabel={tAny(
-                  playing ? 'player:a11y.pauseRecitation' : 'player:a11y.playRecitation'
-                )}
+                accessibilityLabel={t('actions.hideChrome')}
                 focusable={reveal.interactive}
-                testID="chrome-play-toggle"
+                testID="chrome-dismiss"
               />
-            ) : undefined
+            </View>
           }
           leading={
             <HeaderActionButton
@@ -199,6 +217,16 @@ export function ReadingChrome({
 }
 
 const styles = StyleSheet.create({
+  /** See `HeaderActionButton`'s `inert` — the row itself hit-tests on web too. */
+  inert: {
+    pointerEvents: 'none',
+  },
+  /** The transport and the dismiss chevron share the one `trailing` slot. */
+  trailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
   slot: {
     position: 'absolute',
     left: 0,

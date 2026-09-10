@@ -104,6 +104,17 @@ export function AppHeader({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles((theme) => ({
+    /**
+     * ⚠️ THE FOURTH TREE: DOM HIT-TESTING, and `focusable` alone does not cover it. On web a
+     * DISMISSED bar's controls stayed CLICKABLE — react-native-web's `box-none` hands children
+     * `pointer-events: auto`, and a child's own `auto` beats a parent's `none` in CSS. On the
+     * mushaf those invisible controls sit exactly over the page header band that reveals the
+     * chrome: measured 2026-09-10, 7 of 7 probe points across that band hit a chrome control
+     * instead of the band. Gate it at the LEAF, the way `focusable` already is.
+     */
+    inert: {
+      pointerEvents: 'none' as const,
+    },
     bar: {
       backgroundColor: theme.colors.background.secondary,
       borderBottomWidth: 1,
@@ -181,7 +192,7 @@ export function AppHeader({
       {onTitlePress ? (
         <Pressable
           onPress={onTitlePress}
-          style={styles.titlePress}
+          style={[styles.titlePress, !interactive && styles.inert]}
           accessibilityRole="button"
           accessibilityHint={titleHint}
           focusable={interactive}

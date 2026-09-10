@@ -396,6 +396,85 @@ describe('the controls the chrome carries (story 6-6)', () => {
   });
 });
 
+describe('the dismiss chevron (2026-09-10)', () => {
+  it('puts the chrome away — the only VISIBLE way out', async () => {
+    // ⚠️ WHY THIS CONTROL EXISTS. Revealed chrome covers whatever revealed it: on the mushaf the
+    // page header band sits under this very bar and the page number under the tab bar's pills, so
+    // the only thing still showing is Quran text, which seeks. Before the chevron, dismissal was
+    // the 5s dwell or a tap falling through `box-none` onto a band the reader cannot see —
+    // two invisible affordances. MUTATION: point `onPress` at `show` instead of `toggle`.
+    render(<Harness />);
+    await reveal();
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+
+    fireEvent.press(screen.getByTestId('chrome-dismiss'));
+    // `interactive` drops on the LEADING edge of a dismissal — the bars stop taking touches while
+    // they are still drawn, so this needs no timer, only React's own flush.
+    await waitFor(() => expect(touchesOf('reading-chrome-header')).toBe('none'));
+    expect(touchesOf('reading-chrome-footer')).toBe('none');
+  });
+
+  it.each(['reading', 'mushaf'] as const)('is carried on the %s surface too', (mode) => {
+    // The mushaf is the surface that needs it most — its bands are the things the bar covers — so
+    // a chevron wired only on `reading` would miss the case it was added for.
+    render(<Harness mode={mode} />);
+    expect(screen.getByTestId('chrome-dismiss', ANY)).toBeTruthy();
+  });
+
+  it('sits BESIDE the transport rather than instead of it', () => {
+    // MUTATION: return the chevron from the `trailing` slot alone. A listener would lose play or
+    // pause the moment the chrome carried a way out.
+    const reveal: ChromeReveal = {
+      visible: true,
+      interactive: true,
+      toggle: () => {},
+      show: () => {},
+      headerStyle: {},
+      footerStyle: {},
+    };
+    render(
+      <ReadingChrome
+        reveal={reveal}
+        title="Al-Fatihah"
+        mode="reading"
+        playing={false}
+        onTogglePlay={jest.fn()}
+      />
+    );
+    expect(screen.getByTestId('chrome-play-toggle', ANY)).toBeTruthy();
+    expect(screen.getByTestId('chrome-dismiss', ANY)).toBeTruthy();
+  });
+
+  it('takes no keyboard focus while the chrome is dismissed', async () => {
+    // The web third tree — see the overlay block for the Tab-key defect this mirrors.
+    render(<Harness />);
+    expect(screen.getByTestId('chrome-dismiss', ANY).props.focusable).toBe(false);
+    await reveal();
+    expect(screen.getByTestId('chrome-dismiss', ANY).props.focusable).toBe(true);
+  });
+});
+
+describe('the DOM hit-test tree (2026-09-10)', () => {
+  it('makes every control inert while the bars are dismissed', async () => {
+    // ⚠️ A FOURTH TREE, AND `focusable` DOES NOT COVER IT. The bar sets `pointerEvents` on
+    // itself, but react-native-web's `box-none` hands children `pointer-events: auto`, and a
+    // child's own `auto` beats a parent's `none` in CSS — so a DISMISSED bar's controls stayed
+    // CLICKABLE on web. It was invisible until the mushaf started revealing its chrome from a
+    // band under the header: measured in WebKit 2026-09-10, 7 of 7 probe points across that band
+    // hit a chrome control instead of the band, i.e. the reveal was dead on web. 7 of 7 reach the
+    // band with these styles in place. MUTATION: drop any `inert` entry — this reddens.
+    render(<Harness />);
+    for (const id of ['chrome-title-entry', 'chrome-mode-toggle', 'chrome-dismiss', TAB_IDS[0]]) {
+      expect(styleOf(id).pointerEvents).toBe('none');
+    }
+
+    await reveal();
+    for (const id of ['chrome-title-entry', 'chrome-mode-toggle', 'chrome-dismiss', TAB_IDS[0]]) {
+      expect(styleOf(id).pointerEvents).toBeUndefined();
+    }
+  });
+});
+
 describe('what the bars say', () => {
   it('names the surah once the metadata read lands, and renders empty before it', async () => {
     const { rerender } = render(<Harness title={null} />);
