@@ -189,6 +189,38 @@ export default function Read() {
     }, [clearSelection])
   );
 
+  /**
+   * ⚠️ THE SAVED ROW ARRIVES AFTER THE FIRST RENDER — see `(tabs)/index.tsx` for the measurement
+   * and the root cause (`readCache` answers `undefined` until the anonymous session resolves), and
+   * `lib/usePosition.ts` for the docblock that used to claim otherwise. Without this the reading
+   * surface opens at 1:1 for the whole session: `target` is captured once, and the focus resync
+   * cannot correct it because on mount the fresh pair and the visible pair are both 1:1.
+   *
+   * ⚠️ ONE SHOT, AND ONLY BEFORE THE READER HAS MOVED — the restore latch is the same one the
+   * scroll uses, so a row landing after the reader has scrolled changes nothing under them.
+   */
+  const lateRestore = useRef(false);
+  useEffect(() => {
+    if (lateRestore.current || saved === null) return;
+    // ⚠️ LATCHED ON FIRST SIGHT OF A ROW, NOT ON A SUCCESSFUL RE-TARGET. TanStack hands back a
+    // fresh object identity, so this effect re-runs on later renders; latching only when it
+    // actually moved the reader let it fire again after `goToSurah` and drag them back to the
+    // saved pair. Seeing the row at all is what this effect exists for, so seeing it is what
+    // spends it.
+    lateRestore.current = true;
+    const fresh = openingPosition(saved);
+    if (fresh.surah === showing.current && fresh.verse === visibleVerseRef.current) return;
+    // ⚠️ A LATE RESTORE IS A POSITION CHANGE, so it owes the same debt every other one does
+    // (7-8's review): the row must stop offering play-from-here for an ayah no longer drawn.
+    clearSelection();
+    lateRestore.current = true;
+    showing.current = fresh.surah;
+    visibleVerseRef.current = fresh.verse;
+    restored.current = false;
+    setTarget(fresh);
+    setSurah(fresh.surah);
+  }, [saved]);
+
   useEffect(() => {
     if (restored.current) return;
     if (content.loading || content.verses.length === 0) return;

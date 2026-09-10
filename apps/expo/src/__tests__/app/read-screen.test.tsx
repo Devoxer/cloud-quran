@@ -975,6 +975,21 @@ describe('cold launch', () => {
     expect(mockGetSurahVerses).not.toHaveBeenCalledWith(200);
   });
 
+  it('re-targets when the saved row arrives AFTER the first render', async () => {
+    // ⚠️ THE SAME DEFECT `mushaf-screen.test.tsx` pins, on this surface: `readCache` answers
+    // `undefined` until the anonymous session resolves, which is after the first render, so
+    // `target` was captured as 1:1 and the focus resync could not correct it (on mount the fresh
+    // pair and the visible pair are both 1:1). The reader's saved place was lost for the whole
+    // session. MUTATION: delete the late-restore effect — this reddens.
+    mockReadingPositionRow.current = null;
+    const view = render(<Read />);
+    await screen.findByText('أية 1:1');
+
+    mockReadingPositionRow.current = { surah: 2, verse: 100 };
+    view.rerender(<Read />);
+    await screen.findByText('أية 2:100');
+  });
+
   it('restores ONCE — moving to the next surah does not re-apply it', async () => {
     mockReadingPositionRow.current = { surah: 1, verse: 5 };
     render(<Read />);

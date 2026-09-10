@@ -266,6 +266,43 @@ describe('where it opens', () => {
     expect(listProps().initialScrollIndex).toBe(TOTAL_PAGES - 42);
   });
 
+  it('re-targets when the saved row arrives AFTER the first render', async () => {
+    // ⚠️ THE DEFECT THIS PINS LOST THE RESTORE FOR A WHOLE SESSION, NOT JUST A MOMENT.
+    // `readCache` answers `undefined` while there is no user id, and the anonymous session
+    // resolves after the first render — so `opening` captured page 1, and the focus resync could
+    // not correct it because on mount the fresh page and the visible page were both 1. Measured
+    // in WebKit 2026-09-10: a saved Al-Kahf position (page 293) opened page 1 and was still there
+    // ten seconds later. MUTATION: delete the late-restore effect — this reddens.
+    mockReadingPositionRow.current = null;
+    const view = render(<Mushaf />);
+    expect(listProps().initialScrollIndex).toBe(TOTAL_PAGES - 1);
+
+    mockReadingPositionRow.current = { surah: 18, verse: 1 };
+    view.rerender(<Mushaf />);
+    await waitFor(() =>
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: TOTAL_PAGES - getPageForVerse(18, 1),
+        animated: false,
+      })
+    );
+  });
+
+  it('does NOT re-target a second time — the row landing is one shot', async () => {
+    // MUTATION: latch on a successful re-target instead of on first sight of a row. TanStack
+    // hands back a fresh object identity, so the effect re-runs on later renders and would drag
+    // the reader back to the saved page after they had turned away.
+    mockReadingPositionRow.current = null;
+    const view = render(<Mushaf />);
+    mockReadingPositionRow.current = { surah: 18, verse: 1 };
+    view.rerender(<Mushaf />);
+    await waitFor(() => expect(mockScrollToIndex).toHaveBeenCalled());
+    mockScrollToIndex.mockClear();
+
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    view.rerender(<Mushaf />);
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
+  });
+
   it('opens at page 1 with no saved row', () => {
     render(<Mushaf />);
     expect(listProps().initialScrollIndex).toBe(TOTAL_PAGES - 1);

@@ -168,6 +168,38 @@ export default function Mushaf() {
     }, [clearSelection])
   );
 
+  /**
+   * ⚠️ THE SAVED ROW ARRIVES AFTER THE FIRST RENDER, AND WITHOUT THIS THE RESTORE IS LOST FOR THE
+   * WHOLE SESSION — not merely delayed. `readCache` answers `undefined` until the anonymous
+   * session resolves (`syncCache.ts`: `if (!userId) return undefined`), so `opening` above
+   * captures page 1, and the focus resync CANNOT correct it: on mount `fresh` and
+   * `currentPageRef.current` are both 1, so it returns early and never runs again for this row.
+   * Measured in WebKit 2026-09-10 — a saved Al-Kahf position (page 293) opened page 1 and was
+   * still there ten seconds later. `usePosition`'s docblock claimed the opposite ("the row is
+   * already there when this hook initialises"); it is now corrected.
+   *
+   * ⚠️ ONE SHOT, AND ONLY WHILE THE READER HAS NOT MOVED. `moved` is the same latch the restore
+   * uses, so a row landing after a page turn changes nothing under the reader's finger — which is
+   * the whole reason this is not simply "re-resolve whenever `saved` changes".
+   */
+  const lateRestore = useRef(false);
+  useEffect(() => {
+    if (lateRestore.current || moved.current || saved === null) return;
+    // Latched on first SIGHT of a row, not on a successful re-target — see `read.tsx` for the
+    // regression that taught this (TanStack hands back a fresh identity, so this effect re-runs).
+    lateRestore.current = true;
+    const fresh = openingPage(saved);
+    if (fresh === currentPageRef.current) return;
+    // ⚠️ A LATE RESTORE IS A POSITION CHANGE, so it owes the same debt every other one does
+    // (7-8's review): the row must stop offering play-from-here for an ayah no longer drawn.
+    clearSelection();
+    lateRestore.current = true;
+    restoreTarget.current = fresh;
+    currentPageRef.current = fresh;
+    setCurrentPage(fresh);
+    listRef.current?.scrollToIndex({ index: pageToIndex(fresh), animated: false });
+  }, [saved]);
+
   // ±2 neighbour fonts, re-aimed on every settled page (and at the opening page on mount).
   // Fire-and-forget: `preloadAdjacentPageFonts` never throws; a miss becomes that page's own
   // retry surface if the reader ever arrives on it.

@@ -39,6 +39,14 @@
  *
  * ── The restore is not itself a write ────────────────────────────────────────────────────────
  *
+ * ⚠️ THE SAVED ROW IS NOT THERE ON THE FIRST RENDER, AND THIS DOCBLOCK CLAIMED IT WAS UNTIL
+ * 2026-09-10. `readCache` answers `undefined` while there is no user id (`syncCache.ts`), and the
+ * anonymous session resolves AFTER the first render — so a cold launch initialises this hook with
+ * `null` and the row lands a moment later. Both reading surfaces therefore carry a one-shot
+ * "late restore" effect that re-targets when the row arrives, guarded by their existing moved /
+ * restored latches; without it a saved position was lost for the whole session (measured in
+ * WebKit: a saved Al-Kahf position opened page 1 and stayed there).
+ *
  * `lastWritten` is SEEDED from the saved row on the first render. `useReadingPosition()` reads
  * `initialData` synchronously out of MMKV (that is the whole point of `lib/sync.ts`'s rule 1), so
  * on a cold launch with a saved position the row is already there when this hook initialises —
