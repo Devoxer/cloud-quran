@@ -11,6 +11,7 @@ import { act, render } from '@testing-library/react-native';
 import { createAudioPlaylist } from 'expo-audio';
 import { AppState } from 'react-native';
 
+import { SPEED_PERSIST_DEBOUNCE_MS } from '@/constants/audio';
 import { loadReciterManifest } from '@/lib/reciterManifest';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { RecitationEngineHost } from '../components/RecitationEngineHost';
@@ -130,7 +131,15 @@ function makePlaylist(): FakePlaylist {
  */
 const tick = async (
   seconds: number,
-  extra: { didJustFinish?: boolean; isLoaded?: boolean; playing?: boolean; index?: number } = {}
+  extra: {
+    didJustFinish?: boolean;
+    isLoaded?: boolean;
+    playing?: boolean;
+    index?: number;
+    /** ⚠️ A REAL STATE, and it was hardcoded false until story 7-4's review: a mid-playback stall
+     *  reports `playing: false, isBuffering: true`, which the engine turns into `buffering`. */
+    isBuffering?: boolean;
+  } = {}
 ) => {
   playlist.currentTime = seconds;
   const status = {
@@ -140,7 +149,7 @@ const tick = async (
     currentTime: seconds,
     duration: 60,
     playing: extra.playing ?? playlist.playing,
-    isBuffering: false,
+    isBuffering: extra.isBuffering ?? false,
     isLoaded: extra.isLoaded ?? true,
     playbackRate: 1,
     muted: false,
@@ -275,7 +284,13 @@ describe('the status tick drives the highlight', () => {
     await tick(1);
     await tick(12);
     // Two ayahs, two refreshes — a conventional engine would have refreshed on track change only.
-    expect(playlist.updateLockScreenMetadata).toHaveBeenCalledTimes(2);
+    // ⚠️ COUNTED BY THE CALLS THAT CARRY A TITLE. Story 7-4 made a rate change refresh the
+    // now-playing info too (with no title of its own when none has been pushed yet), so a raw
+    // call count would move whenever the rate does and say nothing about the ayah.
+    const titled = (
+      playlist.updateLockScreenMetadata.mock.calls as [{ title?: string } | undefined][]
+    ).filter(([m]) => typeof m?.title === 'string');
+    expect(titled).toHaveLength(2);
     expect(playlist.updateLockScreenMetadata).toHaveBeenLastCalledWith({
       title: 'Al-Fatihah · 3',
     });
@@ -842,9 +857,60 @@ describe('speed', () => {
     expect(playlist.playbackRate).toBe(0.75);
   });
 
-  it('is persisted on change, so the next launch reads it back', () => {
-    act(() => engine().setSpeed(1.25));
-    expect(mockWriteSpeed).toHaveBeenCalledWith(1.25);
+  it('is persisted once the drag STOPS, not on every frame of it', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    /**
+     * ⚠️ THE SLIDER HAS NO RELEASE EVENT (17.3's accepted regression), so a drag commits ~30
+     * values live. Each must be HEARD immediately and only the last needs to reach the disk;
+     * writing all thirty is thirty synchronous MMKV writes for one gesture, with no outbox to
+     * coalesce them the way 6-5's font-size slider has. MUTATION: call `writeStoredSpeed`
+     * straight from the subscription; the first assertion reddens.
+     */
+    jest.useFakeTimers();
+    try {
+      for (const rate of [1.05, 1.1, 1.15, 1.2, 1.25]) act(() => engine().setSpeed(rate));
+      expect(mockWriteSpeed).not.toHaveBeenCalled();
+      // …and the audible half is NOT debounced: the player already has the latest value.
+      expect(playlist.playbackRate).toBe(1.25);
+
+      act(() => {
+        jest.advanceTimersByTime(SPEED_PERSIST_DEBOUNCE_MS + 10);
+      });
+      expect(mockWriteSpeed).toHaveBeenCalledTimes(1);
+      expect(mockWriteSpeed).toHaveBeenCalledWith(1.25);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a rate chosen mid-drag survives a teardown — the debounce is flushed, not dropped', () => {
+    jest.useFakeTimers();
+    try {
+      act(() => engine().setSpeed(1.75));
+      expect(mockWriteSpeed).not.toHaveBeenCalled();
+      view.unmount();
+      expect(mockWriteSpeed).toHaveBeenCalledWith(1.75);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('tells the LOCK SCREEN about the rate, which setting the property alone does not', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    playlist.updateLockScreenMetadata.mockClear();
+    /**
+     * ⚠️ THE PATCH PUBLISHES `MPNowPlayingInfoPropertyPlaybackRate` ONLY WHEN THE NOW-PLAYING
+     * INFO IS REBUILT — an item change or an explicit refresh — and assigning `playbackRate` is
+     * neither. On a fully timed surah the per-ayah refresh hides it; on an UNTIMED one nothing
+     * pushes metadata at all and the lock-screen scrubber ran at the old rate until the next
+     * track. MUTATION: drop the `updateLockScreenMetadata` call from `applyRate`.
+     */
+    act(() => engine().setSpeed(1.5));
+    expect(playlist.updateLockScreenMetadata).toHaveBeenCalled();
   });
 
   it.each([
@@ -854,6 +920,26 @@ describe('speed', () => {
   ])('clamps %s at the store’s door', (_label, requested, expected) => {
     act(() => engine().setSpeed(requested));
     expect(engine().speed).toBe(expected);
+  });
+
+  /**
+   * ⚠️ THE DOCBLOCK CLAIMS THE RATE WOULD BE "lost by the rebuild that starts every surah AND
+   * every voice switch", and only the surah half was covered (story 7-4 review, P19). 7-2's
+   * picker re-plays the current ayah on selection, so a reader who chooses a different reciter
+   * mid-listen gets a whole new playlist — and would have got it at 1.0x.
+   */
+  it('survives a VOICE SWITCH, which rebuilds the playlist just as a new surah does', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(3);
+    act(() => engine().setSpeed(1.5));
+
+    playlist = makePlaylist();
+    await switchReciter('qatami');
+
+    expect(engine().reciterId).toBe('qatami');
+    expect(playlist.playbackRate).toBe(1.5);
   });
 
   it('does not disturb the highlight — position is MEDIA time, so the lookup is unchanged', async () => {
@@ -1033,6 +1119,158 @@ describe('the sleep timer', () => {
 
     expect(playlist.pause).toHaveBeenCalled();
     expect(engine().sleepEndOfSurah).toBe(false);
+  });
+
+  /**
+   * ⚠️ THE FINDING ALL THREE REVIEW LAYERS REPORTED (story 7-4, P1). Both sleep paths used to
+   * clear the timer FIRST and then bail unless the state was exactly `playing`. `buffering` is a
+   * state this very engine MANUFACTURES from any mid-playback stall — so a thirty-minute timer
+   * expiring during a rebuffer was discarded in silence, the recitation played on all night, and
+   * the indicator that would have said so had already been cleared. MUTATION: put the
+   * `clearSleepTimer()` back above the state check; this reddens and nothing else does.
+   */
+  it('fires through a REBUFFER, rather than cancelling itself in silence', async () => {
+    await play();
+    // Into the stall, still short of the deadline.
+    act(() => engine().setSleepTimer(30 * MINUTE));
+    await tick(4, { playing: false, isBuffering: true });
+    expect(engine().playbackState).toBe('buffering');
+
+    advanceWallClock(30 * MINUTE + 1000);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().sleepDeadline).toBeNull();
+  });
+
+  /**
+   * The same finding on the other path. `onStatus` runs the end-of-surah check BEFORE the block
+   * that promotes the store to `playing`, so on the first ticks of a track the near-end condition
+   * is routinely met while the state still reads `loading` — where the old `!== 'playing'` bail
+   * dropped the timer and let the playlist roll into the next surah.
+   */
+  it('“end of surah” fires while the store still reads `loading`', async () => {
+    // No tick yet, so `playSurah` has left the state at `loading` by design.
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    expect(engine().playbackState).toBe('loading');
+    act(() => engine().setSleepTimer('surah'));
+
+    // A first tick that is already inside the lead — a short track, or a resumed one.
+    await tick(59.6, { playing: true });
+
+    expect(playlist.pause).toHaveBeenCalled();
+    expect(engine().sleepEndOfSurah).toBe(false);
+  });
+
+  /**
+   * ⚠️ THE POSITION THE READER RESUMES AT (story 7-4 review, P2). `pause()` writes the listening
+   * position, and `adoptTrack` has already moved the refs to surah *n+1* with no verse — so a
+   * pause AFTER it saved *(n+1, 1)*: the start of the surah the reader explicitly asked not to
+   * enter, and exactly where 7-7's resume drops them next launch. MUTATION: move `adoptTrack`
+   * back above `fireEndOfSurah`; the "still stops" case stays green and this reddens.
+   */
+  it('the end-of-surah fallback saves the FINISHED surah, not the one it refused to enter', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(1);
+    await tick(30);
+    act(() => engine().setSleepTimer('surah'));
+    mockSetAudioPosition.mockClear();
+
+    await changeTrack(1);
+
+    expect(playlist.pause).toHaveBeenCalled();
+    const saved = mockSetAudioPosition.mock.calls.map(([row]) => row);
+    expect(saved.length).toBeGreaterThan(0);
+    for (const row of saved) expect(row).toMatchObject({ surah: 1 });
+    // 1:6 is the ayah the last tick resolved (it runs 27,390-32,934ms) — not "surah 2, ayah 1".
+    expect(saved.at(-1)).toMatchObject({ surah: 1, verse: 6 });
+  });
+
+  /**
+   * ⚠️ THE COUNTDOWN'S GUARD, COUNTED (story 7-4 review, P3). The first cut asserted that
+   * `sleepRemainingMs` did not MOVE across ten sub-second ticks — which is true with or without
+   * the guard, because an ungated setter writes the same value. Counting the CALLS is what makes
+   * the guard the subject. MUTATION: delete `if (shown !== state.sleepRemainingMs)`; this
+   * reddens on the first assertion.
+   */
+  it('publishes the countdown ONCE per second, however many ticks land inside one', async () => {
+    await play();
+    const real = engine().setSleepRemaining;
+    const spy = jest.fn(real);
+    act(() => {
+      useAudioPlayerStore.setState({ setSleepRemaining: spy });
+    });
+    try {
+      act(() => engine().setSleepTimer(2 * MINUTE));
+      spy.mockClear();
+
+      // Ten status ticks, wall clock frozen: the displayed second cannot have moved.
+      for (let i = 0; i < 10; i++) await tick(3 + i / 100);
+      expect(spy).not.toHaveBeenCalled();
+
+      // One second later, exactly one publish.
+      advanceWallClock(1200);
+      await tick(4);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      act(() => {
+        useAudioPlayerStore.setState({ setSleepRemaining: real });
+      });
+    }
+  });
+
+  /**
+   * ⚠️ AN ENGINE THAT COMES UP WITH A TIMER ALREADY ARMED HAS NO CLOCK (story 7-4 review, P4).
+   * The interval was started only where a deadline CHANGES, which assumed the engine outlives
+   * every timer — a remount, a Fast Refresh or a re-registered effect each disprove it, and a
+   * timer armed over a PAUSED recitation is exactly the case the status stream cannot cover.
+   * MUTATION: start the clock only from the subscription; this reddens.
+   */
+  it('picks up a timer that was already armed when it mounted', async () => {
+    await play();
+    act(() => engine().setSleepTimer(10 * MINUTE));
+    view.unmount();
+
+    view = render(<RecitationEngineHost />);
+    expect(engine().sleepDeadline).not.toBeNull();
+
+    advanceWallClock(11 * MINUTE);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(engine().sleepDeadline).toBeNull();
+  });
+
+  /**
+   * ⚠️ AN ARMED "END OF SURAH" BELONGS TO THE SURAH IT WAS ARMED ON (story 7-4 review, P5).
+   * Starting another surah silently re-pointed it at a surah the reader had just OPENED.
+   */
+  it('an end-of-surah timer does not follow the reader into another surah', async () => {
+    await play();
+    act(() => engine().setSleepTimer('surah'));
+
+    await act(async () => {
+      await engine().playSurah(36);
+    });
+
+    expect(engine().sleepEndOfSurah).toBe(false);
+  });
+
+  it('…but a TIMED timer does, because it is a promise about the clock', async () => {
+    // Anti-vacuity for the case above, and the rule itself: only the surah-shaped timer is
+    // surah-scoped. MUTATION: clear both kinds; this reddens.
+    await play();
+    act(() => engine().setSleepTimer(20 * MINUTE));
+    await act(async () => {
+      await engine().playSurah(36);
+    });
+    expect(engine().sleepDeadline).not.toBeNull();
   });
 
   it('a stop takes the armed timer with it', async () => {

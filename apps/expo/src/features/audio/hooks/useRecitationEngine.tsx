@@ -64,8 +64,9 @@ import {
   LOAD_TIMEOUT_MS,
   PLAYLIST_TICK_MS,
   SEEK_GUARD_TIMEOUT_MS,
-  SLEEP_END_LEAD_MS,
   SLEEP_TICK_MS,
+  SPEED_PERSIST_DEBOUNCE_MS,
+  sleepEndLeadMs,
   surahAudioUrl,
 } from '@/constants/audio';
 import { addBreadcrumb, captureException } from '@/lib/errors';
@@ -77,7 +78,7 @@ import {
   verseAtMs,
 } from '@/lib/reciterManifest';
 import { setAudioPosition } from '@/lib/sync';
-import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
+import { type PlaybackState, useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { readStoredSpeed, writeStoredSpeed } from '../lib/playbackPrefs';
 
 /**
@@ -231,6 +232,12 @@ export function useRecitationEngine(selectedReciterId: string): void {
     savePositionRef.current = savePosition;
 
     /**
+     * The last now-playing title pushed to the lock screen, so a refresh can re-send it rather
+     * than falling back to the track's source name. Written by the tick, read by `applyRate`.
+     */
+    let lockScreenTitle: string | null = null;
+
+    /**
      * Tell the native player the rate (story 7-4).
      *
      * ⚠️ IT IS A PROPERTY, NOT `setPlaybackRate(rate, pitchCorrection)`. That two-argument call is
@@ -256,12 +263,52 @@ export function useRecitationEngine(selectedReciterId: string): void {
       if (!player) return;
       try {
         player.playbackRate = rate;
+        /**
+         * ⚠️ AND TELL THE LOCK SCREEN, WHICH OTHERWISE KEEPS SCRUBBING AT THE OLD RATE. The
+         * native patch publishes `MPNowPlayingInfoPropertyPlaybackRate` only when the now-playing
+         * info is REBUILT — an item change, or an explicit refresh — and setting the property is
+         * neither. On a fully timed surah the per-ayah `updateLockScreenMetadata` below hides
+         * this, which is why it looked fine; on an UNTIMED surah nothing pushes metadata at all
+         * and the lock-screen elapsed time ran at the old speed until the next track. The story's
+         * Code Map claim that the lock screen follows the rate for free is corrected in its Spec
+         * Change Log. (Story 7-4 review, P8.)
+         *
+         * The last title is re-sent rather than omitted: a bare refresh rebuilds from the track's
+         * source name and would drop the "· ayah" suffix until the next verse change.
+         */
+        player.updateLockScreenMetadata(lockScreenTitle ? { title: lockScreenTitle } : undefined);
       } catch (error) {
         addBreadcrumb('ui', 'playback rate not applied', {
           rate,
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    };
+
+    /**
+     * The rate's durable half, held back until the drag stops (`SPEED_PERSIST_DEBOUNCE_MS`).
+     *
+     * ⚠️ THE AUDIBLE HALF IS NOT DEBOUNCED, and the split is the whole point: the slider has no
+     * release event, so a drag is ~30 values, and each must be heard immediately while only the
+     * last needs to reach the disk. Flushed on teardown so a drag interrupted by a sign-out or a
+     * reload is not lost.
+     */
+    let persistTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingSpeed: number | null = null;
+    const persistRateSoon = (rate: number) => {
+      pendingSpeed = rate;
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        persistTimer = null;
+        if (pendingSpeed !== null) writeStoredSpeed(pendingSpeed);
+        pendingSpeed = null;
+      }, SPEED_PERSIST_DEBOUNCE_MS);
+    };
+    const flushRate = () => {
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = null;
+      if (pendingSpeed !== null) writeStoredSpeed(pendingSpeed);
+      pendingSpeed = null;
     };
 
     /**
@@ -277,6 +324,25 @@ export function useRecitationEngine(selectedReciterId: string): void {
     const stopSleepClock = () => {
       if (sleepClock) clearInterval(sleepClock);
       sleepClock = null;
+    };
+    /**
+     * Start or stop the clock to match whether a deadline exists.
+     *
+     * ⚠️ CALLED ON MOUNT AS WELL AS ON CHANGE (story 7-4 review, P4). Starting it only where a
+     * timer is ARMED assumed the engine outlives every timer, which a Fast Refresh, a remount or
+     * a re-registered effect all disprove: an engine that came up with a deadline already in the
+     * store got no clock at all, so a timer armed over a PAUSED recitation — the one case the
+     * status stream cannot cover — would never expire, and its countdown would sit frozen in the
+     * chrome forever.
+     */
+    const syncSleepClock = () => {
+      const armed = store.getState().sleepDeadline !== null;
+      if (!armed) {
+        stopSleepClock();
+        return;
+      }
+      if (sleepClock) return;
+      sleepClock = setInterval(evaluateSleep, SLEEP_TICK_MS);
     };
 
     /**
@@ -296,12 +362,40 @@ export function useRecitationEngine(selectedReciterId: string): void {
         if (shown !== state.sleepRemainingMs) state.setSleepRemaining(shown);
         return;
       }
-      state.clearSleepTimer();
-      // ⚠️ EXPIRING WHILE ALREADY PAUSED IS A NO-OP, and calling `pause()` anyway would not be
-      // one: it writes the listening position and sets the playback state, so a timer lapsing
-      // over a paused reader would overwrite where they actually stopped.
-      if (state.playbackState !== 'playing') return;
-      void store.getState().pause();
+      pauseForSleep(state.playbackState);
+    };
+
+    /**
+     * The one place a sleep timer stops the recitation — BOTH kinds go through it.
+     *
+     * ⚠️ THE STATE IS READ BEFORE THE TIMER IS CLEARED, AND THAT ORDERING IS THE FIX (story 7-4
+     * review, P1). Both callers used to clear first and then bail on `playbackState !== 'playing'`
+     * — justified for `paused`, where pausing again would overwrite the reader's real stopping
+     * point with wherever the last tick landed. But `buffering`, `loading` and `error` take the
+     * same branch, and `onStatus` MANUFACTURES `buffering` from any mid-playback stall: a
+     * thirty-minute timer expiring during a rebuffer was discarded in silence and the recitation
+     * played on all night, with no indicator left to say a timer had ever been armed.
+     *
+     * So the question is not "is it playing" but "is the reader still being played to":
+     * `buffering` and `loading` both mean sound is coming and must be stopped. `paused`, `idle`
+     * and `error` mean it is not, and there the timer simply clears — which is the frozen
+     * matrix's "fires while paused → no-op; the timer clears".
+     */
+    const pauseForSleep = (playbackState: PlaybackState) => {
+      const sounding =
+        playbackState === 'playing' || playbackState === 'buffering' || playbackState === 'loading';
+      store.getState().clearSleepTimer();
+      if (!sounding) return;
+      // ⚠️ CAUGHT. A rejection from a playlist torn down mid-pause has no error surface to reach
+      // from here, and an unhandled rejection is a crash on some runtimes (7-4 review, P13).
+      void store
+        .getState()
+        .pause()
+        .catch((error: unknown) => {
+          addBreadcrumb('ui', 'sleep-timer pause failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     };
 
     /**
@@ -313,9 +407,11 @@ export function useRecitationEngine(selectedReciterId: string): void {
      * the status stream never reported).
      */
     const fireEndOfSurah = () => {
-      store.getState().clearSleepTimer();
-      if (store.getState().playbackState !== 'playing') return;
-      void store.getState().pause();
+      // ⚠️ THE SAME DOOR AS THE TIMED KIND, for the reason in `pauseForSleep`'s docblock — and
+      // this path needed it MORE: `onStatus` runs the end-of-surah check before the block that
+      // promotes the store to `playing`, so the near-end condition is routinely met while the
+      // state still reads `loading`, and the old `!== 'playing'` bail dropped the timer there.
+      pauseForSleep(store.getState().playbackState);
     };
 
     /** Point the store, and the lock screen, at the track the playlist just moved to. */
@@ -355,7 +451,8 @@ export function useRecitationEngine(selectedReciterId: string): void {
         (status.didJustFinish ||
           (status.playing &&
             status.duration > 0 &&
-            status.currentTime * 1000 >= status.duration * 1000 - SLEEP_END_LEAD_MS))
+            status.currentTime * 1000 >=
+              status.duration * 1000 - sleepEndLeadMs(store.getState().speed)))
       ) {
         fireEndOfSurah();
         return;
@@ -419,16 +516,11 @@ export function useRecitationEngine(selectedReciterId: string): void {
       // ⚠️ MID-TRACK, WHICH IS THE ADAPTATION THE FORKED ENGINE DID NOT HAVE. A conventional
       // player refreshes the lock screen on track change; here the ayah changes many times
       // inside one surah, so the refresh is driven by the timing lookup instead.
-      player.updateLockScreenMetadata({
-        title: `${SURAH_METADATA[surah - 1]?.nameTransliteration ?? surah} · ${verse}`,
-      });
+      lockScreenTitle = `${SURAH_METADATA[surah - 1]?.nameTransliteration ?? surah} · ${verse}`;
+      player.updateLockScreenMetadata({ title: lockScreenTitle });
     };
 
     const onTrackChanged = ({ currentIndex }: { previousIndex: number; currentIndex: number }) => {
-      // Save where the FINISHED track got to before adopting the new one — this is one of the
-      // four moments a listening position is written.
-      savePosition();
-      adoptTrack(currentIndex);
       /**
        * ⚠️ THE DEFENSIVE HALF OF "END OF SURAH", for the boundary the lead never saw. The status
        * stream reports `duration: 0` until a track is prepared, so a surah whose duration never
@@ -436,8 +528,25 @@ export function useRecitationEngine(selectedReciterId: string): void {
        * "surah end unknown" is a FALLBACK, not a shrug. Pausing here is one boundary late by a
        * fraction of a second, which is where the reader asked to stop; a duration fallback would
        * pause somewhere that is not a boundary at all.
+       *
+       * ⚠️ AND IT RUNS BEFORE `adoptTrack`, WHICH IS NOT A TIDINESS PREFERENCE (story 7-4 review,
+       * P2). `pause()` writes the listening position, and `adoptTrack` moves `currentSurah` to
+       * *n+1* and nulls `currentVerse` — so pausing afterwards saved *(n+1, 1)*: the start of the
+       * very surah the reader asked not to enter, and exactly where 7-7's resume would drop them
+       * next launch. Pausing first means the write is the finished surah's last ayah, and it is
+       * the ONLY write on this path (`pause()` performs it), so the track change does not save
+       * twice. `adoptTrack` still runs after, so the store and the native player agree about
+       * which track is loaded.
        */
-      if (store.getState().sleepEndOfSurah) fireEndOfSurah();
+      if (store.getState().sleepEndOfSurah) {
+        fireEndOfSurah();
+        adoptTrack(currentIndex);
+        return;
+      }
+      // Save where the FINISHED track got to before adopting the new one — this is one of the
+      // four moments a listening position is written.
+      savePosition();
+      adoptTrack(currentIndex);
     };
 
     const teardown = () => {
@@ -489,6 +598,22 @@ export function useRecitationEngine(selectedReciterId: string): void {
       // that does not exist. This is reached from a row press and a page lookup, both of which
       // can be wrong before their own guards run.
       if (!Number.isInteger(surah) || surah < 1 || surah > SURAH_COUNT) return;
+      /**
+       * ⚠️ AN ARMED "END OF SURAH" BELONGS TO THE SURAH IT WAS ARMED ON (story 7-4 review, P5).
+       * A reader who presses a verse in another surah while it is armed was silently re-targeting
+       * the timer at a surah they had just STARTED — "stop at the end of this one" turned into
+       * "stop at the end of the one you just opened", which is not a thing anybody asked for.
+       * Only a genuine surah change disarms it: the reciter switch re-enters here with the SAME
+       * surah, and a voice change is not a reason to forget a sleep timer. A TIMED timer is left
+       * alone on purpose — it is a promise about the wall clock, not about the track.
+       */
+      if (
+        store.getState().sleepEndOfSurah &&
+        currentSurah.current !== null &&
+        surah !== currentSurah.current
+      ) {
+        store.getState().clearSleepTimer();
+      }
       store.getState().setPlaybackState('loading');
       lastLoadedAt.current = Date.now();
       /**
@@ -644,13 +769,18 @@ export function useRecitationEngine(selectedReciterId: string): void {
     const unsubscribe = store.subscribe((next, previous) => {
       if (next.speed !== previous.speed) {
         applyRate(next.speed);
-        writeStoredSpeed(next.speed);
+        persistRateSoon(next.speed);
       }
-      if (next.sleepDeadline !== previous.sleepDeadline) {
-        stopSleepClock();
-        if (next.sleepDeadline !== null) sleepClock = setInterval(evaluateSleep, SLEEP_TICK_MS);
-      }
+      if (next.sleepDeadline !== previous.sleepDeadline) syncSleepClock();
     });
+
+    /**
+     * ⚠️ AND ANSWER THE STORE AS IT STANDS RIGHT NOW, not only as it changes. Everything above
+     * reacts to a transition; a deadline that was already set when this effect ran has no
+     * transition to react to. See `syncSleepClock`.
+     */
+    evaluateSleep();
+    syncSleepClock();
 
     // Backgrounding is the fourth moment a position is written: a listener who swipes the app
     // away never presses pause, and the process can be killed without another event.
@@ -671,6 +801,8 @@ export function useRecitationEngine(selectedReciterId: string): void {
       subscription.remove();
       unsubscribe();
       stopSleepClock();
+      // A rate the reader chose mid-drag is still a rate they chose — see `persistRateSoon`.
+      flushRate();
       teardown();
     };
   }, []);

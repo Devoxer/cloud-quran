@@ -22,14 +22,23 @@ import { clampSpeed, SPEED_DEFAULT } from '@/constants/audio';
 import { createAppMMKV } from '@/lib/mmkv';
 
 /**
- * The device's playback preferences. A dedicated instance, like `theme`'s — and `createAppMMKV`
- * is what supplies the web-SSR no-op stub, so a module-scope instance here cannot crash the
- * static render.
+ * The device's playback preferences.
+ *
+ * ⚠️ NOT A DEDICATED INSTANCE, whatever the first cut of this comment said (story 7-4 review,
+ * P14). Instances sharing an `id` back the SAME store, and `lib/voicePreference.ts` — inherited
+ * code with no caller in this tree, whose own header still describes a `usePlaybackSpeed` that
+ * does not exist here — opens `'playback-prefs'` too, under the bare key `voice_preference`.
+ * Sharing the instance is fine and deliberate (`createAppMMKV`'s docblock says so); what is not
+ * fine is claiming an isolation the id does not give. The KEY is what keeps these apart, which
+ * is why it is namespaced.
+ *
+ * `createAppMMKV` also supplies the web-SSR no-op stub, so a module-scope instance here cannot
+ * crash the static render.
  */
 const storage = createAppMMKV('playback-prefs');
 
-/** MMKV key for the playback rate. */
-export const SPEED_KEY = '@cloudquran/playbackSpeed';
+/** MMKV key for the playback rate. Module-private: nothing outside needs to name it. */
+const SPEED_KEY = '@cloudquran/playbackSpeed';
 
 /**
  * The saved rate, or 1.0 when there is none — clamped to 0.5–2.0 either way.

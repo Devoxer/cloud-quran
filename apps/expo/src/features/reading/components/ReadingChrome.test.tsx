@@ -167,6 +167,9 @@ describe('one driver', () => {
     // …and the SECOND such sheet (story 7-4), for the same reason. Listing them one at a time is
     // the weak part of this walk, so both are named in the anti-vacuity case below.
     read(join(__dirname, '..', '..', 'audio', 'components', 'PlaybackOptionsSheet.tsx'));
+    // …and the controls that sheet hosts, which are a component of their own (they also mount on
+    // the settings surface). A driver added there would animate inside the chrome all the same.
+    read(join(__dirname, '..', '..', 'audio', 'components', 'PlaybackOptions.tsx'));
     return out.join('\n');
   }
 
@@ -190,6 +193,7 @@ describe('one driver', () => {
     expect(all).toMatch(/export function AppTabBar/);
     expect(all).toMatch(/export function ReciterSheet/);
     expect(all).toMatch(/export function PlaybackOptionsSheet/);
+    expect(all).toMatch(/export function PlaybackOptions/);
   });
 
   it('both animated styles come off that one value', () => {

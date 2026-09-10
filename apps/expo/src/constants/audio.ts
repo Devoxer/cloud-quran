@@ -71,10 +71,16 @@ export function reciterManifestUrl(reciterId: string): string {
 /**
  * ── Speed (story 7-4) ────────────────────────────────────────────────────────────────────────
  *
- * The bounds live HERE rather than in the feature because two layers need them and they may not
- * import each other: `stores/audioPlayerStore.ts` clamps at the store's door, and
- * `features/audio/lib/playbackPrefs.ts` clamps what it reads back off the device. `constants/` is
- * the one home both are allowed to reach (`lint:layers` rule 5).
+ * The bounds live HERE rather than in the feature because THREE layers need them and they may not
+ * import each other: `stores/audioPlayerStore.ts` clamps at the store's door,
+ * `features/audio/lib/playbackPrefs.ts` clamps what it reads back off the device, and
+ * `components/ui/SpeedSelector.tsx` is the control the reader actually moves. `constants/` is the
+ * one home all three are allowed to reach (`lint:layers` rule 5).
+ *
+ * ⚠️ THE SELECTOR IS INCLUDED BECAUSE IT IS THE ONLY UI THAT SETS A RATE, and it used to hold its
+ * own copy of the bounds. "Clamped at the store's door" was true and useless on its own: moving
+ * `SPEED_MAX` would have left the slider's track and both steppers' disable points on the old
+ * value, so the control would offer a rate the store silently refused. (Story 7-4 review, P10.)
  */
 
 /** Slowest rate offered. Below this the recitation is not comprehensible as recitation. */
@@ -90,6 +96,18 @@ export const SPEED_MAX = 2;
 
 /** Normal speed — what an unset, unreadable or corrupt stored value resolves to. */
 export const SPEED_DEFAULT = 1;
+
+/**
+ * How long the rate must hold still before it is written to the device.
+ *
+ * ⚠️ THE SLIDER HAS NO RELEASE EVENT. `components/ui/Slider` documents it (story 17.3's accepted
+ * regression: the community wrapper does not bridge `onValueChangeFinished`), so `SpeedSelector`
+ * commits LIVE — roughly thirty values per drag. Applying each to the native player is right, and
+ * cheap; writing each to MMKV is thirty synchronous disk writes for one gesture, and unlike 6-5's
+ * font-size slider there is no outbox here to coalesce them. So the audible half stays live and
+ * the durable half waits for the drag to end. (Story 7-4 review, P7.)
+ */
+export const SPEED_PERSIST_DEBOUNCE_MS = 500;
 
 /**
  * The ONE door every rate passes through, at the store and again at the MMKV read.
@@ -135,3 +153,17 @@ export const SLEEP_TICK_MS = 1000;
  * silence.
  */
 export const SLEEP_END_LEAD_MS = 500;
+
+/**
+ * That lead, in the media time a tick actually covers at the reader's rate.
+ *
+ * ⚠️ THE LEAD IS MEASURED IN MEDIA TIME AND THE TICK IS MEASURED IN WALL TIME, so the number of
+ * chances the check gets is not a constant — it is `lead / (tick × rate)`. At 1.0x a 500ms lead
+ * is five ticks; at 2.0x the media advances 200ms per tick and it is two and a half, which one
+ * dropped tick turns into a miss. Since this story ships a 2.0x control, the lead scales with the
+ * rate so the number of chances does not. `onTrackChanged`'s pause stays the floor beneath it.
+ * (Story 7-4 review, P18.)
+ */
+export function sleepEndLeadMs(rate: number): number {
+  return SLEEP_END_LEAD_MS * Math.max(1, rate);
+}

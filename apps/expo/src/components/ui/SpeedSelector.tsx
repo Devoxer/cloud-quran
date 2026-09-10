@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { Slider } from '@/components/ui/Slider';
+import { SPEED_MAX, SPEED_MIN } from '@/constants/audio';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
@@ -33,11 +34,16 @@ const STEP_BUTTON_SIZE = SPACING.xxl;
 /** Slider container width - component-specific dimension for compact layout */
 const SLIDER_CONTAINER_WIDTH = 220;
 
-/** Minimum playback speed */
-const MIN_SPEED = 0.5;
-
-/** Maximum playback speed */
-const MAX_SPEED = 2;
+/**
+ * The bounds, from the ONE home (story 7-4 review, P10).
+ *
+ * ⚠️ THEY USED TO BE LOCAL COPIES, and this is the only UI in the app that sets a rate — so the
+ * store's clamp and this control could disagree about what is reachable, and moving the ceiling
+ * would have left the slider's track and both steppers offering a rate the store refused. The
+ * STEPS below stay local: they are this control's feel, not the rate's range.
+ */
+const MIN_SPEED = SPEED_MIN;
+const MAX_SPEED = SPEED_MAX;
 
 /** Speed increment step for slider */
 const SPEED_STEP = 0.05;

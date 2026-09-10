@@ -429,15 +429,31 @@ describe('the playback-options control', () => {
     return (frame.props as { children: { props: { name?: unknown } } }).children.props.name;
   };
 
-  it('appears in the mini player and NOT in the verse face', () => {
+  it('appears in BOTH faces, so selecting an ayah cannot strand an armed timer', () => {
+    /**
+     * ⚠️ IT USED TO BE MINI-PLAYER-ONLY (story 7-4 review, P6). The row swaps to the verse face
+     * the moment a reader selects an ayah — so an armed sleep timer went invisible AND
+     * uncancellable, because this control is the only door onto the sheet that turns it off.
+     * MUTATION: render it only in the player face; the second half reddens.
+     */
     loadTrack();
     renderRow(null);
     expect(screen.getByTestId('chrome-playback-options')).toBeTruthy();
     screen.unmount();
 
-    // Selecting an ayah swaps the face; the control goes with it.
     renderRow({ surah: 18, verse: 10 });
-    expect(screen.queryByTestId('chrome-playback-options')).toBeNull();
+    expect(screen.getByTestId('chrome-verse-row')).toBeTruthy();
+    expect(screen.getByTestId('chrome-playback-options')).toBeTruthy();
+  });
+
+  it('keeps the moon and the countdown across a selection', () => {
+    loadTrack();
+    renderRow({ surah: 18, verse: 10 });
+    act(() => store().setSleepTimer(30 * 60_000));
+    expect(screen.getByTestId('chrome-sleep-countdown').props.children).toBe('30m');
+    // And it is still the door out: one press asks for the sheet that can cancel it.
+    fireEvent.press(screen.getByTestId('chrome-playback-options'));
+    expect(mockOpenPlaybackOptions).toHaveBeenCalled();
   });
 
   it('asks for the sheet, and re-arms the dwell like every other control here', () => {

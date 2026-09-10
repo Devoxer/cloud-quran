@@ -6,6 +6,15 @@
  * arithmetic instead of the rule the sheet is enforcing.
  */
 
+/** The window the sheet sizes against — `MushafPage.test`'s idiom, and its reason: the wide
+ *  branch is a different renderer, not a different width. */
+const mockWindow = { width: 390, height: 844, scale: 2, fontScale: 1 };
+
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => mockWindow,
+}));
+
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
@@ -62,15 +71,31 @@ describe('speed', () => {
     expect(store().speed).toBe(1.1);
   });
 
-  it('cannot leave the bounds, at either end', () => {
+  it('DISABLES the stepper at each end, rather than leaning on the clamp', () => {
+    /**
+     * ⚠️ THE FIRST CUT ASSERTED `store().speed` AND CLAIMED TO BE ABOUT THE BUTTON (story 7-4
+     * review, P16). `clampSpeed` guarantees that value at either end whether or not the control
+     * is disabled, so deleting `disabled={isAtMax}` left it green — a control that looks live,
+     * presses, and does nothing. The disabled state is the thing under test, so assert it.
+     */
     act(() => store().setSpeed(2));
     open();
-    // The step button is disabled at the ceiling; pressing it changes nothing either way.
-    fireEvent.press(screen.getByTestId('playback-options-speed-increment'));
+    const up = screen.getByTestId('playback-options-speed-increment');
+    expect(up.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(
+      screen.getByTestId('playback-options-speed-decrement').props.accessibilityState
+    ).toMatchObject({
+      disabled: false,
+    });
+    fireEvent.press(up);
     expect(store().speed).toBe(2);
 
+    screen.unmount();
     act(() => store().setSpeed(0.5));
-    fireEvent.press(screen.getByTestId('playback-options-speed-decrement'));
+    open();
+    const down = screen.getByTestId('playback-options-speed-decrement');
+    expect(down.props.accessibilityState).toMatchObject({ disabled: true });
+    fireEvent.press(down);
     expect(store().speed).toBe(0.5);
   });
 });
@@ -148,6 +173,19 @@ describe('the sleep timer', () => {
     expect(screen.queryByTestId('playback-options-sleep-off')).toBeNull();
   });
 
+  it('spells a chip and the countdown it arms IDENTICALLY', () => {
+    /**
+     * ⚠️ 60 MINUTES READ "60m" ON THE CHIP AND "1h 0m" ON THE LABEL BENEATH IT (story 7-4 review,
+     * P12) — two spellings of one duration, on one screen, at the same moment. The chip goes
+     * through `formatSleepRemaining` now, which is the same function the countdown uses.
+     * MUTATION: spell the chip `t('player:sleep.minutes')`; this reddens.
+     */
+    open();
+    const chipLabel = screen.getByTestId('playback-options-sleep-60-text').props.children;
+    fireEvent.press(screen.getByTestId('playback-options-sleep-60'));
+    expect(screen.getByTestId('playback-options-sleep-armed').props.children).toBe(chipLabel);
+  });
+
   it('spells the armed timer with the shared formatter', () => {
     open();
     fireEvent.press(screen.getByTestId('playback-options-sleep-30'));
@@ -175,18 +213,31 @@ describe('the sleep timer', () => {
 });
 
 describe('the sheet itself', () => {
-  it('bounds its body, on the wide branch as well as the narrow one', () => {
-    // ⚠️ `snapPoints` IS IGNORED AT ≥768pt — `BottomSheet` renders a centered dialog card there
-    // instead of the native sheet, so the detent covers phones and nothing else. `ReciterSheet`
-    // records the same lesson. MUTATION: drop the height; this reddens.
+  it.each([
+    ['a phone', 390, 844],
+    ['the ≥768pt dialog-card branch', 1024, 768],
+  ])('bounds its body on %s', (_label, width, height) => {
+    /**
+     * ⚠️ `snapPoints` IS IGNORED AT ≥768pt — `BottomSheet` renders a centered dialog card there
+     * instead of the native sheet, whose body is the content-MEASURED host that has no detent to
+     * obey. So the detent covers phones and nothing else, and the explicit bound is what makes
+     * the claim true on iPad, Android tablet and wide web. `ReciterSheet` records the same lesson.
+     *
+     * ⚠️ AND IT IS ASSERTED AT BOTH WIDTHS NOW (story 7-4 review, P20). The first cut ran at the
+     * default width and asserted only `typeof maxHeight === 'number' && > 0`, which any positive
+     * number passes — so the wide branch, the whole reason the bound exists, was never entered.
+     * MUTATION: drop the bound; both cases redden.
+     */
+    mockWindow.width = width;
+    mockWindow.height = height;
     open();
-    const style = screen.getByTestId('playback-options-body').props.style;
+    const style = screen.getByTestId('playback-options-bound').props.style;
     const flat = Object.assign(
       {},
       ...(Array.isArray(style) ? style.flat(3) : [style]).filter(Boolean)
     );
-    expect(typeof flat.maxHeight).toBe('number');
-    expect(flat.maxHeight).toBeGreaterThan(0);
+    // Half the window, capped at 420 — never the whole screen, and never unbounded.
+    expect(flat.maxHeight).toBe(Math.min(height * 0.5, 420));
   });
 
   it('renders nothing until it is opened', () => {

@@ -219,6 +219,54 @@ export function ChromeVerseRow({
     return verse === null ? name : t('player:nowPlayingVerse', { name, verse });
   };
 
+  /**
+   * The overflow control, which is ALSO the sleep indicator — drawn in BOTH faces.
+   *
+   * ⚠️ ONE CONTROL, NOT AN ELLIPSIS PLUS A MOON BADGE. The row's doctrine is "the thing you are
+   * acting on right now", and two glyphs for one subject in a bar that already carries four
+   * things is the clutter a single row exists to avoid. Armed, the glyph BECOMES the moon and the
+   * countdown sits beside it; unarmed it is the plain overflow. Either way one press opens the
+   * sheet that owns it.
+   *
+   * ⚠️ AND IT IS NOT MINI-PLAYER-ONLY, WHICH IS WHERE IT STARTED (story 7-4 review, P6). The row
+   * swaps to the VERSE face the moment a reader selects an ayah — so an armed sleep timer became
+   * invisible and, worse, uncancellable, because this is the only door onto the sheet that can
+   * turn it off. Selecting a verse is not a reason to lose the timer you set. The verse face's
+   * own controls are scoped to the ayah; this one is scoped to the recitation and outlives them.
+   */
+  const playbackOptionsControl = (
+    <Pressable
+      onPress={openPlaybackOptions}
+      hitSlop={CONTROL_HIT_SLOP}
+      accessibilityRole="button"
+      accessibilityLabel={
+        sleep.active
+          ? t('player:a11y.sleepTimerActive', {
+              label: formatSleepRemaining(sleep.remainingMs, sleep.endOfSurah),
+            })
+          : t('player:a11y.moreOptions')
+      }
+      focusable={interactive}
+      // See the bookmark control: `focusable` alone is inert in the DOM tab order.
+      tabIndex={interactive ? 0 : -1}
+      style={styles.options}
+      testID="chrome-playback-options"
+    >
+      <Icon
+        name={sleep.active ? 'moon-outline' : 'ellipsis-horizontal'}
+        size={RECITER_ICON_SIZE}
+        color={sleep.active ? colors.accent.primary : colors.text.secondary}
+        accessibilityElementsHidden
+        testID="chrome-playback-options-icon"
+      />
+      {sleep.active ? (
+        <Text style={styles.sleepLabel} numberOfLines={1} testID="chrome-sleep-countdown">
+          {formatSleepRemaining(sleep.remainingMs, sleep.endOfSurah)}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+
   const face = chromeRowFace(selected, playback.playbackState, playback.surah);
 
   // ── the selected ayah ──────────────────────────────────────────────────────────────────────
@@ -241,6 +289,9 @@ export function ChromeVerseRow({
         <Text style={styles.label} numberOfLines={1} testID="chrome-verse-label">
           {label}
         </Text>
+        {/* See its definition above: the recitation's control, in the ayah's face, because an
+            armed sleep timer must not vanish when the reader selects a verse. */}
+        {playbackOptionsControl}
         {/* The same glyph pair and the same colours as `VerseRow`'s control — one action, one
             look. The indicator flips on the SAME interaction because `addBookmark` applies the
             local cache synchronously. */}
@@ -318,44 +369,7 @@ export function ChromeVerseRow({
       <Text style={styles.label} numberOfLines={1} testID="chrome-now-playing">
         {nowPlaying}
       </Text>
-      {/**
-       * ⚠️ ONE CONTROL, WHICH IS ALSO THE SLEEP INDICATOR (story 7-4). The row's whole doctrine is
-       * "the thing you are acting on right now" — a separate moon badge beside an ellipsis would
-       * be two glyphs for one subject in a bar that already carries four things, and the badge
-       * would be an indicator nobody can press while the control beside it is the only place the
-       * timer can be cancelled. Armed, the glyph BECOMES the moon and the countdown sits next to
-       * it; unarmed, it is the plain overflow. Either way one press opens the sheet that owns it.
-       */}
-      <Pressable
-        onPress={openPlaybackOptions}
-        hitSlop={CONTROL_HIT_SLOP}
-        accessibilityRole="button"
-        accessibilityLabel={
-          sleep.active
-            ? t('player:a11y.sleepTimerActive', {
-                label: formatSleepRemaining(sleep.remainingMs, sleep.endOfSurah),
-              })
-            : t('player:a11y.moreOptions')
-        }
-        focusable={interactive}
-        // See the bookmark control: `focusable` alone is inert in the DOM tab order.
-        tabIndex={interactive ? 0 : -1}
-        style={styles.options}
-        testID="chrome-playback-options"
-      >
-        <Icon
-          name={sleep.active ? 'moon-outline' : 'ellipsis-horizontal'}
-          size={RECITER_ICON_SIZE}
-          color={sleep.active ? colors.accent.primary : colors.text.secondary}
-          accessibilityElementsHidden
-          testID="chrome-playback-options-icon"
-        />
-        {sleep.active ? (
-          <Text style={styles.sleepLabel} numberOfLines={1} testID="chrome-sleep-countdown">
-            {formatSleepRemaining(sleep.remainingMs, sleep.endOfSurah)}
-          </Text>
-        ) : null}
-      </Pressable>
+      {playbackOptionsControl}
       <HeaderActionButton
         name={playing ? 'pause' : 'play'}
         onPress={toggleTransport}

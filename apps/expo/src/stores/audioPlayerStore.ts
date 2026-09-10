@@ -226,9 +226,14 @@ export const useAudioPlayerStore = create<RecitationStore>((set) => ({
           sleepRemainingMs: 0,
         };
       }
-      // A non-positive duration is "off", not "already expired": a zero-length timer that armed
-      // and then fired would pause the recitation the instant the reader asked for it.
-      if (typeof arg === 'number' && arg > 0) {
+      /**
+       * ⚠️ `Number.isFinite`, NOT JUST `> 0`. A non-positive duration is "off" rather than
+       * "already expired" — a zero-length timer that armed and then fired would pause the
+       * recitation the instant the reader asked for it — and `Infinity > 0` is TRUE, which
+       * would arm a deadline no wall clock ever passes and a countdown that renders
+       * "Infinityh NaNm". A non-integer is harmless but has no meaning either. (7-4 review, P11.)
+       */
+      if (typeof arg === 'number' && Number.isFinite(arg) && arg > 0) {
         // The countdown is seeded HERE rather than waiting for the first clock tick — otherwise
         // the row reads "" for up to a second after a press that was supposed to arm something.
         return {
