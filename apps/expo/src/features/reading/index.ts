@@ -13,6 +13,10 @@ export { ReadingChrome, type ReadingChromeProps } from './components/ReadingChro
 export { nextSurah, prevSurah, SurahNavigator } from './components/SurahNavigator';
 export { VerseRow, type VerseRowProps } from './components/VerseRow';
 export { WelcomeBackBanner } from './components/WelcomeBackBanner';
+// `CHROME_DWELL_MS` is deliberately NOT re-exported: it is the hook's own timing and its only
+// reader outside the hook is that hook's test, which imports it directly.
 export { CHROME_TRAVEL, type ChromeReveal, useChromeReveal } from './hooks/useChromeReveal';
 export { type SurahContent, useSurah } from './hooks/useSurah';
+// story 7-6: the surface tap and its empty-area rule — one gesture, both reading surfaces.
+export { type SurfaceTap, useSurfaceTap } from './hooks/useSurfaceTap';
 export { MushafPage, type MushafPageProps } from './mushaf/MushafPage';

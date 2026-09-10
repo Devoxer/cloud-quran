@@ -4,9 +4,16 @@ import { getFirstVerseForPage, getPageForVerse, SURAH_METADATA, TOTAL_PAGES } fr
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector } from 'react-native-gesture-handler';
 
-import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
+import { useVerseSeek } from '@/features/audio';
+import {
+  MushafPage,
+  ReadingChrome,
+  useChromeReveal,
+  useSurfaceTap,
+  WelcomeBackBanner,
+} from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -59,6 +66,10 @@ import {
  * 5. **THE TAP IS THE SAME RNGH GESTURE AS `read.tsx`**, `.cancelsTouchesInView(false)` and all
  *    — a drag fails the recognizer, which is how a page-turn swipe is distinguished from a
  *    chrome tap. The chrome is a SIBLING of the detector, one driver, no second animation source.
+ *    ⚠️ Since story 7-6 "the same gesture" is literal: both surfaces build it through
+ *    `useSurfaceTap`, which also carries the empty-area rule — a press on a WORD seeks the
+ *    recitation and leaves the chrome alone, while the margins, the page header and the page
+ *    number still toggle it.
  *
  * 6. **A PAGE THAT FAILS reveals the chrome — on BOTH edges, and only for the page the reader is
  *    LOOKING at.** FlashList renders neighbours off-screen; offline, an uncached neighbour fails
@@ -267,16 +278,16 @@ export default function Mushaf() {
     [show]
   );
 
-  /** One tap gesture for the whole surface — `read.tsx`'s shape, verbatim, for its reasons. */
+  /** One tap gesture for the whole surface — `read.tsx`'s shape, now literally the same hook. */
   const { toggle } = reveal;
-  const surfaceTap = useMemo(
-    () =>
-      Gesture.Tap()
-        .cancelsTouchesInView(false)
-        .runOnJS(true)
-        .onEnd(() => toggle()),
-    [toggle]
-  );
+  const { gesture: surfaceTap, onChildPressIn } = useSurfaceTap(toggle);
+
+  /**
+   * Tap-to-seek on the facsimile (story 7-6). The SAME rule the reading rows use — seek inside
+   * the loaded track, otherwise start this surah here — so the `idle`/`error` guard cannot drift
+   * between the two surfaces. Identity-stable, which is what `renderPage` below needs.
+   */
+  const onPressVerse = useVerseSeek();
 
   // Every item is exactly one screen — which is what makes `pagingEnabled` page cleanly and
   // `initialScrollIndex` exact (shape 2). Geometry, not theme, so it lives inline.
@@ -292,10 +303,12 @@ export default function Mushaf() {
           pageNumber={item}
           activeVerseKey={activeVerseKey}
           onErrorChange={onPageErrorChange}
+          onPressVerse={onPressVerse}
+          onInteractionStart={onChildPressIn}
         />
       </View>
     ),
-    [pageStyle, onPageErrorChange, activeVerseKey]
+    [pageStyle, onPageErrorChange, activeVerseKey, onPressVerse, onChildPressIn]
   );
 
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);
@@ -320,6 +333,11 @@ export default function Mushaf() {
             initialScrollIndex={pageToIndex(opening)}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={VIEWABILITY_CONFIG}
+            /* ⚠️ NO `delaysContentTouches` HERE EITHER — see `read.tsx` for the whole answer.
+               The question bites hardest on this list, because it IS the page pager: every word
+               press starts inside a scroll view that is deciding about a page turn. Fabric's
+               scroll view already sets it to NO unconditionally, and RN 0.85 forwards no such
+               prop from JS. */
             testID="mushaf-list"
           />
         </View>

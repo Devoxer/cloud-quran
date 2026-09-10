@@ -48,6 +48,13 @@ export interface SurahNavigatorProps {
   /** That surah's name, from the same derivation. */
   nextName: string;
   onNavigate: (surah: number) => void;
+  /**
+   * "A control took this touch" — fired on press-IN of either button (story 7-6). This footer
+   * sits INSIDE `read.tsx`'s surface `GestureDetector`, so without it moving to the next surah
+   * also toggled the chrome. Optional, for the same reason `VerseRow`'s is: a surface with no
+   * chrome gesture behind it passes nothing.
+   */
+  onInteractionStart?: () => void;
 }
 
 export function SurahNavigator({
@@ -56,6 +63,7 @@ export function SurahNavigator({
   next,
   nextName,
   onNavigate,
+  onInteractionStart,
 }: SurahNavigatorProps) {
   const { t } = useTranslation();
   const styles = useThemedStyles((theme) => ({
@@ -93,6 +101,7 @@ export function SurahNavigator({
         accessibilityRole="button"
         accessibilityLabel={prevLabel}
         onPress={() => onNavigate(prev)}
+        onPressIn={onInteractionStart}
         style={styles.button}
         testID="prev-surah-button"
       >
@@ -104,6 +113,7 @@ export function SurahNavigator({
         accessibilityRole="button"
         accessibilityLabel={nextLabel}
         onPress={() => onNavigate(next)}
+        onPressIn={onInteractionStart}
         style={styles.button}
         testID="next-surah-button"
       >

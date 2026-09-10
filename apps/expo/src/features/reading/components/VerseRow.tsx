@@ -36,21 +36,31 @@
  * ⚠️ STORY 7-1 HAS NOW SPENT THE TAP THIS SHAPE WAS RESERVING, AND IT DID NOT SPEND IT ON THE
  * ROW. The press is on the ARABIC TEXT alone (`onPressVerse`), not on the container — so the meta
  * strip, the margins and every gap between rows remain the "elsewhere" the chrome gesture needs,
- * and shape (2) is still the thing that must not come back. Like the bookmark control below, the
- * press ALSO fires the surface's chrome toggle; that double-fire is named and accepted.
+ * and shape (2) is still the thing that must not come back.
  *
  * So the row CONTAINER has no `onPress` and renders a `View`, not a `Pressable`. Adding one back
  * re-opens (2): put the verse-level gesture in `read.tsx` beside the surface one, where the two
  * can be composed and one can be given priority over the other.
  *
- * ⚠️ THE BOOKMARK CONTROL IS THE ONE PRESSABLE INSIDE THE ROW (story 6-4, the pre-fork meta-row
+ * ⚠️ THE BOOKMARK CONTROL IS THE OTHER PRESSABLE INSIDE THE ROW (story 6-4, the pre-fork meta-row
  * shape folded back). It is a small target in the meta row — not the row tap of shape (2), so the
- * "elsewhere" the chrome gesture needs survives and epic 7's verse tap stays unspent. Its press
- * ALSO fires the surface's chrome toggle: RNGH's tap runs in a different touch system, RN
- * `stopPropagation` cannot reach it, and 6-1's `.cancelsTouchesInView(false)` is what lets this
- * Pressable receive the touch at all — the double-fire is named and accepted in story 6-4's
- * design notes (the 1-8 "must not toggle chrome" clause described the pre-fork responder
- * architecture, superseded with it).
+ * "elsewhere" the chrome gesture needs survives.
+ *
+ * ── ⚠️ THE DOUBLE-FIRE IS FIXED, AND THIS PARAGRAPH USED TO ARGUE THE OPPOSITE ────────────────
+ *
+ * Until story 7-6 both of this row's presses ALSO toggled the surface's chrome, and both 6-4's
+ * design notes and this docblock recorded that as "named and accepted": RNGH's tap runs in a
+ * different touch system, RN's `stopPropagation` cannot reach it, and 6-1's
+ * `.cancelsTouchesInView(false)` is what lets these `Pressable`s receive the touch at all.
+ * **The owner reversed that call on 2026-09-09.** Bookmarking an ayah or seeking to it now leaves
+ * the chrome exactly as it was.
+ *
+ * The mechanism is `onInteractionStart`, wired to `onPressIn` on BOTH Pressables and owned by
+ * `useSurfaceTap` — a touch-DOWN latch the surface tap reads at touch-UP, so the two touch
+ * systems are ordered by physics rather than by a guess about dispatch order. See that hook for
+ * why `onPress` would have been a race and why the reset is `onFinalize`. Nothing else about
+ * these Pressables changed, and `cancelsTouchesInView(false)` is still required — the fix works
+ * BECAUSE both systems see the touch, not by taking it away from one of them.
  *
  * ⚠️ AND STILL NO `accessibilityRole` ON THE ROW. The row is text, not a control. A role would
  * announce every ayah as a button; the bookmark control carries its own role and a label that
@@ -125,6 +135,14 @@ export interface VerseRowProps {
    * `onToggleBookmark`: an unstable callback defeats the memo the highlight depends on.
    */
   onPressVerse?: (surah: number, verse: number) => void;
+  /**
+   * "A child took this touch" — fired on press-IN by BOTH of this row's controls (story 7-6), so
+   * the surface's chrome tap can suppress itself for that touch. ⚠️ It must be `onPressIn` and
+   * not `onPress`: touch-down is the only edge guaranteed to precede the gesture's touch-up
+   * callback, and the two live in different touch systems that cannot otherwise be ordered.
+   * Optional — the bookmarks list renders these rows with no surface gesture behind them.
+   */
+  onInteractionStart?: () => void;
   testID?: string;
 }
 
@@ -137,6 +155,7 @@ function VerseRowInner({
   onToggleBookmark,
   highlighted = false,
   onPressVerse,
+  onInteractionStart,
   testID,
 }: VerseRowProps) {
   const { t } = useTranslation();
@@ -207,6 +226,7 @@ function VerseRowInner({
             the local cache synchronously — no optimistic-update code here. */}
         <Pressable
           onPress={() => onToggleBookmark(surah, verse)}
+          onPressIn={onInteractionStart}
           hitSlop={BOOKMARK_HIT_SLOP}
           accessibilityRole="button"
           accessibilityLabel={bookmarked ? t('common:bookmarks.remove') : t('common:bookmarks.add')}
@@ -236,6 +256,11 @@ function VerseRowInner({
           renders the same row with no press target at all. */}
       <Pressable
         onPress={onPressVerse ? () => onPressVerse(surah, verse) : undefined}
+        // ⚠️ REPORTED EVEN WHEN `onPressVerse` IS ABSENT — but `disabled` below stops the
+        // Pressable taking the touch at all in that case, so this only ever fires on a surface
+        // that offers playback. The two flags stay independent on purpose: a row could gain a
+        // press with no seek behind it, and it would still owe the surface the suppression.
+        onPressIn={onInteractionStart}
         disabled={!onPressVerse}
         accessibilityRole={onPressVerse ? 'button' : undefined}
         accessibilityLabel={onPressVerse ? t('player:a11y.playFromVerse', { verse }) : undefined}

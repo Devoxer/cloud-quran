@@ -21,3 +21,5 @@ export {
   type ReciterStyle,
   resolveReciterId,
 } from './data/reciters';
+// ── story 7-6: the one seek-or-start rule, shared by both reading surfaces ──
+export { useVerseSeek, type VerseSeek } from './hooks/useVerseSeek';

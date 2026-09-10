@@ -5,13 +5,14 @@ import { SURAH_COUNT, SURAH_METADATA, type Verse } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, type ViewToken } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorView } from '@/components/ui';
 import { clampArabicFontSize } from '@/constants/arabic';
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
+import { useVerseSeek } from '@/features/audio';
 import {
   nextSurah,
   prevSurah,
@@ -19,6 +20,7 @@ import {
   SurahNavigator,
   useChromeReveal,
   useSurah,
+  useSurfaceTap,
   VerseRow,
 } from '@/features/reading';
 import { addBookmark, removeBookmark, useBookmarks, usePreferences } from '@/lib/sync';
@@ -74,7 +76,10 @@ import {
  * 5. **THE TAP IS AN RNGH GESTURE** (`Gesture.Tap()` over the whole surface,
  *    `.cancelsTouchesInView(false)` so it cannot kill the Pressables inside its area). A
  *    full-screen `Pressable` blocked scrolling outright and a per-row press left no "elsewhere"
- *    to tap — both measured in 6-1; see that story's write-up for the three attempts.
+ *    to tap — both measured in 6-1; see that story's write-up for the three attempts. ⚠️ Since
+ *    story 7-6 the gesture and its empty-area rule live in `useSurfaceTap`, shared with the
+ *    mushaf: a press on the Arabic or on the bookmark control no longer ALSO toggles the chrome
+ *    (6-4 named that double-fire and accepted it; the owner reversed the call on 2026-09-09).
  */
 
 /**
@@ -147,7 +152,7 @@ export default function Read() {
   // ayah; the controls are stable function references and the status changes a handful of times
   // per listen. Selecting them together would re-derive all three on every ayah change.
   const activeVerseKey = useActiveVerseKey();
-  const { playSurah, seekToVerse, pause, resume } = usePlaybackControls();
+  const { playSurah, pause, resume } = usePlaybackControls();
   const playback = usePlaybackStatus();
 
   // ⚠️ THE PAIR IS RESOLVED ONCE PER FOCUS, AND BOTH HALVES COME FROM THE SAME READ. Within a
@@ -432,22 +437,13 @@ export default function Read() {
   }, []);
 
   /**
-   * Tap-to-seek, story 7-1's half of the verse tap epic 6 reserved. Two cases and one rule: if
-   * this surah is already the loaded track, MOVE inside it; otherwise start it here. ⚠️ The pair
-   * comes from the ROW (see `toggleBookmark` for the defect that taught this), and everything
-   * else is read through a ref so the callback stays identity-stable for `VerseRow`'s memo.
+   * Tap-to-seek, story 7-1's half of the verse tap epic 6 reserved — and since 7-6 the rule lives
+   * in `useVerseSeek`, shared with the mushaf's word press so the `idle`/`error` guard has one
+   * home rather than two that can drift. ⚠️ The pair still comes from the ROW (see
+   * `toggleBookmark` for the defect that taught this), and the hook's callback is
+   * identity-stable, which is what `VerseRow`'s memo needs.
    */
-  const onPressVerse = useCallback(
-    (rowSurah: number, verse: number) => {
-      const { surah: trackSurah, playbackState } = playbackRef.current;
-      if (trackSurah === rowSurah && playbackState !== 'idle' && playbackState !== 'error') {
-        void seekToVerse(verse);
-        return;
-      }
-      void playSurah(rowSurah, verse);
-    },
-    [seekToVerse, playSurah]
-  );
+  const onPressVerse = useVerseSeek();
 
   /**
    * ⚠️ A PLAYBACK FAILURE REVEALS THE CHROME, for the reason a failed mushaf page does: the error
@@ -483,18 +479,11 @@ export default function Read() {
 
   /**
    * ⚠️ ONE TAP GESTURE FOR THE WHOLE SURFACE — see the file header for the two shapes this
-   * replaces and why each failed. `runOnJS(true)` because the callback is a React state setter,
-   * not a worklet.
+   * replaces and why each failed. Built by `useSurfaceTap`, which also owns the empty-area rule:
+   * `onChildPressIn` goes to every row, and a touch that starts on one suppresses the toggle.
    */
   const { toggle } = reveal;
-  const surfaceTap = useMemo(
-    () =>
-      Gesture.Tap()
-        .cancelsTouchesInView(false)
-        .runOnJS(true)
-        .onEnd(() => toggle()),
-    [toggle]
-  );
+  const { gesture: surfaceTap, onChildPressIn } = useSurfaceTap(toggle);
 
   const renderItem = useCallback(
     ({ item }: { item: Verse }) => (
@@ -507,10 +496,11 @@ export default function Read() {
         onToggleBookmark={toggleBookmark}
         highlighted={activeVerseKey === verseKey(item.surah, item.verse)}
         onPressVerse={onPressVerse}
+        onInteractionStart={onChildPressIn}
         testID={`verse-${item.surah}:${item.verse}`}
       />
     ),
-    [fontSize, bookmarkIds, toggleBookmark, activeVerseKey, onPressVerse]
+    [fontSize, bookmarkIds, toggleBookmark, activeVerseKey, onPressVerse, onChildPressIn]
   );
 
   const title = content.meta?.nameTransliteration ?? null;
@@ -553,6 +543,11 @@ export default function Read() {
                   : t('common:reading.noVersesBody')
               }
               onAction={content.reload}
+              // ⚠️ THE RETRY MUST NOT TOGGLE THE CHROME. This surface was revealed STICKILY by
+              // `show()` above because it carries the only exit; a retry that also ran `toggle()`
+              // would take that exit away — and clear the sticky mark — at the moment the reader
+              // is trying to recover.
+              onActionPressIn={onChildPressIn}
               fullScreen
               testID="reading-error"
             />
@@ -565,6 +560,18 @@ export default function Read() {
               contentContainerStyle={listContentStyle}
               onViewableItemsChanged={onViewableItemsChanged}
               viewabilityConfig={VIEWABILITY_CONFIG}
+              /* ⚠️ NO `delaysContentTouches` HERE, AND THAT IS A CHECKED ANSWER RATHER THAN AN
+                 OVERSIGHT — story 7-6's review raised it as a threat to `useSurfaceTap`'s
+                 ordering argument. UIKit's own default IS `true`: UIScrollView withholds a
+                 content touch (and therefore a child's `onPressIn`) while it decides whether the
+                 finger is dragging, while the surface tap's recogniser sits on an ancestor and is
+                 not delayed — which on iOS could run the tap's `onEnd` BEFORE the press-in meant
+                 to suppress it. It cannot happen on this stack: the app is New Architecture only,
+                 and Fabric's scroll view sets `_scrollView.delaysContentTouches = NO`
+                 unconditionally at init (`RCTScrollViewComponentView.mm:145`) — the prop is not
+                 forwarded from JS at all, and RN 0.85 exposes no such prop to set. Android and
+                 web have no equivalent delay. Re-check this if the app ever leaves the New
+                 Architecture. */
               ListFooterComponent={
                 content.verses.length > 0 ? (
                   <SurahNavigator
@@ -573,6 +580,7 @@ export default function Read() {
                     next={upcoming}
                     nextName={nextSurahName}
                     onNavigate={goToSurah}
+                    onInteractionStart={onChildPressIn}
                   />
                 ) : null
               }

@@ -23,8 +23,8 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Pressable, Text } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo, Pressable, Text } from 'react-native';
 
 const mockBack = jest.fn();
 const mockNavigate = jest.fn();
@@ -42,19 +42,27 @@ jest.mock('expo-router', () => ({
   useSegments: () => ['(tabs)', 'read'],
 }));
 
+import { DURATIONS } from '@/constants/animation';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
-import { useChromeReveal } from '../hooks/useChromeReveal';
+import { CHROME_DWELL_MS, type ChromeReveal, useChromeReveal } from '../hooks/useChromeReveal';
 import { ReadingChrome, type ReadingChromeProps } from './ReadingChrome';
 
 /** A host that owns the reveal hook, so a tap drives the real state the screen would. */
 function Harness({
   title = 'Al-Baqarah',
   mode = 'reading',
+  capture,
 }: {
   title?: string | null;
   mode?: ReadingChromeProps['mode'];
+  /**
+   * ⚠️ ONLY THE DWELL CASES USE THIS, AND THEY HAVE TO — see that block. Everything else drives
+   * the chrome by pressing `surface`, which is the shape a reader's tap actually takes.
+   */
+  capture?: (reveal: ChromeReveal) => void;
 }) {
   const reveal = useChromeReveal();
+  capture?.(reveal);
   return (
     <>
       <Pressable testID="surface" onPress={reveal.toggle}>
@@ -395,5 +403,189 @@ describe('what the bars say', () => {
     expect(screen.queryByText('Al-Baqarah')).toBeNull();
     rerender(<Harness title="Al-Baqarah" />);
     expect(screen.getByText('Al-Baqarah')).toBeTruthy();
+  });
+});
+
+/**
+ * ⚠️ THE DWELL — REVEALED CHROME PUTS ITSELF AWAY AGAIN (story 7-6).
+ *
+ * ⚠️ THIS BLOCK DRIVES THE REVEAL THROUGH THE CAPTURED HOOK, NOT THROUGH `fireEvent.press`, AND
+ * THAT IS NOT A SHORTCUT. It needs Jest's fake timers to reach `CHROME_DWELL_MS` without spending
+ * five real seconds — and RN's `Pressability`, which is what turns a `fireEvent.press` on the
+ * surface into an `onPress`, schedules its own timers and simply does not fire under them
+ * (measured: the press left `visible` false). Calling `toggle()`/`show()` is the same entry point
+ * the surface gesture uses, and everything asserted below is read off the RENDERED chrome, so
+ * what is under test is still the bars going away rather than a flag.
+ *
+ * Every other case in this file stays on real timers and runs far inside the dwell, so none of
+ * them is affected by it.
+ */
+describe('the dwell (story 7-6)', () => {
+  /** The live reveal, captured from the harness on each render. */
+  let reveal: ChromeReveal;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /**
+   * Reveal by the reader's own entry point and let the animation settle — the bars are usable.
+   * ⚠️ THE DWELL STARTS WITH THE REVEAL, NOT WITH THE SETTLE, so this spends `DURATIONS.standard`
+   * of it; a case measuring the boundary has to subtract that.
+   */
+  function revealByTap() {
+    act(() => reveal.toggle());
+    act(() => jest.advanceTimersByTime(DURATIONS.standard));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  }
+
+  it('dismisses itself once the reader has been idle for the dwell', () => {
+    render(<Harness capture={(r) => (reveal = r)} />);
+    revealByTap();
+    // A whisker before: still there. This half is what stops the dwell from being "any timeout at
+    // all" — a 100ms value would pass the assertion below and fail this one. The reveal already
+    // spent `DURATIONS.standard` of the dwell (see `revealByTap`).
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS - DURATIONS.standard - 1));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    act(() => jest.advanceTimersByTime(1));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+    expect(touchesOf('reading-chrome-footer')).toBe('none');
+  });
+
+  it('re-arms a FRESH dwell on the next reveal', () => {
+    render(<Harness capture={(r) => (reveal = r)} />);
+    revealByTap();
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+
+    revealByTap();
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+  });
+
+  it('clears the pending dwell when the reader dismisses it early', () => {
+    // MUTATION: arm the timer without cleaning it up. The reader dismisses at 2s and re-reveals
+    // at 3s; the orphaned timer then fires at 5s and takes the chrome away one second into a
+    // reveal that should have had its own five.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    revealByTap();
+    act(() => jest.advanceTimersByTime(2000));
+    act(() => reveal.toggle()); // dismissed by hand
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+
+    act(() => jest.advanceTimersByTime(1000));
+    revealByTap();
+    // Now WELL past the moment the orphaned first dwell would have fired, and well short of the
+    // second one's — so only an uncleaned timer can redden this.
+    act(() => jest.advanceTimersByTime(2000));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  });
+
+  it('does NOT arm a dwell for a `show()` reveal — the error exit stays put', () => {
+    // ⚠️ EVERY `show()` CALLER IS A FAILURE SURFACE whose message is drawn inside the chrome and
+    // whose only exit is the tab bar the reveal brings back: an unreadable surah, an empty one, a
+    // mushaf page whose font could not be fetched, a playback error. A dwell there rebuilds the
+    // trap the reveal exists to prevent.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    act(() => reveal.show());
+    act(() => jest.advanceTimersByTime(DURATIONS.standard));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 4));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  });
+
+  it('cancels a dwell already running when a failure arrives over an ordinary reveal', () => {
+    // MUTATION: make `show()` sticky only for reveals it starts. A playback error arriving while
+    // the chrome is already up changes no state, so the effect never re-runs — the dwell armed by
+    // the reader's tap keeps counting and fades the error message out from under them.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    revealByTap();
+    act(() => jest.advanceTimersByTime(2000));
+    act(() => reveal.show());
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 2));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+  });
+
+  it('lets the reader dismiss a sticky reveal, after which reveals dwell again', () => {
+    // The sticky mark is the reader's to clear: `show()` sets it, `toggle()` clears it. Without
+    // the clear, one page-load failure would disable the dwell for the rest of the session.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    act(() => reveal.show());
+    act(() => jest.advanceTimersByTime(DURATIONS.standard));
+    act(() => reveal.toggle()); // dismissed by hand
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+
+    revealByTap();
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+  });
+
+  it('does NOT dwell while a screen reader is on', async () => {
+    // ⚠️ VoiceOver and TalkBack navigate by swiping the ACCESSIBILITY tree, and a dismissed bar
+    // leaves that tree entirely (the case above pins that). Chrome that vanishes five seconds
+    // after it appears is chrome a screen-reader user can never finish reading.
+    const probe = jest
+      .spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
+      .mockResolvedValue(true as never);
+    render(<Harness capture={(r) => (reveal = r)} />);
+    await act(async () => {}); // the probe is a promise; let it land before the first reveal
+    revealByTap();
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 4));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    // ⚠️ RE-MOCKED, NOT RESTORED. `mockRestore()` on the RN preset's OWN `jest.fn()` leaves a
+    // function that returns `undefined`, not the `Promise.resolve(false)` it shipped with — which
+    // poisons every later case in the file.
+    probe.mockResolvedValue(false as never);
+  });
+
+  it('cancels a dwell ALREADY COUNTING when the reader turns a screen reader on', async () => {
+    // MUTATION: have the listener only record the flag. `screenReaderOn` is read once, at arm
+    // time, so a pending timer would still fire — and the ONE reader who most needs the chrome
+    // to stay put watches it vanish exactly once before the suspension takes effect.
+    let notify: ((on: boolean) => void) | undefined;
+    const listener = jest.spyOn(AccessibilityInfo, 'addEventListener').mockImplementation(((
+      _event: string,
+      handler: (on: boolean) => void
+    ) => {
+      notify = handler;
+      return { remove: () => {} };
+    }) as never);
+    render(<Harness capture={(r) => (reveal = r)} />);
+    await act(async () => {});
+    revealByTap();
+    act(() => jest.advanceTimersByTime(2000));
+    act(() => notify?.(true));
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 4));
+    expect(touchesOf('reading-chrome-header')).toBe('box-none');
+    // Re-mocked rather than restored, for the reason the case above spells out.
+    listener.mockImplementation((() => ({ remove: () => {} })) as never);
+  });
+
+  it('treats a failed detection as "no screen reader" rather than as an error', async () => {
+    // MUTATION: let the rejection through. An unavailable accessibility bridge would then be an
+    // unhandled rejection at boot AND — worse — could take the dwell away for every reader.
+    const probe = jest
+      .spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
+      .mockRejectedValue(new Error('no bridge') as never);
+    render(<Harness capture={(r) => (reveal = r)} />);
+    await act(async () => {});
+    revealByTap();
+    act(() => jest.advanceTimersByTime(CHROME_DWELL_MS));
+    expect(touchesOf('reading-chrome-header')).toBe('none');
+    probe.mockResolvedValue(false as never);
+  });
+
+  it('leaves no timer behind when the reader leaves the screen mid-dwell', () => {
+    // A `setTimeout` that outlives its hook sets state on an unmounted component. The arm and its
+    // cleanup are the same effect, which is what makes unmount, re-arm and dismissal one rule.
+    render(<Harness capture={(r) => (reveal = r)} />);
+    revealByTap();
+    screen.unmount();
+    expect(() => act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 2))).not.toThrow();
+    expect(jest.getTimerCount()).toBe(0);
   });
 });

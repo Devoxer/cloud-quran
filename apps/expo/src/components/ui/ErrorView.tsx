@@ -40,6 +40,17 @@ export interface ErrorViewProps {
   actionLabel?: string;
   /** Action handler — renders the button only when provided. */
   onAction?: () => void;
+  /**
+   * "A control took this touch" — fired on press-IN of the action button (story 7-6), so a
+   * reading surface that draws this INSIDE its chrome-tap gesture can suppress the toggle.
+   *
+   * ⚠️ THE RETRY BUTTON IS THE DAMAGING CASE. Both in-surface call sites (`(tabs)/read.tsx`'s
+   * unreadable/empty surah and `MushafPage`'s failed page) are revealed STICKILY by
+   * `useChromeReveal`'s `show()` — the chrome carries the only exit. Without this, pressing
+   * "Try Again" also ran `toggle()`, which both hid the chrome and cleared the sticky mark at
+   * the exact moment the reader was trying to recover. Optional; every other call site ignores it.
+   */
+  onActionPressIn?: () => void;
   /** Semantic icon name. @default 'warning-outline' */
   icon?: IconName;
   /** Fill the available space and center vertically (screen-level takeover). @default false */
@@ -61,6 +72,7 @@ export function ErrorView({
   message,
   actionLabel,
   onAction,
+  onActionPressIn,
   icon = 'warning-outline',
   fullScreen = false,
   style,
@@ -146,6 +158,7 @@ export function ErrorView({
         <Pressable
           style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
           onPress={onAction}
+          onPressIn={onActionPressIn}
           accessibilityRole="button"
           accessibilityLabel={resolvedActionLabel}
           testID="error-view-action"

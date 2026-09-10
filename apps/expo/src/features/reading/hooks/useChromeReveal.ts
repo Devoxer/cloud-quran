@@ -51,10 +51,41 @@
  * Scroll-to-dismiss is deliberately NOT here. The epic's UX note mentions it, but this story's
  * frozen matrix specifies tap only — and an `onScroll` handler on the one screen whose recorded
  * defect is a per-scroll-tick storm is a mechanism to add later, with a reason, not by default.
+ *
+ * ── The dwell: revealed chrome puts itself away again (story 7-6) ────────────────────────────
+ *
+ * ⚠️ A `setTimeout` IS NOT A SECOND DRIVER, AND `ReadingChrome.test.tsx`'s ONE-DRIVER WALK IS
+ * RIGHT TO IGNORE IT. That walk counts `useSharedValue(` and `withTiming(` because
+ * `chrome-render-storm` was two ANIMATION mechanisms running at two speeds. The dwell adds
+ * neither: it flips `visible`, and the effect below turns that into the same single `withTiming`
+ * every other reveal and dismissal goes through — exactly like `toggle()`. The docblock above
+ * already promised this ("a state update that arrives from anywhere … animates identically");
+ * this is that future arriving, and it is also why BOTH surfaces get the dwell for free rather
+ * than each growing a timer of its own.
+ *
+ * ⚠️ `show()` IS STICKY AND `toggle()` IS NOT — the distinction costs a ref, not a new API. Every
+ * `show()` caller is a FAILURE surface (an unreadable surah, an empty one, a mushaf page whose
+ * font could not be fetched, a playback error) whose message is drawn INSIDE the chrome and whose
+ * only exit is the tab bar the reveal brings back. Dismissing that on a timer would rebuild the
+ * trap the reveal was added to prevent. So `show()` marks the reveal sticky and clears any dwell
+ * already running (a failure arriving over an ordinary reveal must not inherit its countdown),
+ * and `toggle()` clears the mark — the reader dismissing it by hand is the documented exit, and
+ * the next ordinary reveal gets a fresh dwell.
+ *
+ * ⚠️ A SCREEN READER SUSPENDS THE DWELL — INCLUDING ONE ALREADY COUNTING DOWN. VoiceOver and
+ * TalkBack navigate by swiping through the accessibility tree, and a dismissed bar leaves that
+ * tree entirely, so chrome that vanishes five seconds after it appears is chrome a screen-reader
+ * user can never finish reading. Turning the reader on mid-dwell therefore CANCELS the pending
+ * timer rather than only governing the next reveal. Both halves of the check are
+ * failure-tolerant (a rejected probe or a listener that cannot be attached means "off"), because
+ * a detection failure must degrade to the sighted behaviour rather than to no chrome timer for
+ * anybody. This is the ONE `AccessibilityInfo` read in the
+ * tree, and it is not the reduce-motion one the paragraph above explains away: reduce motion is
+ * about how the bars move, this is about whether they leave at all.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import type { ViewStyle } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, type ViewStyle } from 'react-native';
 import {
   type AnimatedStyle,
   runOnJS,
@@ -70,6 +101,15 @@ import { DURATIONS, EASINGS } from '@/constants/animation';
  */
 export const CHROME_TRAVEL = 12;
 
+/**
+ * How long revealed chrome waits before putting itself away, in ms. A DOMAIN duration, not an
+ * animation one — `DURATIONS` carries transition tokens and explicitly allows a named local
+ * const for a duration like this (the same shape as `WelcomeBackBanner`'s `BANNER_DISMISS_MS`).
+ * Long enough to read a surah name and reach for the tab bar; short enough that the immersive
+ * default is not lost for the rest of the session.
+ */
+export const CHROME_DWELL_MS = 5000;
+
 export interface ChromeReveal {
   /** Whether the chrome is on its way in (or already there). Drives the animation, never layout. */
   visible: boolean;
@@ -81,9 +121,11 @@ export interface ChromeReveal {
   /** Flip it. Idempotent per tap; the animation is interrupted and re-targeted, never queued. */
   toggle: () => void;
   /**
-   * Bring the chrome back regardless of where it was. One consumer, and it is not decoration:
-   * the error and empty surfaces have no other exit, so the screen reveals the door rather than
-   * leaving the reader to guess that a tap does something.
+   * Bring the chrome back regardless of where it was, and STICKILY — no dwell is armed and any
+   * dwell already running is cancelled. Not decoration: the error and empty surfaces have no
+   * other exit, so the screen reveals the door rather than leaving the reader to guess that a
+   * tap does something, and a five-second timer taking that door away again would be the trap
+   * this exists to prevent. `toggle()` — the reader's own dismissal — clears the stickiness.
    */
   show: () => void;
   /** Animated style for the TOP bar — same driver as `footerStyle`, opposite travel. */
@@ -96,10 +138,66 @@ export function useChromeReveal(): ChromeReveal {
   const progress = useSharedValue(0);
   const [visible, setVisible] = useState(false);
   const [interactive, setInteractive] = useState(false);
+  /** Whether this reveal came from `show()` — see the docblock. Set by `show`, cleared by `toggle`. */
+  const sticky = useRef(false);
+  /** Last known screen-reader state. A ref: it must not re-render anything, only gate the arm. */
+  const screenReaderOn = useRef(false);
+  /** The pending dwell, so `show()` can cancel one it did not arm. */
+  const dwell = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // The single animation. Driven from an effect rather than from inside `toggle` so the shared
-  // value is a pure function of `visible` — a state update that arrives from anywhere (a future
-  // "hide chrome while audio plays") animates identically, and `toggle` stays a plain setter.
+  const clearDwell = useCallback(() => {
+    if (dwell.current !== null) {
+      clearTimeout(dwell.current);
+      dwell.current = null;
+    }
+  }, []);
+
+  // Both halves swallow their own failures: an unavailable accessibility bridge means "no screen
+  // reader", which is the sighted behaviour, rather than an unhandled rejection at boot.
+  useEffect(() => {
+    let alive = true;
+    /**
+     * ⚠️ RECORDING IT IS NOT ENOUGH — AN ARMED DWELL HAS TO BE CANCELLED. The arm reads this ref
+     * once, when the reveal starts, so a reader who turns VoiceOver on WHILE the chrome is up
+     * would still have watched it vanish once before the suspension took effect (and that one
+     * time is exactly the reader who needs it least often and can least afford it). Both the
+     * initial probe and the live listener therefore clear a pending timer as well as setting the
+     * flag; the flag alone governs every LATER reveal.
+     */
+    const record = (on: boolean) => {
+      screenReaderOn.current = on;
+      if (on) clearDwell();
+    };
+    try {
+      // `Promise.resolve(...)` rather than `.then` on the answer directly: a stubbed or absent
+      // bridge can hand back a non-promise, and a `TypeError` thrown from an effect at boot
+      // would take the whole reading surface down over a detail about a timer.
+      void Promise.resolve(AccessibilityInfo.isScreenReaderEnabled())
+        .then((on) => {
+          if (alive) record(on === true);
+        })
+        .catch(() => {});
+    } catch {
+      // no probe, no live state — "off" stands, which is the sighted behaviour
+    }
+    let subscription: { remove: () => void } | undefined;
+    try {
+      subscription = AccessibilityInfo.addEventListener('screenReaderChanged', (on) => {
+        record(on === true);
+      });
+    } catch {
+      // no listener, no live updates — the initial probe still stands
+    }
+    return () => {
+      alive = false;
+      subscription?.remove();
+    };
+  }, [clearDwell]);
+
+  // The single animation, plus the dwell that feeds it. Driven from an effect rather than from
+  // inside `toggle` so the shared value is a pure function of `visible` — a state update that
+  // arrives from anywhere (the dwell below; a future "hide chrome while audio plays") animates
+  // identically, and `toggle` stays a plain setter.
   useEffect(() => {
     // Leading edge of a dismissal: stop taking taps NOW, while the bars are still drawn.
     if (!visible) setInteractive(false);
@@ -113,10 +211,30 @@ export function useChromeReveal(): ChromeReveal {
         if (finished && visible) runOnJS(setInteractive)(true);
       }
     );
-  }, [visible, progress]);
+    // ⚠️ THE ARM AND ITS CLEANUP ARE THE SAME EFFECT, which is what makes "cleared on dismissal,
+    // on re-arm and on unmount" one rule instead of three: any change to `visible` runs the
+    // cleanup first, and so does unmounting, so no timer outlives the reveal it belongs to and
+    // nothing sets state after the hook is gone.
+    if (!visible || sticky.current || screenReaderOn.current) return;
+    dwell.current = setTimeout(() => setVisible(false), CHROME_DWELL_MS);
+    return clearDwell;
+  }, [visible, progress, clearDwell]);
 
-  const toggle = useCallback(() => setVisible((wasVisible) => !wasVisible), []);
-  const show = useCallback(() => setVisible(true), []);
+  const toggle = useCallback(() => {
+    // The reader's own tap owns the chrome again — including dismissing a sticky reveal, after
+    // which the next reveal is an ordinary one and dwells.
+    sticky.current = false;
+    setVisible((wasVisible) => !wasVisible);
+  }, []);
+
+  const show = useCallback(() => {
+    sticky.current = true;
+    // ⚠️ CANCEL EAGERLY: an error arriving while the chrome is ALREADY revealed changes no state,
+    // so the effect does not re-run and the dwell it armed would still be counting down — the
+    // failure message would fade out on a reader who never dismissed it.
+    clearDwell();
+    setVisible(true);
+  }, [clearDwell]);
 
   const headerStyle = useAnimatedStyle(() => ({
     opacity: progress.value,

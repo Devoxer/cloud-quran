@@ -29,9 +29,29 @@
  * reads it. The highlight seam matches `activeVerseKey + ':'` against `location` so `"2:1"`
  * cannot match `2:15:x`; audio wiring itself is story 7-1's, this prop is the seam it plugs into.
  *
- * ⚠️ NO TAP HANDLING HERE, unlike the pre-fork (whose `Pressable` + `isScrolling` discrimination
- * 6-1 measured as the broken shape). The chrome tap is one RNGH gesture over the whole surface,
- * owned by `app/mushaf.tsx`; tap-to-seek is 7-1's and was dropped, not ported.
+ * ── ⚠️ TAP-TO-SEEK IS HERE NOW (story 7-6), AND THE PARAGRAPH THIS REPLACES SAID IT WAS NOT ──
+ *
+ * The chrome tap is still ONE RNGH gesture over the whole surface, owned by `(tabs)/index.tsx`
+ * through `useSurfaceTap` — the pre-fork's `Pressable` + `isScrolling` discrimination is still
+ * the broken shape 6-1 measured, and nothing here rebuilds it. What is new is a press on each
+ * WORD, which seeks the recitation to that word's ayah.
+ *
+ * ⚠️ IT ADDS NO VIEWS. `onPress`/`onPressIn` go on the per-word `<Text>` that already exists
+ * inside the line's `<Text>`. Wrapping words in `View`s or `GestureDetector`s would break the
+ * justified RTL line the facsimile depends on — the words are nested text nodes in one flow, not
+ * boxes.
+ *
+ * ⚠️ THE PRESS REPORTS `location`, LIKE THE HIGHLIGHT DOES — first two segments of
+ * `"surah:verse:word"`. `verseRange` is the drifted display metadata nothing here may read.
+ *
+ * ⚠️ IT ALSO FIRES `onInteractionStart` ON PRESS-IN, which is how a word press stops ALSO
+ * toggling the chrome (see `useSurfaceTap`: touch-down latch, read at the tap's touch-up).
+ *
+ * ⚠️ NO PER-WORD `accessibilityRole` OR LABEL, DELIBERATELY. `word.qpcV1` is QPC glyph ENCODING —
+ * codepoints into a per-page font, not readable Arabic — so announcing ~150 buttons per page
+ * would read as noise and bury the page's own label. The accessible route to the same action is
+ * the reading surface's `verse-text-{verse}` button, which is labelled with its ayah. That is why
+ * this story adds no new string.
  *
  * ⚠️ THE U+06DF STRIP DOES NOT APPLY HERE. `word.qpcV1` is QPC glyph ENCODING — codepoints into a
  * per-page font — not Uthmani text in the KFGQPC face; and the two strings this file does set in
@@ -39,7 +59,7 @@
  */
 
 import type { MushafLine } from 'quran-data';
-import { SURAH_METADATA } from 'quran-data';
+import { SURAH_COUNT, SURAH_METADATA } from 'quran-data';
 import { Fragment, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Text, useWindowDimensions, View } from 'react-native';
@@ -85,6 +105,22 @@ export interface MushafPageProps {
    * retry reports `false` so the screen's record does not go stale.
    */
   onErrorChange?: (page: number, failed: boolean) => void;
+  /**
+   * Play from — or seek to — the ayah a pressed WORD belongs to (story 7-6). Called with the pair
+   * parsed out of that word's `location`, never with anything the screen believes it is showing.
+   * ⚠️ Must be IDENTITY-STABLE: this component is rendered from FlashList's `renderPage`, whose
+   * own identity is what keeps every page from re-rendering per turn. Optional — and it is what
+   * makes a word pressable AT ALL: without it no word takes a touch, so a page with no player
+   * behind it renders plain glyphs.
+   */
+  onPressVerse?: (surah: number, verse: number) => void;
+  /**
+   * "A word took this touch" — fired on press-IN, so the surface's chrome tap suppresses itself
+   * for that touch (see `useSurfaceTap`). Optional, and only ever fired on a word that
+   * `onPressVerse` has actually made pressable — see the render for why the two are gated
+   * together rather than independently.
+   */
+  onInteractionStart?: () => void;
 }
 
 const useStyles = () =>
@@ -161,7 +197,13 @@ const useStyles = () =>
 
 type MushafStyles = ReturnType<typeof useStyles>;
 
-export function MushafPage({ pageNumber, activeVerseKey, onErrorChange }: MushafPageProps) {
+export function MushafPage({
+  pageNumber,
+  activeVerseKey,
+  onErrorChange,
+  onPressVerse,
+  onInteractionStart,
+}: MushafPageProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -205,10 +247,15 @@ export function MushafPage({ pageNumber, activeVerseKey, onErrorChange }: Mushaf
         accessibilityLabel={t('common:mushaf.pageErrorA11y', { page: pageNumber })}
         testID={`mushaf-page-error-${pageNumber}`}
       >
+        {/* ⚠️ THE RETRY REPORTS THE TOUCH TOO, AND HERE IT MATTERS MOST: this surface was
+            revealed STICKILY by the screen's `show()` because the chrome carries the only exit.
+            A retry that also ran the chrome toggle would hide that exit — and clear the sticky
+            mark — at the moment the reader was trying to recover. */}
         <ErrorView
           title={t('common:mushaf.pageErrorTitle')}
           message={t('common:mushaf.pageErrorBody')}
           onAction={reload}
+          onActionPressIn={onInteractionStart}
           fullScreen
           testID={`mushaf-page-retry-${pageNumber}`}
         />
@@ -247,6 +294,8 @@ export function MushafPage({ pageNumber, activeVerseKey, onErrorChange }: Mushaf
       glyphFontSize={glyphFontSize}
       activePrefix={activePrefix}
       styles={styles}
+      onPressVerse={onPressVerse}
+      onInteractionStart={onInteractionStart}
     />
   ));
 
@@ -280,6 +329,28 @@ interface MushafLineViewProps {
   activePrefix: string | null;
   /** The page's themed styles — passed down so this stays a HOOKLESS function (see header). */
   styles: MushafStyles;
+  /** Seek to a pressed word's ayah. A PROP, not a hook — the renderer stays hookless. */
+  onPressVerse?: (surah: number, verse: number) => void;
+  /** Press-in reporter, for the chrome's empty-area rule. Also a prop, for the same reason. */
+  onInteractionStart?: () => void;
+}
+
+/**
+ * The `(surah, verse)` a word belongs to, from `location` (`"surah:verse:word"`) — the ONE
+ * source of verse identity on this page, exactly as the highlight seam uses it.
+ *
+ * ⚠️ RANGE, NOT JUST INTEGER-NESS. `Number.parseInt` is happy with `'0'` and `'-1'`, so a
+ * malformed `'0:0:1'` would have produced `playSurah(0, 0)` — a request for a surah that does
+ * not exist — rather than a word that is simply not pressable. Answering `null` is what makes a
+ * bad row inert: the word then takes no touch at all (see the render below).
+ */
+function verseAt(location: string): { surah: number; verse: number } | null {
+  const [rawSurah, rawVerse] = location.split(':');
+  const surah = Number.parseInt(rawSurah, 10);
+  const verse = Number.parseInt(rawVerse, 10);
+  if (!Number.isInteger(surah) || surah < 1 || surah > SURAH_COUNT) return null;
+  if (!Number.isInteger(verse) || verse < 1) return null;
+  return { surah, verse };
 }
 
 /**
@@ -292,6 +363,8 @@ function MushafLineView({
   glyphFontSize,
   activePrefix,
   styles,
+  onPressVerse,
+  onInteractionStart,
 }: MushafLineViewProps) {
   if (line.type === 'surah-header') {
     const surahNumber = Number.parseInt(line.surah ?? '0', 10);
@@ -349,12 +422,28 @@ function MushafLineView({
       {line.words.map((word, i) => {
         // The `+ ':'` in the prefix is what stops "2:1" matching 2:15's words.
         const isActive = activePrefix !== null && word.location.startsWith(activePrefix);
+        // Parsed per word from `location` — the same ground truth the highlight above reads.
+        const at = onPressVerse ? verseAt(word.location) : null;
         return (
           <Fragment key={word.location}>
             {/* The separator sits OUTSIDE the word's Text so a highlight never bleeds into it. */}
             {i > 0 && ' '}
             <Text
+              // ⚠️ HANDLERS ON THE EXISTING `<Text>`, NO WRAPPER. A `View` or a
+              // `GestureDetector` here would take the word out of the line's justified RTL flow
+              // and break the facsimile.
+              // ⚠️ BOTH HANDLERS ARE GATED ON THE SAME `at`, AND THE SYMMETRY IS THE POINT. RN
+              // `Text` becomes pressable on `onPressIn` ALONE, so an unconditional reporter made
+              // a word with an unparseable `location` — or a page handed a reporter and no
+              // seek — swallow the touch and suppress the chrome while doing nothing at all.
+              // `VerseRow` avoids the same trap with `disabled={!onPressVerse}`.
+              onPress={at ? () => onPressVerse?.(at.surah, at.verse) : undefined}
+              onPressIn={at ? onInteractionStart : undefined}
+              // ⚠️ iOS DRAWS A PRESS HIGHLIGHT OVER PRESSABLE TEXT BY DEFAULT — a grey rectangle
+              // flashing across a facsimile whose whole premise is faithful rendering.
+              suppressHighlighting
               style={[{ fontFamily, fontSize: glyphFontSize }, isActive && styles.highlightedWord]}
+              testID={`mushaf-word-${word.location}`}
             >
               {word.qpcV1}
             </Text>

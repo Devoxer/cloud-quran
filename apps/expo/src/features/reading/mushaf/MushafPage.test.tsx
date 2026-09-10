@@ -297,6 +297,19 @@ describe('the error surface', () => {
     expect(onErrorChange).toHaveBeenLastCalledWith(40, false);
   });
 
+  it('reports the RETRY press so it cannot also toggle the chrome (story 7-6)', async () => {
+    // ⚠️ THE STICKY SURFACE, AND THE DAMAGING HALF OF THE DOUBLE-FIRE. The screen reveals the
+    // chrome via `show()` when the VISIBLE page fails, because the chrome carries the only exit.
+    // A "Try Again" that also ran `toggle()` would take that exit away — and clear the sticky
+    // mark — at the moment the reader was trying to recover. MUTATION: drop `onActionPressIn`.
+    const onInteractionStart = jest.fn();
+    mockLoadPageFont.mockRejectedValue(new Error('offline'));
+    render(<MushafPage pageNumber={40} onInteractionStart={onInteractionStart} />);
+    await screen.findByTestId('mushaf-page-error-40');
+    fireEvent(screen.getByTestId('error-view-action'), 'pressIn');
+    expect(onInteractionStart).toHaveBeenCalledTimes(1);
+  });
+
   it('does not call a page "fine" while it is still loading', async () => {
     // MUTATION: drop the `loading` guard. Every page then reports `false` on its very first
     // render, which is an answer the loader has not given yet.
@@ -312,5 +325,142 @@ describe('the error surface', () => {
     expect(onErrorChange).not.toHaveBeenCalled();
     await act(async () => resolveLayout(PAGE_40));
     expect(onErrorChange).toHaveBeenCalledWith(40, false);
+  });
+});
+
+/**
+ * ⚠️ TAP-TO-SEEK ON THE FACSIMILE (story 7-6). The word `<Text>` nodes already existed for the
+ * highlight; this story gives them `onPress`/`onPressIn` and nothing else — no wrapper views, no
+ * gesture detectors, because a word is a nested text node inside a justified RTL line and boxing
+ * it breaks the page.
+ */
+describe('the word press', () => {
+  it('reports the pair from `location`, not from the line it sits on', async () => {
+    const onPressVerse = jest.fn();
+    render(<MushafPage pageNumber={40} onPressVerse={onPressVerse} />);
+    await screen.findByTestId('mushaf-page-40');
+    // ⚠️ THE THIRD WORD IS 2:15's, ON A LINE WHOSE `verseRange` READS "2:1-2:15". A press that
+    // took the range — or the line's first verse — would seek to 2:1 and the recitation would
+    // jump backwards fourteen ayahs.
+    fireEvent.press(screen.getByText('ﭓ'));
+    expect(onPressVerse).toHaveBeenCalledWith(2, 15);
+  });
+
+  it('…and a DRIFTED `verseRange` cannot move it — the 565-line defect, as a press', async () => {
+    // MUTATION: parse `line.verseRange` instead of `word.location`. 565 committed lines carried a
+    // drifted range before story 6-2 regenerated the data, so this is not a hypothetical.
+    const onPressVerse = jest.fn();
+    mockGetPageLayout.mockResolvedValue({
+      page: 50,
+      lines: [
+        {
+          line: 1,
+          type: 'text',
+          text: 'x',
+          verseRange: '9:1-9:1',
+          words: [{ location: '2:255:1', word: 'a', qpcV1: 'ﭔ', qpcV2: '' }],
+        },
+      ],
+    } as MushafPageLayout);
+    render(<MushafPage pageNumber={50} onPressVerse={onPressVerse} />);
+    await screen.findByTestId('mushaf-page-50');
+    fireEvent.press(screen.getByText('ﭔ'));
+    expect(onPressVerse).toHaveBeenCalledWith(2, 255);
+  });
+
+  it('reports the interaction on press-IN, so the press does not ALSO toggle the chrome', async () => {
+    // ⚠️ TOUCH DOWN, and that is the whole mechanism: the surface's RNGH tap reads the latch at
+    // touch UP, so the two touch systems are ordered by physics rather than by dispatch order.
+    const onInteractionStart = jest.fn();
+    render(
+      <MushafPage
+        pageNumber={40}
+        onPressVerse={jest.fn()}
+        onInteractionStart={onInteractionStart}
+      />
+    );
+    await screen.findByTestId('mushaf-page-40');
+    fireEvent(screen.getByText('ﭑ'), 'pressIn');
+    expect(onInteractionStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes no press on a basmala row — there is no ayah there to seek to', async () => {
+    // The layout's `basmala` and `surah-header` rows carry no `words`, so they are the boundary
+    // of what is pressable; a press there is an ordinary empty-area tap and toggles the chrome.
+    const onPressVerse = jest.fn();
+    render(<MushafPage pageNumber={40} onPressVerse={onPressVerse} />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(screen.getByText(BASMALA_TEXT).props.onPress).toBeUndefined();
+    expect(screen.getByText(SURAH_METADATA[1].nameArabic).props.onPress).toBeUndefined();
+  });
+
+  it('renders a page with no handlers at all — the props are optional', async () => {
+    // MUTATION: make either handler required. `MushafPage` has one consumer today, but a page
+    // with no player behind it must render plain glyphs rather than crash.
+    render(<MushafPage pageNumber={40} />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(screen.getByText('ﭑ').props.onPress).toBeUndefined();
+    expect(() => fireEvent.press(screen.getByText('ﭑ'))).not.toThrow();
+  });
+
+  it('takes NO touch at all without `onPressVerse`, even when a reporter is given', async () => {
+    // ⚠️ RN `Text` BECOMES PRESSABLE ON `onPressIn` ALONE. An unconditionally-wired reporter
+    // therefore made every word swallow the touch and suppress the chrome while doing nothing —
+    // the reader loses the chrome tap over the whole page and gains no seek. `VerseRow` avoids
+    // the same trap with `disabled={!onPressVerse}`.
+    const onInteractionStart = jest.fn();
+    render(<MushafPage pageNumber={40} onInteractionStart={onInteractionStart} />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(screen.getByText('ﭑ').props.onPressIn).toBeUndefined();
+    fireEvent(screen.getByText('ﭑ'), 'pressIn');
+    expect(onInteractionStart).not.toHaveBeenCalled();
+  });
+
+  it('leaves a word whose `location` is out of range unpressable, in BOTH directions', async () => {
+    // MUTATION: keep only the `Number.isInteger` check. `Number.parseInt` accepts '0' and '-1',
+    // so `'0:0:1'` produced `playSurah(0, 0)` — a request for a surah that does not exist —
+    // rather than a word that simply takes no touch. A page whose data is wrong must be inert,
+    // never confidently wrong about the Quran.
+    const onPressVerse = jest.fn();
+    const onInteractionStart = jest.fn();
+    mockGetPageLayout.mockResolvedValue({
+      page: 51,
+      lines: [
+        {
+          line: 1,
+          type: 'text',
+          text: 'x',
+          verseRange: '1:1-1:1',
+          words: [
+            { location: '0:0:1', word: 'a', qpcV1: 'ﭕ', qpcV2: '' },
+            { location: '115:1:1', word: 'b', qpcV1: 'ﭖ', qpcV2: '' },
+            { location: '2:255:1', word: 'c', qpcV1: 'ﭗ', qpcV2: '' },
+          ],
+        },
+      ],
+    } as MushafPageLayout);
+    render(
+      <MushafPage
+        pageNumber={51}
+        onPressVerse={onPressVerse}
+        onInteractionStart={onInteractionStart}
+      />
+    );
+    await screen.findByTestId('mushaf-page-51');
+    for (const glyph of ['ﭕ', 'ﭖ']) {
+      expect(screen.getByText(glyph).props.onPress).toBeUndefined();
+      expect(screen.getByText(glyph).props.onPressIn).toBeUndefined();
+    }
+    // …and the good word beside them still works, so the guard is a filter and not an off switch.
+    fireEvent.press(screen.getByText('ﭗ'));
+    expect(onPressVerse).toHaveBeenCalledWith(2, 255);
+    expect(onPressVerse).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not draw iOS’s press highlight over the facsimile', async () => {
+    // A grey rectangle flashing across a page whose whole premise is faithful rendering.
+    render(<MushafPage pageNumber={40} onPressVerse={jest.fn()} />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(screen.getByText('ﭑ').props.suppressHighlighting).toBe(true);
   });
 });

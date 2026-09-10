@@ -54,8 +54,13 @@ jest.mock('expo-router', () => {
   };
 });
 
-/** Every tap gesture the screen built, with its chained configuration and its handler. */
-const mockTaps: { settings: string[]; end?: () => void }[] = [];
+/**
+ * Every tap gesture the screen built, with its chained configuration and its handlers.
+ * ⚠️ `finalize` ARRIVED WITH STORY 7-6 and is not decoration: it is the edge that resets the
+ * empty-area latch on a FAILED tap (a drag), so a mock without it models a gesture whose
+ * suppression never clears.
+ */
+const mockTaps: { settings: string[]; end?: () => void; finalize?: () => void }[] = [];
 
 jest.mock('react-native-gesture-handler', () => {
   // ⚠️ NO TYPE ANNOTATIONS INSIDE THIS FACTORY — Jest's hoisting guard rejects any identifier it
@@ -75,6 +80,10 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.maxDistance = setting('maxDistance');
     gesture.onEnd = (callback: any) => {
       gesture.end = callback;
+      return gesture;
+    };
+    gesture.onFinalize = (callback: any) => {
+      gesture.finalize = callback;
       return gesture;
     };
     mockTaps.push(gesture);
@@ -169,11 +178,12 @@ jest.mock('@/lib/quranDb', () => ({
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ViewToken } from 'react-native';
 import Read from '@/app/(tabs)/read';
-import { ARABIC_FONT_SIZE, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 // ⚠️ THE CONSTANT, NOT A LITERAL `56`. The padding case is the surviving half of a coupling whose
 // other half (`ReadingChrome.test.tsx` asserting the bar RENDERS at this height) story 6-6
 // deleted; measuring the padding against a hand-typed number would leave the pair free to drift
 // apart in both directions at once.
+import { DURATIONS } from '@/constants/animation';
+import { ARABIC_FONT_SIZE, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 
@@ -201,10 +211,24 @@ function reportVisible(item: TestVerse) {
   act(() => handler({ viewableItems: [{ item, key: '', index: 0, isViewable: true }] }));
 }
 
-/** Tap the reading surface — the screen's ONE gesture, and the chrome's only reveal. */
+/**
+ * Tap the reading surface — the screen's ONE gesture, and the chrome's only reveal.
+ * ⚠️ BOTH EDGES, IN HARDWARE ORDER (story 7-6): a recognised tap runs `onEnd` and then
+ * `onFinalize`, and the second is what resets the empty-area latch. A helper that fired only
+ * `onEnd` would model a gesture that never resets and would go green on a broken reset.
+ */
 function tapSurface() {
   const tap = mockTaps[mockTaps.length - 1];
-  act(() => tap.end?.());
+  act(() => {
+    tap.end?.();
+    tap.finalize?.();
+  });
+}
+
+/** A drag that started somewhere and never recognised — RNGH runs `onFinalize` alone. */
+function dragSurface() {
+  const tap = mockTaps[mockTaps.length - 1];
+  act(() => tap.finalize?.());
 }
 
 /**
@@ -239,6 +263,47 @@ function chromeTouches(): unknown {
 async function revealChrome() {
   tapSurface();
   await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+}
+
+/**
+ * ⚠️ THE CHROME DESCRIBE RUNS ON FAKE TIMERS, AND STORY 7-6 IS WHY. The chrome now DWELLS: a
+ * reveal puts itself away after `CHROME_DWELL_MS` (5s) of wall-clock. Every chrome case here
+ * reads the bars within milliseconds of revealing them, so none is close to that today — but a
+ * case that grew one more `waitFor` would go intermittently red on a loaded machine, and a
+ * flake that only appears under load is the worst kind to diagnose. Freezing the clock for that
+ * block removes the class rather than the instance. The DWELL ITSELF is covered in
+ * `ReadingChrome.test.tsx`, which drives it deliberately.
+ *
+ * `settle()` below has to work in both modes, because other describes in this file use it on the
+ * real clock.
+ */
+let fakeTimers = false;
+
+/**
+ * ⚠️ WAIT OUT A REVEAL BEFORE ASSERTING THERE WASN'T ONE. `chromeTouches()` is `'none'` both when
+ * the chrome is dismissed AND while it is still fading in, so a synchronous "expect none" right
+ * after a tap passes whether or not the toggle ran — three cases in this file were exactly that
+ * restatement until story 7-6's review mutated `useSurfaceTap` and watched them stay green. A
+ * reveal reaches `pointerEvents` only after the timing lands and `runOnJS` hops the setter back,
+ * so a case asserting the chrome did NOT come back has to burn the same wall-clock first.
+ * (`mushaf-screen.test.tsx` has the same helper, for the same reason.)
+ */
+async function settle() {
+  if (fakeTimers) {
+    await act(async () => {
+      jest.advanceTimersByTime(DURATIONS.standard * 2);
+    });
+    return;
+  }
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, DURATIONS.standard * 2));
+  });
+}
+
+/** The chrome did not move: still no touches once a reveal would have finished. */
+async function expectChromeStayedHidden() {
+  await settle();
+  expect(chromeTouches()).toBe('none');
 }
 
 beforeEach(() => {
@@ -348,6 +413,23 @@ describe('it shows verses', () => {
     await waitFor(() => expect(screen.getByTestId('chrome-tab-(profile)')).toBeTruthy());
     fireEvent.press(screen.getByTestId('chrome-tab-(profile)'));
     expect(mockNavigate).toHaveBeenCalledWith('/account');
+  });
+
+  it('keeps that exit on screen when the reader presses Try Again (story 7-6)', async () => {
+    // ⚠️ THE MOST DAMAGING DOUBLE-FIRE OF THE THREE THIS STORY CLOSES. This surface is revealed
+    // STICKILY — the chrome carries the ONLY way out of a failed screen — so a retry that also
+    // ran the chrome toggle hid that exit AND cleared the sticky mark, at the exact moment the
+    // reader was trying to recover. MUTATION: drop `onActionPressIn` from the `ErrorView`.
+    mockGetSurahVerses.mockImplementation(async () => []);
+    render(<Read />);
+    await screen.findByTestId('reading-error');
+    await waitFor(() => expect(chromeTouches()).toBe('box-none'));
+    fireEvent(screen.getByTestId('error-view-action'), 'pressIn');
+    tapSurface();
+    // The tap must be a no-op here: the chrome is up and must stay up.
+    await settle();
+    expect(chromeTouches()).toBe('box-none');
+    expect(screen.getByTestId('chrome-tab-(profile)')).toBeTruthy();
   });
 });
 
@@ -775,6 +857,17 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
 });
 
 describe('the chrome, and the gesture that reveals it', () => {
+  // See `fakeTimers` above: the chrome dwells now, and wall-clock is the one thing these cases
+  // must not be at the mercy of.
+  beforeEach(() => {
+    jest.useFakeTimers();
+    fakeTimers = true;
+  });
+  afterEach(() => {
+    fakeTimers = false;
+    jest.useRealTimers();
+  });
+
   it('starts HIDDEN — the screen is immersive when it renders', async () => {
     // ⚠️ THE FROZEN CRITERION: "given the reading screen, when it renders, then it is
     // immersive". Under 6-6 immersion is OURS — the chrome overlays and starts hidden — rather
@@ -800,6 +893,66 @@ describe('the chrome, and the gesture that reveals it', () => {
     // ⚠️ NO `waitFor` HERE, DELIBERATELY. Touches stop on the LEADING edge of a dismissal while
     // the bars are still drawn; only the reveal waits for the animation to finish.
     expect(chromeTouches()).toBe('none');
+  });
+
+  it('does NOT toggle when the touch started on the Arabic — 6-4’s double-fire, reversed', async () => {
+    // ⚠️ THE OWNER REVERSED 6-4’S "named and accepted" CALL ON 2026-09-09. Press-in is touch
+    // DOWN and the gesture’s `onEnd` is touch UP, so the latch is settled when it is read — the
+    // two touch systems are ordered by physics, not by a guess about dispatch order.
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    fireEvent(screen.getByTestId('verse-text-1'), 'pressIn');
+    tapSurface();
+    await expectChromeStayedHidden();
+  });
+
+  it('does NOT toggle when the touch started on the BOOKMARK control either', async () => {
+    // MUTATION: wire the reporter to the verse text alone. Bookmarking would still summon the
+    // chrome — the half of the double-fire story 6-4 actually introduced.
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    fireEvent(screen.getByTestId('bookmark-toggle-1'), 'pressIn');
+    tapSurface();
+    await expectChromeStayedHidden();
+  });
+
+  it('is armed again for the NEXT tap — one suppression, not a mode', async () => {
+    // MUTATION: never reset the latch. The first verse press would kill the chrome tap for the
+    // rest of the session, which reads to a reader as "the chrome stopped working".
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    fireEvent(screen.getByTestId('verse-text-1'), 'pressIn');
+    tapSurface();
+    await revealChrome();
+  });
+
+  it('leaves no residue when a drag STARTS on a verse and never becomes a tap', async () => {
+    // MUTATION: reset in `onEnd` instead of `onFinalize`. A scroll that begins on the Arabic
+    // never reaches `onEnd`, so the flag would survive into the reader’s next chrome tap.
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    fireEvent(screen.getByTestId('verse-text-1'), 'pressIn');
+    dragSurface();
+    await revealChrome();
+  });
+
+  it('does NOT toggle when the touch started on the next/prev-surah control (story 7-6)', async () => {
+    // `SurahNavigator` is the LIST FOOTER, so it sits inside the surface gesture exactly as the
+    // rows do — moving to the next surah used to summon the chrome on the way. MUTATION: drop
+    // `onInteractionStart` from the navigator.
+    render(<Read />);
+    await screen.findByTestId('next-surah-button');
+    fireEvent(screen.getByTestId('next-surah-button'), 'pressIn');
+    tapSurface();
+    await expectChromeStayedHidden();
+  });
+
+  it('…and the same for the PREVIOUS-surah control', async () => {
+    render(<Read />);
+    await screen.findByTestId('prev-surah-button');
+    fireEvent(screen.getByTestId('prev-surah-button'), 'pressIn');
+    tapSurface();
+    await expectChromeStayedHidden();
   });
 
   it('configures the gesture so a tap cannot cancel the RN touches underneath it', async () => {

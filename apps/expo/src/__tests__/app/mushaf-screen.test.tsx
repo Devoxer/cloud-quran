@@ -41,8 +41,13 @@ jest.mock('expo-router', () => {
   };
 });
 
-/** Every tap gesture the screen built, with its chained configuration and its handler. */
-const mockTaps: { settings: string[]; end?: () => void }[] = [];
+/**
+ * Every tap gesture the screen built, with its chained configuration and its handlers.
+ * ⚠️ `finalize` ARRIVED WITH STORY 7-6 and is not decoration: it is the edge that resets the
+ * empty-area latch on a FAILED tap (a drag), so a mock without it models a gesture whose
+ * suppression never clears.
+ */
+const mockTaps: { settings: string[]; end?: () => void; finalize?: () => void }[] = [];
 
 jest.mock('react-native-gesture-handler', () => {
   // ⚠️ NO TYPE ANNOTATIONS INSIDE THIS FACTORY — Jest's hoisting guard rejects any identifier it
@@ -62,6 +67,10 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.maxDistance = setting('maxDistance');
     gesture.onEnd = (callback: any) => {
       gesture.end = callback;
+      return gesture;
+    };
+    gesture.onFinalize = (callback: any) => {
+      gesture.finalize = callback;
       return gesture;
     };
     mockTaps.push(gesture);
@@ -130,10 +139,31 @@ function settleOnPage(page: number) {
   act(() => handler({ viewableItems: [{ item: page, key: '', index: 0, isViewable: true }] }));
 }
 
-/** Tap the surface — the screen's ONE gesture, and the chrome's only reveal. */
+/**
+ * Tap the surface — the screen's ONE gesture, and the chrome's only reveal.
+ * ⚠️ BOTH EDGES, IN HARDWARE ORDER — see `read-screen.test.tsx` for why `onFinalize` matters.
+ */
 function tapSurface() {
   const tap = mockTaps[mockTaps.length - 1];
-  act(() => tap.end?.());
+  act(() => {
+    tap.end?.();
+    tap.finalize?.();
+  });
+}
+
+/**
+ * The props `renderPage` hands `MushafPage` for a given page. The list mock renders no items
+ * (see the file header), so this is how the screen→page wiring is inspected.
+ */
+function pageProps(page: number): {
+  activeVerseKey?: string | null;
+  onPressVerse?: (surah: number, verse: number) => void;
+  onInteractionStart?: () => void;
+} {
+  const renderItem = listProps().renderItem as (info: { item: number }) => {
+    props: { children: { props: Record<string, unknown> } };
+  };
+  return renderItem({ item: page }).props.children.props;
 }
 
 /**
@@ -160,15 +190,41 @@ async function revealChrome() {
 }
 
 /**
+ * ⚠️ THE CHROME DESCRIBE RUNS ON FAKE TIMERS — see `read-screen.test.tsx` for the full note. The
+ * chrome dwells since story 7-6, so a chrome case that grew one more `waitFor` could outlive the
+ * reveal it is asserting about on a loaded machine. The page-failure describe below stays on the
+ * real clock: those reveals come from `show()` and are sticky, so no dwell is ever armed there.
+ */
+let fakeTimers = false;
+
+/**
  * Wait out everything a reveal needs to reach `pointerEvents`: the timing itself plus the
  * `runOnJS` hop that flips `interactive`. `revealChrome` polls for the POSITIVE answer and can
  * stop early; a case asserting the chrome did NOT come back has to burn the same wall-clock or
  * it passes vacuously.
  */
 async function settle() {
+  if (fakeTimers) {
+    await act(async () => {
+      jest.advanceTimersByTime(DURATIONS.standard * 2);
+    });
+    return;
+  }
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, DURATIONS.standard * 2));
   });
+}
+
+/** The chrome did not move: still no touches once a reveal would have finished. */
+async function expectChromeStayedHidden() {
+  await settle();
+  expect(chromeTouches()).toBe('none');
+}
+
+/** A drag that started somewhere and never recognised — RNGH runs `onFinalize` alone. */
+function dragSurface() {
+  const tap = mockTaps[mockTaps.length - 1];
+  act(() => tap.finalize?.());
 }
 
 beforeEach(() => {
@@ -338,6 +394,15 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
 });
 
 describe('the chrome, and the gesture that reveals it', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    fakeTimers = true;
+  });
+  afterEach(() => {
+    fakeTimers = false;
+    jest.useRealTimers();
+  });
+
   it('starts HIDDEN — the mushaf is immersive when it renders', () => {
     render(<Mushaf />);
     expect(chromeTouches()).toBe('none');
@@ -358,6 +423,37 @@ describe('the chrome, and the gesture that reveals it', () => {
     expect(tap.settings).toContain('cancelsTouchesInView(false)');
     expect(tap.settings).toContain('runOnJS(true)');
     expect(tap.end).toBeInstanceOf(Function);
+  });
+
+  it('does NOT toggle when a word took the touch — the empty-area rule', async () => {
+    // ⚠️ THE LIST MOCK RENDERS NO ITEMS (see the file header), so the word press itself is driven
+    // in `MushafPage.test.tsx`. What is checked here is the SCREEN half: the reporter the page is
+    // handed really suppresses this screen's chrome tap. ⚠️ ASSERTED THROUGH A SETTLE — a bare
+    // `expect(chromeTouches()).toBe('none')` also passes while the chrome is still fading IN, so
+    // it stayed green with the suppression removed entirely (7-6's review mutated it).
+    render(<Mushaf />);
+    act(() => pageProps(42).onInteractionStart?.());
+    tapSurface();
+    await expectChromeStayedHidden();
+  });
+
+  it('…and is armed again for the next tap', async () => {
+    // MUTATION: never reset the latch. One word press would kill the chrome tap for the session.
+    render(<Mushaf />);
+    act(() => pageProps(42).onInteractionStart?.());
+    tapSurface();
+    await revealChrome();
+  });
+
+  it('leaves no residue when a PAGE TURN starts on a word — the dominant gesture here', async () => {
+    // ⚠️ THIS IS THE MUSHAF'S COMMON CASE, NOT AN EDGE ONE. A horizontal drag beginning on a word
+    // IS the page turn, so the `onFinalize` reset exists mostly for this surface. MUTATION: reset
+    // in `onEnd` instead — a drag never reaches `onEnd`, so the flag survives the turn and eats
+    // the reader's next chrome tap, and the chrome appears to have stopped working after one swipe.
+    render(<Mushaf />);
+    act(() => pageProps(42).onInteractionStart?.());
+    dragSurface();
+    await revealChrome();
   });
 
   it('names the settled page’s surah — and not the page number, which the page itself draws', async () => {
@@ -419,6 +515,65 @@ describe('the welcome-back banner (story 6-3)', () => {
   });
 });
 
+describe('tap-to-seek on the facsimile (story 7-6)', () => {
+  const store = () => useAudioPlayerStore.getState();
+  const playSurah = jest.fn(async () => {});
+  const seekToVerse = jest.fn(async () => {});
+
+  beforeEach(() => {
+    playSurah.mockClear();
+    seekToVerse.mockClear();
+    act(() => {
+      store().clearPlayback();
+      // What the engine host does at boot; before it the actions are inert, by design.
+      store().registerEngineActions({
+        playSurah,
+        seekToVerse,
+        pause: async () => {},
+        resume: async () => {},
+        stop: async () => {},
+        abandonPlayback: async () => {},
+      });
+    });
+  });
+  afterEach(() => act(() => store().clearPlayback()));
+
+  it('hands every page a press handler and a press-in reporter', () => {
+    // MUTATION: forget either prop in `renderPage`. The facsimile would silently keep the
+    // "no tap handling here" behaviour `MushafPage`'s docblock recorded until this story.
+    render(<Mushaf />);
+    expect(typeof pageProps(42).onPressVerse).toBe('function');
+    expect(typeof pageProps(42).onInteractionStart).toBe('function');
+  });
+
+  it('STARTS the pressed word’s surah when nothing is playing', () => {
+    render(<Mushaf />);
+    act(() => pageProps(42).onPressVerse?.(2, 255));
+    expect(playSurah).toHaveBeenCalledWith(2, 255);
+    expect(seekToVerse).not.toHaveBeenCalled();
+  });
+
+  it('SEEKS inside the track when that surah is already loaded — the shared rule', () => {
+    render(<Mushaf />);
+    act(() => {
+      store().setTrack(2, 'husary', true);
+      store().setPlaybackState('playing');
+    });
+    act(() => pageProps(42).onPressVerse?.(2, 255));
+    expect(seekToVerse).toHaveBeenCalledWith(255);
+    expect(playSurah).not.toHaveBeenCalled();
+  });
+
+  it('keeps the page renderer identity-stable across a page turn', () => {
+    // ⚠️ LOAD-BEARING: `renderPage` is a `useCallback`, and an unstable handler inside it would
+    // re-render all 604 pages on every turn. Both new props are stable by construction.
+    render(<Mushaf />);
+    const before = listProps().renderItem;
+    settleOnPage(41);
+    expect(listProps().renderItem).toBe(before);
+  });
+});
+
 describe('the recitation moves the page, and lights one ayah (story 7-1)', () => {
   const store = () => useAudioPlayerStore.getState();
 
@@ -427,12 +582,7 @@ describe('the recitation moves the page, and lights one ayah (story 7-1)', () =>
   afterEach(() => act(() => store().clearPlayback()));
 
   /** The seam story 6-2 built for exactly this and left unset. */
-  const activeKeyOnPage = (page: number) => {
-    const renderItem = listProps().renderItem as (info: { item: number }) => {
-      props: { children: { props: { activeVerseKey?: string | null } } };
-    };
-    return renderItem({ item: page }).props.children.props.activeVerseKey;
-  };
+  const activeKeyOnPage = (page: number) => pageProps(page).activeVerseKey;
 
   it('hands the page renderer the ayah the engine names', () => {
     render(<Mushaf />);

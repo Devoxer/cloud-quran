@@ -19,6 +19,14 @@
  * they are this component's own contract: Arabic needs `writingDirection` + `textAlign` locally,
  * and the app has no RTL infrastructure to lean on.
  *
+ * ⚠️ THE DOUBLE-FIRE CASE (STORY 7-6) REVERSES WHAT THIS FILE USED TO SAY. Until 2026-09-09 both
+ * of the row's presses ALSO toggled the surface's chrome, and 6-4 recorded that as "named and
+ * accepted"; the owner reversed the call, and the `onInteractionStart` cases below are what makes
+ * the row hold up its end. ⚠️ They assert the WIRING only — that both Pressables report on
+ * press-IN — because the suppression itself is `useSurfaceTap`'s (a touch-down latch read at the
+ * gesture's touch-up), and responder negotiation between the two touch systems is unmockable in
+ * Jest. `onPressIn` rather than `onPress` is the whole design: see that hook.
+ *
  * ⚠️ TWO MORE CASES ARRIVED ON 2026-08-27, BOTH FOLDED BACK FROM THE PRE-FORK ROW, AND BOTH WERE
  * INVISIBLE TO EVERY OTHER GATE — the surface rendered, typechecked, linted and passed 100+ suites
  * while showing a bullet-hole mid-word in a third of the book and a `2:16` debug label above every
@@ -310,6 +318,45 @@ describe('tap to play from a verse (story 7-1)', () => {
     const text = screen.getByTestId('verse-text-1');
     expect(text.props.accessibilityRole).toBeUndefined();
     expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+});
+
+describe('the chrome must not toggle when this row takes the touch (story 7-6)', () => {
+  it('reports the verse press on press-IN, not on press', () => {
+    // ⚠️ THE EDGE IS THE POINT. `onPressIn` is touch DOWN and the surface gesture's `onEnd` is
+    // touch UP, so one physically precedes the other and the latch is settled when it is read.
+    // A latch built on `onPress` would be a race between two touch systems.
+    const onInteractionStart = jest.fn();
+    renderRow({ onPressVerse: jest.fn(), onInteractionStart });
+    fireEvent(screen.getByTestId('verse-text-1'), 'pressIn');
+    expect(onInteractionStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the BOOKMARK press on press-in too — 6-4 accepted this double-fire, 7-6 does not', () => {
+    // MUTATION: wire only the verse text. Bookmarking an ayah would still toggle the chrome —
+    // exactly the behaviour the owner reversed.
+    const onInteractionStart = jest.fn();
+    renderRow({ onInteractionStart });
+    fireEvent(screen.getByTestId('bookmark-toggle-1'), 'pressIn');
+    expect(onInteractionStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('still performs the action the press was for', () => {
+    // Anti-vacuity: suppression must not have cost the row its actual job. `onPressIn` reports,
+    // `onPress` acts, and both fire.
+    const onInteractionStart = jest.fn();
+    const onToggleBookmark = jest.fn();
+    renderRow({ surah: 18, verse: 4, onToggleBookmark, onInteractionStart });
+    fireEvent.press(screen.getByTestId('bookmark-toggle-4'));
+    expect(onToggleBookmark).toHaveBeenCalledWith(18, 4);
+  });
+
+  it('renders unchanged with no reporter — the bookmarks list has no surface gesture', () => {
+    // The prop is optional; `features/bookmarks` renders its own rows, and `read.tsx` is
+    // `VerseRow`'s only consumer, so this pins the CONTRACT.
+    renderRow({ onPressVerse: jest.fn() });
+    expect(() => fireEvent(screen.getByTestId('verse-text-1'), 'pressIn')).not.toThrow();
+    expect(screen.getByTestId('verse-text-1')).toBeTruthy();
   });
 });
 
