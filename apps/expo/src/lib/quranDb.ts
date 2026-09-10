@@ -58,7 +58,7 @@
  * ── Why the asset is imported into the SQLite directory ──────────────────────────────────────
  *
  * A bundled `.db` lives in the app bundle (iOS) or inside the APK (Android), neither of which
- * SQLite can open for writing — and `openDatabaseSync` opens READWRITE|CREATE, so pointing it at
+ * SQLite can open for writing — and the open is READWRITE|CREATE, so pointing it at
  * the asset path fails rather than degrading. `importDatabaseFromAssetAsync` is upstream's own
  * implementation of `<SQLiteProvider assetSource={…}>`: it resolves the asset, then asks the
  * native module to copy it into the SQLite directory once. We use the imperative form because the
@@ -73,7 +73,7 @@
  * time against the repo's copy, not against the device's.
  */
 
-import { importDatabaseFromAssetAsync, openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
+import { importDatabaseFromAssetAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import type { Surah, Verse } from 'quran-data';
 
 /**
@@ -140,7 +140,7 @@ let opening: Promise<SQLiteDatabase> | null = null;
  * the reading screen's error state offers — actually re-attempts rather than replaying the stored
  * failure forever. A successful open is cached for the process.
  *
- * ⚠️ AND A HALF-OPEN IS CLOSED RATHER THAN DROPPED. `openDatabaseSync` can succeed and the PRAGMA
+ * ⚠️ AND A HALF-OPEN IS CLOSED RATHER THAN DROPPED. `openDatabaseAsync` can succeed and the PRAGMA
  * still reject — a locked file, a corrupt page, a native module that answers the open and then
  * fails the first statement. Without the `try`, that path throws away a LIVE connection with no
  * reference to it: the module has no handle to close, and the error state's retry opens another
@@ -153,7 +153,14 @@ async function openQuranDb(): Promise<SQLiteDatabase> {
       await importDatabaseFromAssetAsync(QURAN_DATABASE_NAME, {
         assetId: require('@/data/quran.db'),
       });
-      const opened = openDatabaseSync(QURAN_DATABASE_NAME);
+      // ⚠️ `openDatabaseAsync`, NEVER `openDatabaseSync` — AND THAT IS THE SAME WEB DEFECT THE
+      // READS ABOVE ARE ASYNC FOR, caught one layer higher. Story 6-1 made every QUERY async
+      // because `expo-sqlite@56`'s web backend serves `*Sync` calls over a `SharedArrayBuffer`
+      // whose byte-length write truncates to `length & 0xFF`; it left the OPEN sync, which walks
+      // into the identical channel. Measured 2026-09-10: `/` and `/read` rendered the "Quran text
+      // could not be opened" surface with `Error: invokeWorkerSync`, so the web build has shown no
+      // Quran text since 6-1 and every web smoke since has exercised chrome and transport only.
+      const opened = await openDatabaseAsync(QURAN_DATABASE_NAME);
       try {
         // See the header: this is the closest thing to a read-only open flag that exists here.
         await opened.execAsync('PRAGMA query_only = ON;');

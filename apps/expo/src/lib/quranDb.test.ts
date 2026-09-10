@@ -39,7 +39,7 @@ const mockExeced: string[] = [];
 /**
  * Set by a test to make one leg of the open fail.
  *   • `importFailure` — the asset never reaches the SQLite directory.
- *   • `pragmaFailure` — `openDatabaseSync` SUCCEEDS and the first statement does not, which is a
+ *   • `pragmaFailure` — the open SUCCEEDS and the first statement does not, which is a
  *     locked file, a corrupt page, or a native module that answers the open and then fails.
  */
 const mockState = { importFailure: null as Error | null, pragmaFailure: null as Error | null };
@@ -57,7 +57,11 @@ jest.mock('expo-sqlite', () => ({
     mockImports(name);
     if (mockState.importFailure) throw mockState.importFailure;
   }),
-  openDatabaseSync: () => {
+  // ⚠️ ASYNC, MIRRORING THE MODULE. The open was `openDatabaseSync` until 2026-09-10, when it
+  // was found walking into the very `WorkerChannel` defect story 6-1 made every READ async to
+  // avoid — so the web build had shown no Quran text at all since 6-1. A mock that still exposed
+  // only the sync name would let that regress silently.
+  openDatabaseAsync: async () => {
     // ⚠️ CAMELCASE. See the header — the lowercase spelling is silently ignored and would open
     // the shipped Quran database read-WRITE from a test run.
     const { DatabaseSync: Driver } = require('node:sqlite');
@@ -296,7 +300,7 @@ describe('opening', () => {
   });
 
   it('CLOSES the connection when the read-only PRAGMA rejects, rather than leaking it', async () => {
-    // ⚠️ `openDatabaseSync` CAN SUCCEED AND THE FIRST STATEMENT STILL FAIL — a locked file, a
+    // ⚠️ THE OPEN CAN SUCCEED AND THE FIRST STATEMENT STILL FAIL — a locked file, a
     // corrupt page, a native module that answers the open and then does not. Without the `try`,
     // that path threw away a LIVE connection with no reference to it: the module had no handle to
     // close, and the reading screen's error state offers a RETRY, so every press opened another
