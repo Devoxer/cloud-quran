@@ -362,6 +362,7 @@ export function MushafPage({
       selectedPrefix={selectedPrefix}
       styles={styles}
       onSelectVerse={onSelectVerse}
+      onToggleChrome={onToggleChrome}
     />
   ));
 
@@ -443,6 +444,21 @@ interface MushafLineViewProps {
   styles: MushafStyles;
   /** Select a pressed word's ayah. A PROP, not a hook — the renderer stays hookless. */
   onSelectVerse?: (surah: number, verse: number) => void;
+  /**
+   * ⚠️ REVEAL FROM THE LINE ITSELF — BELT AND BRACES OVER THE PAGE BAND, AND HONESTLY LABELLED
+   * AS SUCH. A line's `<Text>` spans the FULL WIDTH of the column while its glyphs do not, so
+   * whether a tap in the run-in either side reaches the band depends on how the platform
+   * hit-tests a text view holding pressable spans — which is exactly the kind of thing that
+   * differs between iOS and Android and is invisible to every gate.
+   *
+   * ⚠️ THE OWNER REPORTED THE DEAD RUN-IN ON iOS ("the empty area in the left and the right
+   * don't reveal nothing, and sometimes other areas") AND I COULD NOT REPRODUCE IT ON ANDROID:
+   * A/B'd on the emulator against the band-only build, the same point revealed either way. So
+   * this is NOT a measured Android fix and must not be written up as one. What it buys is that
+   * the reveal no longer DEPENDS on hit-testing on any platform — the line answers for itself.
+   * Nested word spans still win where they are (pinned by test, and driven on the emulator).
+   */
+  onToggleChrome?: () => void;
 }
 
 /**
@@ -475,6 +491,7 @@ function MushafLineView({
   selectedPrefix,
   styles,
   onSelectVerse,
+  onToggleChrome,
 }: MushafLineViewProps) {
   if (line.type === 'surah-header') {
     const surahNumber = Number.parseInt(line.surah ?? '0', 10);
@@ -520,6 +537,11 @@ function MushafLineView({
     // page's every line onto a second row (the defect the simulator smoke caught).
     <Text
       testID={`mushaf-line-${line.line}`}
+      // ⚠️ GATED, LIKE THE WORD'S HANDLER BELOW AND FOR THE SAME REASON — RN `Text` becomes
+      // pressable on a handler ALONE, so an unconditional one on a page with no chrome behind it
+      // would swallow the touch and do nothing.
+      onPress={onToggleChrome}
+      suppressHighlighting
       style={[
         styles.arabicLine,
         {

@@ -448,6 +448,36 @@ describe('the word press', () => {
     expect(onToggleChrome).toHaveBeenCalledTimes(3);
   });
 
+  it('reveals from a LINE too — the run-in beside the glyphs is not dead space', async () => {
+    // ⚠️ THE LINE ANSWERS FOR ITSELF RATHER THAN LEANING ON THE BAND BEHIND IT. A line's
+    // `<Text>` is full width while its glyphs are not, so whether a tap in the run-in reaches the
+    // band is a platform hit-testing question. The owner reported the run-in dead on iOS; an A/B
+    // on the Android emulator against the band-only build revealed either way, so this case pins
+    // a behaviour that no longer DEPENDS on hit-testing — not a reproduced Android defect.
+    const onToggleChrome = jest.fn();
+    render(<MushafPage pageNumber={40} onToggleChrome={onToggleChrome} />);
+    await screen.findByTestId('mushaf-page-40');
+    // Line 3 is the fixture's TEXT line — 1 is the surah header and 2 the basmala, neither of
+    // which holds word spans and so neither of which ever swallowed a press.
+    fireEvent.press(screen.getByTestId('mushaf-line-3'));
+    expect(onToggleChrome).toHaveBeenCalledTimes(1);
+  });
+
+  it('…and a WORD inside that line still selects instead, never both', async () => {
+    // MUTATION: the line-level handler is the obvious way to re-introduce the double-fire story
+    // 7-6 was built to remove. Nesting is what prevents it — the word span is the inner
+    // responder — so this pins that adding the outer handler did not cost the inner rule.
+    const onToggleChrome = jest.fn();
+    const onSelectVerse = jest.fn();
+    render(
+      <MushafPage pageNumber={40} onSelectVerse={onSelectVerse} onToggleChrome={onToggleChrome} />
+    );
+    await screen.findByTestId('mushaf-page-40');
+    fireEvent.press(screen.getByText('ﭑ'));
+    expect(onSelectVerse).toHaveBeenCalledTimes(1);
+    expect(onToggleChrome).not.toHaveBeenCalled();
+  });
+
   it('leaves a WORD press to the SELECTION alone — it never toggles the chrome', async () => {
     // MUTATION: put `onToggleChrome` back on the word `<Text>`. This is the whole point of the
     // change: a press on the Quran moves the recitation and does nothing else.
