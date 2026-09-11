@@ -1,5 +1,5 @@
 diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
-index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..4fa80f543be194365129de98053a9462771f5f85 100644
+index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..a5227068b58cefb918552818c03a5ae0b14741bb 100644
 --- a/android/src/main/java/expo/modules/audio/AudioModule.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
 @@ -18,6 +18,7 @@ import androidx.media3.common.C.CONTENT_TYPE_HLS
@@ -10,7 +10,32 @@ index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..4fa80f543be194365129de98053a9462
  import androidx.media3.common.Player
  import androidx.media3.common.util.Util
  import androidx.media3.datasource.DataSource
-@@ -674,13 +675,32 @@ class AudioModule : Module() {
+@@ -507,20 +508,21 @@ class AudioModule : Module() {
+         }
+       }
+ 
++      // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
+       Function("setActiveForLockScreen") { ref: AudioPlayer, active: Boolean, metadata: Metadata?, options: AudioLockScreenOptions? ->
+-        runOnMain {
++        postOnMain {
+           ref.setActiveForLockScreen(active, metadata, options)
+         }
+       }
+ 
+       Function("updateLockScreenMetadata") { ref: AudioPlayer, metadata: Metadata ->
+-        runOnMain {
++        postOnMain {
+           ref.updateLockScreenMetadata(metadata)
+         }
+       }
+ 
+       Function("clearLockScreenControls") { ref: AudioPlayer ->
+-        runOnMain {
++        postOnMain {
+           ref.clearLockScreenControls()
+         }
+       }
+@@ -674,13 +676,32 @@ class AudioModule : Module() {
            playlist.setMediaItemCreator { source ->
              source.uri?.let { uriString ->
                val uri = uriString.toUri()
@@ -44,26 +69,28 @@ index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..4fa80f543be194365129de98053a9462
              }
            }
            playlist.loadInitialPlaylist()
-@@ -852,6 +872,26 @@ class AudioModule : Module() {
+@@ -852,6 +873,28 @@ class AudioModule : Module() {
          }
        }
  
 +      // wisdom-fruits 22.10 (spike): playlist lock-screen controls — attach the playlist's
 +      // multi-item ExoPlayer to the AudioControlsService MediaSession (native transport + title).
++      // cloud-quran: `postOnMain`, not `runOnMain`. THIS is the pair that ANR'd — the playlist
++      // metadata push runs once per ayah during recitation.
 +      Function("setActiveForLockScreen") { playlist: AudioPlaylist, active: Boolean, metadata: Metadata?, options: AudioLockScreenOptions? ->
-+        runOnMain {
++        postOnMain {
 +          playlist.setActiveForLockScreen(active, metadata, options)
 +        }
 +      }
 +
 +      Function("updateLockScreenMetadata") { playlist: AudioPlaylist, metadata: Metadata ->
-+        runOnMain {
++        postOnMain {
 +          playlist.updateLockScreenMetadata(metadata)
 +        }
 +      }
 +
 +      Function("clearLockScreenControls") { playlist: AudioPlaylist ->
-+        runOnMain {
++        postOnMain {
 +          playlist.clearLockScreenControls()
 +        }
 +      }
@@ -71,6 +98,33 @@ index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..4fa80f543be194365129de98053a9462
        Function("destroy") { playlist: AudioPlaylist ->
          playlists.remove(playlist.id)
        }
+@@ -939,6 +982,26 @@ class AudioModule : Module() {
+   private fun <T> runOnMain(block: () -> T): T =
+     runBlocking(appContext.mainQueue.coroutineContext) { block() }
+ 
++  /**
++   * cloud-quran: post to main WITHOUT blocking the caller.
++   *
++   * ⚠️ THIS EXISTS BECAUSE `runOnMain` IS `runBlocking` AND THE LOCK-SCREEN CALLS SIT ON THE HOT
++   * PATH. The JS thread parks waiting for main; if main is simultaneously parked in Fabric's
++   * `executeSynchronouslyOnSameThread_CAN_DEADLOCK` waiting for JS, neither side moves and the app
++   * ANRs mid-recitation. Reproduced three times on an emulator, where the metadata push runs once
++   * per ayah — trace: `main` under `EventBeat::induce`, `mqt_v_js` under `runBlocking` in
++   * `AudioModule.runOnMain`.
++   *
++   * Only safe for calls that RETURN NOTHING and whose receiver tolerates arriving late. The six
++   * lock-screen entry points qualify: each early-returns unless `isActiveForLockScreen` and
++   * null-checks the service binder, so a post landing after teardown is a no-op. Ordering is
++   * preserved — one main-thread queue, FIFO — so an activate followed by a metadata push still
++   * arrives in that order. Do NOT use this for anything whose value JS reads back.
++   */
++  private fun postOnMain(block: () -> Unit) {
++    appContext.mainQueue.launch { block() }
++  }
++
+   private fun checkRecordingPermission() {
+     val permission = ContextCompat.checkSelfPermission(appContext.throwingActivity.applicationContext, Manifest.permission.RECORD_AUDIO)
+     if (permission != PackageManager.PERMISSION_GRANTED) {
 diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
 index c76a9fd2a53743a691782e0f67d0d71401df58f6..9f9a7b25c7a1714782afc701d84378d82d935265 100644
 --- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
