@@ -1,29 +1,6 @@
 import i18n from '@/i18n';
 
 /**
- * formatTime - Format milliseconds to MM:SS display format
- *
- * Story 5.3: Build Full-Screen AudioPlayer Component
- * Epic 5: Core Summary Playback
- *
- * @param ms - Time in milliseconds
- * @returns Formatted time string (e.g., "3:24")
- *
- * @example
- * formatTime(45000)  // "0:45"
- * formatTime(204000) // "3:24"
- */
-export function formatTime(ms: number): string {
-  if (ms < 0 || !isFinite(ms)) return '0:00';
-
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-/**
  * formatSleepRemaining - Compact sleep-timer countdown label.
  *
  * Story 19.5: one formatter shared by the full-player countdown pill, the

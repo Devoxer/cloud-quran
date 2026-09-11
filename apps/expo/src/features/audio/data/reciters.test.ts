@@ -10,6 +10,8 @@
  * a deliberate edit HERE too, made by whoever also ran the pipeline.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { DEFAULT_PREFERENCES } from '@/lib/sync';
 import {
   DEFAULT_RECITER_ID,
@@ -71,6 +73,32 @@ const PUBLISHED_IDS = [
 describe('the catalogue names exactly what the pipeline publishes', () => {
   it('holds the thirty-nine published ids, in order', () => {
     expect(RECITERS.map((reciter) => reciter.id)).toEqual(PUBLISHED_IDS);
+  });
+
+  it("…and PUBLISHED_IDS is the PIPELINE's list, not a transcription of it", () => {
+    /**
+     * ⚠️ WITHOUT THIS, EVERY ASSERTION ABOVE IS CIRCULAR AT ONE REMOVE. `PUBLISHED_IDS` is a
+     * literal typed into this file; the thing that actually decides what exists on the CDN is
+     * `scripts/prepare-audio.ts`. Adding a reciter there and forgetting the app — or the reverse
+     * — leaves every case here green, and the failure surfaces as a 404 on a reader's device.
+     *
+     * Read as SOURCE TEXT rather than imported: the script is a Node pipeline that opens
+     * databases and writes files at import time, and pulling it into jest-expo would run that.
+     *
+     * ⚠️ SETS, NOT ORDER, AND THE DIFFERENCE IS DELIBERATE — the first version of this case
+     * compared sequences and failed on 39 matching ids. The app's order is the PICKER's order
+     * (alphabetical by display name, a product decision); the pipeline's is whatever the build
+     * wants. What must never drift is WHICH voices exist. `holds the thirty-nine published ids,
+     * in order` above already pins the app's order against `PUBLISHED_IDS`.
+     */
+    const script = readFileSync(
+      join(__dirname, '..', '..', '..', '..', '..', '..', 'scripts', 'prepare-audio.ts'),
+      'utf8'
+    );
+    const fromPipeline = [...script.matchAll(/^\s{4}id: '([a-z0-9-]+)',$/gm)].map((m) => m[1]);
+    // Anti-vacuity: a regex that matched nothing would make the next line pass against `[]`.
+    expect(fromPipeline).toHaveLength(39);
+    expect([...fromPipeline].sort()).toEqual([...PUBLISHED_IDS].sort());
   });
 
   it('never names the same voice twice', () => {

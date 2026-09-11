@@ -219,17 +219,24 @@ export default function Mushaf() {
       setCurrentPage(page);
       // The OTHER edge of the failure reveal — see `failedPages` above for why one is not enough.
       if (failedPages.current.has(page)) show();
-      if (!moved.current) {
+      /**
+       * ⚠️ "THE READER MOVED" MEANS THE READER — NOT THE RECITATION. This flag already gated the
+       * position write for exactly that reason; the banner dismissal sat ABOVE the gate and so
+       * counted an audio-driven page turn as a move, which put the welcome-back banner away
+       * without the reader ever touching the screen. The banner's whole contract is that it
+       * survives until the reader moves or its 4s fade elapses.
+       */
+      const readerDriven = playbackRef.current.playbackState !== 'playing';
+      if (!moved.current && readerDriven) {
         if (page === restoreTarget.current) return; // a restore settling is not a move
         moved.current = true;
         setBannerDismissed(true); // the first real move dismisses the welcome-back banner
       }
       const first = getFirstVerseForPage(page);
       if (first.surah === 0) return; // out-of-range answer — nothing true to write
-      // ⚠️ NOT WHILE PLAYING — `read.tsx`'s reasoning, on this surface's cadence. An audio-driven
-      // page turn is the app moving, not the reader, and a long listen would otherwise write a
-      // position per page. The effect below writes once when playback stops.
-      if (playbackRef.current.playbackState === 'playing') return;
+      // ⚠️ NOT WHILE PLAYING — `read.tsx`'s reasoning, on this surface's cadence. A long listen
+      // would otherwise write a position per page. The effect below writes once playback stops.
+      if (!readerDriven) return;
       // Reported every time. `usePosition` decides whether it is a write.
       reportVerse(first.surah, first.verse);
     },

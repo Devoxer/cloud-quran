@@ -52,8 +52,7 @@
     "licenseExpired": "Vuelve a conectarte para seguir escuchando tus descargas."
   },
   "lockScreen": {
-    "unknownTitle": "Título desconocido",
-    "unknownAuthor": "Autor desconocido"
+    "title": "{{surah}} · {{ayah}}"
   },
   "errors": {
     "noAudioAvailable": "No hay audio disponible para reproducir.",
@@ -123,7 +122,12 @@
     },
     "emptyTitle": "No se encontraron recitadores",
     "emptyBody": "Prueba con otro nombre, en inglés o árabe.",
-    "sheetTitle": "Recitador"
+    "sheetTitle": "Recitador",
+    "styleGloss": {
+      "murattal": "Recitación medida y sin adornos.",
+      "mujawwad": "Recitación melódica y ornamentada.",
+      "muallim": "Estilo de enseñanza: frases repetidas para aprender."
+    }
   },
   "download": {
     "sectionLabel": "Sin conexión",

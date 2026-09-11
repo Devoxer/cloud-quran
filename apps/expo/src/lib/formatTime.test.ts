@@ -1,90 +1,20 @@
 /**
- * formatTime Tests
+ * `formatSleepRemaining` — the sleep-timer countdown label.
  *
- * Story 5.3: Build Full-Screen AudioPlayer Component
- * Epic 5: Core Summary Playback
+ * ⚠️ THE `formatTime(ms)` EXPORT AND ITS 78 LINES OF CASES WERE DELETED 2026-09-11, as the
+ * epic-7 boundary sweep. It was inherited from the fork's full-screen player (story 5.3) and had
+ * ZERO consumers in this tree — `components/ui/TimePicker.tsx` carries a comment about a
+ * DIFFERENT local `formatTime(hour, minute, …)`, which is how it kept looking alive. Its tests
+ * passed the whole time, which is exactly the shape the repo's non-negotiable warns about: a
+ * green suite is not evidence that anything calls the thing.
+ *
+ * `formatSleepRemaining` is the opposite case and stays: stories 7-4 and 7-8 gave it real
+ * consumers (`PlaybackOptions`, `ChromeVerseRow`), so the ledger entry that called it orphaned
+ * is out of date.
  */
 
 import i18n from '@/i18n';
-import { formatSleepRemaining, formatTime } from './formatTime';
-
-describe('formatTime', () => {
-  describe('valid inputs', () => {
-    it('formats 0ms as "0:00"', () => {
-      expect(formatTime(0)).toBe('0:00');
-    });
-
-    it('formats 1000ms as "0:01"', () => {
-      expect(formatTime(1000)).toBe('0:01');
-    });
-
-    it('formats 45000ms as "0:45"', () => {
-      expect(formatTime(45000)).toBe('0:45');
-    });
-
-    it('formats 60000ms as "1:00"', () => {
-      expect(formatTime(60000)).toBe('1:00');
-    });
-
-    it('formats 61000ms as "1:01"', () => {
-      expect(formatTime(61000)).toBe('1:01');
-    });
-
-    it('formats 180000ms (3 minutes) as "3:00"', () => {
-      expect(formatTime(180000)).toBe('3:00');
-    });
-
-    it('formats 204000ms as "3:24"', () => {
-      expect(formatTime(204000)).toBe('3:24');
-    });
-
-    it('formats 599000ms as "9:59"', () => {
-      expect(formatTime(599000)).toBe('9:59');
-    });
-
-    it('formats 3599000ms (59:59) correctly', () => {
-      expect(formatTime(3599000)).toBe('59:59');
-    });
-
-    it('handles times over an hour', () => {
-      // 1 hour, 5 minutes, 30 seconds
-      expect(formatTime(3930000)).toBe('65:30');
-    });
-  });
-
-  describe('edge cases', () => {
-    it('handles negative values gracefully by returning "0:00"', () => {
-      expect(formatTime(-1000)).toBe('0:00');
-      expect(formatTime(-100)).toBe('0:00');
-    });
-
-    it('handles NaN gracefully by returning "0:00"', () => {
-      expect(formatTime(NaN)).toBe('0:00');
-    });
-
-    it('handles Infinity gracefully by returning "0:00"', () => {
-      expect(formatTime(Infinity)).toBe('0:00');
-      expect(formatTime(-Infinity)).toBe('0:00');
-    });
-
-    it('rounds down milliseconds (floors to nearest second)', () => {
-      expect(formatTime(1999)).toBe('0:01'); // 1.999 seconds -> 1 second
-      expect(formatTime(59999)).toBe('0:59'); // 59.999 seconds -> 59 seconds
-    });
-  });
-
-  describe('formatting', () => {
-    it('pads single-digit seconds with leading zero', () => {
-      expect(formatTime(5000)).toBe('0:05');
-      expect(formatTime(65000)).toBe('1:05');
-    });
-
-    it('does not pad minutes with leading zero', () => {
-      expect(formatTime(60000)).toBe('1:00');
-      expect(formatTime(540000)).toBe('9:00');
-    });
-  });
-});
+import { formatSleepRemaining } from './formatTime';
 
 describe('formatSleepRemaining (Story 19.5)', () => {
   it('returns "End" for end-of-section regardless of ms', () => {

@@ -521,6 +521,35 @@ describe('the welcome-back banner (story 6-3)', () => {
     settleOnPage(41);
     expect(screen.queryByTestId('welcome-back-banner')).toBeNull();
   });
+
+  it('survives an AUDIO-driven page turn — the recitation moving is not the reader moving', () => {
+    /**
+     * ⚠️ THE BANNER'S CONTRACT IS "UNTIL THE READER MOVES", AND THE PAGE FOLLOWS THE RECITATION
+     * (story 7-1). So a listener watching the mushaf scroll itself had the banner taken away
+     * without ever touching the screen. The position write was already gated on exactly this
+     * flag; the dismissal sat above the gate. MUTATION: move `setBannerDismissed` back above the
+     * `readerDriven` check and this reddens while every case above stays green.
+     */
+    mockReadingPositionRow.current = {
+      surah: 2,
+      verse: 255,
+      updatedAt: Date.now() - EIGHT_DAYS_MS,
+    };
+    render(<Mushaf />);
+    act(() => {
+      useAudioPlayerStore.getState().setPlaybackState('playing');
+    });
+    settleOnPage(42);
+    settleOnPage(41);
+    expect(screen.getByTestId('welcome-back-banner')).toBeTruthy();
+
+    // …and once the recitation stops, the reader's own next turn still dismisses it.
+    act(() => {
+      useAudioPlayerStore.getState().setPlaybackState('paused');
+    });
+    settleOnPage(40);
+    expect(screen.queryByTestId('welcome-back-banner')).toBeNull();
+  });
 });
 
 describe('a word press SELECTS its ayah — and makes no sound (story 7-8)', () => {

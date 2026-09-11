@@ -136,6 +136,15 @@ describe('grouping — murattal, then mujawwad, then muallim', () => {
     expect(screen.getByTestId('reciter-style-murattal')).toBeTruthy();
     expect(screen.getByTestId('reciter-style-mujawwad')).toBeTruthy();
     expect(screen.getByTestId('reciter-style-muallim')).toBeTruthy();
+    /**
+     * ⚠️ AND EACH HEADING GLOSSES ITSELF. Murattal / Mujawwad / Muallim stay untranslated —
+     * they are technical terms, not copy — which means the divider teaches a reader nothing on
+     * its own. Literal expected strings, because the value of the line IS its wording; reading
+     * them back through `t()` would restate the bundle rather than test it.
+     */
+    expect(screen.getByText('Measured, unadorned recitation.')).toBeTruthy();
+    expect(screen.getByText('Ornamented, melodic recitation.')).toBeTruthy();
+    expect(screen.getByText('Teaching style — phrases repeated to learn by.')).toBeTruthy();
     expect(screen.getByTestId('reciter-row-alafasy')).toBeTruthy();
   });
 });

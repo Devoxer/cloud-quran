@@ -89,6 +89,7 @@ import {
   SPEED_PERSIST_DEBOUNCE_MS,
   sleepEndLeadMs,
 } from '@/constants/audio';
+import i18n from '@/i18n';
 import { addBreadcrumb, captureException } from '@/lib/errors';
 import {
   isSurahTimed,
@@ -495,7 +496,13 @@ export function useRecitationEngine(selectedReciterId: string): void {
      */
     const announceVerse = (surah: number, verse: number) => {
       pushLockScreen(
-        store.getState().highlightAvailable ? `${surahName(surah)} · ${verse}` : surahName(surah)
+        store.getState().highlightAvailable
+          ? // ⚠️ A KEY, NOT A TEMPLATE LITERAL — this is the one string a reader sees WITHOUT
+            // opening the app, and assembling it here put it beyond `lint:i18n` and the copy
+            // budget entirely (there is no JSX sink for the gate to find). A locale can now move
+            // the ayah, change the separator, or drop it.
+            i18n.t('player:lockScreen.title', { surah: surahName(surah), ayah: verse })
+          : surahName(surah)
       );
     };
 

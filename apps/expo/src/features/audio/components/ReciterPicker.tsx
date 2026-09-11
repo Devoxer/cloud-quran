@@ -208,9 +208,14 @@ export function ReciterPicker({ listFooter }: ReciterPickerProps) {
   const renderRow = ({ item }: { item: ReciterRow }) => {
     if (item.kind === 'style') {
       return (
-        <Text style={styles.groupLabel} testID={`reciter-style-${item.style}`}>
-          {t(`player:reciters.styles.${item.style}`)}
-        </Text>
+        <View testID={`reciter-style-${item.style}`}>
+          <Text style={styles.groupLabel}>{t(`player:reciters.styles.${item.style}`)}</Text>
+          {/* ⚠️ THE GLOSS IS THE POINT OF THE HEADING. Murattal / Mujawwad / Muallim are the
+              ONLY structure in a 39-row list, and they are technical Arabic terms — correctly
+              left untranslated, which also means a reader who does not already know them learns
+              nothing from the divider. One line each says what the grouping is for. */}
+          <Text style={styles.groupGloss}>{t(`player:reciters.styleGloss.${item.style}`)}</Text>
+        </View>
       );
     }
     const { reciter } = item;
@@ -386,6 +391,13 @@ const useStyles = () =>
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase' as const,
       letterSpacing: 1,
+      color: t.colors.text.tertiary,
+    },
+    // Sentence case under the caps heading — the caption treatment, without the caps.
+    groupGloss: {
+      paddingHorizontal: SPACING.lg,
+      paddingBottom: SPACING.sm,
+      fontSize: FONT_SIZE.caption,
       color: t.colors.text.tertiary,
     },
   }));

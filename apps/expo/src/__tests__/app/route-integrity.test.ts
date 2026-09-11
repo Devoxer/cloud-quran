@@ -146,6 +146,33 @@ describe('route tree integrity', () => {
     for (const tab of TABS) expect(urls).toContain(tab.href);
   });
 
+  it('gives every (profile) leaf its own title key — a new one must not inherit "Account"', () => {
+    /**
+     * ⚠️ THE FALLBACK IS SILENT, WHICH IS THE WHOLE PROBLEM. `(profile)/_layout.tsx` resolves a
+     * leaf's header through `TITLE_KEYS[leaf] ?? 'titles.account'`, so a screen added without an
+     * entry does not throw, does not warn and does not render a raw key — it renders "Account"
+     * and looks deliberate. Nothing else in the suite can see that, because the title only
+     * becomes wrong for the leaf that does not exist yet.
+     *
+     * Read from the SOURCE rather than importing the map, which is not exported — and matching
+     * the object literal keeps this honest if the map is ever reordered or reformatted.
+     */
+    const profileDir = join(APP_DIR, '(tabs)', '(profile)');
+    const layout = readFileSync(join(profileDir, '_layout.tsx'), 'utf8');
+    const block = /const TITLE_KEYS = \{([\s\S]*?)\n\} as const;/.exec(layout);
+    expect(block).not.toBeNull();
+    const declared = new Set(
+      [...(block?.[1] ?? '').matchAll(/^\s*'?([A-Za-z0-9-]+)'?:/gm)].map((m) => m[1])
+    );
+
+    const leaves = readdirSync(profileDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && /\.tsx$/.test(e.name) && e.name !== '_layout.tsx')
+      .map((e) => e.name.replace(/\.tsx$/, ''));
+
+    expect(leaves.length).toBeGreaterThan(0); // anti-vacuity: the directory must have been read
+    expect([...leaves].filter((leaf) => !declared.has(leaf))).toEqual([]);
+  });
+
   it('keeps test files out of the route tree', () => {
     // web.output "static" filesystem-scans src/app; Metro's blockList does not filter that scan,
     // so a co-located test becomes a phantom route. Both configs warn about this at length.
