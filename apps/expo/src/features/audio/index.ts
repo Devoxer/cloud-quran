@@ -17,10 +17,19 @@ export {
   type PlaybackOptionsSheetProps,
 } from './components/PlaybackOptionsSheet';
 export { RecitationEngineHost } from './components/RecitationEngineHost';
+// ── story 7-5: offline downloads — the per-surah control and the whole-reciter block ──
+export {
+  ReciterDownloads,
+  type ReciterDownloadsProps,
+} from './components/ReciterDownloads';
 // ── story 7-2: the voice surface, plus the catalogue helpers a settings row needs ──
 export { buildReciterRows, ReciterPicker, type ReciterRow } from './components/ReciterPicker';
 // ── story 7-8: the same picker, embedded in a sheet the chrome's player row opens ──
 export { ReciterSheet, type ReciterSheetProps } from './components/ReciterSheet';
+export {
+  SurahDownloadButton,
+  type SurahDownloadButtonProps,
+} from './components/SurahDownloadButton';
 export {
   DEFAULT_RECITER_ID,
   RECITER_STYLES,
@@ -29,10 +38,12 @@ export {
   type ReciterStyle,
   resolveReciterId,
 } from './data/reciters';
+export { useDownloadReciterId } from './hooks/useDownloadReciterId';
 // ── story 7-7: where a COLD press starts — the saved listening position, read back at last ──
 export { useResumeListening } from './hooks/useResumeListening';
 // ── story 7-6: the one seek-or-start rule, shared by both reading surfaces ──
 export { useVerseSeek, type VerseSeek } from './hooks/useVerseSeek';
+export { DOWNLOADS_SUPPORTED, hydrateDownloadState } from './lib/audioDownloads';
 /**
  * ⚠️ `playbackPrefs` IS NOT EXPORTED AT ALL, and the task list's "export the prefs accessor" is
  * answered by NOT doing it (story 7-4 review, P15). Its only consumer is the engine, which sits

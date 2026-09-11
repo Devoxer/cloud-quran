@@ -22,6 +22,18 @@ jest.mock('@/lib/sync', () => ({
 }));
 
 /**
+ * Which reciters have something on disk, for story 7-5's downloaded indicator.
+ *
+ * ⚠️ THE INDICATOR IS REMOVABLE WITH A GREEN SUITE WITHOUT THESE CASES. Narrowing the trailing
+ * slot's condition from `selected || downloaded` back to `selected` takes the mark off all
+ * thirty-nine rows and nothing else in the tree notices. (Story 7-5 review, P22.)
+ */
+let mockRecitersWithDownloads: string[] = [];
+jest.mock('../lib/audioDownloads', () => ({
+  recitersWithDownloads: () => mockRecitersWithDownloads,
+}));
+
+/**
  * ⚠️ THE GLOBAL FLASHLIST MOCK IS A REAL `FlatList`, WHICH VIRTUALIZES — it renders about ten
  * rows and nothing below them, so `reciter-row-alafasy` (row 22 of 42) simply is not in the tree.
  * A non-virtualizing stand-in is the house answer (`surahs-screen.test.tsx` does the same for the
@@ -45,14 +57,34 @@ jest.mock('@shopify/flash-list', () => {
   return { __esModule: true, FlashList };
 });
 
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { buildReciterRows, ReciterPicker } from './ReciterPicker';
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockPreferences = null;
+  mockRecitersWithDownloads = [];
 });
+
+/**
+ * Render the picker and let the indicator's debounced disk read land.
+ *
+ * The listing walks every reciter directory and this list shares a screen with "download all",
+ * so it is deliberately not synchronous — see the component's docblock.
+ */
+async function renderSettled() {
+  jest.useFakeTimers();
+  try {
+    const view = render(<ReciterPicker />);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    return view;
+  } finally {
+    jest.useRealTimers();
+  }
+}
 
 /** Type into the search field. */
 function search(query: string) {
@@ -216,5 +248,50 @@ describe('choosing a voice', () => {
     render(<ReciterPicker />);
     fireEvent.press(screen.getByTestId('reciter-row-husary-mujawwad'));
     expect(mockPatchPreferences).toHaveBeenCalledWith({ reciterId: 'husary-mujawwad' });
+  });
+});
+
+/**
+ * The mark is `accessibilityElementsHidden` — the ROW carries the label (see the a11y case
+ * below) — so RNTL's default query, which skips hidden subtrees, cannot see it. Asking
+ * explicitly is what makes the absence assertions mean something rather than pass vacuously.
+ */
+const mark = (id: string) =>
+  screen.queryByTestId(`reciter-downloaded-${id}`, { includeHiddenElements: true });
+
+describe('the downloaded indicator (story 7-5)', () => {
+  it('marks only the reciters that have something kept', async () => {
+    mockRecitersWithDownloads = ['husary'];
+    await renderSettled();
+
+    expect(mark('husary')).toBeTruthy();
+    expect(mark('alafasy')).toBeNull();
+  });
+
+  it('marks nobody when nothing is kept', async () => {
+    await renderSettled();
+    expect(mark('husary')).toBeNull();
+  });
+
+  /**
+   * ⚠️ `SettingsRow` PUTS `accessibilityLabel ?? label` ON ITS PRESSABLE, WHICH OVERRIDES ANY
+   * LABEL A NESTED GLYPH CARRIES — the exact failure the row's `selected` prop exists to prevent,
+   * in a new costume. The mark has to reach assistive tech through the ROW. (Review P18.)
+   */
+  it("says so in the ROW's label, not the glyph's", async () => {
+    mockRecitersWithDownloads = ['husary'];
+    await renderSettled();
+
+    expect(screen.getByLabelText('Mahmoud Khalil Al-Husary, has offline downloads')).toBeTruthy();
+  });
+
+  it('shows the selection checkmark and the download mark together', async () => {
+    mockPreferences = { reciterId: 'husary' };
+    mockRecitersWithDownloads = ['husary'];
+    await renderSettled();
+
+    // Both marks on one row: the chosen voice is very often also the downloaded one.
+    expect(mark('husary')).toBeTruthy();
+    expect(screen.getByTestId('reciter-row-husary').props.accessibilityState.selected).toBe(true);
   });
 });

@@ -27,13 +27,31 @@
  * another tap from trying the next one. Popping would make comparing two reciters a four-tap
  * round trip through Settings.
  *
+ * ⚠️ THE DOWNLOADED INDICATOR (story 7-5, deferred here by 7-2) IS READ FROM DISK, NOT FROM THE
+ * QUEUE STORE. The store mirrors ONE reciter at a time — whichever surface hydrated it last —
+ * while this list asks a question about all 39 at once, and a mirror that has only ever been
+ * seeded for the current voice would report every other reciter as empty. One listing of
+ * `{document}/audio` answers all of them.
+ *
+ * ⚠️ IT REFRESHES ON THE COUNT OF *KEPT* SURAHS, AND THE FIRST CUT KEYED ON THE WRONG THING. The
+ * total entry count moves when a download is QUEUED (no file yet) and does NOT move when one
+ * COMPLETES (a status change on a key that already existed) — so a reciter's first kept surah
+ * never lit its indicator while this screen stayed mounted, and a queue lit it before a byte had
+ * landed. Wrong in both directions. `useDownloadedCount` counts `downloaded` rows, which is
+ * exactly "a file was added or removed". (Story 7-5 review, P12.)
+ *
+ * ⚠️ AND THE RE-READ IS DEBOUNCED, BECAUSE THIS LIST SHARES A SCREEN WITH "DOWNLOAD ALL". The
+ * listing walks the audio root and every reciter directory under it; keyed straight on the count
+ * it ran once per completed surah — 114 times on the JS thread, during the one operation the
+ * reader most wants to stay responsive. (Story 7-5 review, P13.)
+ *
  * Grouping and filtering are `buildReciterRows`, exported and unit-tested as a pure function —
  * a rendered list can only be asserted one row at a time, and the property that matters here is
  * the ORDER of all of them.
  */
 
 import { FlashList } from '@shopify/flash-list';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -44,6 +62,7 @@ import { haptics } from '@/lib/haptics';
 import { patchPreferences, usePreferences } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
+import { useDownloadedCount } from '@/stores/downloadQueueStore';
 import {
   RECITER_STYLES,
   RECITERS,
@@ -51,6 +70,7 @@ import {
   type ReciterStyle,
   resolveReciterId,
 } from '../data/reciters';
+import { recitersWithDownloads } from '../lib/audioDownloads';
 
 /** One entry of the flat list: a style heading, or a reciter under it. */
 export type ReciterRow =
@@ -112,6 +132,14 @@ export function buildReciterRows(query: string): ReciterRow[] {
   return rows;
 }
 
+/**
+ * How long the disk listing waits for a draining queue to stop moving. See the docblock.
+ *
+ * Zero would be correct and unaffordable; a few hundred milliseconds is imperceptible on a mark
+ * whose whole job is to say "this voice has something kept".
+ */
+const INDICATOR_REFRESH_DEBOUNCE_MS = 400;
+
 export function ReciterPicker() {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -122,6 +150,18 @@ export function ReciterPicker() {
   const storedId = preferences?.reciterId;
   const selectedId = resolveReciterId(storedId);
   const rows = useMemo(() => buildReciterRows(query), [query]);
+
+  // Kept surahs across every reciter: the value that changes exactly when a file is added or
+  // removed, and never on a progress tick or a queueing. Debounced — see the docblock.
+  const downloadedCount = useDownloadedCount();
+  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setDownloadedIds(new Set(recitersWithDownloads())),
+      INDICATOR_REFRESH_DEBOUNCE_MS
+    );
+    return () => clearTimeout(timer);
+  }, [downloadedCount]);
 
   const choose = (id: string) => {
     // Against the STORED value, not `selectedId` — see the docblock. Tapping the voice the row
@@ -142,6 +182,7 @@ export function ReciterPicker() {
     }
     const { reciter } = item;
     const selected = reciter.id === selectedId;
+    const downloaded = downloadedIds.has(reciter.id);
     return (
       <SettingsRow
         // The names are DATA, not copy — a reciter is called what he is called in every locale.
@@ -151,8 +192,32 @@ export function ReciterPicker() {
         // below has no semantics of its own, so without this an assistive-tech reader cannot tell
         // which of 39 rows is the one in force.
         selected={selected}
+        // ⚠️ THE DOWNLOAD STATE IS COMPOSED INTO THE ROW'S OWN LABEL, because `SettingsRow` puts
+        // `accessibilityLabel ?? label` on its Pressable and that OVERRIDES any label a nested
+        // glyph carries — see the docblock. `selected` has its own prop; this does not.
+        accessibilityLabel={
+          downloaded
+            ? t('player:download.reciterRowA11y', { name: reciter.nameEnglish })
+            : undefined
+        }
+        // ⚠️ BOTH MARKS CAN SHOW AT ONCE, AND THAT IS THE POINT. The chosen voice is very often
+        // also the downloaded one; a trailing slot that could hold only one of the two would hide
+        // "kept offline" on exactly the reciter most likely to have downloads.
         trailing={
-          selected ? <Icon name="checkmark" size={20} color={colors.accent.primary} /> : undefined
+          selected || downloaded ? (
+            <View style={styles.trailing}>
+              {downloaded ? (
+                <Icon
+                  name="cloud-download-outline"
+                  size={18}
+                  color={colors.text.tertiary}
+                  accessibilityElementsHidden
+                  testID={`reciter-downloaded-${reciter.id}`}
+                />
+              ) : null}
+              {selected ? <Icon name="checkmark" size={20} color={colors.accent.primary} /> : null}
+            </View>
+          ) : undefined
         }
         onPress={() => choose(reciter.id)}
         testID={`reciter-row-${reciter.id}`}
@@ -209,6 +274,11 @@ const useStyles = () =>
     },
     search: {
       paddingVertical: SPACING.sm,
+    },
+    trailing: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: SPACING.sm,
     },
     listContent: {
       paddingBottom: SPACING.xl,

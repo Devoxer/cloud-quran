@@ -63,6 +63,29 @@ jest.mock('../lib/playbackPrefs', () => ({
   writeStoredSpeed: (speed: number) => mockWriteSpeed(speed),
 }));
 
+/**
+ * Which surahs this reciter has on disk, for story 7-5's local-first resolver.
+ *
+ * ⚠️ THE ENGINE IS WHERE THE STORY'S PROMISE IS ACTUALLY REMOVABLE. Every other assertion in
+ * this file uses `toContain('/husary/112.mp3')`, which matches the CDN URL *and* a `file://`
+ * path equally well — so reverting `buildSources` to `surahAudioUrl(...)` left the whole suite
+ * green while every downloaded surah silently streamed again. The cases at the bottom of "the
+ * queue is surahs" are the ones that redden for that edit. (Story 7-5 review, P2.)
+ */
+const mockLocalSurahs = new Map<string, string>();
+jest.mock('../lib/audioDownloads', () => ({
+  localSurahUri: (reciterId: string, surah: number) =>
+    mockLocalSurahs.get(`${reciterId}:${surah}`) ?? null,
+  downloadedSurahSet: (reciterId: string) => {
+    const kept = new Set<number>();
+    for (const key of mockLocalSurahs.keys()) {
+      const [id, surah] = key.split(':');
+      if (id === reciterId) kept.add(Number(surah));
+    }
+    return kept;
+  },
+}));
+
 let mockManifestFails = false;
 jest.mock('@/lib/reciterManifest', () => {
   const actual = jest.requireActual('@/lib/reciterManifest');
@@ -182,6 +205,7 @@ beforeEach(() => {
       return { remove: jest.fn() } as never;
     });
   mockManifestFails = false;
+  mockLocalSurahs.clear();
   mockReciterId = 'husary';
   // Before the render below: the boot effect reads this synchronously.
   mockStoredSpeed = 1;
@@ -234,6 +258,37 @@ describe('the queue is surahs', () => {
     });
     expect(createdWith.loop).toBe('none');
     expect(createdWith.updateInterval).toBe(100);
+  });
+
+  /**
+   * ⚠️ THE ZERO-NETWORK-CALLS CRITERION, AS A TEST. A downloaded surah's track must BE the file
+   * path — not merely "contain the surah number", which the CDN URL does too. The neighbour is
+   * asserted in the same case so the rule is "local when local, remote otherwise" rather than
+   * "everything went one way".
+   */
+  it('gives a downloaded surah the FILE as its uri, and its neighbour the CDN', async () => {
+    mockLocalSurahs.set('husary:112', 'file:///documents/audio/husary/112.mp3');
+    await act(async () => {
+      await engine().playSurah(112);
+    });
+
+    expect(createdWith.sources[0].uri).toBe('file:///documents/audio/husary/112.mp3');
+    expect(createdWith.sources[0].uri).not.toContain('http');
+    // 113 is not kept, so it is still streamed — byte for byte the pre-7-5 URL.
+    expect(createdWith.sources[1].uri).toBe(
+      'https://cdn.nobleachievements.com/audio/husary/113.mp3'
+    );
+  });
+
+  it('streams every track when nothing is on disk', async () => {
+    await act(async () => {
+      await engine().playSurah(112);
+    });
+    expect(createdWith.sources.map((source) => source.uri)).toEqual([
+      'https://cdn.nobleachievements.com/audio/husary/112.mp3',
+      'https://cdn.nobleachievements.com/audio/husary/113.mp3',
+      'https://cdn.nobleachievements.com/audio/husary/114.mp3',
+    ]);
   });
 
   it('starting An-Nas queues exactly one track, so the book ends there', async () => {

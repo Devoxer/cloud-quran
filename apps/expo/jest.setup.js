@@ -434,6 +434,48 @@ jest.mock('expo-file-system', () => ({
   EncodingType: { UTF8: 'utf8', Base64: 'base64' },
   FileSystemSessionType: { BACKGROUND: 0, FOREGROUND: 1 },
   FileSystemUploadType: { BINARY_CONTENT: 0, MULTIPART: 1 },
+
+  // ── The SDK-56 class API (story 7-5) ──────────────────────────────────────────────────────
+  //
+  // ⚠️ THIS MOCK USED TO BE LEGACY-ONLY, AND THAT MADE A WHOLE MODULE UNTESTABLE OUTSIDE ITS OWN
+  // SUITE. `lib/mushafFonts.ts`, `lib/reciterManifest.ts` and `features/audio/lib/audioDownloads.ts`
+  // all use `File`/`Directory`/`Paths`; with those undefined, every call from any OTHER suite
+  // threw `Directory is not a constructor` straight into those modules' catch-alls, so a real
+  // misuse of the modern API — a typo'd method, a wrong argument order — could not redden
+  // anything. The stub below is a real, permanently EMPTY filesystem: nothing exists, a download
+  // rejects, and a method that does not exist still throws the way it would on a device. Suites
+  // that need contents re-mock the module locally (see `audioDownloads.test.ts`).
+  Paths: { document: 'file:///mock/documents', cache: 'file:///mock/cache' },
+  Directory: class Directory {
+    constructor(...parts) {
+      this.uri = parts.map((p) => (typeof p === 'string' ? p : p.uri)).join('/');
+      this.exists = false;
+      this.size = 0;
+    }
+    get name() {
+      return this.uri.split('/').pop();
+    }
+    create() {}
+    delete() {}
+    list() {
+      return [];
+    }
+  },
+  File: class File {
+    constructor(...parts) {
+      this.uri = parts.map((p) => (typeof p === 'string' ? p : p.uri)).join('/');
+      this.exists = false;
+      this.size = 0;
+    }
+    get name() {
+      return this.uri.split('/').pop();
+    }
+    delete() {}
+    moveSync() {}
+    static downloadFileAsync() {
+      return Promise.reject(new Error('expo-file-system is stubbed empty in jest.setup.js'));
+    }
+  },
 }));
 
 // story 5-2: the `posthog-react-native` mock stood here. The package is uninstalled — zero

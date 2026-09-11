@@ -125,5 +125,31 @@
     "emptyBody": "Essayez un autre nom, en anglais ou en arabe.",
     "sheetTitle": "Récitateur"
   },
+  "download": {
+    "sectionLabel": "Hors ligne",
+    "sectionFootnote": "Les téléchargements sont propres au récitateur et restent sur cet appareil.",
+    "downloadAll": "Télécharger toutes les sourates",
+    "keptNone": "Aucun téléchargement",
+    "keptValue": "{{kept}} sourates sur {{total}} · {{size}}",
+    "confirmTitle": "Télécharger toutes les sourates ?",
+    "confirmMessage": "Environ {{size}} sur {{total}} fichiers. Taille approximative.",
+    "confirmAction": "Télécharger",
+    "removeAll": "Supprimer les téléchargements",
+    "removeAllTitle": "Supprimer les téléchargements ?",
+    "removeAllMessage": "Toutes les sourates de ce récitateur seront effacées de cet appareil.",
+    "removeAllAction": "Supprimer",
+    "downloadA11y": "Télécharger {{name}} pour l'écoute hors ligne",
+    "cancelA11y": "Annuler le téléchargement de {{name}}",
+    "removeA11y": "Supprimer le téléchargement de {{name}}",
+    "retryA11y": "Échec du téléchargement de {{name}} : {{reason}}. Touchez pour réessayer.",
+    "reciterRowA11y": "{{name}}, contient des téléchargements hors ligne",
+    "stop": "Arrêter le téléchargement",
+    "stopValue": "{{active}} encore en attente",
+    "retryFailed": "Réessayer les échecs",
+    "failedValue": "{{failed}} n'ont pas pu être téléchargées",
+    "estimateFailed": "Taille non estimable. Vérifiez votre connexion et réessayez.",
+    "removeOrphans": "Supprimer les voix indisponibles",
+    "orphansValue": "{{size}} pour des récitateurs non proposés"
+  },
   "nowPlayingVerse": "{{name}} · {{verse}}"
 }

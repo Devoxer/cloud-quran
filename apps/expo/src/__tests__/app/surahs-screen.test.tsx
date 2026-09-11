@@ -62,12 +62,22 @@ jest.mock('@shopify/flash-list', () => {
 const mockSetReadingPosition = jest.fn();
 const mockReadingPositionRow = { current: null as { surah: number; verse: number } | null };
 
+/**
+ * Story 7-5: the rows carry a per-surah download control, and the screen resolves the reader's
+ * reciter ONCE for all 114 of them.
+ *
+ * ⚠️ `undefined` HERE WOULD RENDER NO CONTROLS AT ALL, WHICH IS THE POINT OF `useDownloadReciterId`
+ * — a pending preference row must not file a download under the default voice. `null` is a
+ * RESOLVED empty row, so the default is the right answer and the controls render.
+ */
+let mockPreferencesRow: { reciterId?: string } | null | undefined = null;
 jest.mock('@/lib/sync', () => ({
   setReadingPosition: (...args: unknown[]) => mockSetReadingPosition(...args),
   useReadingPosition: () => ({ data: mockReadingPositionRow.current }),
+  usePreferences: () => ({ data: mockPreferencesRow }),
 }));
 
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { getPageForVerse } from 'quran-data';
 import Surahs from '@/app/surahs';
 
@@ -105,6 +115,7 @@ beforeEach(() => {
   mockListProps.length = 0;
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
+  mockPreferencesRow = null;
   mockParams.current = {};
 });
 
@@ -127,14 +138,18 @@ describe('the Surahs segment', () => {
     render(<Surahs />);
     // Uniform fixed-height rows make the index exact — the docblock's mushaf precedent.
     expect(listProps().initialScrollIndex).toBe(1);
-    expect(styleOf('surah-row-2').backgroundColor).toBeTruthy();
-    expect(styleOf('surah-row-1').backgroundColor).toBeUndefined();
+    // ⚠️ THE HIGHLIGHT IS ON THE ROW'S WRAPPER, NOT ON `surah-row-N` ITSELF (story 7-5). The
+    // download control is a SIBLING of the `ListRow` rather than a child of its `trailing` slot
+    // — nesting it there makes a `<button>` inside a `<button>` on react-native-web — so the row
+    // stops short of the control and the band has to be painted one level up.
+    expect(styleOf('surah-row-2-container').backgroundColor).toBeTruthy();
+    expect(styleOf('surah-row-1-container').backgroundColor).toBeUndefined();
   });
 
   it('highlights surah 1 for a corrupt saved row — clamp, never trust', () => {
     mockReadingPositionRow.current = { surah: 200, verse: 1 };
     render(<Surahs />);
-    expect(styleOf('surah-row-1').backgroundColor).toBeTruthy();
+    expect(styleOf('surah-row-1-container').backgroundColor).toBeTruthy();
     expect(listProps().initialScrollIndex).toBeUndefined();
   });
 });
@@ -284,5 +299,35 @@ describe('the mode param', () => {
     render(<Surahs />);
     select('surah-row-5');
     expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ mode: 'reading' });
+  });
+});
+
+describe('the per-surah download control (story 7-5)', () => {
+  /**
+   * ⚠️ THE CONTROL IS A SIBLING OF THE ROW, NEVER A CHILD OF ITS `trailing` SLOT, AND THE ONLY
+   * THING THAT EVER SAID SO WAS A SAFARI HYDRATION ERROR. `trailing` renders inside the row's own
+   * `Pressable`, and react-native-web turns every `accessibilityRole="button"` Pressable into a
+   * real `<button>` — so a control in that slot is a `<button>` nested in a `<button>`: invalid
+   * HTML, which React reports as a hydration error. Native renders both nestings perfectly, so
+   * neither tsc, nor jest, nor a device smoke can see the difference. This repo's precedent for a
+   * rule whose only witness is one platform is a scan (`lint:header-controls`); the cheaper form
+   * here is an assertion about the tree, because the placement IS the tree. (Review P25.)
+   */
+  it('is NOT inside the row pressable — the nested-<button> rule', () => {
+    render(<Surahs />);
+
+    const row = screen.getByTestId('surah-row-1');
+    const control = screen.getByTestId('surah-download-1');
+    expect(control).toBeTruthy();
+    // The control exists, and it is not reachable from inside the row's own pressable.
+    expect(within(row).queryByTestId('surah-download-1')).toBeNull();
+  });
+
+  it('renders NO control while the reciter preference is still pending', () => {
+    mockPreferencesRow = undefined;
+    render(<Surahs />);
+
+    expect(screen.getByTestId('surah-row-1')).toBeTruthy();
+    expect(screen.queryByTestId('surah-download-1')).toBeNull();
   });
 });

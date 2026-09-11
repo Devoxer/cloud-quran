@@ -21,6 +21,20 @@
  * ⚠️ THE SAVED ROW IS UNTRUSTED (MMKV): the surah is clamped into 1..114 for the highlight, so a
  * corrupt row highlights surah 1 rather than crashing or highlighting nothing.
  *
+ * ⚠️ THE PER-SURAH DOWNLOAD CONTROL LIVES HERE (story 7-5), and this is the only surface that
+ * lists all 114 rows at once — which is what makes it the natural home for "keep this one". The
+ * reciter is resolved ONCE, at the screen, and passed down: 114 rows each subscribing to
+ * `usePreferences` would be 114 subscribers to one query.
+ *
+ * ⚠️ AND IT IS A SIBLING OF THE `ListRow`, NEVER INSIDE ITS `trailing` SLOT — `BookmarkRow`'s
+ * shape, for a reason only the web surface shows. `trailing` renders inside the row's own
+ * `Pressable`, and react-native-web turns every `accessibilityRole="button"` Pressable into a
+ * real `<button>`: a control in that slot is a `<button>` nested in a `<button>`, which is
+ * invalid HTML and which React reports as a hydration error. Measured in Safari against the dev
+ * server, 2026-09-11. Native renders both nestings fine, so nothing but the browser can catch it.
+ * The row keeps the flex, the control sits beside it, and the highlight moves to the wrapper so
+ * it still spans the whole row.
+ *
  * The screen is NOT immersive: `AppHeader` occupies layout (the settings-shell pattern), with the
  * default history-conditional back. On a deep link with no history the back control is ABSENT and
  * a selection `replace`s toward the opener mode's home — never a dead end.
@@ -35,7 +49,7 @@ import {
   SURAH_COUNT,
   SURAH_METADATA,
 } from 'quran-data';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +58,12 @@ import { AppHeader, ListRow, SegmentedControl, Text } from '@/components/ui';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
+import {
+  DOWNLOADS_SUPPORTED,
+  hydrateDownloadState,
+  SurahDownloadButton,
+  useDownloadReciterId,
+} from '@/features/audio';
 import { usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -64,6 +84,19 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
   const insets = useSafeAreaInsets();
   const { saved, reportVerse } = usePosition(mode);
   const [segment, setSegment] = useState<Segment>('surahs');
+  /**
+   * ⚠️ `null` UNTIL THE PREFERENCE ROW RESOLVES, AND THE ROWS RENDER NO CONTROL UNTIL IT DOES.
+   * Defaulting here would file an early press's 3 MB download under `alafasy` while the reader's
+   * real choice was still in flight — a file under a voice they never picked, which only
+   * `deleteOrphanedDownloads` could ever reach. See `useDownloadReciterId`. (Review P10.)
+   */
+  const reciterId = useDownloadReciterId();
+
+  // The queue store mirrors the disk; seed it for this voice so a row can draw its state on the
+  // first frame rather than after the reader presses something.
+  useEffect(() => {
+    if (reciterId !== null) hydrateDownloadState(reciterId);
+  }, [reciterId]);
 
   // Clamp, never trust — the row comes out of MMKV, and the highlight's only job is to point at
   // a real row: an out-of-range surah highlights surah 1 (the frozen matrix's corrupt-row row).
@@ -98,6 +131,18 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
     arabicName: {
       color: theme.colors.text.primary,
       fontSize: FONT_SIZE.h2,
+    },
+    // The row and its offline control, side by side — see the docblock for why the control is
+    // not in the row's `trailing` slot. `paddingRight` replaces the inset the control used to
+    // sit inside, so the glyph lands where it did — and on web, where the control is absent
+    // entirely, it would just be 16pt of missing row inset. (Review P19.)
+    surahRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      paddingRight: DOWNLOADS_SUPPORTED ? SPACING.md : 0,
+    },
+    rowFlex: {
+      flex: 1,
     },
   }));
 
@@ -169,15 +214,31 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
             ? t('index.revelation.meccan')
             : t('index.revelation.medinan');
         return (
-          <ListRow
-            leading={<Text style={styles.number}>{item.number}</Text>}
-            title={item.nameTransliteration}
-            subtitle={t('index.surahSubtitle', { name: item.nameEnglish, verses, revelation })}
-            trailing={<Text style={styles.arabicName}>{item.nameArabic}</Text>}
-            onPress={() => onSelectSurah(item.number)}
-            style={item.number === currentSurah ? styles.currentRow : undefined}
-            testID={`surah-row-${item.number}`}
-          />
+          <View
+            style={[styles.surahRow, item.number === currentSurah ? styles.currentRow : null]}
+            // ⚠️ THE HIGHLIGHT LIVES ON THIS WRAPPER, NOT ON THE `ListRow`. The row no longer
+            // spans the full width (the download control is its sibling), so a background on it
+            // would stop short of the control and leave the current surah's band visibly clipped.
+            testID={`surah-row-${item.number}-container`}
+          >
+            <ListRow
+              leading={<Text style={styles.number}>{item.number}</Text>}
+              title={item.nameTransliteration}
+              subtitle={t('index.surahSubtitle', { name: item.nameEnglish, verses, revelation })}
+              trailing={<Text style={styles.arabicName}>{item.nameArabic}</Text>}
+              onPress={() => onSelectSurah(item.number)}
+              style={styles.rowFlex}
+              testID={`surah-row-${item.number}`}
+            />
+            {reciterId === null ? null : (
+              <SurahDownloadButton
+                reciterId={reciterId}
+                surah={item.number}
+                surahName={item.nameTransliteration}
+                testID={`surah-download-${item.number}`}
+              />
+            )}
+          </View>
         );
       }
       const name =
@@ -203,7 +264,7 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
         />
       );
     },
-    [segment, currentSurah, onSelectSurah, onSelectBoundary, styles, t]
+    [segment, currentSurah, onSelectSurah, onSelectBoundary, reciterId, styles, t]
   );
 
   const rows: IndexRow[] =

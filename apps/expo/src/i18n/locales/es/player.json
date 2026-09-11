@@ -125,5 +125,31 @@
     "emptyBody": "Prueba con otro nombre, en inglés o árabe.",
     "sheetTitle": "Recitador"
   },
+  "download": {
+    "sectionLabel": "Sin conexión",
+    "sectionFootnote": "Las descargas se guardan por recitador y permanecen en este dispositivo.",
+    "downloadAll": "Descargar todas las suras",
+    "keptNone": "Aún no hay descargas",
+    "keptValue": "{{kept}} de {{total}} suras · {{size}}",
+    "confirmTitle": "¿Descargar todas las suras?",
+    "confirmMessage": "Unos {{size}} en {{total}} archivos. El tamaño es aproximado.",
+    "confirmAction": "Descargar",
+    "removeAll": "Eliminar todas las descargas",
+    "removeAllTitle": "¿Eliminar todas las descargas?",
+    "removeAllMessage": "Se borrarán de este dispositivo todas las suras descargadas de este recitador.",
+    "removeAllAction": "Eliminar",
+    "downloadA11y": "Descargar {{name}} para escuchar sin conexión",
+    "cancelA11y": "Cancelar la descarga de {{name}}",
+    "removeA11y": "Eliminar la descarga de {{name}}",
+    "retryA11y": "Falló la descarga de {{name}}: {{reason}}. Toca para reintentar.",
+    "reciterRowA11y": "{{name}}, tiene descargas sin conexión",
+    "stop": "Detener la descarga",
+    "stopValue": "{{active}} aún en cola",
+    "retryFailed": "Reintentar las fallidas",
+    "failedValue": "No se pudieron descargar {{failed}}",
+    "estimateFailed": "No se pudo estimar el tamaño. Revisa tu conexión e inténtalo de nuevo.",
+    "removeOrphans": "Eliminar voces no disponibles",
+    "orphansValue": "{{size}} de recitadores que ya no se ofrecen"
+  },
   "nowPlayingVerse": "{{name}} · {{verse}}"
 }

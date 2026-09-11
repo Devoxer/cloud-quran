@@ -67,7 +67,6 @@ import {
   SLEEP_TICK_MS,
   SPEED_PERSIST_DEBOUNCE_MS,
   sleepEndLeadMs,
-  surahAudioUrl,
 } from '@/constants/audio';
 import { addBreadcrumb, captureException } from '@/lib/errors';
 import {
@@ -79,6 +78,7 @@ import {
 } from '@/lib/reciterManifest';
 import { setAudioPosition } from '@/lib/sync';
 import { type PlaybackState, useAudioPlayerStore } from '@/stores/audioPlayerStore';
+import { resolveSurahUris } from '../lib/audioSource';
 import { readStoredSpeed, writeStoredSpeed } from '../lib/playbackPrefs';
 
 /**
@@ -101,12 +101,29 @@ async function configureAudioMode(): Promise<void> {
   }
 }
 
-/** The tracks for "play from surah n to the end of the book". */
+/**
+ * The tracks for "play from surah n to the end of the book".
+ *
+ * ⚠️ THE URIS COME THROUGH `resolveSurahUris`, WHICH IS THE WHOLE OF STORY 7-5'S PLAYBACK SEAM
+ * (and the only line of this file that story changed). A downloaded surah resolves to its
+ * `file://` path and the network is never consulted for it; everything else resolves to the CDN
+ * URL, byte for byte what it was before. The range form answers all of them from one directory
+ * listing rather than up to 114 stats on the press path. The queue shape, the loop mode and the
+ * lock-screen name are untouched.
+ *
+ * ⚠️ THE RESOLUTION HAPPENS ONCE PER `playSurah`, AND THAT IS THE SHAPE OF ONE ACCEPTED LIMIT.
+ * Deleting the surah that is CURRENTLY LOADED does not move it back to the CDN mid-track — the
+ * player is already holding a handle to the file, and the frozen matrix's "delete → playback
+ * falls back to streaming" is therefore met on the next press rather than instantly. Fixing it
+ * would mean rebuilding the playlist from a delete, which is exactly the queue shape this story
+ * is forbidden to touch. Stated rather than hidden. (Story 7-5 review, P11.)
+ */
 function buildSources(reciterId: string, startSurah: number): AudioSource[] {
+  const uris = resolveSurahUris(reciterId, startSurah, SURAH_COUNT);
   const sources: AudioSource[] = [];
   for (let surah = startSurah; surah <= SURAH_COUNT; surah++) {
     sources.push({
-      uri: surahAudioUrl(reciterId, surah),
+      uri: uris[surah - startSurah],
       // The lock screen reads this per track; the ayah is refreshed separately, mid-track.
       name: SURAH_METADATA[surah - 1]?.nameTransliteration ?? String(surah),
     });
