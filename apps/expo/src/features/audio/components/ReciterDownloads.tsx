@@ -6,37 +6,11 @@
  * Quran index, where the reader is already choosing a surah; this is the bulk answer, and the one
  * that has to be honest about size before it costs anybody a gigabyte.
  *
- * ⚠️ THE ESTIMATE IS COMPUTED BEFORE THE DIALOG OPENS, NOT INSIDE IT. The criterion is that an
- * approximate total was shown BEFORE the confirmation — a dialog that appears first and fills its
- * number in afterwards has already asked the question. So the press loads the reciter's manifest
- * (duration × bitrate; see `estimateReciterDownload`), and only then opens the confirmation. The
- * manifest is the same file highlighting wants, cached in the document directory by
- * `lib/reciterManifest.ts`, so the fetch is not spent solely on this dialog.
- *
- * ⚠️ AND IT IS LABELLED APPROXIMATE IN THE COPY, WHICH IS WHAT MAKES IT HONEST — and the FILE
- * COUNT comes from the manifest rather than from 114, so a reciter described in part cannot be
- * promised in full. A number presented as exact and wrong by 40% is worse than a number presented
- * as a guess and wrong by 40%; a number presented as covering 114 files while covering 90 is
- * worse than both.
- *
- * ⚠️ A FAILED ESTIMATE SAYS SO. The manifest load fails when there is no network, and with no
- * network there is nothing to download either — so the confirmation correctly does not open. What
- * the first cut then did was nothing at all: a pressed row, a blinking spinner, silence. The
- * reasoning was sound and the silence was the defect. (Story 7-5 review, P15.)
- *
- * ⚠️ TWO THINGS ARE CHECKED BETWEEN THE ESTIMATE AND THE DIALOG, AND THEY ARE NOT THE SAME KIND
- * OF THING. Free space REFUSES — a gigabyte that cannot fit is not a decision the reader should
- * be allowed to confirm, and the refusal states the size rather than doing nothing, because a
- * button that quietly declines is indistinguishable from a broken one. A metered connection only
- * WARNS, in the confirmation's own copy: a metered connection is precisely the situation the
- * reader is downloading FOR (it is the owner's stated motivation for the feature), so the app's
- * job there is to make sure nobody spends an allowance by accident, not to decide for them.
- *
- * ⚠️ THE SPACE CHECK IS AS APPROXIMATE AS THE ESTIMATE IT USES, WHICH IS WHY IT IS A FLOOR AND
- * NOT A GUARANTEE. `NOMINAL_BITRATE_BPS` can be out by a factor of two at the extremes, so a
- * download that passes here can still fill the disk — and that lands on the per-row storage-full
- * error the frozen matrix already asks for. What this stops is the obvious case: 1.6 GB onto a
- * device with 400 MB left, discovered 114 failures later.
+ * ⚠️ THE ESTIMATE-THEN-CONFIRM GATE IS `useDownloadAllPrompt`, NOT CODE IN HERE ANY MORE. It
+ * moved when the reciter picker's per-row control became a second caller (2026-09-11): the
+ * frozen criterion is about ORDER — "an approximate total was shown BEFORE the confirmation" —
+ * and two inline copies is how one of them quietly loses the free-space refusal or the metered
+ * wording. Its docblock carries the reasoning for all of it.
  *
  * ⚠️ A RUNNING QUEUE HAS A VISIBLE STOP, AND IT IS NOT OPTIONAL. Per-row cancel lives on another
  * screen, remove-all renders only once something is kept, and the reciter picker sits directly
@@ -59,25 +33,22 @@ import { View } from 'react-native';
 
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
-import { isMeteredConnection } from '@/lib/connectivity';
 import { formatBytes } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
-import { loadReciterManifest } from '@/lib/reciterManifest';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
 import { RECITERS } from '../data/reciters';
+import { type DownloadAllRefusalKind, useDownloadAllPrompt } from '../hooks/useDownloadAllPrompt';
 import {
-  availableDownloadSpace,
   cancelReciterDownloads,
   deleteOrphanedDownloads,
   deleteReciterDownloads,
-  estimateReciterDownload,
   hydrateDownloadState,
   orphanedDownloadBytes,
-  queueReciterDownloads,
   reciterBytesOnDisk,
   retryFailedDownloads,
 } from '../lib/audioDownloads';
+import { DownloadProgress } from './DownloadProgress';
 
 export interface ReciterDownloadsProps {
   /** The voice whose downloads these are — the reader's current choice. */
@@ -85,19 +56,13 @@ export interface ReciterDownloadsProps {
   testIDPrefix: string;
 }
 
-/** Which dialog, if any, is open. `null` is the ordinary state. */
-type Prompt = 'download-all' | 'remove-all' | null;
-
 /**
- * Why "download all" did not open its confirmation. `null` is the ordinary state.
+ * The testID suffix each refusal renders under — the two states are told apart by a test.
  *
  * Both are shown in the same inline error, under the row that was pressed, because both answer
  * the same question the reader just asked and neither is worth a modal.
  */
-type Refusal = 'estimate' | 'space' | null;
-
-/** The testID suffix each refusal renders under — the two states are told apart by a test. */
-const REFUSAL_TEST_IDS: Record<Exclude<Refusal, null>, string> = {
+const REFUSAL_TEST_IDS: Record<DownloadAllRefusalKind, string> = {
   estimate: 'estimate-failed',
   space: 'no-space',
 };
@@ -109,12 +74,9 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
   const { t } = useTranslation();
   const styles = useStyles();
   const summary = useReciterDownloadSummary(reciterId);
-  const [prompt, setPrompt] = useState<Prompt>(null);
-  const [estimate, setEstimate] = useState<{ bytes: number; surahs: number } | null>(null);
-  const [estimating, setEstimating] = useState(false);
-  const [refusal, setRefusal] = useState<Refusal>(null);
-  /** Whether the confirmation should mention what this will cost. See the docblock. */
-  const [metered, setMetered] = useState(false);
+  /** The estimate-then-confirm gate, shared with the picker's per-row control. */
+  const prompt = useDownloadAllPrompt();
+  const [removing, setRemoving] = useState(false);
   const [bytesOnDisk, setBytesOnDisk] = useState(0);
   const [orphanBytes, setOrphanBytes] = useState(0);
   /** Bumped by anything that changes the disk behind the store's back, to force a re-read. */
@@ -148,45 +110,8 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
     return () => clearTimeout(timer);
   }, [reciterId, summary.downloaded, diskRevision]);
 
-  const askDownloadAll = async () => {
-    if (estimating) return;
-    haptics.selection();
-    setEstimating(true);
-    setRefusal(null);
-    try {
-      const computed = estimateReciterDownload(await loadReciterManifest(reciterId));
-      if (!mounted.current) return;
-      setEstimate(computed);
-
-      // ⚠️ REFUSED, WITH THE SIZE NAMED. `null` is "the platform would not say" and is not a
-      // reason to stop anybody — see `availableDownloadSpace`.
-      const free = availableDownloadSpace();
-      if (free !== null && free < computed.bytes) {
-        setRefusal('space');
-        return;
-      }
-
-      const onMetered = await isMeteredConnection();
-      if (!mounted.current) return;
-      setMetered(onMetered);
-      setPrompt('download-all');
-    } catch {
-      // No estimate means no dialog — see the docblock. What it does NOT mean is silence.
-      if (!mounted.current) return;
-      setEstimate(null);
-      setRefusal('estimate');
-    } finally {
-      if (mounted.current) setEstimating(false);
-    }
-  };
-
-  const confirmDownloadAll = () => {
-    setPrompt(null);
-    queueReciterDownloads(reciterId);
-  };
-
   const confirmRemoveAll = () => {
-    setPrompt(null);
+    setRemoving(false);
     haptics.impact('light');
     deleteReciterDownloads(reciterId);
     setDiskRevision((n) => n + 1);
@@ -217,8 +142,8 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
           icon="cloud-download-outline"
           label={t('player:download.downloadAll')}
           description={keptLabel}
-          trailing={estimating ? 'spinner' : 'chevron'}
-          onPress={askDownloadAll}
+          trailing={prompt.estimatingId === reciterId ? 'spinner' : 'chevron'}
+          onPress={() => prompt.ask(reciterId)}
           testID={`${testIDPrefix}-download-all`}
         />
         {summary.active > 0 ? (
@@ -244,7 +169,7 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
             icon="trash-outline"
             label={t('player:download.removeAll')}
             destructive
-            onPress={() => setPrompt('remove-all')}
+            onPress={() => setRemoving(true)}
             testID={`${testIDPrefix}-remove-all`}
           />
         ) : null}
@@ -260,40 +185,47 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
         ) : null}
       </SettingsGroup>
 
-      {refusal === null ? null : (
+      {/* ⚠️ THE GRANULAR HALF, AND THE ONLY PLACE THE APP SAYS THE QUEUE NEEDS THE APP OPEN.
+          The rows above move once per completed FILE; through Al-Baqarah that is minutes of
+          nothing. See `DownloadProgress`. */}
+      <DownloadProgress reciterId={reciterId} testID={`${testIDPrefix}-progress`} />
+
+      {prompt.refusal === null ? null : (
         <InlineError
           message={
-            refusal === 'space'
-              ? t('player:download.noSpace', { size: formatBytes(estimate?.bytes ?? 0) })
+            prompt.refusal.kind === 'space'
+              ? t('player:download.noSpace', { size: formatBytes(prompt.refusal.bytes) })
               : t('player:download.estimateFailed')
           }
           style={styles.error}
-          testID={`${testIDPrefix}-${REFUSAL_TEST_IDS[refusal]}`}
+          testID={`${testIDPrefix}-${REFUSAL_TEST_IDS[prompt.refusal.kind]}`}
         />
       )}
 
       <ConfirmDialog
-        visible={prompt === 'download-all'}
+        visible={prompt.pendingId !== null}
         title={t('player:download.confirmTitle')}
         message={t(
-          metered ? 'player:download.confirmMessageMetered' : 'player:download.confirmMessage',
+          prompt.metered
+            ? 'player:download.confirmMessageMetered'
+            : 'player:download.confirmMessage',
           {
-            total: estimate?.surahs ?? 0,
-            size: formatBytes(estimate?.bytes ?? 0),
+            total: prompt.estimate?.surahs ?? 0,
+            size: formatBytes(prompt.estimate?.bytes ?? 0),
           }
         )}
         confirmText={t('player:download.confirmAction')}
-        onConfirm={confirmDownloadAll}
-        onCancel={() => setPrompt(null)}
+        onConfirm={prompt.confirm}
+        onCancel={prompt.cancel}
       />
       <ConfirmDialog
-        visible={prompt === 'remove-all'}
+        visible={removing}
         title={t('player:download.removeAllTitle')}
         message={t('player:download.removeAllMessage')}
         confirmText={t('player:download.removeAllAction')}
         confirmStyle="destructive"
         onConfirm={confirmRemoveAll}
-        onCancel={() => setPrompt(null)}
+        onCancel={() => setRemoving(false)}
       />
     </View>
   );

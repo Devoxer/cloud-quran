@@ -132,8 +132,8 @@
     "keptNone": "Nothing downloaded yet",
     "keptValue": "{{kept}} of {{total}} surahs · {{size}}",
     "confirmTitle": "Download all surahs?",
-    "confirmMessage": "About {{size}} across {{total}} files. The size is approximate.",
-    "confirmMessageMetered": "About {{size}} across {{total}} files, on a metered connection. The size is approximate.",
+    "confirmMessage": "About {{size}} across {{total}} files, approximate. Downloads run only while the app is open.",
+    "confirmMessageMetered": "About {{size}} across {{total}} files, approximate, on a metered connection. Keep the app open.",
     "confirmAction": "Download",
     "removeAll": "Remove all downloads",
     "removeAllTitle": "Remove all downloads?",
@@ -143,7 +143,6 @@
     "cancelA11y": "Cancel the download of {{name}}",
     "removeA11y": "Remove the download of {{name}}",
     "retryA11y": "Download of {{name}} failed: {{reason}}. Tap to retry.",
-    "reciterRowA11y": "{{name}}, has offline downloads",
     "stop": "Stop downloading",
     "stopValue": "{{active}} still queued",
     "retryFailed": "Retry failed downloads",
@@ -151,7 +150,17 @@
     "estimateFailed": "Could not estimate the size. Check your connection and try again.",
     "noSpace": "Not enough free space for about {{size}}. Free some up, or download surahs one by one.",
     "removeOrphans": "Remove unavailable voices",
-    "orphansValue": "{{size}} kept for reciters no longer offered"
+    "orphansValue": "{{size}} kept for reciters no longer offered",
+    "progressValue": "{{done}} of {{size}} · {{active}} in queue",
+    "progressUnknown": "{{done}} so far · {{active}} in queue",
+    "progressA11y": "Downloading {{name}}: {{detail}}",
+    "foregroundOnly": "Downloads pause when you leave the app. Keep it open to finish the queue.",
+    "perSurahLabel": "Surahs",
+    "reciterAllA11y": "Download every surah for {{name}}",
+    "reciterRestA11y": "Download the remaining surahs for {{name}}",
+    "reciterStopA11y": "Stop downloading {{name}}",
+    "reciterKeptA11y": "{{name}}: every surah is downloaded",
+    "reciterOpenA11y": "Manage downloads for {{name}}"
   },
   "nowPlayingVerse": "{{name}} · {{verse}}"
 }

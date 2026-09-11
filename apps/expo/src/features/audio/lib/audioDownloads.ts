@@ -101,16 +101,46 @@ export const AUDIO_DOWNLOAD_DIR = 'audio';
 export const DOWNLOADS_SUPPORTED = Platform.OS !== 'web';
 
 /**
- * Whether a transfer is handed to the OS and survives the app being suspended.
+ * Whether ONE transfer is handed to the OS and survives the app being suspended.
+ *
+ * ⚠️ ONE. NOT THE QUEUE. THIS CONSTANT IS ABOUT A FILE, AND THE COMMIT MESSAGE THAT SHIPPED IT
+ * SAID "iOS GETS A REAL BACKGROUND URLSession" IN A SENTENCE A READER TOOK TO BE ABOUT
+ * "DOWNLOAD ALL". Measured on a real iPhone 15 Pro, 2026-09-11: started "Download all",
+ * backgrounded the app for ~1.5 minutes, came back to 1 of 114 — and the queue only resumed
+ * advancing once the app was foregrounded. That is not a bug in the transfer; it is `drain`
+ * below, which is a JS loop that `await`s one download and then starts the next. A suspended app
+ * runs no JS, so the one file already handed to the OS finishes and nothing takes its place.
+ * The copy on both download surfaces says so; do not let it drift back.
  *
  * ⚠️ IT IS TRUE ON iOS ONLY, AND THAT IS THE LIBRARY'S LIMIT RATHER THAN A CHOICE OF OURS.
  * `sessionType: 'background'` reaches a `URLSessionConfiguration.background` session on iOS
- * (`expo-file-system/ios/FileSystemDownloadTask.swift`) — the transfer continues at the system
- * level while the app is suspended. On Android the same option is declared "accepted for API
- * consistency and ignored", and the Kotlin proves it: `DownloadTaskOptions` there has ONE field,
- * `headers`, and the transfer is an in-process OkHttp call that lives exactly as long as the
- * process does. Nothing in `expo-file-system` can give Android background continuation; that
- * would take a foreground service or WorkManager, which is a native change and not this one.
+ * (`expo-file-system/ios/FileSystemDownloadTask.swift`, `createBackgroundSession()`:
+ * `sessionSendsLaunchEvents = true`, `isDiscretionary = false`) — the transfer is owned by
+ * `nsurlsessiond`, out of process, and continues while the app is suspended. It is the ONLY path
+ * that does: `File.downloadFileAsync` runs through `FileSystemDownload.swift`'s
+ * `DownloadTaskStore`, which builds `URLSession(configuration: .default)` — a foreground session
+ * on iOS too. On Android the same option is declared "accepted for API consistency and ignored",
+ * and the Kotlin proves it: `DownloadTaskOptions` there has ONE field, `headers`, and the
+ * transfer is an in-process OkHttp call that lives exactly as long as the process does. Nothing
+ * in `expo-file-system` can give Android background continuation; that would take a foreground
+ * service or WorkManager, which is a native change and not this one.
+ *
+ * ⚠️ AND A COMPLETION THE APP NEVER SEES IS LOST, NOT HALF-COMMITTED — checked in the same
+ * source. `NetworkTaskSessionDispatcher` keeps its delegates in an in-memory dictionary keyed
+ * `"{sessionIdentifier}:{taskIdentifier}"`, populated by `start()`. After the app is KILLED the
+ * relaunch reaches `FileSystemBackgroundSessionHandler`, which stores the system completion
+ * handler and nothing else — it registers no delegate and rebuilds no task bookkeeping — so
+ * `didFinishDownloadingTo` finds nobody, the temp file is never moved onto the `.part` path, and
+ * the system discards it. No `.part`, no `{NNN}.mp3`, nothing to clean up. A merely SUSPENDED app
+ * is woken, its delegate is still there, and the promise resolves then: at resume, never before.
+ *
+ * ⚠️ HANDING THE OS MORE THAN ONE TRANSFER IS REACHABLE FROM JS AND IS DELIBERATELY NOT DONE.
+ * The background session is created once and shared, so N concurrent `downloadAsync()` calls
+ * would be N tasks `nsurlsessiond` runs while the app sleeps. What is NOT reachable without
+ * native code is the OS starting a transfer JS never handed it, or performing the `.part` →
+ * `{NNN}.mp3` commit — both are JS. So "download all and put the phone away" costs enqueuing all
+ * 114 up front, which is an owner call (it changes what the stall watchdog, the progress surface
+ * and the serial-failure rule below each mean) and not this change.
  *
  * ⚠️ AND THE ANDROID PATH DELIBERATELY STAYS ON `File.downloadFileAsync`, WHICH IS NOT MERELY
  * "the same thing without the flag". The task API's Kotlin read loop checks a cancel flag between
@@ -246,13 +276,26 @@ export function downloadedSurahs(reciterId: string): number[] | null {
   return set === null ? null : [...set].sort((a, b) => a - b);
 }
 
-/** How many bytes this reciter's downloads occupy. `0` when nothing is kept. */
+/**
+ * How many bytes this reciter's KEPT surahs occupy. `0` when nothing is kept.
+ *
+ * ⚠️ IT SUMS THE COMMITTED FILES, NOT `dir.size`, AND THE DIFFERENCE IS A `.part` FILE. The
+ * recursive directory size counts the transfer that is in flight, so through a "download all"
+ * the row read "1 of 114 surahs · 94.6 MB" — a count and a size describing different things,
+ * on exactly the screen a reader goes to to find out what they have. Measured on the Pixel 9 Pro
+ * emulator, 2026-09-11. The same regex the listing uses decides what counts, so "kept" means one
+ * thing in this module.
+ */
 export function reciterBytesOnDisk(reciterId: string): number {
   if (!DOWNLOADS_SUPPORTED) return 0;
   try {
     const dir = reciterDirectory(reciterId);
     if (!dir.exists) return 0;
-    return dir.size ?? 0;
+    let total = 0;
+    for (const entry of dir.list()) {
+      if (/^\d{3}\.mp3$/.test(entry.name ?? '')) total += entry.size ?? 0;
+    }
+    return total;
   } catch {
     return 0;
   }
@@ -285,22 +328,31 @@ function reciterDirectories(): Directory[] {
 }
 
 /**
- * Every reciter id with at least one surah on disk — the picker's downloaded indicator.
+ * How many surahs each reciter has on disk — the picker's per-row download state, for all 39.
  *
- * Short-circuits on the first kept file per reciter rather than building each one's full set:
- * the caller only needs "any", and this runs on the JS thread of a surface that is live while a
- * queue is draining. (Story 7-5 review, P12.)
+ * ⚠️ THE PICKER CANNOT ASK THE QUEUE STORE THIS. The store mirrors ONE reciter at a time —
+ * whichever surface hydrated it last — so a summary read for the other 38 answers zero, and a
+ * control drawn from it would offer to download a book the device already has. One walk of
+ * `{document}/audio` answers all of them.
+ *
+ * ⚠️ IT COUNTS RATHER THAN SHORT-CIRCUITING, AND THE COUNT COSTS NOTHING EXTRA. The P12 version
+ * stopped at each reciter's first kept file because "any" was all a single indicator glyph
+ * needed; a row that has to tell "nothing kept" from "partly kept" from "the whole book" needs
+ * the number. The listing is one syscall either way — the `.some` was walking an array that was
+ * already in memory.
  */
-export function recitersWithDownloads(): string[] {
-  if (!DOWNLOADS_SUPPORTED) return [];
+export function reciterDownloadCounts(): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!DOWNLOADS_SUPPORTED) return counts;
   try {
-    const ids: string[] = [];
     for (const dir of reciterDirectories()) {
-      if (dir.list().some((entry) => /^\d{3}\.mp3$/.test(entry.name))) ids.push(dir.name);
+      let kept = 0;
+      for (const entry of dir.list()) if (/^\d{3}\.mp3$/.test(entry.name)) kept++;
+      if (kept > 0) counts.set(dir.name, kept);
     }
-    return ids;
+    return counts;
   } catch {
-    return [];
+    return counts;
   }
 }
 
@@ -370,6 +422,23 @@ export function removeReciterFiles(reciterId: string): void {
   }
 }
 
+/**
+ * How far one surah's transfer has got — the BYTES, not only the fraction.
+ *
+ * ⚠️ THE FRACTION ALONE WAS NOT ENOUGH, AND THE SURAH THAT PROVED IT IS AL-BAQARAH. A reader
+ * watching "3 of 114 surahs · 212.9 MB" through a 40 MB file has a number that does not move for
+ * minutes and no way to tell a slow download from a dead one — the same "we can't know" the
+ * background claim above produced, one layer up. `totalBytes` is `0` when the server sent no
+ * `Content-Length`, which is a real state a surface must render rather than divide by.
+ */
+export interface SurahDownloadProgress {
+  /** 0–1, and `0` whenever `totalBytes` is unknown. */
+  fraction: number;
+  bytesWritten: number;
+  /** `0` means "the server sent no Content-Length" — never a denominator. */
+  totalBytes: number;
+}
+
 /** A transfer that delivered no bytes for `DOWNLOAD_STALL_TIMEOUT_MS`. Named so a row can say so. */
 export class DownloadStalledError extends Error {
   constructor(reciterId: string, surah: number) {
@@ -401,7 +470,7 @@ export class DownloadStalledError extends Error {
 export async function downloadSurah(
   reciterId: string,
   surah: number,
-  options: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}
+  options: { onProgress?: (progress: SurahDownloadProgress) => void; signal?: AbortSignal } = {}
 ): Promise<void> {
   if (!DOWNLOADS_SUPPORTED) throw new Error('audio downloads are not available on web');
 
@@ -444,9 +513,14 @@ export async function downloadSurah(
   }) => {
     rearm();
     // `-1` is "the server sent no Content-Length" — a real state, and one that must not
-    // produce a negative fraction the progress ring would draw backwards.
-    if (!(totalBytes > 0)) return;
-    options.onProgress?.(Math.min(1, bytesWritten / totalBytes));
+    // produce a negative fraction the progress ring would draw backwards. The BYTES are still
+    // worth reporting when it happens: "12.4 MB so far" beats a bar that never moves.
+    const known = totalBytes > 0;
+    options.onProgress?.({
+      fraction: known ? Math.min(1, bytesWritten / totalBytes) : 0,
+      bytesWritten: Math.max(0, bytesWritten),
+      totalBytes: known ? totalBytes : 0,
+    });
   };
 
   try {
@@ -585,11 +659,18 @@ async function drain(): Promise<void> {
       const key = downloadKey(reciterId, surah);
       const controller = new AbortController();
       inFlight.set(key, controller);
-      setDownloadEntry(key, { status: 'downloading', progress: 0, error: undefined });
+      setDownloadEntry(key, {
+        status: 'downloading',
+        progress: 0,
+        bytesWritten: 0,
+        totalBytes: 0,
+        error: undefined,
+      });
       try {
         await downloadSurah(reciterId, surah, {
           signal: controller.signal,
-          onProgress: (fraction) => setDownloadEntry(key, { progress: fraction }),
+          onProgress: ({ fraction, bytesWritten, totalBytes }) =>
+            setDownloadEntry(key, { progress: fraction, bytesWritten, totalBytes }),
         });
         /**
          * ⚠️ THE SUCCESS WRITE IS CONDITIONAL, BECAUSE REMOVE-ALL CAN LAND WHILE A TRANSFER IS
@@ -617,7 +698,13 @@ async function drain(): Promise<void> {
           // ⚠️ THE REASON IS CARRIED, NOT DISCARDED (story 7-5 review, P5). A 404, a full disk
           // and a dead socket are the same bare glyph without it, and the frozen matrix asks for
           // "a stated error on that row" for the storage-full case.
-          setDownloadEntry(key, { status: 'error', progress: 0, error: reason });
+          setDownloadEntry(key, {
+            status: 'error',
+            progress: 0,
+            bytesWritten: 0,
+            totalBytes: 0,
+            error: reason,
+          });
           addBreadcrumb('ui', 'surah download failed', { reciterId, surah, reason });
           /**
            * ⚠️ A BREADCRUMB ALWAYS, A CAPTURE ONLY FOR SOMETHING ACTIONABLE — `errors.ts`'s own
@@ -645,15 +732,59 @@ async function drain(): Promise<void> {
 }
 
 /**
+ * Delete `.part` residue no transfer owns any more.
+ *
+ * ⚠️ A `.part` FILE IS INVISIBLE TO EVERY READER AND VISIBLE TO `dir.size`, WHICH IS WHY THIS
+ * EXISTS. The header's rename-is-the-commit rule makes an interrupted transfer harmless for
+ * PLAYBACK — nothing mistakes `{NNN}.mp3.part` for a kept surah — and the cleanup in
+ * `downloadSurah`'s `catch` covers every failure the process lives to see. What it cannot cover
+ * is the process not living: kill the app mid-transfer (or reload the bundle, which story 7-5's
+ * review already names) and the bytes written so far stay on disk under a name only the NEXT
+ * download of that exact surah would overwrite. `reciterBytesOnDisk` is a recursive walk, so the
+ * reader is then told they are keeping 212 MB when 40 MB of it is a corpse of Al-Baqarah.
+ *
+ * ⚠️ A TRANSFER THAT IS WRITING RIGHT NOW OWNS ITS `.part`, AND BOTH GUARDS ARE NEEDED. Hydration
+ * runs on every surface arrival and on every voice change, which can land in the middle of a
+ * draining queue — and deleting the file the native writer has open is how a healthy download
+ * becomes a mystery failure. `inFlight` names the one being written; the store entry names the
+ * ones queued behind it, whose `.part` the attempt will delete for itself when it starts.
+ */
+export function sweepStalePartFiles(reciterId: string): void {
+  if (!DOWNLOADS_SUPPORTED) return;
+  try {
+    const dir = reciterDirectory(reciterId);
+    if (!dir.exists) return;
+    for (const entry of dir.list()) {
+      const match = /^(\d{3})\.mp3\.part$/.exec(entry.name);
+      if (!match) continue;
+      const surah = Number.parseInt(match[1], 10);
+      if (!(surah >= 1 && surah <= SURAH_COUNT)) continue;
+      const key = downloadKey(reciterId, surah);
+      if (inFlight.has(key)) continue;
+      const status = getDownloadEntry(key)?.status;
+      if (status === 'queued' || status === 'downloading') continue;
+      deleteQuietly(surahPartFile(reciterId, surah));
+    }
+  } catch {
+    // One unreadable directory changes nothing: the residue stays, and the next download of
+    // that surah overwrites it, exactly as before this function existed.
+  }
+}
+
+/**
  * Seed the store from disk — what the surfaces call so a row can render before any press.
  *
  * A listing that could not be read hydrates NOTHING rather than hydrating emptiness; see the
  * header's note on `downloadedSurahSet`'s `null`.
+ *
+ * It is also where the `.part` sweep runs, because it is the one call every download surface
+ * already makes on arrival and there is nothing else at app start that looks at this directory.
  */
 export function hydrateDownloadState(reciterId: string): void {
   const kept = downloadedSurahs(reciterId);
   if (kept === null) return;
   hydrateReciterEntries(reciterId, kept);
+  sweepStalePartFiles(reciterId);
 }
 
 /** Queue one surah. Already downloaded, queued or downloading: nothing happens. */
@@ -669,7 +800,13 @@ export function startSurahDownload(reciterId: string, surah: number): void {
     setDownloadEntry(key, { status: 'downloaded', progress: 1, error: undefined });
     return;
   }
-  setDownloadEntry(key, { status: 'queued', progress: 0, error: undefined });
+  setDownloadEntry(key, {
+    status: 'queued',
+    progress: 0,
+    bytesWritten: 0,
+    totalBytes: 0,
+    error: undefined,
+  });
   pending.push({ reciterId, surah });
   void drain();
 }
@@ -723,9 +860,23 @@ export function queueReciterDownloads(reciterId: string): void {
   }
 }
 
-/** Stop everything outstanding for one reciter, keeping what already landed. */
+/**
+ * Stop everything outstanding for one reciter, keeping what already landed.
+ *
+ * ⚠️ A `downloaded` ROW IS SKIPPED, AND THE FIRST CUT DID NOT SKIP IT. `cancelSurahDownload`
+ * drops the store entry — that is how a cancelled row goes back to "not downloaded" — so calling
+ * it for all 114 wiped the rows of the surahs that had ALREADY LANDED. Measured on the Pixel 9
+ * Pro emulator, 2026-09-11: stopped a Sudais queue with `001.mp3` and `002.mp3` committed on
+ * disk, and the surface read "Nothing downloaded yet" over 143 MB of kept Quran until something
+ * re-hydrated. The files were never at risk; the MIRROR was, which is the same class as the
+ * listing that answered `[]` for "could not list". This function's own docblock already promised
+ * "keeping what already landed" — it is the promise that was wrong in code.
+ */
 export function cancelReciterDownloads(reciterId: string): void {
-  for (let surah = SURAH_COUNT; surah >= 1; surah--) cancelSurahDownload(reciterId, surah);
+  for (let surah = SURAH_COUNT; surah >= 1; surah--) {
+    if (getDownloadEntry(downloadKey(reciterId, surah))?.status === 'downloaded') continue;
+    cancelSurahDownload(reciterId, surah);
+  }
 }
 
 /** Re-queue only the rows that failed — what the "N failed" line offers. */

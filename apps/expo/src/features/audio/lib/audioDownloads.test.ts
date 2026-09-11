@@ -156,7 +156,7 @@ jest.mock('expo-file-system', () => {
 
 import { AppState } from 'react-native';
 
-import { useDownloadQueueStore } from '@/stores/downloadQueueStore';
+import { downloadKey, setDownloadEntry, useDownloadQueueStore } from '@/stores/downloadQueueStore';
 import {
   __resetDownloadRunner,
   availableDownloadSpace,
@@ -177,9 +177,10 @@ import {
   orphanedDownloadBytes,
   queueReciterDownloads,
   reciterBytesOnDisk,
-  recitersWithDownloads,
+  reciterDownloadCounts,
   startSurahDownload,
   surahFileName,
+  sweepStalePartFiles,
 } from './audioDownloads';
 
 const DOC = 'file:///documents';
@@ -389,6 +390,93 @@ describe('the partial file', () => {
   });
 });
 
+/**
+ * ⚠️ THE RENAME-IS-THE-COMMIT RULE MAKES A `.part` FILE HARMLESS FOR PLAYBACK AND INVISIBLE TO
+ * EVERY READER — AND `dir.size` COUNTS IT ANYWAY. `downloadSurah`'s catch covers every failure
+ * the process lives to SEE; killing the app mid-transfer is the one it cannot, and the bytes then
+ * sit under a name only a re-download of that exact surah would overwrite. The reader is told
+ * they are keeping megabytes that are a corpse.
+ */
+/**
+ * ⚠️ MEASURED ON THE PIXEL 9 PRO EMULATOR, 2026-09-11, not reasoned. Both cases are about the
+ * MIRROR rather than the files: the disk was correct in each, and the surface lied about it.
+ */
+describe('what a running queue does to what is already kept', () => {
+  it('leaves a completed row alone when the reciter queue is stopped', () => {
+    seedFile(uriFor('sudais', 1));
+    seedFile(uriFor('sudais', 2));
+    hydrateDownloadState('sudais');
+    setDownloadEntry(downloadKey('sudais', 3), { status: 'queued', progress: 0 });
+
+    cancelReciterDownloads('sudais');
+
+    // "Nothing downloaded yet" over 143 MB of kept Quran was the observed defect.
+    expect(useDownloadQueueStore.getState().entries['sudais:1']?.status).toBe('downloaded');
+    expect(useDownloadQueueStore.getState().entries['sudais:2']?.status).toBe('downloaded');
+    expect(useDownloadQueueStore.getState().entries['sudais:3']).toBeUndefined();
+  });
+
+  it('counts only committed files toward the kept size, never the transfer in flight', () => {
+    seedFile(uriFor('sudais', 1), 838_887);
+    seedFile(`${uriFor('sudais', 2)}.part`, 94_000_000);
+
+    // "1 of 114 surahs · 94.6 MB" — a count and a size describing different things.
+    expect(reciterBytesOnDisk('sudais')).toBe(838_887);
+  });
+});
+
+describe('stale `.part` residue', () => {
+  it('is swept on hydration, and the kept surahs are untouched', () => {
+    seedFile(uriFor('husary', 2));
+    seedFile(`${uriFor('husary', 36)}.part`, 4_000_000);
+
+    hydrateDownloadState('husary');
+
+    expect(mockFiles.has(`${uriFor('husary', 36)}.part`)).toBe(false);
+    expect(mockFiles.has(uriFor('husary', 2))).toBe(true);
+    // The residue was never a kept surah, before or after.
+    expect(downloadedSurahs('husary')).toEqual([2]);
+  });
+
+  it('gives the disk back — the whole reason it is not merely ignored', () => {
+    seedFile(uriFor('husary', 2), 3_000_000);
+    seedFile(`${uriFor('husary', 36)}.part`, 4_000_000);
+
+    hydrateDownloadState('husary');
+
+    // Every READER already ignores a `.part` file; the storage does not.
+    let onDisk = 0;
+    for (const [uri, size] of mockFiles) if (uri.includes('/husary/')) onDisk += size;
+    expect(onDisk).toBe(3_000_000);
+  });
+
+  /**
+   * ⚠️ THE FILE A TRANSFER IS WRITING RIGHT NOW IS NOT RESIDUE. Hydration runs on every surface
+   * arrival and every voice change, which can land mid-queue — deleting the path the native
+   * writer has open is how a healthy download becomes a mystery failure.
+   */
+  it('spares the transfer that is in flight', async () => {
+    let settle: (() => void) | undefined;
+    mockDownload.mockImplementation((_url, file) => {
+      mockFiles.set(file.uri, 120);
+      return new Promise<void>((resolve) => {
+        settle = resolve;
+      });
+    });
+
+    startSurahDownload('husary', 18);
+    await flush();
+    expect(mockFiles.has(`${uriFor('husary', 18)}.part`)).toBe(true);
+
+    sweepStalePartFiles('husary');
+
+    expect(mockFiles.has(`${uriFor('husary', 18)}.part`)).toBe(true);
+    settle?.();
+    await flush();
+    expect(mockFiles.has(uriFor('husary', 18))).toBe(true);
+  });
+});
+
 describe('the runner', () => {
   it('reports progress and settles as downloaded', async () => {
     mockDownload.mockImplementation((_url, file, options) => {
@@ -407,6 +495,10 @@ describe('the runner', () => {
     expect(useDownloadQueueStore.getState().entries['husary:18']).toEqual({
       status: 'downloaded',
       progress: 1,
+      // The BYTES the last tick carried, not only the fraction — what the progress panel reads.
+      bytesWritten: 500,
+      totalBytes: 1000,
+      error: undefined,
     });
   });
 
@@ -484,10 +576,21 @@ describe('per-reciter totals', () => {
     expect(downloadedSurahs('husary')).toEqual([2, 18]);
   });
 
-  it("names every reciter with at least one file — the picker's indicator", () => {
+  it("counts each reciter's kept surahs — the picker's per-row control", () => {
     seedFile(uriFor('husary', 1));
+    seedFile(uriFor('husary', 2));
     seedFile(uriFor('alafasy', 5));
-    expect(recitersWithDownloads().sort()).toEqual(['alafasy', 'husary']);
+    // A literal expected map, not one derived from the listing under test.
+    expect([...reciterDownloadCounts().entries()].sort()).toEqual([
+      ['alafasy', 1],
+      ['husary', 2],
+    ]);
+  });
+
+  it('leaves a reciter with nothing kept OUT of the map rather than at zero', () => {
+    // A `.part` file is residue, never a kept surah — the rename IS the commit.
+    seedFile(`${DOC}/audio/husary/001.mp3.part`);
+    expect(reciterDownloadCounts().size).toBe(0);
   });
 
   it('takes everything for a reciter away at once, rows included', async () => {
@@ -677,6 +780,8 @@ describe('the failure reason', () => {
     expect(useDownloadQueueStore.getState().entries['husary:18']).toEqual({
       status: 'error',
       progress: 0,
+      bytesWritten: 0,
+      totalBytes: 0,
       error: 'HTTP 507 insufficient storage',
     });
   });

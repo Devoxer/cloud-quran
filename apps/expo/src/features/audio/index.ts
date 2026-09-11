@@ -13,6 +13,10 @@
 // ── story 7-5: offline downloads. Biome sorts this list by path, so the story's three exports
 //    (DownloadKeepAwake here, ReciterDownloads and SurahDownloadButton below) are not adjacent ──
 export { DownloadKeepAwake, type DownloadKeepAwakeProps } from './components/DownloadKeepAwake';
+export {
+  DownloadProgress,
+  type DownloadProgressProps,
+} from './components/DownloadProgress';
 // ── story 7-4: speed + the sleep timer — the controls, and the sheet that hosts them ──
 export { PlaybackOptions, type PlaybackOptionsProps } from './components/PlaybackOptions';
 export {
@@ -21,6 +25,10 @@ export {
 } from './components/PlaybackOptionsSheet';
 export { RecitationEngineHost } from './components/RecitationEngineHost';
 export {
+  ReciterDownloadButton,
+  type ReciterDownloadButtonProps,
+} from './components/ReciterDownloadButton';
+export {
   ReciterDownloads,
   type ReciterDownloadsProps,
 } from './components/ReciterDownloads';
@@ -28,6 +36,11 @@ export {
 export { buildReciterRows, ReciterPicker, type ReciterRow } from './components/ReciterPicker';
 // ── story 7-8: the same picker, embedded in a sheet the chrome's player row opens ──
 export { ReciterSheet, type ReciterSheetProps } from './components/ReciterSheet';
+// ── 2026-09-11: the reciter's own surah list, opened from the picker row's chevron ──
+export {
+  ReciterSurahDownloads,
+  type ReciterSurahDownloadsProps,
+} from './components/ReciterSurahDownloads';
 export {
   SurahDownloadButton,
   type SurahDownloadButtonProps,

@@ -38,6 +38,15 @@ export interface DownloadEntry {
   /** Fraction complete, 0–1. Meaningful only while `downloading`. */
   progress: number;
   /**
+   * Bytes landed so far, and how many there are — the granular half of `progress`.
+   *
+   * ⚠️ `totalBytes: 0` IS "THE SERVER SENT NO CONTENT-LENGTH", NOT "AN EMPTY FILE". A surface
+   * must render the written count on its own there rather than divide by it; `progress` is
+   * already `0` in that state and would draw a bar that never moves.
+   */
+  bytesWritten?: number;
+  totalBytes?: number;
+  /**
    * Why it failed, when it did — carried so a row can SAY something.
    *
    * ⚠️ WITHOUT IT A 404, A FULL DISK AND A DEAD SOCKET ARE ONE BARE GLYPH. The frozen matrix's
@@ -173,6 +182,47 @@ export function useReciterDownloadSummary(reciterId: string): ReciterDownloadSum
         else active++;
       }
       return { downloaded, active, failed };
+    })
+  );
+}
+
+/** The one surah a reciter's queue is actually transferring, with the bytes it has landed. */
+export interface ActiveDownload {
+  surah: number;
+  /** 0–1, and `0` while `totalBytes` is unknown. */
+  progress: number;
+  bytesWritten: number;
+  /** `0` means the server sent no `Content-Length`. Never a denominator. */
+  totalBytes: number;
+}
+
+/**
+ * Which surah this reciter is downloading right now, or `null` between files and when idle.
+ *
+ * ⚠️ THE DRAIN IS SERIAL, SO "THE ONE" IS WELL DEFINED — and `useShallow` over a fresh object is
+ * what keeps this cheap: a 100ms progress tick changes `bytesWritten`, which is the point, while
+ * the ten ticks that do not change the SURAH leave every other subscriber alone. The lowest
+ * surah wins if a future change ever runs two at once, so the answer is at least deterministic
+ * rather than dependent on key insertion order.
+ */
+export function useActiveDownload(reciterId: string): ActiveDownload | null {
+  return useDownloadQueueStore(
+    useShallow((s): ActiveDownload | null => {
+      const prefix = `${reciterId}:`;
+      let found: ActiveDownload | null = null;
+      for (const [key, entry] of Object.entries(s.entries)) {
+        if (entry.status !== 'downloading' || !key.startsWith(prefix)) continue;
+        const surah = Number.parseInt(key.slice(prefix.length), 10);
+        if (!Number.isInteger(surah)) continue;
+        if (found !== null && found.surah <= surah) continue;
+        found = {
+          surah,
+          progress: entry.progress,
+          bytesWritten: entry.bytesWritten ?? 0,
+          totalBytes: entry.totalBytes ?? 0,
+        };
+      }
+      return found;
     })
   );
 }

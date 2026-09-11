@@ -51,13 +51,22 @@
  */
 
 import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { EmptyState, Icon, SearchBar, SettingsRow } from '@/components/ui';
+import {
+  ConfirmDialog,
+  EmptyState,
+  Icon,
+  InlineError,
+  SearchBar,
+  SettingsRow,
+} from '@/components/ui';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
+import { formatBytes } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { patchPreferences, usePreferences } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
@@ -70,7 +79,9 @@ import {
   type ReciterStyle,
   resolveReciterId,
 } from '../data/reciters';
-import { recitersWithDownloads } from '../lib/audioDownloads';
+import { useDownloadAllPrompt } from '../hooks/useDownloadAllPrompt';
+import { DOWNLOADS_SUPPORTED, reciterDownloadCounts } from '../lib/audioDownloads';
+import { ReciterDownloadButton } from './ReciterDownloadButton';
 
 /** One entry of the flat list: a style heading, or a reciter under it. */
 export type ReciterRow =
@@ -144,6 +155,7 @@ export function ReciterPicker() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useStyles();
+  const router = useRouter();
   const { data: preferences } = usePreferences();
   const [query, setQuery] = useState('');
 
@@ -154,14 +166,17 @@ export function ReciterPicker() {
   // Kept surahs across every reciter: the value that changes exactly when a file is added or
   // removed, and never on a progress tick or a queueing. Debounced — see the docblock.
   const downloadedCount = useDownloadedCount();
-  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(() => new Set());
+  const [keptCounts, setKeptCounts] = useState<Map<string, number>>(() => new Map());
   useEffect(() => {
     const timer = setTimeout(
-      () => setDownloadedIds(new Set(recitersWithDownloads())),
+      () => setKeptCounts(reciterDownloadCounts()),
       INDICATOR_REFRESH_DEBOUNCE_MS
     );
     return () => clearTimeout(timer);
   }, [downloadedCount]);
+
+  // The estimate-then-confirm gate, ONE instance for 39 rows — see `useDownloadAllPrompt`.
+  const prompt = useDownloadAllPrompt();
 
   const choose = (id: string) => {
     // Against the STORED value, not `selectedId` — see the docblock. Tapping the voice the row
@@ -182,48 +197,59 @@ export function ReciterPicker() {
     }
     const { reciter } = item;
     const selected = reciter.id === selectedId;
-    const downloaded = downloadedIds.has(reciter.id);
+    const kept = keptCounts.get(reciter.id) ?? 0;
     return (
-      <SettingsRow
-        // The names are DATA, not copy — a reciter is called what he is called in every locale.
-        label={reciter.nameEnglish}
-        description={reciter.nameArabic}
-        // ⚠️ `selected` is what carries the choice to VoiceOver and TalkBack. The checkmark glyph
-        // below has no semantics of its own, so without this an assistive-tech reader cannot tell
-        // which of 39 rows is the one in force.
-        selected={selected}
-        // ⚠️ THE DOWNLOAD STATE IS COMPOSED INTO THE ROW'S OWN LABEL, because `SettingsRow` puts
-        // `accessibilityLabel ?? label` on its Pressable and that OVERRIDES any label a nested
-        // glyph carries — see the docblock. `selected` has its own prop; this does not.
-        accessibilityLabel={
-          downloaded
-            ? t('player:download.reciterRowA11y', { name: reciter.nameEnglish })
-            : undefined
-        }
-        // ⚠️ BOTH MARKS CAN SHOW AT ONCE, AND THAT IS THE POINT. The chosen voice is very often
-        // also the downloaded one; a trailing slot that could hold only one of the two would hide
-        // "kept offline" on exactly the reciter most likely to have downloads.
-        trailing={
-          selected || downloaded ? (
-            <View style={styles.trailing}>
-              {downloaded ? (
-                <Icon
-                  name="cloud-download-outline"
-                  size={18}
-                  color={colors.text.tertiary}
-                  accessibilityElementsHidden
-                  testID={`reciter-downloaded-${reciter.id}`}
-                />
-              ) : null}
-              {selected ? <Icon name="checkmark" size={20} color={colors.accent.primary} /> : null}
-            </View>
-          ) : undefined
-        }
-        onPress={() => choose(reciter.id)}
-        testID={`reciter-row-${reciter.id}`}
-      />
+      <View style={styles.row} testID={`reciter-row-${reciter.id}-container`}>
+        <SettingsRow
+          // The names are DATA, not copy — a reciter is called what he is called in every locale.
+          label={reciter.nameEnglish}
+          description={reciter.nameArabic}
+          // ⚠️ `selected` is what carries the choice to VoiceOver and TalkBack. The checkmark
+          // glyph below has no semantics of its own, so without this an assistive-tech reader
+          // cannot tell which of 39 rows is the one in force.
+          selected={selected}
+          trailing={
+            selected ? <Icon name="checkmark" size={20} color={colors.accent.primary} /> : undefined
+          }
+          onPress={() => choose(reciter.id)}
+          style={styles.rowFlex}
+          testID={`reciter-row-${reciter.id}`}
+        />
+        {/* ⚠️ SIBLINGS OF THE ROW, NEVER INSIDE ITS `trailing` SLOT — that slot renders inside
+            the row's own Pressable, which on web is a real `<button>`. See
+            `ReciterDownloadButton`'s docblock for the measured nesting defect. */}
+        <ReciterDownloadButton
+          reciterId={reciter.id}
+          reciterName={reciter.nameEnglish}
+          keptCount={kept}
+          estimating={prompt.estimatingId === reciter.id}
+          onDownloadAll={() => prompt.ask(reciter.id)}
+          testID={`reciter-download-${reciter.id}`}
+        />
+        {!DOWNLOADS_SUPPORTED ? null : (
+          <Pressable
+            onPress={() =>
+              router.push({ pathname: '/reciter-downloads', params: { id: reciter.id } })
+            }
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('player:download.reciterOpenA11y', { name: reciter.nameEnglish })}
+            style={({ pressed }) => [styles.chevron, pressed ? styles.pressed : null]}
+            testID={`reciter-open-${reciter.id}`}
+          >
+            <Icon name="chevron-forward" size={18} color={colors.text.tertiary} />
+          </Pressable>
+        )}
+      </View>
     );
   };
+
+  const refusalMessage =
+    prompt.refusal === null
+      ? null
+      : prompt.refusal.kind === 'space'
+        ? t('player:download.noSpace', { size: formatBytes(prompt.refusal.bytes) })
+        : t('player:download.estimateFailed');
 
   return (
     <View style={styles.screen} testID="reciter-picker">
@@ -235,6 +261,15 @@ export function ReciterPicker() {
           style={styles.search}
           testID="reciter-search"
         />
+        {/* ⚠️ ABOVE THE LIST, NOT UNDER THE ROW THAT WAS PRESSED. A FlashList recycles rows, so a
+            message attached to one would ride onto a different reciter on the next scroll. */}
+        {refusalMessage === null ? null : (
+          <InlineError
+            message={refusalMessage}
+            style={styles.refusal}
+            testID="reciter-download-refused"
+          />
+        )}
         {rows.length === 0 ? (
           <EmptyState
             icon="search-outline"
@@ -258,6 +293,22 @@ export function ReciterPicker() {
           />
         )}
       </View>
+      <ConfirmDialog
+        visible={prompt.pendingId !== null}
+        title={t('player:download.confirmTitle')}
+        message={t(
+          prompt.metered
+            ? 'player:download.confirmMessageMetered'
+            : 'player:download.confirmMessage',
+          {
+            total: prompt.estimate?.surahs ?? 0,
+            size: formatBytes(prompt.estimate?.bytes ?? 0),
+          }
+        )}
+        confirmText={t('player:download.confirmAction')}
+        onConfirm={prompt.confirm}
+        onCancel={prompt.cancel}
+      />
     </View>
   );
 }
@@ -275,10 +326,26 @@ const useStyles = () =>
     search: {
       paddingVertical: SPACING.sm,
     },
-    trailing: {
+    refusal: {
+      marginBottom: SPACING.sm,
+    },
+    // The row and its two controls, side by side. `paddingRight` replaces the inset the row
+    // used to own; on web, where both controls are absent, it would just be missing inset.
+    row: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: SPACING.sm,
+      paddingRight: DOWNLOADS_SUPPORTED ? SPACING.sm : 0,
+    },
+    rowFlex: {
+      flex: 1,
+    },
+    chevron: {
+      padding: SPACING.xs,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    pressed: {
+      opacity: 0.6,
     },
     listContent: {
       paddingBottom: SPACING.xl,

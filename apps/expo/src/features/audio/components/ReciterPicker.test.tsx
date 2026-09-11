@@ -22,16 +22,28 @@ jest.mock('@/lib/sync', () => ({
 }));
 
 /**
- * Which reciters have something on disk, for story 7-5's downloaded indicator.
+ * How many surahs each reciter has on disk, for the per-row download control (2026-09-11).
  *
- * ⚠️ THE INDICATOR IS REMOVABLE WITH A GREEN SUITE WITHOUT THESE CASES. Narrowing the trailing
- * slot's condition from `selected || downloaded` back to `selected` takes the mark off all
- * thirty-nine rows and nothing else in the tree notices. (Story 7-5 review, P22.)
+ * ⚠️ THE CONTROL IS REMOVABLE WITH A GREEN SUITE WITHOUT THESE CASES. It is the only thing on
+ * this screen that says whether a voice is kept offline, and taking it off all thirty-nine rows
+ * is invisible to every other test in the tree. (Story 7-5 review, P22, re-pointed.)
+ *
+ * ⚠️ AND THE COUNT COMES FROM DISK, NEVER FROM THE QUEUE STORE — which mirrors ONE reciter at a
+ * time, so a control drawn from it would report the other thirty-eight as empty.
  */
-let mockRecitersWithDownloads: string[] = [];
+let mockKeptCounts = new Map<string, number>();
+const mockCancelReciterDownloads = jest.fn();
 jest.mock('../lib/audioDownloads', () => ({
-  recitersWithDownloads: () => mockRecitersWithDownloads,
+  DOWNLOADS_SUPPORTED: true,
+  reciterDownloadCounts: () => mockKeptCounts,
+  cancelReciterDownloads: (...args: unknown[]) => mockCancelReciterDownloads(...args),
+  availableDownloadSpace: () => null,
+  estimateReciterDownload: () => ({ bytes: 1_000_000, surahs: 114 }),
+  queueReciterDownloads: jest.fn(),
 }));
+
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 
 /**
  * ⚠️ THE GLOBAL FLASHLIST MOCK IS A REAL `FlatList`, WHICH VIRTUALIZES — it renders about ten
@@ -64,7 +76,7 @@ import { buildReciterRows, ReciterPicker } from './ReciterPicker';
 beforeEach(() => {
   jest.clearAllMocks();
   mockPreferences = null;
-  mockRecitersWithDownloads = [];
+  mockKeptCounts = new Map();
 });
 
 /**
@@ -252,46 +264,91 @@ describe('choosing a voice', () => {
 });
 
 /**
- * The mark is `accessibilityElementsHidden` — the ROW carries the label (see the a11y case
- * below) — so RNTL's default query, which skips hidden subtrees, cannot see it. Asking
- * explicitly is what makes the absence assertions mean something rather than pass vacuously.
+ * The row's download control, whatever state it is in.
+ *
+ * Its glyph is `accessibilityElementsHidden` — the control itself carries the label — so RNTL's
+ * default query, which skips hidden subtrees, cannot see the glyph. Asking for the CONTROL and
+ * reading its label is what makes the absence assertions mean something rather than pass
+ * vacuously.
  */
-const mark = (id: string) =>
-  screen.queryByTestId(`reciter-downloaded-${id}`, { includeHiddenElements: true });
+const control = (id: string) => screen.queryByTestId(`reciter-download-${id}`);
 
-describe('the downloaded indicator (story 7-5)', () => {
-  it('marks only the reciters that have something kept', async () => {
-    mockRecitersWithDownloads = ['husary'];
+describe('the per-row download control (2026-09-11)', () => {
+  it('offers the whole book on a voice with nothing kept', async () => {
     await renderSettled();
 
-    expect(mark('husary')).toBeTruthy();
-    expect(mark('alafasy')).toBeNull();
+    expect(control('husary')?.props.accessibilityLabel).toBe(
+      'Download every surah for Mahmoud Khalil Al-Husary'
+    );
   });
 
-  it('marks nobody when nothing is kept', async () => {
+  it('offers only the REST on a voice that is partly kept', async () => {
+    mockKeptCounts = new Map([['husary', 40]]);
     await renderSettled();
-    expect(mark('husary')).toBeNull();
+
+    expect(control('husary')?.props.accessibilityLabel).toBe(
+      'Download the remaining surahs for Mahmoud Khalil Al-Husary'
+    );
+    // Untouched voices still offer everything — the count is per reciter, from disk.
+    expect(control('alafasy')?.props.accessibilityLabel).toBe(
+      'Download every surah for Mishary Rashid Al-Afasy'
+    );
   });
 
   /**
-   * ⚠️ `SettingsRow` PUTS `accessibilityLabel ?? label` ON ITS PRESSABLE, WHICH OVERRIDES ANY
-   * LABEL A NESTED GLYPH CARRIES — the exact failure the row's `selected` prop exists to prevent,
-   * in a new costume. The mark has to reach assistive tech through the ROW. (Review P18.)
+   * ⚠️ A COMPLETE VOICE IS NOT PRESSABLE, AND THAT IS THE POINT RATHER THAN A GAP. Remove-all
+   * confirms, and a confirmation belongs on the surface that can also name the megabytes — one
+   * tap away through the chevron beside this control.
    */
-  it("says so in the ROW's label, not the glyph's", async () => {
-    mockRecitersWithDownloads = ['husary'];
+  it('shows a non-pressable mark once every surah is kept', async () => {
+    mockKeptCounts = new Map([['husary', 114]]);
     await renderSettled();
 
-    expect(screen.getByLabelText('Mahmoud Khalil Al-Husary, has offline downloads')).toBeTruthy();
+    expect(screen.getByTestId('reciter-download-husary-complete')).toBeTruthy();
+    expect(control('husary')?.props.accessibilityRole).toBeUndefined();
   });
 
-  it('shows the selection checkmark and the download mark together', async () => {
-    mockPreferences = { reciterId: 'husary' };
-    mockRecitersWithDownloads = ['husary'];
+  it("opens that reciter's own surah list from the chevron — not the row press", async () => {
     await renderSettled();
 
-    // Both marks on one row: the chosen voice is very often also the downloaded one.
-    expect(mark('husary')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('reciter-open-husary'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/reciter-downloads',
+      params: { id: 'husary' },
+    });
+    // The ROW still selects the voice. Two controls, two meanings, no overlap.
+    expect(mockPatchPreferences).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ THE CONTROL AND THE CHEVRON ARE SIBLINGS OF THE ROW, NEVER INSIDE ITS `trailing` SLOT.
+   * That slot renders inside the row's own `Pressable`, which react-native-web turns into a real
+   * `<button>` — a control there is a `<button>` in a `<button>`, the hydration error story 7-5
+   * measured in Safari and that no native surface can see.
+   */
+  it('keeps both controls OUTSIDE the row pressable', async () => {
+    await renderSettled();
+
+    const row = screen.getByTestId('reciter-row-husary');
+    const inRow = (testID: string) => {
+      const stack: any[] = [row];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (node?.props?.testID === testID) return true;
+        for (const child of node?.children ?? []) if (typeof child !== 'string') stack.push(child);
+      }
+      return false;
+    };
+    expect(inRow('reciter-download-husary')).toBe(false);
+    expect(inRow('reciter-open-husary')).toBe(false);
+  });
+
+  it('keeps the selection checkmark on the row it belongs to', async () => {
+    mockPreferences = { reciterId: 'husary' };
+    mockKeptCounts = new Map([['husary', 3]]);
+    await renderSettled();
+
     expect(screen.getByTestId('reciter-row-husary').props.accessibilityState.selected).toBe(true);
+    expect(control('husary')).toBeTruthy();
   });
 });

@@ -60,7 +60,7 @@ describe('on web', () => {
   it('reports nothing kept and no bytes used', () => {
     expect(downloads.downloadedSurahs('husary')).toEqual([]);
     expect(downloads.reciterBytesOnDisk('husary')).toBe(0);
-    expect(downloads.recitersWithDownloads()).toEqual([]);
+    expect(downloads.reciterDownloadCounts().size).toBe(0);
     expect(downloads.orphanedDownloadBytes(['husary'])).toBe(0);
   });
 });

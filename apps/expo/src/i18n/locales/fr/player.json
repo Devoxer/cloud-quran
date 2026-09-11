@@ -132,8 +132,8 @@
     "keptNone": "Aucun téléchargement",
     "keptValue": "{{kept}} sourates sur {{total}} · {{size}}",
     "confirmTitle": "Télécharger toutes les sourates ?",
-    "confirmMessage": "Environ {{size}} sur {{total}} fichiers. Taille approximative.",
-    "confirmMessageMetered": "Environ {{size}} sur {{total}} fichiers, en connexion facturée. Taille approximative.",
+    "confirmMessage": "Environ {{size}} sur {{total}} fichiers, approximatif. Téléchargement seulement app ouverte.",
+    "confirmMessageMetered": "Environ {{size}} sur {{total}} fichiers, approximatif, connexion facturée. Gardez l’app ouverte.",
     "confirmAction": "Télécharger",
     "removeAll": "Supprimer les téléchargements",
     "removeAllTitle": "Supprimer les téléchargements ?",
@@ -143,7 +143,6 @@
     "cancelA11y": "Annuler le téléchargement de {{name}}",
     "removeA11y": "Supprimer le téléchargement de {{name}}",
     "retryA11y": "Échec du téléchargement de {{name}} : {{reason}}. Touchez pour réessayer.",
-    "reciterRowA11y": "{{name}}, contient des téléchargements hors ligne",
     "stop": "Arrêter le téléchargement",
     "stopValue": "{{active}} encore en attente",
     "retryFailed": "Réessayer les échecs",
@@ -151,7 +150,17 @@
     "estimateFailed": "Taille non estimable. Vérifiez votre connexion et réessayez.",
     "noSpace": "Espace libre insuffisant pour environ {{size}}. Libérez de la place ou téléchargez une par une.",
     "removeOrphans": "Supprimer les voix indisponibles",
-    "orphansValue": "{{size}} pour des récitateurs non proposés"
+    "orphansValue": "{{size}} pour des récitateurs non proposés",
+    "progressValue": "{{done}} sur {{size}} · {{active}} en file",
+    "progressUnknown": "{{done}} pour l’instant · {{active}} en file",
+    "progressA11y": "Téléchargement de {{name}} : {{detail}}",
+    "foregroundOnly": "Le téléchargement s’arrête si vous quittez l’app. Gardez-la ouverte pour finir.",
+    "perSurahLabel": "Sourates",
+    "reciterAllA11y": "Télécharger toutes les sourates de {{name}}",
+    "reciterRestA11y": "Télécharger les sourates restantes de {{name}}",
+    "reciterStopA11y": "Arrêter le téléchargement de {{name}}",
+    "reciterKeptA11y": "{{name}} : toutes les sourates sont téléchargées",
+    "reciterOpenA11y": "Gérer les téléchargements de {{name}}"
   },
   "nowPlayingVerse": "{{name}} · {{verse}}"
 }

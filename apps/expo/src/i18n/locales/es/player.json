@@ -132,8 +132,8 @@
     "keptNone": "Aún no hay descargas",
     "keptValue": "{{kept}} de {{total}} suras · {{size}}",
     "confirmTitle": "¿Descargar todas las suras?",
-    "confirmMessage": "Unos {{size}} en {{total}} archivos. El tamaño es aproximado.",
-    "confirmMessageMetered": "Unos {{size}} en {{total}} archivos, con conexión de pago. El tamaño es aproximado.",
+    "confirmMessage": "Unos {{size}} en {{total}} archivos, aproximado. Solo se descarga con la app abierta.",
+    "confirmMessageMetered": "Unos {{size}} en {{total}} archivos, aproximado, con conexión de pago. Deja la app abierta.",
     "confirmAction": "Descargar",
     "removeAll": "Eliminar todas las descargas",
     "removeAllTitle": "¿Eliminar todas las descargas?",
@@ -143,7 +143,6 @@
     "cancelA11y": "Cancelar la descarga de {{name}}",
     "removeA11y": "Eliminar la descarga de {{name}}",
     "retryA11y": "Falló la descarga de {{name}}: {{reason}}. Toca para reintentar.",
-    "reciterRowA11y": "{{name}}, tiene descargas sin conexión",
     "stop": "Detener la descarga",
     "stopValue": "{{active}} aún en cola",
     "retryFailed": "Reintentar las fallidas",
@@ -151,7 +150,17 @@
     "estimateFailed": "No se pudo estimar el tamaño. Revisa tu conexión e inténtalo de nuevo.",
     "noSpace": "No hay espacio libre para unos {{size}}. Libera espacio o descarga las suras una a una.",
     "removeOrphans": "Eliminar voces no disponibles",
-    "orphansValue": "{{size}} de recitadores que ya no se ofrecen"
+    "orphansValue": "{{size}} de recitadores que ya no se ofrecen",
+    "progressValue": "{{done}} de {{size}} · {{active}} en cola",
+    "progressUnknown": "{{done}} hasta ahora · {{active}} en cola",
+    "progressA11y": "Descargando {{name}}: {{detail}}",
+    "foregroundOnly": "Las descargas se pausan al salir de la app. Déjala abierta para terminar la cola.",
+    "perSurahLabel": "Suras",
+    "reciterAllA11y": "Descargar todas las suras de {{name}}",
+    "reciterRestA11y": "Descargar las suras restantes de {{name}}",
+    "reciterStopA11y": "Detener la descarga de {{name}}",
+    "reciterKeptA11y": "{{name}}: todas las suras están descargadas",
+    "reciterOpenA11y": "Gestionar las descargas de {{name}}"
   },
   "nowPlayingVerse": "{{name}} · {{verse}}"
 }
