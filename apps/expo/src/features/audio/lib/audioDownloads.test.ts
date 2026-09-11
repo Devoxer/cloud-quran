@@ -709,6 +709,41 @@ describe('a transfer that stalls', () => {
   });
 
   /**
+   * ⚠️ THE WHOLE QUEUE REACHES THE OS BEFORE THE FIRST FILE FINISHES — the "download all and put
+   * the phone away" fix, and the case that would have caught its absence.
+   *
+   * The transfers were always real background `URLSession` tasks; the QUEUE was a JS `await` loop,
+   * and a suspended app runs no JS to hand over the next one. So exactly one surah completed in
+   * the reader's pocket and the rest sat at `queued` — measured by the owner, and invisible to
+   * every case here, all of which let their downloads resolve.
+   *
+   * ⚠️ THE MUTATION: put the `await` back (drain one at a time on iOS). With no transfer ever
+   * resolving, a serial drain reaches exactly ONE, and this reds at 1 instead of 3. That is also
+   * why nothing is allowed to settle — a resolving mock cannot tell the two shapes apart.
+   */
+  it('hands the OS every queued surah up front, not one per completion', async () => {
+    mockDownload.mockImplementation(
+      (_url, _file, options) =>
+        new Promise((_resolve, reject) => {
+          (options.signal as AbortSignal).addEventListener('abort', () =>
+            reject(new Error('aborted'))
+          );
+        })
+    );
+
+    startSurahDownload('husary', 1);
+    startSurahDownload('husary', 2);
+    startSurahDownload('husary', 3);
+    await flush();
+
+    expect(mockTaskDownload).toHaveBeenCalledTimes(3);
+    const entries = useDownloadQueueStore.getState().entries;
+    expect(entries['husary:1'].status).toBe('downloading');
+    expect(entries['husary:2'].status).toBe('downloading');
+    expect(entries['husary:3'].status).toBe('downloading');
+  });
+
+  /**
    * ⚠️ A SUSPENDED APP IS NOT A STALLED TRANSFER, AND BACKGROUND TRANSFERS MADE THE DIFFERENCE
    * MATTER. iOS keeps the download running while it freezes the JS that would re-arm this timer,
    * so an unguarded watchdog aborts a healthy transfer the moment the reader comes back — killing

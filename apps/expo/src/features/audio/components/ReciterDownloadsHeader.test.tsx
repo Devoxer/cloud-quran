@@ -119,11 +119,7 @@ describe('the estimate is shown BEFORE the confirmation', () => {
     await pressDownloadAll();
 
     // 1,000,000 bytes → "976.6 KB"; the copy says "About", and names the manifest's count.
-    expect(
-      screen.getByText(
-        'About 976.6 KB across 114 files, approximate. The queue advances while the app is open.'
-      )
-    ).toBeTruthy();
+    expect(screen.getByText('About 976.6 KB across 114 files, approximate.')).toBeTruthy();
     // …and nothing has been queued yet — the dialog is a question, not an action.
     expect(mockQueueAll).not.toHaveBeenCalled();
   });
@@ -193,9 +189,7 @@ describe('before a gigabyte is spent', () => {
     await pressDownloadAll();
 
     expect(
-      screen.getByText(
-        'About 976.6 KB across 114 files on a metered connection. The queue needs the app open.'
-      )
+      screen.getByText('About 976.6 KB across 114 files on a metered connection.')
     ).toBeTruthy();
   });
 
@@ -203,11 +197,7 @@ describe('before a gigabyte is spent', () => {
     renderBlock();
     await pressDownloadAll();
 
-    expect(
-      screen.getByText(
-        'About 976.6 KB across 114 files, approximate. The queue advances while the app is open.'
-      )
-    ).toBeTruthy();
+    expect(screen.getByText('About 976.6 KB across 114 files, approximate.')).toBeTruthy();
   });
 });
 

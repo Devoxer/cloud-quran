@@ -107,10 +107,13 @@ export const DOWNLOADS_SUPPORTED = Platform.OS !== 'web';
  * SAID "iOS GETS A REAL BACKGROUND URLSession" IN A SENTENCE A READER TOOK TO BE ABOUT
  * "DOWNLOAD ALL". Measured on a real iPhone 15 Pro, 2026-09-11: started "Download all",
  * backgrounded the app for ~1.5 minutes, came back to 1 of 114 — and the queue only resumed
- * advancing once the app was foregrounded. That is not a bug in the transfer; it is `drain`
- * below, which is a JS loop that `await`s one download and then starts the next. A suspended app
- * runs no JS, so the one file already handed to the OS finishes and nothing takes its place.
- * The copy on both download surfaces says so; do not let it drift back.
+ * advancing once the app was foregrounded. ⚠️ **THAT IS FIXED AS OF 2026-09-11 AND THIS
+ * PARAGRAPH IS KEPT BECAUSE THE DIAGNOSIS IS THE VALUABLE PART.** It was never a bug in the
+ * transfer: it was `drain` below, a JS loop that `await`ed one download before starting the next,
+ * in an app that runs no JS while suspended. iOS now starts every queued transfer up front, so
+ * the queue drains with the app closed; ANDROID still behaves exactly as described above, and the
+ * progress note branches on `BACKGROUND_TRANSFERS` rather than promising one platform's behaviour
+ * to both.
  *
  * ⚠️ IT IS TRUE ON iOS ONLY, AND THAT IS THE LIBRARY'S LIMIT RATHER THAN A CHOICE OF OURS.
  * `sessionType: 'background'` reaches a `URLSessionConfiguration.background` session on iOS
@@ -134,13 +137,19 @@ export const DOWNLOADS_SUPPORTED = Platform.OS !== 'web';
  * the system discards it. No `.part`, no `{NNN}.mp3`, nothing to clean up. A merely SUSPENDED app
  * is woken, its delegate is still there, and the promise resolves then: at resume, never before.
  *
- * ⚠️ HANDING THE OS MORE THAN ONE TRANSFER IS REACHABLE FROM JS AND IS DELIBERATELY NOT DONE.
- * The background session is created once and shared, so N concurrent `downloadAsync()` calls
- * would be N tasks `nsurlsessiond` runs while the app sleeps. What is NOT reachable without
- * native code is the OS starting a transfer JS never handed it, or performing the `.part` →
- * `{NNN}.mp3` commit — both are JS. So "download all and put the phone away" costs enqueuing all
- * 114 up front, which is an owner call (it changes what the stall watchdog, the progress surface
- * and the serial-failure rule below each mean) and not this change.
+ * ⚠️ SO THE QUEUE IS NOW HANDED OVER ALL AT ONCE ON iOS (owner call 2026-09-11), AND THE
+ * PARAGRAPH ABOVE IS THE REASON RATHER THAN A CONTRADICTION OF IT. The background session is
+ * created once and shared, so N concurrent `downloadAsync()` calls are N tasks `nsurlsessiond`
+ * runs while the app sleeps — `drain` below starts every queued surah up front instead of one per
+ * completion. What is still NOT reachable without native code is the OS starting a transfer JS
+ * never handed it, or performing the `.part` → `{NNN}.mp3` commit: both are JS, which is why a
+ * transfer finishing after the app is KILLED is lost rather than committed (next paragraph up).
+ * ⚠️ "ALL AT ONCE" IS NOT 114 SIMULTANEOUS SOCKETS — `URLSession` runs at most
+ * `httpMaximumConnectionsPerHost` per host and queues the rest itself. The point is that the
+ * QUEUE lives in `nsurlsessiond` rather than in a JS closure that stops running when the app
+ * suspends. The three things this changes the meaning of are answered where they live: the stall
+ * watchdog was already disarmed in `background`, `useActiveDownload` already resolved ties by
+ * lowest surah, and the failure rule is per-row and so unaffected by how many rows move at once.
  *
  * ⚠️ AND THE ANDROID PATH DELIBERATELY STAYS ON `File.downloadFileAsync`, WHICH IS NOT MERELY
  * "the same thing without the flag". The task API's Kotlin read loop checks a cancel flag between
@@ -640,88 +649,145 @@ function describeError(error: unknown): string {
 }
 
 /**
- * Drain the queue, one surah at a time.
+ * Run ONE queued surah to a settled row. Never rejects — every outcome is written to the store,
+ * which is what lets the iOS path hand a whole batch to `Promise.all` without one bad response
+ * abandoning the rest.
  *
- * ⚠️ SERIAL, AND A FAILURE DOES NOT STOP IT. The frozen matrix says "any surah failing leaves the
- * rest queued": a 404 on one file, or a full disk on one write, is that file's problem. The row
- * settles into `error` with a retry and the loop moves on, so a reader who asked for 114 does not
- * lose 113 of them to one bad response.
+ * ⚠️ A FAILURE DOES NOT STOP THE QUEUE. The frozen matrix says "any surah failing leaves the rest
+ * queued": a 404 on one file, or a full disk on one write, is that file's problem. The row settles
+ * into `error` with a retry and the drain moves on, so a reader who asked for 114 does not lose
+ * 113 of them to one bad response.
+ */
+async function runQueuedSurah(entry: { reciterId: string; surah: number }): Promise<void> {
+  const { reciterId, surah } = entry;
+  const key = downloadKey(reciterId, surah);
+  const controller = new AbortController();
+  inFlight.set(key, controller);
+  setDownloadEntry(key, {
+    status: 'downloading',
+    progress: 0,
+    bytesWritten: 0,
+    totalBytes: 0,
+    error: undefined,
+  });
+  try {
+    await downloadSurah(reciterId, surah, {
+      signal: controller.signal,
+      onProgress: ({ fraction, bytesWritten, totalBytes }) =>
+        setDownloadEntry(key, { progress: fraction, bytesWritten, totalBytes }),
+    });
+    /**
+     * ⚠️ THE SUCCESS WRITE IS CONDITIONAL, BECAUSE REMOVE-ALL CAN LAND WHILE A TRANSFER IS
+     * FINISHING. `deleteReciterDownloads` cancels every row and wipes the directory; a
+     * transfer that resolved a tick earlier would otherwise write `downloaded` on top of the
+     * cleared store and leave a checkmark over a file that is gone. The entry surviving is
+     * the proof nobody has cancelled this row. (Story 7-5 review, P8.)
+     */
+    if (!controller.signal.aborted && getDownloadEntry(key) !== null) {
+      setDownloadEntry(key, { status: 'downloaded', progress: 1, error: undefined });
+    } else {
+      removeSurahFile(reciterId, surah);
+    }
+  } catch (error) {
+    /**
+     * ⚠️ A CANCEL IS NOT AN ERROR SURFACE, AND THE SIGNAL IS WHAT SAYS SO — not the store.
+     * Writing `error` after a cancel would put a red retry row under a reader who had just
+     * pressed stop. Asking the STORE whether an entry survives looks equivalent and is not:
+     * a reader who cancels and immediately presses download again has a fresh `queued` entry
+     * under the same key by the time this abort rejects, and the store test would clobber it
+     * with `error`. `controller` belongs to THIS run and cannot be confused with the next.
+     */
+    if (!controller.signal.aborted) {
+      const reason = describeError(error);
+      // ⚠️ THE REASON IS CARRIED, NOT DISCARDED (story 7-5 review, P5). A 404, a full disk
+      // and a dead socket are the same bare glyph without it, and the frozen matrix asks for
+      // "a stated error on that row" for the storage-full case.
+      setDownloadEntry(key, {
+        status: 'error',
+        progress: 0,
+        bytesWritten: 0,
+        totalBytes: 0,
+        error: reason,
+      });
+      addBreadcrumb('ui', 'surah download failed', { reciterId, surah, reason });
+      /**
+       * ⚠️ A BREADCRUMB ALWAYS, A CAPTURE ONLY FOR SOMETHING ACTIONABLE — `errors.ts`'s own
+       * capture policy, tier 2: "expected / transient / user-or-device state → skip, or
+       * breadcrumb". A download that fails because the reader walked into a tunnel is the
+       * definition of self-healing connectivity, and a 114-file queue on a flaky link would
+       * otherwise send up to 114 captures for one bad afternoon. The stall watchdog is the
+       * same class by construction. Measured while smoking this on the emulator: every
+       * throttled failure raised a full-screen dev red box, which is what a tier-3 capture
+       * feels like from the inside.
+       */
+      if (!isTransientDownloadFailure(error)) {
+        captureException(error, { context: 'audio.downloadSurah', reciterId, surah });
+      }
+    }
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+/**
+ * Drain the queue — ALL AT ONCE ON iOS, one at a time on Android.
+ *
+ * ⚠️ THIS IS THE "DOWNLOAD ALL AND PUT THE PHONE AWAY" FIX, AND IT IS THE JS LOOP THAT WAS THE
+ * PROBLEM, NOT THE TRANSFER. Every file already went to a real `URLSessionConfiguration.background`
+ * session on iOS, owned by `nsurlsessiond` out of process — but a serial `await` hands the OS the
+ * NEXT file only when the previous one resolves, and a suspended app runs no JS to do the handing.
+ * So exactly one surah finished in the reader's pocket and the queue sat still, which the owner
+ * measured ("the inflight finishes but it dont move to the next surah"). Handing the OS every
+ * queued task UP FRONT is what makes the rest of the book drain while the app is closed.
+ *
+ * ⚠️ "ALL AT ONCE" IS NOT 114 SIMULTANEOUS TRANSFERS. `URLSession` runs at most
+ * `httpMaximumConnectionsPerHost` per host and queues the remainder itself, so the OS paces the
+ * network and only a handful of tasks report progress at a time. What we are buying is that the
+ * QUEUE lives in `nsurlsessiond` rather than in a JS closure that stops running.
+ *
+ * ⚠️ ANDROID STAYS SERIAL, DELIBERATELY. There is no background continuation to buy there — the
+ * Kotlin path is an in-process OkHttp call that dies with the process (see the module header) — so
+ * parallelism would only mean N sockets competing for one connection and N rows ticking at once,
+ * for a queue that cannot outlive the app anyway.
+ *
+ * ⚠️ AND `useActiveDownload` WAS ALREADY READY FOR THIS. Its docblock says "the lowest surah wins
+ * if a future change ever runs two at once" — so the progress card names the lowest-numbered
+ * in-flight surah rather than becoming non-deterministic. That was written as a hypothetical; this
+ * is the change that makes it the live case on iOS.
  */
 async function drain(): Promise<void> {
   if (draining) return;
   draining = true;
   const gen = generation;
   try {
-    while (pending.length > 0 && gen === generation) {
-      const next = pending.shift();
-      if (!next) break;
-      const { reciterId, surah } = next;
-      const key = downloadKey(reciterId, surah);
-      const controller = new AbortController();
-      inFlight.set(key, controller);
-      setDownloadEntry(key, {
-        status: 'downloading',
-        progress: 0,
-        bytesWritten: 0,
-        totalBytes: 0,
-        error: undefined,
-      });
-      try {
-        await downloadSurah(reciterId, surah, {
-          signal: controller.signal,
-          onProgress: ({ fraction, bytesWritten, totalBytes }) =>
-            setDownloadEntry(key, { progress: fraction, bytesWritten, totalBytes }),
-        });
-        /**
-         * ⚠️ THE SUCCESS WRITE IS CONDITIONAL, BECAUSE REMOVE-ALL CAN LAND WHILE A TRANSFER IS
-         * FINISHING. `deleteReciterDownloads` cancels every row and wipes the directory; a
-         * transfer that resolved a tick earlier would otherwise write `downloaded` on top of the
-         * cleared store and leave a checkmark over a file that is gone. The entry surviving is
-         * the proof nobody has cancelled this row. (Story 7-5 review, P8.)
-         */
-        if (!controller.signal.aborted && getDownloadEntry(key) !== null) {
-          setDownloadEntry(key, { status: 'downloaded', progress: 1, error: undefined });
-        } else {
-          removeSurahFile(reciterId, surah);
-        }
-      } catch (error) {
-        /**
-         * ⚠️ A CANCEL IS NOT AN ERROR SURFACE, AND THE SIGNAL IS WHAT SAYS SO — not the store.
-         * Writing `error` after a cancel would put a red retry row under a reader who had just
-         * pressed stop. Asking the STORE whether an entry survives looks equivalent and is not:
-         * a reader who cancels and immediately presses download again has a fresh `queued` entry
-         * under the same key by the time this abort rejects, and the store test would clobber it
-         * with `error`. `controller` belongs to THIS run and cannot be confused with the next.
-         */
-        if (!controller.signal.aborted) {
-          const reason = describeError(error);
-          // ⚠️ THE REASON IS CARRIED, NOT DISCARDED (story 7-5 review, P5). A 404, a full disk
-          // and a dead socket are the same bare glyph without it, and the frozen matrix asks for
-          // "a stated error on that row" for the storage-full case.
-          setDownloadEntry(key, {
-            status: 'error',
-            progress: 0,
-            bytesWritten: 0,
-            totalBytes: 0,
-            error: reason,
+    if (BACKGROUND_TRANSFERS) {
+      /**
+       * ⚠️ YIELD ONCE BEFORE THE FIRST BITE, AND THIS LINE IS THE WHOLE FIX WORKING. "Download
+       * all" queues 114 surahs in a SYNCHRONOUS loop, and each `startSurahDownload` calls here —
+       * so without a yield the first call runs the batch logic while `pending` still holds
+       * exactly one entry, takes that one bite, and the other 113 wait behind a promise that
+       * settles when the first file finishes. Exactly the serial behaviour, wearing a batch's
+       * clothes. A microtask is enough: the caller's loop is synchronous, so it has finished
+       * filling `pending` by the time this resumes.
+       */
+      await Promise.resolve();
+      const running = new Set<Promise<void>>();
+      // Ends when nothing is queued AND nothing is in flight. Racing rather than `Promise.all`
+      // so a surah the reader queues mid-batch starts immediately instead of waiting for 113.
+      while ((pending.length > 0 || running.size > 0) && gen === generation) {
+        for (const entry of pending.splice(0, pending.length)) {
+          const task: Promise<void> = runQueuedSurah(entry).finally(() => {
+            running.delete(task);
           });
-          addBreadcrumb('ui', 'surah download failed', { reciterId, surah, reason });
-          /**
-           * ⚠️ A BREADCRUMB ALWAYS, A CAPTURE ONLY FOR SOMETHING ACTIONABLE — `errors.ts`'s own
-           * capture policy, tier 2: "expected / transient / user-or-device state → skip, or
-           * breadcrumb". A download that fails because the reader walked into a tunnel is the
-           * definition of self-healing connectivity, and a 114-file queue on a flaky link would
-           * otherwise send up to 114 captures for one bad afternoon. The stall watchdog is the
-           * same class by construction. Measured while smoking this on the emulator: every
-           * throttled failure raised a full-screen dev red box, which is what a tier-3 capture
-           * feels like from the inside.
-           */
-          if (!isTransientDownloadFailure(error)) {
-            captureException(error, { context: 'audio.downloadSurah', reciterId, surah });
-          }
+          running.add(task);
         }
-      } finally {
-        inFlight.delete(key);
+        if (running.size > 0) await Promise.race(running);
+      }
+    } else {
+      while (pending.length > 0 && gen === generation) {
+        const next = pending.shift();
+        if (!next) break;
+        await runQueuedSurah(next);
       }
     }
   } finally {

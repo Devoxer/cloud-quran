@@ -56,6 +56,7 @@ import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useActiveDownload, useReciterDownloadSummary } from '@/stores/downloadQueueStore';
+import { BACKGROUND_TRANSFERS } from '../lib/audioDownloads';
 
 export interface DownloadProgressProps {
   /** The voice whose queue this reports on — downloads are per reciter. */
@@ -156,7 +157,16 @@ export function DownloadProgress({
           testID={testID ? `${testID}-fill` : undefined}
         />
       </View>
-      <Text style={styles.note}>{t('player:download.foregroundOnly')}</Text>
+      {/* ⚠️ THE NOTE IS A PLATFORM PROMISE, SO IT BRANCHES ON THE ONE FLAG THAT DECIDES IT.
+          On iOS the whole queue is handed to `nsurlsessiond` up front and drains while the app is
+          closed; on Android the transfer is an in-process OkHttp call that dies with the process,
+          so only the file already moving survives a trip to the home screen. One string for both
+          was wrong for one of them whichever wording it carried. */}
+      <Text style={styles.note}>
+        {t(
+          BACKGROUND_TRANSFERS ? 'player:download.backgroundOk' : 'player:download.foregroundOnly'
+        )}
+      </Text>
     </Card>
   );
 }

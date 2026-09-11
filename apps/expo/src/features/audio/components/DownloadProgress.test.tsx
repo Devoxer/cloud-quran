@@ -122,13 +122,22 @@ describe('while a surah is transferring', () => {
     });
     render(<DownloadProgress reciterId="husary" testID="progress" />);
 
-    // Literal, and deliberately the whole sentence: half of it is the claim the device test
-    // disproved, and the other half is the claim the device test confirmed.
+    // ⚠️ THE SUITE RUNS AS `ios`, AND THE NOTE IS A PLATFORM PROMISE — so this is the iOS
+    // sentence. It changed on 2026-09-11 with the behaviour: the drain now hands the OS every
+    // queued transfer up front, so the whole queue survives the app being closed rather than only
+    // the file already moving. Literal, because the point of the string is the promise it makes.
     expect(
       screen.getByText(
-        'The surah in progress finishes in the background. The rest wait until you come back.'
+        'The whole queue keeps downloading in the background, even with the app closed.'
       )
     ).toBeTruthy();
+    // MUTATION: the Android sentence must not be what iOS shows — one string for both platforms
+    // is wrong for one of them whichever wording it carries.
+    expect(
+      screen.queryByText(
+        'The surah in progress finishes in the background. The rest wait until you come back.'
+      )
+    ).toBeNull();
   });
 
   it('offers no stop when the caller gave it no way to stop', () => {
