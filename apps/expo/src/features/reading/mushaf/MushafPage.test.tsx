@@ -429,10 +429,11 @@ describe('the word press', () => {
     expect(onSelectVerse).toHaveBeenCalledWith(2, 255);
   });
 
-  it('toggles the chrome from the page HEADER band, and from the page NUMBER band', async () => {
-    // ⚠️ THESE TWO BANDS ARE THE MUSHAF'S ENTIRE CHROME-TOGGLE SURFACE (owner call 2026-09-10).
-    // The RNGH tap that used to cover the whole pager is gone, so there is no second touch system
-    // to race and no inter-word gap that flips the chrome by accident.
+  it('toggles the chrome from ALL THREE bands — header, page number, and the text column', async () => {
+    // ⚠️ THESE THREE BANDS ARE THE MUSHAF'S ENTIRE CHROME-TOGGLE SURFACE, and together they
+    // are the WHOLE PAGE (owner call 2026-09-11: "all the screen should either select a verse or
+    // reveal the chrome"). The RNGH tap that used to cover the pager is still gone — there is no
+    // second touch system to race — but the dead margins it left behind are gone too.
     const onToggleChrome = jest.fn();
     render(<MushafPage pageNumber={40} onToggleChrome={onToggleChrome} />);
     await screen.findByTestId('mushaf-page-40');
@@ -441,6 +442,10 @@ describe('the word press', () => {
     expect(onToggleChrome).toHaveBeenCalledTimes(1);
     fireEvent.press(screen.getByTestId('mushaf-chrome-band-footer-40'));
     expect(onToggleChrome).toHaveBeenCalledTimes(2);
+    // The third band is the one the 2026-09-10 shape had no answer for: the margins beside the
+    // lines, the gaps between them, and a special page's frame.
+    fireEvent.press(screen.getByTestId('mushaf-chrome-band-page-40'));
+    expect(onToggleChrome).toHaveBeenCalledTimes(3);
   });
 
   it('leaves a WORD press to the SELECTION alone — it never toggles the chrome', async () => {
@@ -467,6 +472,9 @@ describe('the word press', () => {
     ).toBeUndefined();
     expect(
       screen.getByTestId('mushaf-chrome-band-footer-40').props.accessibilityRole
+    ).toBeUndefined();
+    expect(
+      screen.getByTestId('mushaf-chrome-band-page-40').props.accessibilityRole
     ).toBeUndefined();
   });
 

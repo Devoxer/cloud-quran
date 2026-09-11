@@ -33,8 +33,14 @@
  *
  * Story 7-6 gave the mushaf a word press (a seek, until story 7-8 made it a SELECTION) under an
  * RNGH tap that toggled the chrome everywhere else. ⚠️ **That surface gesture is GONE (owner call
- * 2026-09-10) and must not come back.** Two bands toggle the chrome — the page header strip and
- * the page number — and nothing else on the page does. Everything here follows from that:
+ * 2026-09-10) and must not come back.** THREE `Pressable` bands toggle the chrome — the page
+ * header strip, the page number, and (owner call 2026-09-11) the whole text column between them.
+ * Everything here follows from that:
+ *
+ * ⚠️ THE THIRD BAND RESTORES FULL COVERAGE WITHOUT RESTORING THE GESTURE, and the difference is
+ * the entire point. 2026-09-10 traded the race away for dead margins; the owner's rule is that
+ * every point on the screen must either select an ayah or reveal the chrome. A `Pressable` gets
+ * that back inside RN's responder system, where nesting — not dispatch order — decides.
  *
  * ⚠️ NO CROSS-SYSTEM RACE IS POSSIBLE ANY MORE, which is the real prize. 7-6's suppression had
  * RNGH's recogniser and RN's responder both seeing one touch, with only their dispatch order
@@ -42,10 +48,12 @@
  * synthetic taps and logged in `deferred-work.md`. With one touch system left on this screen,
  * RN's responder decides alone: the deepest view that wants the touch gets it, always.
  *
- * ⚠️ AND THE INTER-WORD GAPS STOP TOGGLING. The `' '` separators belong to the LINE, not to any
- * word (they must, or a highlight bleeds across them), so under 7-6 a tap landing between two
- * words was an "empty area" and flipped the chrome — measured at roughly one tap in three across
- * a line. Now a gap tap does nothing, which is the honest answer for a facsimile.
+ * ⚠️ AN INTER-WORD GAP REVEALS, IT DOES NOT SELECT — and it reveals again as of the third band.
+ * The `' '` separators belong to the LINE, not to any word (they must, or a highlight bleeds
+ * across them), so a tap landing between two words is not on any word's `<Text>` and falls
+ * through to the band. Under 7-6 that flipped the chrome via the surface gesture (~one tap in
+ * three across a line); between 2026-09-10 and 2026-09-11 it did nothing at all; now it reveals
+ * with no ayah selected, which is what an empty area means everywhere else in the app.
  *
  * ⚠️ THE WORD PRESS ADDS NO VIEWS. `onPress` goes on the per-word `<Text>` that already exists
  * inside the line's `<Text>`. Wrapping words in `View`s or `GestureDetector`s would break the
@@ -156,6 +164,10 @@ const useStyles = () =>
       flex: 1,
       justifyContent: 'space-between',
       backgroundColor: theme.colors.background.primary,
+    },
+    /** The reveal band that is everything between the header strip and the page number. */
+    pageBand: {
+      flex: 1,
     },
     pageContent: {
       flex: 1,
@@ -370,15 +382,41 @@ export function MushafPage({
       >
         <MushafPageHeader pageNumber={pageNumber} surahNumber={surahNumber} />
       </Pressable>
-      {isSpecialPage ? (
-        <View style={styles.specialPageContent}>
-          <View style={styles.specialPageFrame} testID="mushaf-special-frame">
-            {lines}
+      {/* ⚠️ BAND THREE, AND IT IS THE WHOLE REST OF THE PAGE (owner call 2026-09-11: "all the
+          screen should either select a verse or reveal the chrome"). Before this, the two bands
+          above and below were the ONLY reveal targets and the entire text column — the margins
+          beside the lines, the gaps between them, a special page's frame — was dead.
+
+          ⚠️ IT IS A `Pressable`, NOT A RESTORED SURFACE GESTURE, AND THAT DISTINCTION IS THE
+          POINT. The RNGH recogniser this screen carried until 2026-09-10 lived in a DIFFERENT
+          touch system from the word presses inside it, and nothing sequences the two — which is
+          the leak `useSurfaceTap` still lives with on the reading surface. Here the word `<Text>`
+          and this `Pressable` are both RN responders, so nesting decides: the innermost responder
+          that accepts the touch wins, the word press never reaches this handler, and the race is
+          unwritable rather than merely unlikely.
+
+          ⚠️ AND IT MUST NOT EAT THE PAGE TURN. `onPress` fires on release only; the horizontal
+          pager claims the responder on MOVE, so a swipe turns the page and never reveals. Verified
+          on the emulator — re-verify on any change here, because a mushaf that cannot be turned is
+          a worse regression than a dead margin. */}
+      <Pressable
+        style={styles.pageBand}
+        onPress={onToggleChrome}
+        disabled={!onToggleChrome}
+        accessibilityRole={onToggleChrome ? 'button' : undefined}
+        accessibilityLabel={onToggleChrome ? t('common:mushaf.toggleChrome') : undefined}
+        testID={`mushaf-chrome-band-page-${pageNumber}`}
+      >
+        {isSpecialPage ? (
+          <View style={styles.specialPageContent}>
+            <View style={styles.specialPageFrame} testID="mushaf-special-frame">
+              {lines}
+            </View>
           </View>
-        </View>
-      ) : (
-        <View style={styles.pageContent}>{lines}</View>
-      )}
+        ) : (
+          <View style={styles.pageContent}>{lines}</View>
+        )}
+      </Pressable>
       {/* Band two. A bare numeral — no run of two letters, so `lint:i18n` leaves the text alone. */}
       <Pressable
         onPress={onToggleChrome}
