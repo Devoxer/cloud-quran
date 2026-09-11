@@ -313,3 +313,18 @@ const RECITER_IDS: ReadonlySet<string> = new Set(RECITERS.map((reciter) => recit
 export function resolveReciterId(id: string | null | undefined): string {
   return id && RECITER_IDS.has(id) ? id : DEFAULT_RECITER_ID;
 }
+
+/**
+ * The name a surface should print for an id — RESOLVED first, so it can never print a withdrawn
+ * one back at the reader.
+ *
+ * ⚠️ IT EXISTS FOR THE `(profile)` HEADER, which resolves a route's title from the focused
+ * segment and had nowhere to look up a param. The reciter-downloads screen's title IS the voice
+ * (owner, 2026-09-11), so the name has to be readable from outside this feature's components;
+ * every one of them already had `RECITERS.find` inline, which is the same lookup written three
+ * times.
+ */
+export function reciterDisplayName(id: string | null | undefined): string {
+  const resolved = resolveReciterId(id);
+  return RECITERS.find((reciter) => reciter.id === resolved)?.nameEnglish ?? resolved;
+}

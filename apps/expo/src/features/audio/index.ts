@@ -10,13 +10,14 @@
  * other global store.
  */
 
-// ── story 7-5: offline downloads. Biome sorts this list by path, so the story's three exports
-//    (DownloadKeepAwake here, ReciterDownloads and SurahDownloadButton below) are not adjacent ──
+// ── story 7-5: offline downloads. Biome sorts this list by path, so the story's exports
+//    (DownloadKeepAwake here, DownloadStorage and SurahDownloadButton below) are not adjacent.
+//    ⚠️ `DownloadProgress` and `ReciterDownloadsHeader` are NOT here: both are internal to the
+//    per-reciter downloads screen, and an export with no outside caller is a surface this
+//    feature would then owe compatibility to. ──
 export { DownloadKeepAwake, type DownloadKeepAwakeProps } from './components/DownloadKeepAwake';
-export {
-  DownloadProgress,
-  type DownloadProgressProps,
-} from './components/DownloadProgress';
+// ── 2026-09-11: what every voice costs together — the recitation screen's list footer ──
+export { DownloadStorage, type DownloadStorageProps } from './components/DownloadStorage';
 // ── story 7-4: speed + the sleep timer — the controls, and the sheet that hosts them ──
 export { PlaybackOptions, type PlaybackOptionsProps } from './components/PlaybackOptions';
 export {
@@ -28,12 +29,13 @@ export {
   ReciterDownloadButton,
   type ReciterDownloadButtonProps,
 } from './components/ReciterDownloadButton';
-export {
-  ReciterDownloads,
-  type ReciterDownloadsProps,
-} from './components/ReciterDownloads';
 // ── story 7-2: the voice surface, plus the catalogue helpers a settings row needs ──
-export { buildReciterRows, ReciterPicker, type ReciterRow } from './components/ReciterPicker';
+export {
+  buildReciterRows,
+  ReciterPicker,
+  type ReciterPickerProps,
+  type ReciterRow,
+} from './components/ReciterPicker';
 // ── story 7-8: the same picker, embedded in a sheet the chrome's player row opens ──
 export { ReciterSheet, type ReciterSheetProps } from './components/ReciterSheet';
 // ── 2026-09-11: the reciter's own surah list, opened from the picker row's chevron ──
@@ -51,6 +53,7 @@ export {
   RECITERS,
   type Reciter,
   type ReciterStyle,
+  reciterDisplayName,
   resolveReciterId,
 } from './data/reciters';
 export { useDownloadReciterId } from './hooks/useDownloadReciterId';

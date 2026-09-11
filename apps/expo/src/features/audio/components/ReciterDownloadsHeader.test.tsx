@@ -1,23 +1,25 @@
 /**
- * The whole-reciter offline block (story 7-5).
+ * The per-reciter downloads header (story 7-5's block, rewritten 2026-09-11).
  *
  * ⚠️ THE CASE THIS FILE EXISTS FOR IS THE ORDERING. "An approximate total was shown BEFORE the
  * confirmation" is an explicit acceptance criterion, and moving `setPrompt` above the `await`
  * satisfies every type and renders a dialog promising "About 0 B" — a confirmation the reader
  * answers on no information at all. Nothing else in the tree can see that edit.
  *
+ * ⚠️ AND IT PINS THE DE-CLUTTERING, which is otherwise a thing only a screenshot can see. The
+ * block this replaces drew four rows over a progress panel; the rule now is that a running queue
+ * shows the progress card and NO action row, a complete voice shows a mark and NO action, and a
+ * failure is a message carrying its own retry rather than a menu item that is usually absent.
+ *
  * The runner is mocked throughout: what it does to the queue is `audioDownloads.test.ts`'s
- * subject, and what is proven only here is which row calls what, and when.
+ * subject, and what is proven only here is which control calls what, and when.
  */
 
 const mockQueueAll = jest.fn();
-const mockDeleteAll = jest.fn();
 const mockCancelAll = jest.fn();
 const mockRetryFailed = jest.fn();
-const mockDeleteOrphans = jest.fn();
 const mockHydrate = jest.fn();
 let mockBytesOnDisk = 0;
-let mockOrphanBytes = 0;
 /** Free bytes the platform reports; `null` is "it would not say". */
 let mockFreeSpace: number | null = null;
 let mockMetered = false;
@@ -26,12 +28,9 @@ jest.mock('../lib/audioDownloads', () => ({
   DOWNLOADS_SUPPORTED: true,
   hydrateDownloadState: (...args: unknown[]) => mockHydrate(...args),
   queueReciterDownloads: (...args: unknown[]) => mockQueueAll(...args),
-  deleteReciterDownloads: (...args: unknown[]) => mockDeleteAll(...args),
   cancelReciterDownloads: (...args: unknown[]) => mockCancelAll(...args),
   retryFailedDownloads: (...args: unknown[]) => mockRetryFailed(...args),
-  deleteOrphanedDownloads: (...args: unknown[]) => mockDeleteOrphans(...args),
   reciterBytesOnDisk: () => mockBytesOnDisk,
-  orphanedDownloadBytes: () => mockOrphanBytes,
   availableDownloadSpace: () => mockFreeSpace,
   // The real arithmetic is `audioDownloads.test.ts`'s; here it only has to be deterministic.
   estimateReciterDownload: () => ({ bytes: 1_000_000, surahs: 114 }),
@@ -40,7 +39,7 @@ jest.mock('../lib/audioDownloads', () => ({
 /**
  * ⚠️ THE NATIVE `<Dialog>` IS OS CHROME AND IS NOT QUERYABLE IN JEST (UIAlertController / M3
  * AlertDialog render host views, not RN buttons) — `ConfirmDialog.test.tsx` records this and
- * stubs it the same way. Only one prompt is ever open, so the two dialogs cannot collide.
+ * stubs it the same way.
  */
 jest.mock('@/components/ui/Dialog', () => ({
   Dialog: ({ open, title, message, confirmText, cancelText, onConfirm, onCancel }: any) => {
@@ -81,7 +80,7 @@ jest.mock('@/lib/reciterManifest', () => ({
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { setDownloadEntry, useDownloadQueueStore } from '@/stores/downloadQueueStore';
-import { ReciterDownloads } from './ReciterDownloads';
+import { ReciterDownloadsHeader } from './ReciterDownloadsHeader';
 
 const PREFIX = 'downloads';
 
@@ -89,17 +88,22 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockManifestFails = false;
   mockBytesOnDisk = 0;
-  mockOrphanBytes = 0;
   mockFreeSpace = null;
   mockMetered = false;
   useDownloadQueueStore.setState({ entries: {} });
 });
 
 function renderBlock() {
-  return render(<ReciterDownloads reciterId="husary" testIDPrefix={PREFIX} />);
+  return render(
+    <ReciterDownloadsHeader
+      reciterId="husary"
+      reciterName="Mahmoud Khalil Al-Husary"
+      testIDPrefix={PREFIX}
+    />
+  );
 }
 
-/** Press "download all" and let the manifest promise settle. */
+/** Press the action row and let the manifest promise settle. */
 async function pressDownloadAll() {
   await act(async () => {
     fireEvent.press(screen.getByTestId(`${PREFIX}-download-all`));
@@ -117,7 +121,7 @@ describe('the estimate is shown BEFORE the confirmation', () => {
     // 1,000,000 bytes → "976.6 KB"; the copy says "About", and names the manifest's count.
     expect(
       screen.getByText(
-        'About 976.6 KB across 114 files, approximate. Downloads run only while the app is open.'
+        'About 976.6 KB across 114 files, approximate. The queue advances while the app is open.'
       )
     ).toBeTruthy();
     // …and nothing has been queued yet — the dialog is a question, not an action.
@@ -190,7 +194,7 @@ describe('before a gigabyte is spent', () => {
 
     expect(
       screen.getByText(
-        'About 976.6 KB across 114 files, approximate, on a metered connection. Keep the app open.'
+        'About 976.6 KB across 114 files on a metered connection. The queue needs the app open.'
       )
     ).toBeTruthy();
   });
@@ -201,45 +205,68 @@ describe('before a gigabyte is spent', () => {
 
     expect(
       screen.getByText(
-        'About 976.6 KB across 114 files, approximate. Downloads run only while the app is open.'
+        'About 976.6 KB across 114 files, approximate. The queue advances while the app is open.'
       )
     ).toBeTruthy();
   });
 });
 
-describe('remove-all', () => {
-  it('confirms first, then deletes', () => {
+describe('the one action row', () => {
+  it('offers the whole book when nothing is kept', () => {
+    renderBlock();
+    expect(screen.getByTestId(`${PREFIX}-download-all`)).toHaveTextContent(/Download all surahs/);
+    expect(screen.getByTestId(`${PREFIX}-download-all`)).toHaveTextContent(
+      /Nothing downloaded yet/
+    );
+  });
+
+  it('offers only the REST once part of the book is kept', () => {
     act(() => setDownloadEntry('husary:1', { status: 'downloaded', progress: 1 }));
     renderBlock();
 
-    fireEvent.press(screen.getByTestId(`${PREFIX}-remove-all`));
-    expect(mockDeleteAll).not.toHaveBeenCalled();
-
-    fireEvent.press(screen.getByText('Remove'));
-    expect(mockDeleteAll).toHaveBeenCalledWith('husary');
+    expect(screen.getByTestId(`${PREFIX}-download-all`)).toHaveTextContent(
+      /Download the remaining surahs/
+    );
   });
 
-  it('is absent while nothing is kept — a remove with nothing to remove', () => {
+  /**
+   * ⚠️ NOT A DISABLED BUTTON — NO BUTTON. A control that cannot act reads as a broken row; the
+   * complete state states the fact and offers nothing, and removing is the list footer's job.
+   */
+  it('becomes a mark, not an action, once every surah is kept', () => {
+    act(() => {
+      for (let surah = 1; surah <= 114; surah += 1) {
+        setDownloadEntry(`husary:${surah}`, { status: 'downloaded', progress: 1 });
+      }
+    });
     renderBlock();
-    expect(screen.queryByTestId(`${PREFIX}-remove-all`)).toBeNull();
+
+    expect(screen.queryByTestId(`${PREFIX}-download-all`)).toBeNull();
+    expect(screen.getByTestId(`${PREFIX}-complete`)).toHaveTextContent(/114 of 114 surahs/);
   });
 });
 
 describe('a running queue', () => {
-  /** Per-row cancel is on another screen and remove-all needs something kept. (Review P7.) */
-  it('offers a stop, which is absent when nothing is moving', () => {
+  /**
+   * ⚠️ THE ACTION ROW AND THE PROGRESS CARD ARE MUTUALLY EXCLUSIVE. Shipping both is exactly the
+   * redundancy the owner called out: a row saying "3 still queued" over a panel saying the same
+   * thing in bytes. The stop is inside the card.
+   */
+  it('replaces the action row with the progress card, stop and all', () => {
     renderBlock();
-    expect(screen.queryByTestId(`${PREFIX}-stop`)).toBeNull();
+    expect(screen.queryByTestId(`${PREFIX}-progress`)).toBeNull();
 
     act(() => setDownloadEntry('husary:1', { status: 'downloading', progress: 0.3 }));
-    fireEvent.press(screen.getByTestId(`${PREFIX}-stop`));
+
+    expect(screen.queryByTestId(`${PREFIX}-download-all`)).toBeNull();
+    fireEvent.press(screen.getByTestId(`${PREFIX}-progress-stop`));
     expect(mockCancelAll).toHaveBeenCalledWith('husary');
   });
 });
 
 describe('failures', () => {
   /** "102 of 114" with nothing saying twelve failed is the state this ends. (Review P6.) */
-  it('are counted, and retryable, separately from what is kept', () => {
+  it('are counted, and retryable, on the message itself', () => {
     act(() => {
       setDownloadEntry('husary:1', { status: 'downloaded', progress: 1 });
       setDownloadEntry('husary:2', { status: 'error', progress: 0, error: 'HTTP 404' });
@@ -247,36 +274,13 @@ describe('failures', () => {
     renderBlock();
 
     expect(screen.getByText('1 could not be downloaded')).toBeTruthy();
-    fireEvent.press(screen.getByTestId(`${PREFIX}-retry-failed`));
+    fireEvent.press(screen.getByText('Retry failed downloads'));
     expect(mockRetryFailed).toHaveBeenCalledWith('husary');
   });
 
-  it('leave the retry row absent when there are none', () => {
+  it('leave the notice absent when there are none', () => {
     renderBlock();
     expect(screen.queryByTestId(`${PREFIX}-retry-failed`)).toBeNull();
-  });
-});
-
-describe('downloads under a withdrawn voice', () => {
-  /** `abdulkareem` left the catalogue; its files are otherwise unreachable. (Review P14.) */
-  it('are offered for removal once the disk read lands', async () => {
-    mockOrphanBytes = 5_000_000;
-    jest.useFakeTimers();
-    try {
-      renderBlock();
-      await act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-      fireEvent.press(screen.getByTestId(`${PREFIX}-remove-orphans`));
-      expect(mockDeleteOrphans).toHaveBeenCalled();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  it('are not mentioned when there are none', () => {
-    renderBlock();
-    expect(screen.queryByTestId(`${PREFIX}-remove-orphans`)).toBeNull();
   });
 });
 

@@ -9,6 +9,23 @@
  * index's control stays, because a reader already there should not have to leave; this is the
  * screen the reciter picker's chevron opens, and the one that can name the voice it is about.
  *
+ * ⚠️ AND IT NAMES IT IN THE HEADER, NOT IN THE BODY. The screen used to draw the reciter's name
+ * as an h2 above a card titled "Offline" under a bar titled "Downloads" — three headings for one
+ * screen. `(profile)/_layout.tsx` now resolves this route's title from the `id` param, so the
+ * bar says "Mahmoud Khalil Al-Husary" and the body says it once: never. (Owner, 2026-09-11.)
+ *
+ * ⚠️ THE SCREEN IS THREE BANDS, IN THIS ORDER, AND EACH OWNS EXACTLY ONE JOB.
+ *   header  → `ReciterDownloadsHeader`: the bulk action, or the running job, or what failed.
+ *   list    → 114 rows, one control each — the granular half.
+ *   footer  → the irreversible one: remove everything kept for this voice.
+ * Remove-all is at the BOTTOM because that is where an irreversible action belongs on a list
+ * screen (Settings → an app → Delete App), and because at the top it sat one thumb-width from
+ * "Download all surahs".
+ *
+ * ⚠️ REMOVING ALL *DOES* CONFIRM, WHILE REMOVING ONE DOES NOT — and the difference is reversal
+ * cost, not consistency. Story 23.13's no-confirm rule is for removes that are trivially
+ * reversible; one surah is a single press to get back, and the whole book is an hour of network.
+ *
  * ⚠️ THE ROW SHAPE IS THE INDEX'S, DELIBERATELY IDENTICAL — `ListRow` with the control as its
  * SIBLING, never in the `trailing` slot. `trailing` renders inside the row's own `Pressable`,
  * which react-native-web turns into a real `<button>`; a control there is a `<button>` in a
@@ -29,19 +46,25 @@
 
 import { FlashList } from '@shopify/flash-list';
 import { SURAH_METADATA } from 'quran-data';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ListRow, Text } from '@/components/ui';
+import { ConfirmDialog, ListRow, SettingsGroup, SettingsRow, Text } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
+import { haptics } from '@/lib/haptics';
 import { useThemedStyles } from '@/lib/useThemedStyles';
+import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
 import { RECITERS, resolveReciterId } from '../data/reciters';
-import { DOWNLOADS_SUPPORTED, hydrateDownloadState } from '../lib/audioDownloads';
+import {
+  DOWNLOADS_SUPPORTED,
+  deleteReciterDownloads,
+  hydrateDownloadState,
+} from '../lib/audioDownloads';
 import { DownloadKeepAwake } from './DownloadKeepAwake';
-import { ReciterDownloads } from './ReciterDownloads';
+import { ReciterDownloadsHeader } from './ReciterDownloadsHeader';
 import { SurahDownloadButton } from './SurahDownloadButton';
 
 export interface ReciterSurahDownloadsProps {
@@ -57,11 +80,20 @@ export function ReciterSurahDownloads({ reciterId }: ReciterSurahDownloadsProps)
   const styles = useStyles();
   const resolved = resolveReciterId(reciterId);
   const reciter = RECITERS.find((entry) => entry.id === resolved);
+  const reciterName = reciter?.nameEnglish ?? resolved;
+  const summary = useReciterDownloadSummary(resolved);
+  const [removing, setRemoving] = useState(false);
 
   // The queue store mirrors the disk, so a surface that shows download state seeds it on arrival.
   useEffect(() => {
     hydrateDownloadState(resolved);
   }, [resolved]);
+
+  const confirmRemoveAll = () => {
+    setRemoving(false);
+    haptics.impact('light');
+    deleteReciterDownloads(resolved);
+  };
 
   const renderRow = useCallback(
     ({ item }: { item: SurahRow }) => (
@@ -96,16 +128,42 @@ export function ReciterSurahDownloads({ reciterId }: ReciterSurahDownloadsProps)
         keyExtractor={(item) => String(item.number)}
         ListHeaderComponent={
           <View>
-            {/* The reciter's name is DATA, not copy — the header above says what the screen is. */}
-            <Text style={styles.voice}>{reciter?.nameEnglish ?? resolved}</Text>
-            <ReciterDownloads reciterId={resolved} testIDPrefix="reciter-downloads" />
+            <ReciterDownloadsHeader
+              reciterId={resolved}
+              reciterName={reciterName}
+              testIDPrefix="reciter-downloads"
+            />
             {DOWNLOADS_SUPPORTED ? (
               <Text style={styles.listLabel}>{t('player:download.perSurahLabel')}</Text>
             ) : null}
           </View>
         }
+        ListFooterComponent={
+          summary.downloaded > 0 ? (
+            <View style={styles.footer}>
+              <SettingsGroup>
+                <SettingsRow
+                  icon="trash-outline"
+                  label={t('player:download.removeAll')}
+                  destructive
+                  onPress={() => setRemoving(true)}
+                  testID="reciter-downloads-remove-all"
+                />
+              </SettingsGroup>
+            </View>
+          ) : null
+        }
         contentContainerStyle={{ paddingBottom: insets.bottom + SPACING.xl }}
         testID="reciter-downloads-list"
+      />
+      <ConfirmDialog
+        visible={removing}
+        title={t('player:download.removeAllTitle')}
+        message={t('player:download.removeAllMessage')}
+        confirmText={t('player:download.removeAllAction')}
+        confirmStyle="destructive"
+        onConfirm={confirmRemoveAll}
+        onCancel={() => setRemoving(false)}
       />
     </View>
   );
@@ -117,14 +175,6 @@ const useStyles = () =>
       flex: 1,
       backgroundColor: theme.colors.background.primary,
     },
-    voice: {
-      paddingHorizontal: SPACING.lg,
-      paddingTop: SPACING.md,
-      paddingBottom: SPACING.sm,
-      fontSize: FONT_SIZE.h2,
-      fontWeight: FONT_WEIGHT.semibold,
-      color: theme.colors.text.primary,
-    },
     listLabel: {
       paddingHorizontal: SPACING.lg,
       paddingTop: SPACING.md,
@@ -134,6 +184,10 @@ const useStyles = () =>
       textTransform: 'uppercase' as const,
       letterSpacing: 1,
       color: theme.colors.text.tertiary,
+    },
+    footer: {
+      paddingHorizontal: SPACING.lg,
+      paddingTop: SPACING.lg,
     },
     // The row and its control, side by side — see the docblock for why the control is not in
     // the row's `trailing` slot.

@@ -10,9 +10,18 @@
  *
  * ⚠️ AND IT PINS THE RESOLUTION. A link carrying a withdrawn id (`abdulkareem`, removed
  * 2026-09-08) must not open a screen that files downloads under a voice nothing can play.
+ *
+ * ⚠️ AND IT PINS THAT THE BODY DOES NOT NAME THE VOICE. The header bar does, from the route's
+ * `id` (`(profile)/_layout.tsx`), so an h2 here would be the same subject announced twice under a
+ * bar that already said it. (Owner, 2026-09-11.)
+ *
+ * ⚠️ AND IT PINS REMOVE-ALL AS THE FOOTER. At the top it sat one thumb-width under "Download all
+ * surahs"; at the bottom it is where a list screen's irreversible action belongs, and it is
+ * absent entirely while there is nothing to remove.
  */
 
 const mockHydrate = jest.fn();
+const mockDeleteReciter = jest.fn();
 jest.mock('../lib/audioDownloads', () => ({
   DOWNLOADS_SUPPORTED: true,
   hydrateDownloadState: (...args: unknown[]) => mockHydrate(...args),
@@ -20,7 +29,7 @@ jest.mock('../lib/audioDownloads', () => ({
   cancelSurahDownload: jest.fn(),
   deleteSurahDownload: jest.fn(),
   cancelReciterDownloads: jest.fn(),
-  deleteReciterDownloads: jest.fn(),
+  deleteReciterDownloads: (...args: unknown[]) => mockDeleteReciter(...args),
   deleteOrphanedDownloads: jest.fn(),
   retryFailedDownloads: jest.fn(),
   orphanedDownloadBytes: () => 0,
@@ -53,14 +62,36 @@ jest.mock('@shopify/flash-list', () => {
             { key: props.keyExtractor(item, index) },
             props.renderItem({ item, index })
           )
-        )
+        ),
+      // The footer is a real branch of this screen — a mock that dropped it would leave
+      // remove-all unobserved in both directions.
+      props.ListFooterComponent ?? null
     );
   return { __esModule: true, FlashList };
 });
 
-import { render, screen } from '@testing-library/react-native';
+/** The native dialog is OS chrome and is not queryable in jest — `ConfirmDialog.test.tsx`'s note. */
+jest.mock('@/components/ui/Dialog', () => ({
+  Dialog: ({ open, message, confirmText, onConfirm }: any) => {
+    const React = require('react');
+    const { Pressable, Text } = require('react-native');
+    if (!open) return null;
+    return React.createElement(
+      Pressable,
+      null,
+      React.createElement(Text, null, message),
+      React.createElement(
+        Pressable,
+        { onPress: onConfirm },
+        React.createElement(Text, null, confirmText)
+      )
+    );
+  },
+}));
 
-import { useDownloadQueueStore } from '@/stores/downloadQueueStore';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+
+import { setDownloadEntry, useDownloadQueueStore } from '@/stores/downloadQueueStore';
 import { ReciterSurahDownloads } from './ReciterSurahDownloads';
 
 beforeEach(() => {
@@ -68,11 +99,36 @@ beforeEach(() => {
   useDownloadQueueStore.setState({ entries: {} });
 });
 
-it('names the voice it is about, and seeds the queue mirror for it', () => {
+it('seeds the queue mirror for the voice it is about', () => {
   render(<ReciterSurahDownloads reciterId="husary" />);
 
-  expect(screen.getByText('Mahmoud Khalil Al-Husary')).toBeTruthy();
   expect(mockHydrate).toHaveBeenCalledWith('husary');
+  expect(screen.getByTestId('reciter-downloads-body')).toBeTruthy();
+});
+
+it('does NOT repeat the voice name in the body — the header bar is the one that says it', () => {
+  render(<ReciterSurahDownloads reciterId="husary" />);
+
+  expect(screen.queryByText('Mahmoud Khalil Al-Husary')).toBeNull();
+});
+
+describe('remove-all', () => {
+  it('is absent while nothing is kept — a remove with nothing to remove', () => {
+    render(<ReciterSurahDownloads reciterId="husary" />);
+
+    expect(screen.queryByTestId('reciter-downloads-remove-all')).toBeNull();
+  });
+
+  it('is the list FOOTER once something is kept, and confirms before deleting', () => {
+    setDownloadEntry('husary:1', { status: 'downloaded', progress: 1 });
+    render(<ReciterSurahDownloads reciterId="husary" />);
+
+    fireEvent.press(screen.getByTestId('reciter-downloads-remove-all'));
+    expect(mockDeleteReciter).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText('Remove'));
+    expect(mockDeleteReciter).toHaveBeenCalledWith('husary');
+  });
 });
 
 it('falls back to the default voice for an id the catalogue no longer offers', () => {

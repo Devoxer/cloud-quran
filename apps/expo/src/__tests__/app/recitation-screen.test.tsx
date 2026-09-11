@@ -67,3 +67,19 @@ it('is the SAME controls as the sheet, not a second copy of them', () => {
     screen.getByTestId('settings-playback-options-sleep-surah').props.accessibilityState
   ).toMatchObject({ selected: true });
 });
+
+/**
+ * ⚠️ THE "DOWNLOAD ALL SURAHS" BLOCK IS GONE FROM THIS SCREEN, AND THAT IS THE ASSERTION.
+ * It only ever acted on the voice already chosen, which every picker row now offers on its own
+ * row along with a chevron into that voice's surah list (owner, 2026-09-11: "we don't need the
+ * current download all surah button"). Pinned because the regression is silent: re-adding the
+ * block breaks nothing, it just puts a third of the screen back in front of the picker.
+ */
+it('has no download-all block in front of the picker', () => {
+  render(<RecitationScreen />);
+
+  expect(screen.queryByTestId('settings-reciter-downloads-body')).toBeNull();
+  expect(screen.queryByText('Download all surahs')).toBeNull();
+  // …and the picker is still the thing the screen is for.
+  expect(screen.getByTestId('reciter-list')).toBeTruthy();
+});

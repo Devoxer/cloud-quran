@@ -19,10 +19,11 @@
  * every layout's anchor against the filesystem).
  */
 
-import { Stack, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { AppHeader, AppTabBar } from '@/components/ui';
+import { reciterDisplayName } from '@/features/audio';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -45,6 +46,22 @@ const TITLE_KEYS = {
 } as const;
 type TitleKey = (typeof TITLE_KEYS)[keyof typeof TITLE_KEYS];
 
+/**
+ * The one leaf whose title is DATA rather than a key (2026-09-11).
+ *
+ * ⚠️ THE RECITER-DOWNLOADS SCREEN IS ABOUT ONE VOICE, AND THE BAR IS WHERE IT SAYS SO. It used
+ * to read "Downloads" over a body that repeated the reciter's name as an h2 — two headings, one
+ * subject (owner: "the reciter's name is already the screen title's subject, do not repeat it").
+ * `titles.reciterDownloads` stays in `TITLE_KEYS` and stays the fallback: it is what a link with
+ * no `id` renders, and what every OTHER leaf still resolves through.
+ *
+ * ⚠️ `useGlobalSearchParams`, NOT `useLocalSearchParams`. A layout is not the focused route, so
+ * the local hook answers with the layout's own (empty) params; the global one tracks the focused
+ * URL, which is the thing the title is about. It re-renders this shell on any param change —
+ * acceptable here, where the shell is two bars and already re-renders on every segment change.
+ */
+const RECITER_TITLE_LEAF = 'reciter-downloads';
+
 export default function ProfileLayout() {
   const { t } = useTranslation('navigation');
   const { colors } = useTheme();
@@ -52,6 +69,8 @@ export default function ProfileLayout() {
   const leaf = segments[segments.length - 1] ?? 'account';
   const titleKey: TitleKey =
     (TITLE_KEYS as Record<string, TitleKey | undefined>)[leaf] ?? 'titles.account';
+  const { id } = useGlobalSearchParams<{ id?: string }>();
+  const title = leaf === RECITER_TITLE_LEAF && id ? reciterDisplayName(id) : t(titleKey);
   const styles = useThemedStyles((theme) => ({
     shell: {
       flex: 1,
@@ -69,7 +88,7 @@ export default function ProfileLayout() {
           on a push (the chevron missed its first frame). The stack root is `account`; any other
           focused leaf is a pushed screen with history to pop. `AppHeader`'s docblock has the
           full story. */}
-      <AppHeader title={t(titleKey)} showBack={leaf !== 'account'} />
+      <AppHeader title={title} showBack={leaf !== 'account'} />
       <View style={styles.stack}>
         <Stack
           screenOptions={{

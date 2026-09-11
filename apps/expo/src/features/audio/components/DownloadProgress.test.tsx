@@ -6,13 +6,19 @@
  * that does not change, which is exactly the "we can't know" the device test produced. Delete the
  * byte line and every other suite in the tree stays green.
  *
- * ⚠️ AND IT PINS THE FOREGROUND-ONLY SENTENCE, which is the one place the app corrects a claim it
- * shipped. Only the transfer already handed to the OS survives suspension on iOS; the loop that
- * starts the next one is JS, and a suspended app runs none. A UI that says "download all" without
- * saying that has lied to a reader who came back to 1 of 114.
+ * ⚠️ AND IT PINS THE BACKGROUND SENTENCE, WHICH IS TRUE IN BOTH DIRECTIONS AND WAS WRONG IN ONE.
+ * The shipped line said "Downloads pause when you leave the app" — then the owner started
+ * Al-Baqarah alone, backgrounded for two minutes, and found the file COMPLETE (`sessionType:
+ * 'background'` hands the transfer in flight to the OS). An earlier test on a 114-file queue came
+ * back at 1 of 114, because the loop that starts the NEXT file is JS and a suspended app runs
+ * none. Copy that says either half alone is a lie; the assertion below is on the literal, so
+ * rewording it to one half again reddens here.
+ *
+ * ⚠️ AND IT PINS THAT THE STOP IS IN THIS CARD. It used to be a `SettingsRow` above, so a running
+ * queue drew its size twice — once as a control and once in bytes. (Owner, 2026-09-11.)
  */
 
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { setDownloadEntry, useDownloadQueueStore } from '@/stores/downloadQueueStore';
 import { DownloadProgress } from './DownloadProgress';
@@ -27,10 +33,21 @@ describe('while nothing is transferring', () => {
     expect(screen.queryByTestId('progress')).toBeNull();
   });
 
-  it('stays absent for a queue that has not started a file yet', () => {
+  /**
+   * ⚠️ A QUEUE WITH NOTHING IN FLIGHT IS A STATE, NOT AN ABSENCE — and this component used to
+   * render nothing for it. Between the confirmation and the first byte the screen went back to
+   * offering "Download all surahs", which is the dead-looking gap the card exists to end.
+   */
+  it('draws the starting state for a queue that has not opened a file yet', () => {
     setDownloadEntry('husary:2', { status: 'queued', progress: 0 });
+    setDownloadEntry('husary:3', { status: 'queued', progress: 0 });
     render(<DownloadProgress reciterId="husary" testID="progress" />);
-    expect(screen.queryByTestId('progress')).toBeNull();
+
+    expect(screen.getByText('Starting the download')).toBeTruthy();
+    expect(screen.getByTestId('progress-detail').props.children).toBe('2 still queued');
+    expect(screen.getByTestId('progress-fill').props.style).toEqual(
+      expect.arrayContaining([{ width: '0%' }])
+    );
   });
 
   it('ignores another voice entirely — downloads are per reciter', () => {
@@ -96,7 +113,7 @@ describe('while a surah is transferring', () => {
     );
   });
 
-  it('says the queue needs the app open — the claim the device test disproved', () => {
+  it('says the in-flight surah finishes and the REST wait — both halves, measured', () => {
     setDownloadEntry('husary:2', {
       status: 'downloading',
       progress: 0.1,
@@ -105,8 +122,50 @@ describe('while a surah is transferring', () => {
     });
     render(<DownloadProgress reciterId="husary" testID="progress" />);
 
+    // Literal, and deliberately the whole sentence: half of it is the claim the device test
+    // disproved, and the other half is the claim the device test confirmed.
     expect(
-      screen.getByText('Downloads pause when you leave the app. Keep it open to finish the queue.')
+      screen.getByText(
+        'The surah in progress finishes in the background. The rest wait until you come back.'
+      )
     ).toBeTruthy();
+  });
+
+  it('offers no stop when the caller gave it no way to stop', () => {
+    setDownloadEntry('husary:2', { status: 'downloading', progress: 0.1 });
+    render(<DownloadProgress reciterId="husary" testID="progress" />);
+
+    expect(screen.queryByTestId('progress-stop')).toBeNull();
+  });
+
+  it('stops the whole queue from inside the card, not from a row above it', () => {
+    const onStop = jest.fn();
+    setDownloadEntry('husary:2', { status: 'downloading', progress: 0.1 });
+    render(
+      <DownloadProgress
+        reciterId="husary"
+        reciterName="Mahmoud Khalil Al-Husary"
+        onStop={onStop}
+        testID="progress"
+      />
+    );
+
+    const stop = screen.getByTestId('progress-stop');
+    expect(stop.props.accessibilityLabel).toBe('Stop downloading Mahmoud Khalil Al-Husary');
+    fireEvent.press(stop);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * ⚠️ `accessible` ON THE CARD WOULD HIDE THE STOP. A container marked accessible collapses its
+   * subtree into one node, so the only action on a running queue would stop existing for
+   * VoiceOver and TalkBack while remaining perfectly visible.
+   */
+  it('keeps the stop reachable beside the one-node progress announcement', () => {
+    setDownloadEntry('husary:2', { status: 'downloading', progress: 0.1 });
+    render(<DownloadProgress reciterId="husary" onStop={jest.fn()} testID="progress" />);
+
+    expect(screen.getByTestId('progress').props.accessible).not.toBe(true);
+    expect(screen.getByTestId('progress-stop')).toBeTruthy();
   });
 });

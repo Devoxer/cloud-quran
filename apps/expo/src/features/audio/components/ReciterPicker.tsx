@@ -45,6 +45,11 @@
  * it ran once per completed surah — 114 times on the JS thread, during the one operation the
  * reader most wants to stay responsive. (Story 7-5 review, P13.)
  *
+ * ⚠️ THE FOOTER IS THE CALLER'S, AND THAT IS WHAT KEEPS THE SHEET CLEAN. The recitation screen
+ * hands it `DownloadStorage` (what every voice costs on disk, plus a withdrawn voice's
+ * leftovers); `ReciterSheet` hands it nothing, because a voice switch mid-listen is not a
+ * storage screen. See `listFooter`.
+ *
  * Grouping and filtering are `buildReciterRows`, exported and unit-tested as a pure function —
  * a rendered list can only be asserted one row at a time, and the property that matters here is
  * the ORDER of all of them.
@@ -52,7 +57,7 @@
 
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
@@ -151,7 +156,20 @@ export function buildReciterRows(query: string): ReciterRow[] {
  */
 const INDICATOR_REFRESH_DEBOUNCE_MS = 400;
 
-export function ReciterPicker() {
+export interface ReciterPickerProps {
+  /**
+   * Rendered after the last reciter, inside the list's own scroll.
+   *
+   * ⚠️ A PROP, NOT SOMETHING THIS COMPONENT DECIDES. The picker has two hosts: the recitation
+   * screen, where the footer carries what every voice costs on disk, and `ReciterSheet`, which
+   * is a quick voice switch and has no business showing a storage figure. A hardcoded footer
+   * would put one in the sheet; a `Platform`/route test in here would be this component
+   * guessing at its caller.
+   */
+  listFooter?: ReactNode;
+}
+
+export function ReciterPicker({ listFooter }: ReciterPickerProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -287,6 +305,9 @@ export function ReciterPicker() {
             }
             // Headings and rows are different heights; FlashList recycles per type.
             getItemType={(item) => item.kind}
+            ListFooterComponent={
+              listFooter === undefined ? null : <View style={styles.footer}>{listFooter}</View>
+            }
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             testID="reciter-list"
@@ -349,6 +370,12 @@ const useStyles = () =>
     },
     listContent: {
       paddingBottom: SPACING.xl,
+    },
+    // The list's rows carry their own 16pt inset (`SettingsRow`); a card in the footer needs
+    // the same rail drawn for it.
+    footer: {
+      paddingTop: SPACING.lg,
+      paddingHorizontal: SPACING.lg,
     },
     // The grouped-list caption treatment, matching `SettingsGroup`'s section label.
     groupLabel: {
