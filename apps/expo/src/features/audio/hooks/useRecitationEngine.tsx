@@ -43,13 +43,33 @@
  * ⚠️ `savePosition` ALREADY RUNS ON PAUSE, so a sleep-timer pause writes the listening position
  * for free. There is no second write here, and adding one would double the store's busiest path.
  *
+ * ── The lock screen is a full card, not a play/pause stub (story 7-3) ────────────────────────
+ *
+ * `setActiveForLockScreen` is given `LOCK_SCREEN_OPTIONS`, which is what puts previous/next on
+ * the card at all — every flag in the native record defaults to `false`, so 7-1's bare `true`
+ * left a play/pause button and nothing else. Next and previous move by SURAH, because a queue
+ * entry is a surah; the fixed-time seek buttons stay off.
+ *
+ * ⚠️ EVERY PUSH IS THE WHOLE PAYLOAD — title and artist. Native replaces the record rather
+ * than merging, so a partial push strips a card that already had the other. The artist is the
+ * LOADED track's voice read from the store, never the preference, which is what the NEXT track
+ * will use. The artwork is `assets/audio-artwork.png` resolved once per process and carried on
+ * every `AudioSource` — and deliberately NOT on the metadata, for which `lockScreenMetadata` is
+ * the argument. Pushes are deduped against the card the native side is already showing.
+ *
+ * ⚠️ NONE OF IT EXISTS ON WEB — the patched module's web playlist implements all three
+ * lock-screen calls as empty bodies. See `LOCK_SCREEN_OPTIONS`.
+ *
  * ── Why no `useState` anywhere in here ───────────────────────────────────────────────────────
  *
  * Every mutable value is a ref, and the host renders `null`. A hook that re-rendered on playback
  * would re-render whatever mounts it — and this mounts at the app root.
  */
 
+import { Asset } from 'expo-asset';
 import {
+  type AudioLockScreenOptions,
+  type AudioMetadata,
   type AudioPlaylist,
   type AudioPlaylistStatus,
   type AudioSource,
@@ -61,6 +81,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 import {
+  ARTWORK_TIMEOUT_MS,
   LOAD_TIMEOUT_MS,
   PLAYLIST_TICK_MS,
   SEEK_GUARD_TIMEOUT_MS,
@@ -78,8 +99,129 @@ import {
 } from '@/lib/reciterManifest';
 import { setAudioPosition } from '@/lib/sync';
 import { type PlaybackState, useAudioPlayerStore } from '@/stores/audioPlayerStore';
+import { RECITERS } from '../data/reciters';
 import { resolveSurahUris } from '../lib/audioSource';
 import { readStoredSpeed, writeStoredSpeed } from '../lib/playbackPrefs';
+
+/**
+ * The lock-screen transport (story 7-3).
+ *
+ * ⚠️ THIS OBJECT IS THE WHOLE DEFECT 7-3 EXISTS TO FIX. `setActiveForLockScreen(true)` was called
+ * with NO options, and every flag in the native record defaults to `false` — so iOS set
+ * `nextTrackCommand.isEnabled = false` and the lock screen carried a play/pause button and
+ * nothing else.
+ *
+ * ⚠️ NEXT/PREVIOUS MOVE BY **SURAH**, AND THE SEEK BUTTONS STAY OFF. A queue entry is a surah
+ * (see this file's header), so a track button moves a track — which is what the reader means by
+ * "next" on a Quran player. The ±10s `showSeek*` buttons are the fixed-time skip story 3-3's AC3
+ * forbids outright: a reader who wants to move within a surah moves by AYAH, and nothing on a
+ * lock screen can express that.
+ *
+ * ⚠️ `isLiveStream: false` IS LOAD-BEARING, NOT A RESTATED DEFAULT. It is what keeps the duration
+ * and the scrub bar on the card (`true` hides both and disables seeking), and the criterion asks
+ * for a scrubber by name. The native record's `isLiveStream` is nullable and falls back to the
+ * player's own `isLive` probe when omitted — so saying it is cheaper than trusting that probe.
+ *
+ * ⚠️ AND ALL OF IT IS A NO-OP ON WEB, WHICH IS A SHIPPED PLATFORM HERE. The patched module's web
+ * `AudioPlaylist` implements `setActiveForLockScreen`, `updateLockScreenMetadata` and
+ * `clearLockScreenControls` as EMPTY BODIES — there is no Media Session bridge — so a browser
+ * gets no now-playing card, no transport and no artwork, and the asset resolve below buys nothing
+ * there. Stated rather than discovered: a web smoke of this story can only ever show that nothing
+ * crashed.
+ */
+const LOCK_SCREEN_OPTIONS: AudioLockScreenOptions = {
+  showNextTrack: true,
+  showPreviousTrack: true,
+  showSeekForward: false,
+  showSeekBackward: false,
+  isLiveStream: false,
+};
+
+/**
+ * The now-playing card's artwork, resolved ONCE for the life of the process.
+ *
+ * ⚠️ `artworkUrl` IS A URL STRING, NOT AN IMAGE. Native fetches and caches it per URL — remote
+ * `http(s)` or a local `file://` path — so a bundled PNG has to be turned into a real on-disk
+ * path first, which is what `expo-asset` does. A base64 payload or a `data:` URI is not accepted
+ * by either platform.
+ *
+ * ⚠️ AND IT IS MEMOIZED AT MODULE SCOPE ON PURPOSE. The per-ayah refresh runs up to ten times a
+ * second; resolving the asset there would put a filesystem round-trip on the busiest path in the
+ * app. The asset never changes, so one resolution outlives every remount.
+ *
+ * Best-effort: a card with no artwork is a cosmetic loss, and there is no reader-facing surface
+ * that could report the failure — so a breadcrumb, and `undefined`, which the metadata builder
+ * simply omits.
+ *
+ * ⚠️ AND IT IS BOUNDED BY A TIMEOUT, WHICH IS THE HALF THAT MATTERS. `startPlayback` has to hold
+ * a real path before it can build the playlist, so this sits on the press path — and the failure
+ * a `catch` cannot see is the one that never settles at all. A hung asset copy would mean the
+ * play button does nothing, forever, with no error state and no watchdog to notice, because a
+ * decorative image had stalled. `ARTWORK_TIMEOUT_MS` makes that impossible; the memo is kicked
+ * off at boot, so in the normal case the await is already settled and costs nothing.
+ *
+ * ⚠️ THE MEMO IS CLEARED ON FAILURE **AND** ON TIMEOUT, so the next press retries. Memoizing a
+ * bad outcome would mean no artwork until the process restarts — and if the `catch` is ever
+ * weakened, a memoized REJECTION would make every later `playSurah` die on `Promise.all` with
+ * `player:errors.playFailed`. Clearing is what keeps a cosmetic failure cosmetic.
+ */
+let artworkPromise: Promise<string | undefined> | null = null;
+function lockScreenArtworkUri(): Promise<string | undefined> {
+  artworkPromise ??= (async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const resolved = await Promise.race([
+        (async () => {
+          const asset = Asset.fromModule(require('@/assets/audio-artwork.png'));
+          await asset.downloadAsync();
+          // `localUri` is the `file://` path; `uri` is the dev-server/web URL, which is still a
+          // URL native can fetch — so it is a real fallback rather than a shrug.
+          return asset.localUri ?? asset.uri ?? undefined;
+        })(),
+        new Promise<undefined>((resolve) => {
+          timer = setTimeout(() => resolve(undefined), ARTWORK_TIMEOUT_MS);
+        }),
+      ]);
+      // Whatever produced `undefined` — a timeout, or an asset with neither uri — is worth one
+      // more attempt on the next press. A resolved path never changes, so it is kept.
+      if (resolved === undefined) artworkPromise = null;
+      return resolved;
+    } catch (error) {
+      artworkPromise = null;
+      addBreadcrumb('ui', 'lock-screen artwork unavailable', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  })();
+  return artworkPromise;
+}
+
+/** The surah name the lock screen prints — the same string `buildSources` gives each track. */
+function surahName(surah: number): string {
+  return SURAH_METADATA[surah - 1]?.nameTransliteration ?? String(surah);
+}
+
+/**
+ * The reciter's display name, or `undefined` for an id this build does not publish.
+ *
+ * ⚠️ DELIBERATELY NOT `reciterDisplayName`, WHICH RESOLVES AN UNKNOWN ID TO THE DEFAULT VOICE'S
+ * NAME. That is right for a picker row — the reader is about to hear the default — and wrong on
+ * a now-playing card, where it would name Al-Afasy over audio that is not his. The frozen
+ * matrix's answer is to omit the artist, never to guess it.
+ *
+ * ⚠️ IT IS DEFENCE IN DEPTH AT A BOUNDARY SOMETHING ELSE CURRENTLY CLOSES, not a live case.
+ * `preferences.reciterId` IS a free-form 1–64 character column another device or an older build
+ * can write — but `RecitationEngineHost` runs it through `resolveReciterId` before the engine
+ * ever sees it, so today an unpublished id cannot reach here in production and the suite only
+ * gets to this branch by calling `setTrack` directly. The branch stays because the guard it
+ * duplicates lives in a different file and could be dropped there without anything failing here.
+ */
+function loadedReciterName(id: string | null): string | undefined {
+  return RECITERS.find((reciter) => reciter.id === id)?.nameEnglish;
+}
 
 /**
  * Background playback and lock-screen transport. Best-effort: the OSStatus failures here happen
@@ -117,15 +259,33 @@ async function configureAudioMode(): Promise<void> {
  * falls back to streaming" is therefore met on the next press rather than instantly. Fixing it
  * would mean rebuilding the playlist from a delete, which is exactly the queue shape this story
  * is forbidden to touch. Stated rather than hidden. (Story 7-5 review, P11.)
+ *
+ * ⚠️ EVERY TRACK CARRIES THE ARTWORK, AND THIS IS THE ONLY PLACE IT IS SENT (story 7-3, measured
+ * twice on a Pixel 9 Pro). Android's notification cover comes from `loadArtworkFromUrl`, which
+ * SKIPS the load when the url matches the one it already holds and has no `else` branch, so its
+ * callback never fires. Our artwork is one constant url for every surah, and that broke the
+ * metadata route twice over: the first playlist of a session got a cover and every rebuild after
+ * it got `largeIcon=null` (`setActivePlaylist` clears the bitmap first), and — the worse half —
+ * the notification is RE-POSTED only from that callback, so its title and artist froze on the
+ * previous surah. The per-source `artworkUrl` reaches the lock screen by a different road
+ * entirely: Android sets it as the MediaItem's `MediaMetadata.artworkUri` and the SYSTEM media
+ * card is built from the session, while iOS prefers it over the JS-pushed metadata and pre-warms
+ * the next track's — which is exactly what the native patch added it for. Fixing the skip itself
+ * would be a change to `patches/expo-audio@56.0.11.patch`, which this story may not make.
  */
-function buildSources(reciterId: string, startSurah: number): AudioSource[] {
+function buildSources(
+  reciterId: string,
+  startSurah: number,
+  artworkUrl: string | undefined
+): AudioSource[] {
   const uris = resolveSurahUris(reciterId, startSurah, SURAH_COUNT);
   const sources: AudioSource[] = [];
   for (let surah = startSurah; surah <= SURAH_COUNT; surah++) {
     sources.push({
       uri: uris[surah - startSurah],
       // The lock screen reads this per track; the ayah is refreshed separately, mid-track.
-      name: SURAH_METADATA[surah - 1]?.nameTransliteration ?? String(surah),
+      name: surahName(surah),
+      artworkUrl,
     });
   }
   return sources;
@@ -251,8 +411,93 @@ export function useRecitationEngine(selectedReciterId: string): void {
     /**
      * The last now-playing title pushed to the lock screen, so a refresh can re-send it rather
      * than falling back to the track's source name. Written by the tick, read by `applyRate`.
+     *
+     * ⚠️ IT IS RESET TO THE BARE SURAH NAME ON EVERY TRACK, which is what keeps an UNTIMED surah
+     * off the previous one's ayah. `onStatus` returns early when the manifest has no window for
+     * the position, so nothing would overwrite "Al-Fatihah · 7" when the queue moved on — the
+     * card would sit there naming an ayah of a surah that finished minutes ago, and `applyRate`
+     * would keep re-sending it. The frozen matrix's "never a stale ayah number" is this line.
      */
     let lockScreenTitle: string | null = null;
+
+    /**
+     * The now-playing payload — ONE builder, because both call sites need all three fields.
+     *
+     * ⚠️ A PARTIAL PUSH IS A DESTRUCTIVE PUSH. Native stores whatever arrives as the playlist's
+     * whole metadata record and rebuilds the card from it, so `updateLockScreenMetadata({title})`
+     * — which is what story 7-4's rate refresh sent — would strip the artist and the artwork off
+     * a card that already had them. There is no merge on either platform.
+     *
+     * The reciter is read from the STORE, which holds the LOADED track's voice. A preference is
+     * what the NEXT track will use: a reader who switches voices mid-surah has not yet heard the
+     * new one, and naming it over the old one's audio is the same confident-wrong-answer the
+     * highlight rules exist to prevent.
+     *
+     * ⚠️ THERE IS NO `artworkUrl` HERE, AND ITS ABSENCE IS LOAD-BEARING — MEASURED ON A PIXEL 9
+     * PRO. The artwork reaches the lock screen through every `AudioSource` instead (see
+     * `buildSources`), which is the path that actually renders: Android sets it as the MediaItem's
+     * `MediaMetadata.artworkUri` and the SYSTEM media card — the thing on the lock screen — is
+     * built from the session, not from this app's notification. Putting it here as well looked
+     * free and was not: Android's `setPlaylistMetadata` re-posts the notification only from
+     * `loadArtworkFromUrl`'s CALLBACK, and that loader skips a url equal to the one it already
+     * holds and has **no `else` branch** — so with one constant artwork url the callback never
+     * fired again and the notification's title and artist FROZE on whatever was posted last.
+     * Measured: after a lock-screen skip the app, the store and the system card all read
+     * "Ali-Imran" while the shade notification still said "Al-Baqarah · 1", twenty-four seconds
+     * in. Dropping the field puts `setPlaylistMetadata` back on its `?: run { … }` branch, which
+     * posts unconditionally. The only thing lost is the notification's large icon; the card keeps
+     * its full-res cover, and iOS prefers the per-source url anyway.
+     */
+    const lockScreenMetadata = (): AudioMetadata => ({
+      title: lockScreenTitle ?? undefined,
+      artist: loadedReciterName(store.getState().reciterId),
+    });
+
+    /** The card the native side is currently showing — what a push is compared against. */
+    let shownCard: AudioMetadata | null = null;
+
+    /**
+     * Push the card, remembering the title so a bare refresh can re-send it.
+     *
+     * ⚠️ ONLY WHEN THE CARD ACTUALLY MOVES — `activeVerseKey`'s discipline, one layer out. On an
+     * UNTIMED surah every ayah change resolves to the same bare surah name, so an unguarded push
+     * would cross the bridge a few hundred times per surah to redraw an identical card.
+     *
+     * ⚠️ THE COMPARISON IS THE WHOLE PAYLOAD, NOT THE TITLE. Deduping on the title alone while
+     * sending three fields silently drops every artist or artwork change that does not move the
+     * title — and on an untimed surah the title is constant for the entire file, so a voice
+     * switch that does not rebuild the playlist would never reach the card at all.
+     */
+    const pushLockScreen = (title: string) => {
+      lockScreenTitle = title;
+      const next = lockScreenMetadata();
+      if (
+        shownCard &&
+        shownCard.title === next.title &&
+        shownCard.artist === next.artist &&
+        shownCard.artworkUrl === next.artworkUrl
+      ) {
+        return;
+      }
+      shownCard = next;
+      playlist.current?.updateLockScreenMetadata(next);
+    };
+
+    /**
+     * The card for an ayah of a surah — the ONE place the "· ayah" suffix is decided.
+     *
+     * ⚠️ THE AYAH IS NAMED ONLY WHEN THE SURAH IS FULLY TIMED — the same gate `setActiveVerse`
+     * applies to the on-screen highlight, for the same reason. `verseAtMs` answers truthfully
+     * over whatever windows a PARTIAL manifest holds, which for a surah missing most of its rows
+     * is one early ayah for the rest of the file; putting that on the lock screen would park a
+     * confidently wrong ayah of the Quran on the reader's phone for fifteen minutes. The surah is
+     * known, so the surah alone is the honest card.
+     */
+    const announceVerse = (surah: number, verse: number) => {
+      pushLockScreen(
+        store.getState().highlightAvailable ? `${surahName(surah)} · ${verse}` : surahName(surah)
+      );
+    };
 
     /**
      * Tell the native player the rate (story 7-4).
@@ -275,11 +520,17 @@ export function useRecitationEngine(selectedReciterId: string): void {
      * has just been torn down, and every new playlist is given the rate at build time, so a
      * transient failure heals on the next track rather than needing to be reported.
      */
-    const applyRate = (rate: number) => {
+    const applyRate = (rate: number, refreshCard = true) => {
       const player = playlist.current;
       if (!player) return;
       try {
         player.playbackRate = rate;
+        // ⚠️ `refreshCard: false` IS FOR `startPlayback` ALONE, where the very next statement is
+        // `setActiveForLockScreen` — which builds the now-playing info from scratch and is
+        // therefore the rebuild this refresh exists to force. Left on, every `playSurah` pushed
+        // the identical card twice, and on Android each push re-enters the artwork loader and
+        // re-posts the foreground notification. (Story 7-3 review, P9.)
+        if (!refreshCard) return;
         /**
          * ⚠️ AND TELL THE LOCK SCREEN, WHICH OTHERWISE KEEPS SCRUBBING AT THE OLD RATE. The
          * native patch publishes `MPNowPlayingInfoPropertyPlaybackRate` only when the now-playing
@@ -291,9 +542,11 @@ export function useRecitationEngine(selectedReciterId: string): void {
          * Change Log. (Story 7-4 review, P8.)
          *
          * The last title is re-sent rather than omitted: a bare refresh rebuilds from the track's
-         * source name and would drop the "· ayah" suffix until the next verse change.
+         * source name and would drop the "· ayah" suffix until the next verse change. Story 7-3
+         * made that a FULL payload — see `lockScreenMetadata`, which is also why this no longer
+         * passes `undefined` (Android's `updateLockScreenMetadata` takes a non-optional record).
          */
-        player.updateLockScreenMetadata(lockScreenTitle ? { title: lockScreenTitle } : undefined);
+        player.updateLockScreenMetadata(lockScreenMetadata());
       } catch (error) {
         addBreadcrumb('ui', 'playback rate not applied', {
           rate,
@@ -420,8 +673,8 @@ export function useRecitationEngine(selectedReciterId: string): void {
      *
      * The playlist advances by itself, so this has to happen BEFORE the boundary rather than in
      * reaction to it — `SLEEP_END_LEAD_MS` is that margin, and `onTrackChanged` carries the
-     * defensive copy for the case where the boundary was crossed anyway (a surah whose duration
-     * the status stream never reported).
+     * defensive copy for the ONE case the lead cannot cover: a surah whose duration the status
+     * stream never reported (`durationSeen`).
      */
     const fireEndOfSurah = () => {
       // ⚠️ THE SAME DOOR AS THE TIMED KIND, for the reason in `pauseForSleep`'s docblock — and
@@ -431,17 +684,42 @@ export function useRecitationEngine(selectedReciterId: string): void {
       pauseForSleep(store.getState().playbackState);
     };
 
-    /** Point the store, and the lock screen, at the track the playlist just moved to. */
-    const adoptTrack = (index: number) => {
+    /**
+     * Whether the CURRENT track ever reported a real duration.
+     *
+     * ⚠️ IT IS WHAT MAKES `onTrackChanged`'S END-OF-SURAH PAUSE A FALLBACK RATHER THAN A SECOND
+     * OWNER (story 7-3 review, P1). `onStatus` stops before the boundary whenever it knows the
+     * duration; the copy at the track change exists only for the surah whose duration never
+     * arrived. Firing it on EVERY track change makes a deliberate skip — lock-screen next, which
+     * this story just enabled — pause instantly while a sleep timer is armed.
+     */
+    let durationSeen = false;
+
+    /**
+     * Point the store, and optionally the lock screen, at the track the playlist just moved to.
+     *
+     * ⚠️ `announce: false` IS THE END-OF-SURAH FALLBACK'S CALL (story 7-3 review, P5). There the
+     * player has crossed into *n+1* and been paused again, and the listening position was written
+     * for *n* — so advertising *n+1* on the card would name a surah the reader explicitly asked
+     * not to enter, and one they will not resume into. The store still adopts the new index,
+     * because the store has to agree with the native player about which track is loaded; only the
+     * card stays on the surah that actually played.
+     */
+    const adoptTrack = (index: number, announce = true) => {
       const surah = startSurah.current + index;
       const reciter = reciterId.current;
       if (!reciter || surah < 1 || surah > SURAH_COUNT) return;
       currentSurah.current = surah;
       currentVerse.current = null;
+      durationSeen = false;
       guard.current.clear();
       store
         .getState()
         .setTrack(surah, reciter, manifest.current ? isSurahTimed(manifest.current, surah) : false);
+      // ⚠️ AFTER `setTrack`, because the artist is read from the store's LOADED reciter — and the
+      // bare surah name, because this track has not reported a position yet. The first status
+      // tick adds the "· ayah"; an untimed surah simply keeps the name (see `lockScreenTitle`).
+      if (announce) pushLockScreen(surahName(surah));
     };
 
     const onStatus = (status: AudioPlaylistStatus) => {
@@ -456,6 +734,10 @@ export function useRecitationEngine(selectedReciterId: string): void {
        * against the same absolute deadline, so it does not matter which one gets there first.
        */
       evaluateSleep();
+
+      // ⚠️ BEFORE ANY BRANCH THAT RETURNS. `onTrackChanged`'s end-of-surah pause is a fallback for
+      // a track whose duration the status stream never reported; this is how it tells.
+      if (status.duration > 0) durationSeen = true;
 
       /**
        * ⚠️ BEFORE THE BOUNDARY, NOT AT IT. `loop: 'none'` still auto-advances mid-queue, so a
@@ -533,8 +815,7 @@ export function useRecitationEngine(selectedReciterId: string): void {
       // ⚠️ MID-TRACK, WHICH IS THE ADAPTATION THE FORKED ENGINE DID NOT HAVE. A conventional
       // player refreshes the lock screen on track change; here the ayah changes many times
       // inside one surah, so the refresh is driven by the timing lookup instead.
-      lockScreenTitle = `${SURAH_METADATA[surah - 1]?.nameTransliteration ?? surah} · ${verse}`;
-      player.updateLockScreenMetadata({ title: lockScreenTitle });
+      announceVerse(surah, verse);
     };
 
     const onTrackChanged = ({ currentIndex }: { previousIndex: number; currentIndex: number }) => {
@@ -546,6 +827,13 @@ export function useRecitationEngine(selectedReciterId: string): void {
        * fraction of a second, which is where the reader asked to stop; a duration fallback would
        * pause somewhere that is not a boundary at all.
        *
+       * ⚠️ AND IT IS GATED ON `!durationSeen`, WHICH IS WHAT MAKES IT A FALLBACK RATHER THAN A
+       * SECOND OWNER OF THE SAME DECISION (story 7-3 review, P1). When the duration WAS known,
+       * `onStatus` already stopped playback with its lead and no track change follows — so a
+       * track change that arrives anyway is a DELIBERATE MOVE, and firing here paused it
+       * instantly. Story 7-3 enabled the lock screen's next button, so that is now one tap away:
+       * with a sleep timer armed, skipping a surah would have stopped the recitation on the spot.
+       *
        * ⚠️ AND IT RUNS BEFORE `adoptTrack`, WHICH IS NOT A TIDINESS PREFERENCE (story 7-4 review,
        * P2). `pause()` writes the listening position, and `adoptTrack` moves `currentSurah` to
        * *n+1* and nulls `currentVerse` — so pausing afterwards saved *(n+1, 1)*: the start of the
@@ -555,9 +843,9 @@ export function useRecitationEngine(selectedReciterId: string): void {
        * twice. `adoptTrack` still runs after, so the store and the native player agree about
        * which track is loaded.
        */
-      if (store.getState().sleepEndOfSurah) {
+      if (store.getState().sleepEndOfSurah && !durationSeen) {
         fireEndOfSurah();
-        adoptTrack(currentIndex);
+        adoptTrack(currentIndex, false);
         return;
       }
       // Save where the FINISHED track got to before adopting the new one — this is one of the
@@ -642,29 +930,54 @@ export function useRecitationEngine(selectedReciterId: string): void {
        */
       teardown();
       try {
-        const timings = await ensureManifest(reciter);
-
+        /**
+         * ⚠️ THE ARTWORK IS RESOLVED HERE, IN THE ONE PLACE THAT ALREADY AWAITS, because every
+         * TRACK carries it and `buildSources` below needs it synchronously. It is memoized for
+         * the process and kicked off at boot, so by the first press it is already settled;
+         * resolving it lazily in the background instead would leave the FIRST card artwork-less,
+         * and on an untimed surah — which never pushes another update — permanently so.
+         * `lockScreenArtworkUri` cannot reject and cannot hang for longer than
+         * `ARTWORK_TIMEOUT_MS`, which is what keeps it off the critical path in the bad cases.
+         */
+        const [timings, artwork] = await Promise.all([
+          ensureManifest(reciter),
+          lockScreenArtworkUri(),
+        ]);
         startSurah.current = surah;
         const player = createAudioPlaylist({
-          sources: buildSources(reciter, surah),
+          sources: buildSources(reciter, surah, artwork),
           updateInterval: PLAYLIST_TICK_MS,
           loop: 'none',
         });
         playlist.current = player;
         player.addListener('playlistStatusUpdate', onStatus);
         player.addListener('trackChanged', onTrackChanged);
-        player.setActiveForLockScreen(true);
+
+        /**
+         * ⚠️ THE STORE IS TOLD WHICH TRACK IS LOADED **BEFORE** THE LOCK SCREEN IS TAKEN, and the
+         * order is the whole of AC2's reciter. `lockScreenMetadata` reads the loaded voice out of
+         * the store; with `setTrack` still below the card would be built from the PREVIOUS
+         * track's reciter and stay wrong until the next ayah tick — and on an untimed surah,
+         * forever. Nothing can interleave: there is no await between the listeners and here.
+         */
+        currentSurah.current = surah;
+        currentVerse.current = null;
+        durationSeen = false;
+        store.getState().setTrack(surah, reciter, isSurahTimed(timings, surah));
+
+        lockScreenTitle = surahName(surah);
+        // ⚠️ AND `shownCard` IS SEEDED WITH IT, so the first `pushLockScreen` of the track — which
+        // carries the same bare surah name until an ayah lands — is recognised as a repeat rather
+        // than sent again.
+        shownCard = lockScreenMetadata();
+        player.setActiveForLockScreen(true, shownCard, LOCK_SCREEN_OPTIONS);
         /**
          * ⚠️ EVERY NEW PLAYLIST IS BORN AT THE READER'S RATE. A rate applied only on CHANGE
          * would be lost by the rebuild that starts every surah and every voice switch, so a
          * reader who chose 1.5x would hear 1.0x again the moment they pressed play on anything.
          * Before `play()`, so the first frame of audio is already at the right speed.
          */
-        applyRate(store.getState().speed);
-
-        currentSurah.current = surah;
-        currentVerse.current = null;
-        store.getState().setTrack(surah, reciter, isSurahTimed(timings, surah));
+        applyRate(store.getState().speed, false);
 
         if (verse !== undefined && verse > 1) {
           const offset = offsetOfVerse(timings, surah, verse);
@@ -719,6 +1032,11 @@ export function useRecitationEngine(selectedReciterId: string): void {
         // 300ms to show anything reads as a tap that did not register.
         currentVerse.current = verse;
         store.getState().setActiveVerse(verse);
+        // ⚠️ AND THE CARD MOVES WITH IT (story 7-3 review, P7). `onStatus` returns early on
+        // `verse === currentVerse.current`, which the line above has just satisfied — so without
+        // this the lock screen kept naming the PRE-seek ayah until the next boundary, tens of
+        // seconds on a long verse, against the frozen matrix's "refreshes on every ayah change".
+        announceVerse(surah, verse);
         try {
           await player.seekTo(offset / 1000);
           // ⚠️ AND PLAY, WHICH THE FIRST CUT DID NOT. The criterion is "playback RESUMES at that
@@ -761,6 +1079,10 @@ export function useRecitationEngine(selectedReciterId: string): void {
 
     store.getState().registerEngineActions(actions);
     void configureAudioMode();
+    // ⚠️ WARM THE ARTWORK NOW, SO THE FIRST PRESS NEVER WAITS FOR IT. It is memoized for the
+    // process, so this is the only call that can cost anything; `startPlayback` awaits the same
+    // promise and by then it is settled. A failure here is already answered inside the resolver.
+    void lockScreenArtworkUri();
 
     /**
      * ⚠️ THE SAVED RATE IS SEEDED BEFORE THE SUBSCRIPTION, NOT THROUGH IT. MMKV is synchronous,

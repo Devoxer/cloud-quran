@@ -378,11 +378,18 @@ jest.mock('expo-sharing', () => ({
 
 // expo-asset — requires expo-modules-core native proxy
 // Asset must be a class (not a plain object) because expo-font uses `source instanceof Asset`
+//
+// ⚠️ THE URI IS EXTENSION-LESS AND THE SAME FOR EVERY MODULE, AND NEITHER IS AN ACCIDENT — BUT
+// THE SECOND MEANS A TEST CAN NEVER ASSERT *WHICH* ASSET WAS RESOLVED. jest-expo transforms every
+// asset file to `module.exports = 1`, so `require('a.png')` and `require('b.ttf')` are the same
+// value and this stub cannot tell them apart however it is written. A suite that cares which file
+// a module requires has to read the source (see `useRecitationEngine.test.tsx`). The extension
+// used to be `.mp3`, which made a PNG's expectations read as wrong.
 jest.mock('expo-asset', () => {
   class Asset {
     constructor() {
-      this.localUri = 'file:///mock/asset.mp3';
-      this.uri = 'https://mock/asset.mp3';
+      this.localUri = 'file:///mock/asset';
+      this.uri = 'https://mock/asset';
     }
     downloadAsync() {
       return Promise.resolve(this);

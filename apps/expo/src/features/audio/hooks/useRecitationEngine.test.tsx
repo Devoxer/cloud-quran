@@ -7,7 +7,10 @@
  * native object so the listeners can be driven a tick at a time.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act, render } from '@testing-library/react-native';
+import { Asset } from 'expo-asset';
 import { createAudioPlaylist } from 'expo-audio';
 import { AppState } from 'react-native';
 
@@ -15,6 +18,18 @@ import { SPEED_PERSIST_DEBOUNCE_MS } from '@/constants/audio';
 import { loadReciterManifest } from '@/lib/reciterManifest';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { RecitationEngineHost } from '../components/RecitationEngineHost';
+
+/**
+ * The lock-screen artwork's asset lookup, spied at module scope so a test can count the calls and
+ * make them FAIL. `jest.setup.js` already stands the class in for the native module; this wraps
+ * it.
+ */
+let mockAssetFails = false;
+const realFromModule = Asset.fromModule.bind(Asset);
+const fromModuleSpy = jest.spyOn(Asset, 'fromModule').mockImplementation((mod) => {
+  if (mockAssetFails) throw new Error('asset unavailable');
+  return realFromModule(mod);
+});
 
 const mockSetAudioPosition = jest.fn();
 /**
@@ -119,7 +134,11 @@ let playlist: FakePlaylist;
 let view: ReturnType<typeof render>;
 /** The engine's AppState subscriber, captured so backgrounding can be driven. */
 let appStateListener: ((state: string) => void) | undefined;
-let createdWith: { sources: { uri: string; name: string }[]; updateInterval: number; loop: string };
+let createdWith: {
+  sources: { uri: string; name: string; artworkUrl?: string }[];
+  updateInterval: number;
+  loop: string;
+};
 
 function makePlaylist(): FakePlaylist {
   const listeners: Record<string, ((payload: never) => void)[]> = {};
@@ -162,6 +181,12 @@ const tick = async (
     /** ⚠️ A REAL STATE, and it was hardcoded false until story 7-4's review: a mid-playback stall
      *  reports `playing: false, isBuffering: true`, which the engine turns into `buffering`. */
     isBuffering?: boolean;
+    /**
+     * ⚠️ ALSO A REAL STATE, and it was hardcoded to 60 until story 7-3's review: the stream
+     * reports `duration: 0` until a track is prepared, and a track that NEVER reports one is the
+     * only thing the end-of-surah pause at `onTrackChanged` exists for.
+     */
+    duration?: number;
   } = {}
 ) => {
   playlist.currentTime = seconds;
@@ -170,7 +195,7 @@ const tick = async (
     currentIndex: extra.index ?? 0,
     trackCount: 3,
     currentTime: seconds,
-    duration: 60,
+    duration: extra.duration ?? 60,
     playing: extra.playing ?? playlist.playing,
     isBuffering: extra.isBuffering ?? false,
     isLoaded: extra.isLoaded ?? true,
@@ -239,6 +264,84 @@ const switchReciter = async (id: string) => {
 
 const engine = () => useAudioPlayerStore.getState();
 
+/**
+ * The artwork's failure path (story 7-3 review, P3).
+ *
+ * ⚠️ THIS DESCRIBE IS FIRST IN THE FILE ON PURPOSE, AND MOVING IT BREAKS IT. `lockScreenArtworkUri`
+ * memoizes its answer at MODULE scope, so once any earlier case has resolved the asset the
+ * resolver is never entered again and a failing `Asset.fromModule` would be unobservable. Running
+ * first means this is the very first `playSurah` of the file. The `expect(fromModuleSpy)` line
+ * below is the guard on that: if the memo is ever warm by the time this runs, the resolver was
+ * not entered and the case fails loudly rather than passing vacuously.
+ *
+ * The resolver clears the memo on failure, which is what lets every later case resolve normally.
+ */
+describe('the lock-screen artwork, when the asset system fails', () => {
+  /**
+   * ⚠️ `beforeAll`, NOT `beforeEach`, AND THAT IS THE WHOLE TRICK. The engine warms the memo from
+   * its BOOT effect, which runs in the file-level `beforeEach`'s `render` — i.e. before any hook
+   * this describe could use to arm the failure. A describe's `beforeAll` is the one hook that
+   * runs earlier, so this makes the very first resolve of the process fail; the resolver clears
+   * the memo on failure, so the case's own `playSurah` fails again and is observable.
+   */
+  beforeAll(() => {
+    mockAssetFails = true;
+  });
+  afterAll(() => {
+    mockAssetFails = false;
+  });
+
+  it('is a cosmetic loss — playback still starts, and nothing is an error', async () => {
+    mockAssetFails = true;
+    const before = fromModuleSpy.mock.calls.length;
+
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+
+    // Anti-vacuity: the resolver really was entered, i.e. the memo was cold and the throw landed.
+    expect(fromModuleSpy.mock.calls.length).toBeGreaterThan(before);
+    // The whole point: a decorative image cannot stop the Quran playing.
+    expect(createdWith.sources).toHaveLength(114);
+    expect(playlist.play).toHaveBeenCalled();
+    expect(playlist.setActiveForLockScreen).toHaveBeenCalled();
+    expect(engine().errorKey).toBeNull();
+    expect(engine().surah).toBe(1);
+
+    // The card still names the surah and the reciter; only the artwork is missing.
+    expect(playlist.setActiveForLockScreen.mock.calls[0][1]).toEqual({
+      title: 'Al-Fatihah',
+      artist: 'Mahmoud Khalil Al-Husary',
+    });
+    // And no track carries a broken path, rather than carrying one.
+    expect(createdWith.sources[0].artworkUrl).toBeUndefined();
+  });
+
+  /**
+   * ⚠️ THE MEMO IS CLEARED ON FAILURE, SO THE NEXT PRESS RETRIES. Memoizing a bad outcome would
+   * mean no artwork until the process restarts — and a memoized REJECTION would make every later
+   * `playSurah` die on the `Promise.all` with `player:errors.playFailed`.
+   *
+   * MUTATION: drop `artworkPromise = null` from the `catch`; this reddens.
+   */
+  it('retries on the next press rather than memoizing the failure', async () => {
+    mockAssetFails = true;
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    // Off `loading`, or the second press is bounced by `playSurah`'s own press guard.
+    await tick(1);
+    mockAssetFails = false;
+
+    await act(async () => {
+      await engine().playSurah(2);
+    });
+
+    expect(engine().errorKey).toBeNull();
+    expect(createdWith.sources[0].artworkUrl).toBe('file:///mock/asset');
+  });
+});
+
 describe('the queue is surahs', () => {
   it('builds tracks from the requested surah to the end of the book', async () => {
     await act(async () => {
@@ -303,7 +406,26 @@ describe('the queue is surahs', () => {
       await engine().playSurah(1);
     });
     expect(playlist.play).toHaveBeenCalled();
-    expect(playlist.setActiveForLockScreen).toHaveBeenCalledWith(true);
+    /**
+     * ⚠️ THE OPTIONS ARE THE STORY (7-3). Called with `true` alone — which is what shipped with
+     * 7-1 — every flag in the native record defaults to `false`, so the lock screen carried a
+     * play/pause button and NOTHING else: no next, no previous. Written out as literals rather
+     * than compared against the constant, which would agree with itself whatever it said.
+     *
+     * `showSeek*` stay false on purpose: a fixed-time skip is what story 3-3's AC3 forbids.
+     * `isLiveStream: false` is what keeps the duration and the scrubber on the card.
+     */
+    expect(playlist.setActiveForLockScreen).toHaveBeenCalledWith(
+      true,
+      { title: 'Al-Fatihah', artist: 'Mahmoud Khalil Al-Husary' },
+      {
+        showNextTrack: true,
+        showPreviousTrack: true,
+        showSeekForward: false,
+        showSeekBackward: false,
+        isLiveStream: false,
+      }
+    );
     expect(engine().surah).toBe(1);
   });
 
@@ -339,15 +461,19 @@ describe('the status tick drives the highlight', () => {
     await tick(1);
     await tick(12);
     // Two ayahs, two refreshes — a conventional engine would have refreshed on track change only.
-    // ⚠️ COUNTED BY THE CALLS THAT CARRY A TITLE. Story 7-4 made a rate change refresh the
-    // now-playing info too (with no title of its own when none has been pushed yet), so a raw
-    // call count would move whenever the rate does and say nothing about the ayah.
-    const titled = (
+    // ⚠️ COUNTED BY THE CALLS THAT NAME AN AYAH. Story 7-4 made a rate change refresh the
+    // now-playing info too, and 7-3 made the track's own adoption push the bare surah name — so
+    // a raw call count moves for reasons that have nothing to do with the ayah.
+    const withAyah = (
       playlist.updateLockScreenMetadata.mock.calls as [{ title?: string } | undefined][]
-    ).filter(([m]) => typeof m?.title === 'string');
-    expect(titled).toHaveLength(2);
+    ).filter(([m]) => / · \d+$/.test(m?.title ?? ''));
+    expect(withAyah).toHaveLength(2);
+    // ⚠️ THE WHOLE PAYLOAD, because native stores what arrives as the card's ENTIRE metadata.
+    // A `{title}`-only push — which is what 7-1 and 7-4 sent — strips the reciter and the
+    // artwork off a card that already had them. There is no merge on either platform.
     expect(playlist.updateLockScreenMetadata).toHaveBeenLastCalledWith({
       title: 'Al-Fatihah · 3',
+      artist: 'Mahmoud Khalil Al-Husary',
     });
   });
 
@@ -361,6 +487,231 @@ describe('the status tick drives the highlight', () => {
     expect(engine().highlightAvailable).toBe(false);
     await tick(1);
     expect(engine().activeVerseKey).toBeNull();
+  });
+});
+
+/**
+ * The lock-screen card (story 7-3).
+ *
+ * What 7-1 shipped was `setActiveForLockScreen(true)` and a `{title}`-only refresh: no transport
+ * buttons at all, and a card with no reciter and no artwork. These cases are the frozen matrix's
+ * rows, each with a literal expected value rather than one derived from the engine's own inputs.
+ */
+describe('the lock-screen card', () => {
+  /**
+   * The metadata the native side was handed LAST, by whichever call carried it — what the card
+   * would actually be showing.
+   *
+   * ⚠️ IT HAS TO READ BOTH CALLS. `setActiveForLockScreen` carries a full payload of its own, and
+   * since the push is deduped against the card already shown (7-3 review, P4/P9) a track whose
+   * title never moves — an untimed surah — is announced by that call and by nothing else.
+   * Reading `updateLockScreenMetadata` alone would report `undefined` there. `invocationCallOrder`
+   * is the only thing that orders two separate mocks against each other.
+   */
+  type Card = { title?: string; artist?: string; artworkUrl?: string } | undefined;
+  const lastCard = (): Card => {
+    const seen: { order: number; card: Card }[] = [];
+    const push = playlist.updateLockScreenMetadata.mock;
+    const activate = playlist.setActiveForLockScreen.mock;
+    (push.calls as [Card][]).forEach((call, i) => {
+      seen.push({ order: push.invocationCallOrder[i], card: call[0] });
+    });
+    (activate.calls as [boolean, Card][]).forEach((call, i) => {
+      seen.push({ order: activate.invocationCallOrder[i], card: call[1] });
+    });
+    seen.sort((a, b) => a.order - b.order);
+    return seen[seen.length - 1]?.card;
+  };
+
+  /**
+   * ⚠️ THE ARTIST IS THE **LOADED** TRACK'S VOICE. `mockReciterId` — the reader's PREFERENCE —
+   * stays 'husary' throughout; only the store's loaded track moves. A card built from the
+   * preference would name a reciter the listener has not heard a syllable of, because the
+   * preference is what the NEXT track will use.
+   *
+   * MUTATION: read `selectedReciterId` / the preference instead of `store.reciterId`.
+   */
+  it('names the loaded track’s reciter, not the reader’s preference', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(1);
+    expect(lastCard()?.artist).toBe('Mahmoud Khalil Al-Husary');
+
+    act(() => {
+      useAudioPlayerStore.getState().setTrack(1, 'alafasy', true);
+    });
+    await tick(12); // 1:3 — a new ayah, so a new push
+    expect(mockReciterId).toBe('husary');
+    expect(lastCard()).toEqual({
+      title: 'Al-Fatihah · 3',
+      artist: 'Mishary Rashid Al-Afasy',
+    });
+  });
+
+  /**
+   * ⚠️ OMITTED, NEVER GUESSED AND NEVER THE RAW ID. `preferences.reciterId` is a free-form column
+   * another device or an older build can write, so an id this build does not publish can reach
+   * the engine. `reciterDisplayName` resolves such an id to the DEFAULT voice's name — right for
+   * a picker row, wrong on a card that would then name Al-Afasy over audio that is not his.
+   */
+  it('omits the artist for a reciter this build does not publish', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    act(() => {
+      useAudioPlayerStore.getState().setTrack(1, 'not-a-reciter', true);
+    });
+    await tick(12);
+    expect(lastCard()?.artist).toBeUndefined();
+    expect(JSON.stringify(lastCard())).not.toContain('not-a-reciter');
+  });
+
+  /**
+   * ⚠️ THE FROZEN MATRIX'S "never a stale ayah number from the previous surah". `onStatus`
+   * returns early when a surah has no usable window, so nothing would overwrite the last ayah
+   * title — the card sat naming an ayah of a surah that had finished, and the rate refresh kept
+   * re-sending it.
+   */
+  it('drops the ayah the moment the track changes', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(40); // 1:7
+    expect(lastCard()?.title).toBe('Al-Fatihah · 7');
+
+    await changeTrack(1); // → Al-Baqarah, which the fixture times for 2 of 286 ayahs
+    expect(lastCard()?.title).toBe('Al-Baqarah');
+  });
+
+  /**
+   * ⚠️ AND A PARTLY-TIMED SURAH NEVER REGAINS ONE. `verseAtMs` answers truthfully over the
+   * windows it has — for the `alafasy` shape that is one early ayah for the rest of the file —
+   * so the gate is `highlightAvailable`, the same one the on-screen highlight uses.
+   */
+  it('names the surah alone while the surah is not fully timed', async () => {
+    await act(async () => {
+      await engine().playSurah(2);
+    });
+    expect(engine().highlightAvailable).toBe(false);
+    await tick(20); // past 2:2's window — the lookup would confidently answer "2"
+    expect(lastCard()).toEqual({
+      title: 'Al-Baqarah',
+      artist: 'Mahmoud Khalil Al-Husary',
+    });
+  });
+
+  /**
+   * ⚠️ WHAT THIS PINS IS THE MEMO, NOT THE CALL SITE — and the distinction matters because the
+   * obvious mutation cannot redden it. The artwork resolve is memoized at module scope, so
+   * `Asset.fromModule` is entered once per process wherever it is written; moving the resolve
+   * into `pushLockScreen` would still show one call. What a per-ayah resolve WOULD cost is the
+   * memo's `await` on the busiest line in the app, and this is the assertion that the memo exists
+   * and holds across a whole surah of ayah changes.
+   *
+   * MUTATION that reddens it: drop the `??=` so every call re-resolves.
+   */
+  it('resolves the artwork once, not once per ayah', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    // A DELTA, not an absolute — earlier describes have already warmed the memo, and an absolute
+    // count would be pinning how many suites ran before this one.
+    const before = fromModuleSpy.mock.calls.length;
+    for (const seconds of [1, 7, 12, 17, 21, 28, 34]) await tick(seconds);
+    // Seven ayah boundaries crossed, seven cards pushed, zero further asset lookups.
+    expect(fromModuleSpy.mock.calls.length).toBe(before);
+  });
+
+  /**
+   * ⚠️ WHICH FILE THE ARTWORK COMES FROM CAN ONLY BE ASSERTED AGAINST THE SOURCE (7-3 review, P6).
+   * jest-expo transforms EVERY asset to `module.exports = 1`, so `require('audio-artwork.png')`
+   * and `require('icon.png')` are the same value and the `expo-asset` stub cannot tell them
+   * apart however it is written — which means all five `artworkUrl` expectations in this describe
+   * stay green if the require is re-pointed at another file. Reading the source is the only thing
+   * that reddens for that edit.
+   */
+  it('resolves the artwork from `assets/audio-artwork.png`, and no other file', () => {
+    const source = readFileSync(join(__dirname, 'useRecitationEngine.tsx'), 'utf8');
+    expect(source).toContain("require('@/assets/audio-artwork.png')");
+    // One require in the whole engine, so there is no second asset quietly in play.
+    expect(source.match(/require\('@\/assets\//g)).toHaveLength(1);
+  });
+
+  /**
+   * ⚠️ THE TRANSPORT IS RE-APPLIED ON EVERY PLAYLIST, NOT ONLY THE FIRST (7-3 review, P8). The
+   * playlist is REBUILT on every `playSurah` and on every voice switch, and each rebuild is a new
+   * native object with its own default-`false` options record — so asserting the first call alone
+   * would leave a lock screen that lost its next/previous buttons the moment the reader changed
+   * surah, with the whole suite green.
+   */
+  it('re-applies the transport flags to every rebuilt playlist', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(1); // off `loading`, so the second press is not bounced
+    await act(async () => {
+      await engine().playSurah(2);
+    });
+    await switchReciter('alafasy');
+
+    // Three playlists: two presses and a voice switch.
+    expect(playlist.setActiveForLockScreen.mock.calls.length).toBeGreaterThanOrEqual(3);
+    for (const call of playlist.setActiveForLockScreen.mock.calls) {
+      expect(call[0]).toBe(true);
+      expect(call[2]).toEqual({
+        showNextTrack: true,
+        showPreviousTrack: true,
+        showSeekForward: false,
+        showSeekBackward: false,
+        isLiveStream: false,
+      });
+    }
+  });
+
+  /**
+   * ⚠️ AND THE CARD IS TAKEN DOWN WITH THE PLAYLIST. Without this the now-playing card outlives
+   * the player it describes — a transport whose buttons reach a destroyed object.
+   */
+  it('clears the lock-screen controls when the playlist goes away', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    expect(playlist.clearLockScreenControls).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await engine().stop();
+    });
+    expect(playlist.clearLockScreenControls).toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ THE TRACKS ARE THE **ONLY** PLACE THE ARTWORK IS SENT, and that is the shape two separate
+   * measurements on a Pixel 9 Pro forced. Android's notification cover loader skips a url equal
+   * to the one it holds and has no `else` branch, so with one constant artwork url (a) the
+   * metadata route dressed only the FIRST playlist of a session and left `largeIcon=null` for
+   * every rebuild after it, and (b) — worse — the notification stopped being re-posted at all,
+   * freezing its title and artist on the previous surah. The per-source url reaches the system
+   * media card by a different road entirely (the MediaItem's `artworkUri`, which is what the lock
+   * screen renders), and iOS prefers it over the metadata anyway.
+   *
+   * MUTATION: drop `artworkUrl` from the object `buildSources` pushes.
+   */
+  it('sends the artwork on every track, and never on the metadata', async () => {
+    await act(async () => {
+      await engine().playSurah(112);
+    });
+    expect(createdWith.sources).toHaveLength(3);
+    for (const source of createdWith.sources) {
+      expect(source.artworkUrl).toBe('file:///mock/asset');
+    }
+    // ⚠️ AND NOT ON THE CARD — putting it there froze Android's notification (see the docblock).
+    for (const [, card] of playlist.setActiveForLockScreen.mock.calls as [boolean, object][]) {
+      expect(card).not.toHaveProperty('artworkUrl');
+    }
+    for (const [card] of playlist.updateLockScreenMetadata.mock.calls as [object][]) {
+      expect(card).not.toHaveProperty('artworkUrl');
+    }
   });
 });
 
@@ -387,6 +738,28 @@ describe('the post-seek guard', () => {
     });
     await tick(1); // the stale tick — 1,000ms, back in 1:1
     expect(engine().activeVerseKey).toBe('1:5');
+  });
+
+  /**
+   * ⚠️ THE CARD MOVES WITH THE SEEK, NOT WITH THE NEXT BOUNDARY (7-3 review, P7). `seekToVerse`
+   * sets `currentVerse.current` itself, which is exactly the condition `onStatus` early-returns
+   * on — so without a push here the lock screen kept naming the PRE-seek ayah until that verse
+   * ended, tens of seconds on a long one, against the frozen matrix's "refreshes on every ayah
+   * change".
+   *
+   * MUTATION: drop the `announceVerse` call from `seekToVerse`; this reddens.
+   */
+  it('moves the lock-screen card too, not just the on-screen highlight', async () => {
+    await act(async () => {
+      await engine().seekToVerse(5);
+    });
+    const calls = playlist.updateLockScreenMetadata.mock.calls as [{ title?: string }][];
+    expect(calls[calls.length - 1][0].title).toBe('Al-Fatihah · 5');
+
+    // And the tick that follows changes nothing, which is the shape that used to hide the bug.
+    await tick(21);
+    const after = playlist.updateLockScreenMetadata.mock.calls as [{ title?: string }][];
+    expect(after[after.length - 1][0].title).toBe('Al-Fatihah · 5');
   });
 
   it('releases once a tick arrives at or after the seek target', async () => {
@@ -1165,15 +1538,69 @@ describe('the sleep timer', () => {
     expect(engine().sleepEndOfSurah).toBe(true);
   });
 
+  /**
+   * ⚠️ AND THE FALLBACK IS ONLY FOR A TRACK WHOSE DURATION NEVER ARRIVED (story 7-3 review, P1).
+   * Every tick here reports `duration: 0`, which is what the stream does for a track that is
+   * never prepared — so `onStatus` can never see the boundary coming and the track change is the
+   * only thing left. The companion case below proves the OTHER half: with a duration known, a
+   * track change is a deliberate move and must not pause.
+   */
   it('…and still stops if the boundary is crossed anyway', async () => {
-    // The status stream reports `duration: 0` until a track is prepared, so a surah whose
-    // duration never arrived would sail past the lead. The track change is the fallback.
-    await play();
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(3, { duration: 0 });
     act(() => engine().setSleepTimer('surah'));
     await changeTrack(1);
 
     expect(playlist.pause).toHaveBeenCalled();
     expect(engine().sleepEndOfSurah).toBe(false);
+  });
+
+  /**
+   * ⚠️ THE SKIP THIS STORY PUT ONE TAP AWAY (story 7-3 review, P1). `onStatus` already stops
+   * before the boundary whenever it knows the duration, and when it has stopped there is no track
+   * change to react to — so a track change that arrives with the duration KNOWN is the reader
+   * moving on purpose, which since 7-3 includes the lock screen's next button. Firing the
+   * fallback there paused the recitation the instant they skipped.
+   *
+   * MUTATION: drop the `!durationSeen` guard in `onTrackChanged`; this reddens and the case above
+   * stays green.
+   */
+  it('a deliberate skip does NOT trip the end-of-surah timer', async () => {
+    await play(); // every tick in `play` reports a 60s duration
+    act(() => engine().setSleepTimer('surah'));
+    playlist.pause.mockClear();
+
+    await changeTrack(1);
+
+    expect(playlist.pause).not.toHaveBeenCalled();
+    // Still armed: the reader asked to stop at the end of a surah, and has not reached one.
+    expect(engine().sleepEndOfSurah).toBe(true);
+    expect(engine().surah).toBe(2);
+  });
+
+  /**
+   * ⚠️ AND THE CARD STAYS ON THE SURAH THAT ACTUALLY PLAYED (story 7-3 review, P5). The fallback
+   * pause leaves the native player sitting on *n+1*, and the listening position was written for
+   * *n* — so announcing *n+1* would name a surah the reader explicitly asked not to enter and
+   * will not resume into. The store still adopts the index; only the card does not move.
+   *
+   * MUTATION: drop the `announce` argument so `adoptTrack` always pushes.
+   */
+  it('the fallback does not advertise the surah it refused to enter', async () => {
+    await act(async () => {
+      await engine().playSurah(1);
+    });
+    await tick(12, { duration: 0 }); // 1:3
+    act(() => engine().setSleepTimer('surah'));
+
+    await changeTrack(1);
+
+    const calls = playlist.updateLockScreenMetadata.mock.calls as [{ title?: string }][];
+    expect(calls[calls.length - 1][0].title).toBe('Al-Fatihah · 3');
+    // The store still follows the native player, which really is on Al-Baqarah now.
+    expect(engine().surah).toBe(2);
   });
 
   /**
@@ -1232,8 +1659,9 @@ describe('the sleep timer', () => {
     await act(async () => {
       await engine().playSurah(1);
     });
-    await tick(1);
-    await tick(30);
+    // `duration: 0` throughout — the only state in which the fallback fires at all (7-3 P1).
+    await tick(1, { duration: 0 });
+    await tick(30, { duration: 0 });
     act(() => engine().setSleepTimer('surah'));
     mockSetAudioPosition.mockClear();
 

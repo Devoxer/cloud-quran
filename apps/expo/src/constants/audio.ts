@@ -50,6 +50,19 @@ export const SEEK_GUARD_TIMEOUT_MS = 2000;
 export const LOAD_TIMEOUT_MS = 15_000;
 
 /**
+ * How long the lock-screen artwork may take to resolve before playback stops waiting for it
+ * (story 7-3).
+ *
+ * ⚠️ A DECORATIVE IMAGE MUST NEVER BE ABLE TO STOP THE QURAN PLAYING. The artwork has to be a
+ * real `file://` path before the playlist is built — every track carries it — so its resolution
+ * sits on the press path, and `expo-asset` offers no cancellation. A copy that hangs (a full
+ * disk, a dev bundler that never answers) would otherwise mean the play button does nothing,
+ * forever, with no error and no watchdog to notice. Short, because the normal cost is a warm
+ * memo: the resolve is kicked off at boot and is settled long before any press.
+ */
+export const ARTWORK_TIMEOUT_MS = 2000;
+
+/**
  * Subdirectory of the DOCUMENT directory the reciter manifests are cached in.
  *
  * ⚠️ DOCUMENT, NOT `Paths.cache` — `lib/mushafFonts.ts` made this call first and the reasoning is
