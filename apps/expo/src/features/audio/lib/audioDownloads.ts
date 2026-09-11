@@ -38,6 +38,19 @@
  * short-circuits on `DOWNLOADS_SUPPORTED` — same shape as `reciterManifest.ts`'s reader and
  * `mushafFonts.ts`'s cache. The browser's own HTTP cache is what a web reader gets.
  *
+ * ⚠️ ANDROID ALREADY KEEPS THIS DIRECTORY OUT OF BACKUP, AND iOS DOES NOT — a gigabyte of
+ * re-downloadable MP3s must reach neither cloud. Android is covered by construction rather than
+ * by anything of ours: `expo-secure-store`'s config plugin owns `android:fullBackupContent` and
+ * `android:dataExtractionRules`, and its rule files are ALLOW-lists (`<include domain="sharedpref"
+ * path="."/>`), so shared preferences are the only thing backed up at all and `files/` — this
+ * directory included — is excluded. Adding a second plugin would have to take those attributes
+ * over from secure-store and re-state its SecureStore exclusion, i.e. take on the risk of
+ * silently un-excluding a keystore in order to re-exclude what is already excluded. iOS is the
+ * open half: the flag there is `NSURLIsExcludedFromBackupKey`, a RUNTIME resource value on a
+ * runtime-created directory, which no config plugin can reach and which `expo-file-system` 56
+ * exposes no API for. It needs a small native module; it is an owner call, and it is recorded in
+ * `deferred-work.md` rather than hacked around.
+ *
  * ── The runner half ─────────────────────────────────────────────────────────────────────────
  *
  * The queue is module-level, never a component hook, for the reason `downloadQueueStore`'s own
@@ -51,14 +64,15 @@
  * downloads is a network decision the reader did not make on this launch, the same reasoning
  * that keeps sync's outbox drain explicit.
  *
- * `lint:layers`: a feature `lib/` — it imports `expo-file-system`, `react-native`'s Platform,
- * `@/constants/audio`, `@/lib/errors`, this feature's own catalogue and the shared queue store.
+ * `lint:layers`: a feature `lib/` — it imports `expo-file-system`, `react-native`'s Platform and
+ * AppState, `@/constants/audio`, `@/lib/errors`, this feature's own catalogue and the shared
+ * queue store.
  * No UI, no routes, no other feature.
  */
 
 import { Directory, File, Paths } from 'expo-file-system';
 import { SURAH_COUNT } from 'quran-data';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { surahAudioUrl } from '@/constants/audio';
 import { addBreadcrumb, captureException, isDeviceOfflineError } from '@/lib/errors';
@@ -85,6 +99,37 @@ export const AUDIO_DOWNLOAD_DIR = 'audio';
  * component is how the two surfaces start disagreeing about what web can do.
  */
 export const DOWNLOADS_SUPPORTED = Platform.OS !== 'web';
+
+/**
+ * Whether a transfer is handed to the OS and survives the app being suspended.
+ *
+ * ⚠️ IT IS TRUE ON iOS ONLY, AND THAT IS THE LIBRARY'S LIMIT RATHER THAN A CHOICE OF OURS.
+ * `sessionType: 'background'` reaches a `URLSessionConfiguration.background` session on iOS
+ * (`expo-file-system/ios/FileSystemDownloadTask.swift`) — the transfer continues at the system
+ * level while the app is suspended. On Android the same option is declared "accepted for API
+ * consistency and ignored", and the Kotlin proves it: `DownloadTaskOptions` there has ONE field,
+ * `headers`, and the transfer is an in-process OkHttp call that lives exactly as long as the
+ * process does. Nothing in `expo-file-system` can give Android background continuation; that
+ * would take a foreground service or WorkManager, which is a native change and not this one.
+ *
+ * ⚠️ AND THE ANDROID PATH DELIBERATELY STAYS ON `File.downloadFileAsync`, WHICH IS NOT MERELY
+ * "the same thing without the flag". The task API's Kotlin read loop checks a cancel flag between
+ * `read()` returning and the write, and RETURNS from the response callback without ever resuming
+ * the coroutine — so a cancel that lands in that window settles no promise at all, the drain's
+ * `await` never returns, and every remaining row sits at `queued` forever. `downloadFileAsync`
+ * has no such path: a cancel closes the stream and the IOException always settles. Taking a
+ * hang-on-cancel for a flag the platform ignores would be a pure loss.
+ *
+ * Two things that do NOT change under a background session, both checked in the SDK source:
+ * progress still arrives through the same throttled `onProgress` (~100ms), and an `AbortSignal`
+ * still cancels — `DownloadTask` wires the signal to `cancel()` and rejects with `AbortError`,
+ * exactly as `downloadFileAsync` does. The `.part`-then-rename commit is untouched: iOS moves
+ * the completed temp file onto the `.part` path inside its own delegate, and the rename to
+ * `{NNN}.mp3` stays here, in JS. What a background session does NOT do is survive the app being
+ * KILLED — the JS task is not restored, so a transfer that finishes after termination is simply
+ * lost. Lost, never truncated: only the JS rename creates the real path.
+ */
+export const BACKGROUND_TRANSFERS = Platform.OS === 'ios';
 
 /**
  * The nominal bitrate an estimate is computed at, in bits per second.
@@ -213,6 +258,25 @@ export function reciterBytesOnDisk(reciterId: string): number {
   }
 }
 
+/**
+ * Free bytes on the device's internal storage, or `null` when the platform cannot say.
+ *
+ * ⚠️ `null` IS "UNKNOWN" AND MUST NEVER BE TREATED AS "FULL". A caller refuses a download on this
+ * number, and refusing because the answer was unavailable would block a reader whose device has
+ * plenty of room. The same `null`-is-not-a-value rule `downloadedSurahSet` records, pointing the
+ * other way: there, empty could not stand in for unknown; here, unknown must not stand in for
+ * zero.
+ */
+export function availableDownloadSpace(): number | null {
+  if (!DOWNLOADS_SUPPORTED) return null;
+  try {
+    const free = Paths.availableDiskSpace;
+    return typeof free === 'number' && Number.isFinite(free) && free >= 0 ? free : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Every reciter directory under the audio root, whether or not the catalogue still names it. */
 function reciterDirectories(): Directory[] {
   const root = new Directory(Paths.document, AUDIO_DOWNLOAD_DIR);
@@ -325,6 +389,14 @@ export class DownloadStalledError extends Error {
  * ⚠️ THE WATCHDOG ABORTS A *SEPARATE* CONTROLLER FROM THE CALLER'S, which is what lets the runner
  * still tell a reader's cancel from a dead socket: only the caller's signal being aborted means
  * "the reader pressed stop", and everything else is a failure the row should report.
+ *
+ * ⚠️ AND THE WATCHDOG IS DISARMED WHILE THE APP IS IN THE BACKGROUND, WHICH BACKGROUND TRANSFERS
+ * MADE LOAD-BEARING. A suspended iOS app runs no JS: no progress event arrives to re-arm the
+ * timer, and the timer itself fires on the wall clock the moment the app is resumed. So a
+ * perfectly healthy transfer that spent a minute in the reader's pocket would be aborted as
+ * "stalled" on the way back — the watchdog killing exactly the downloads it was added to protect.
+ * Silence only means "stalled" while somebody is there to be told; `background` is the one state
+ * that says nobody is.
  */
 export async function downloadSurah(
   reciterId: string,
@@ -341,8 +413,15 @@ export async function downloadSurah(
   const watchdog = new AbortController();
   let stallTimer: ReturnType<typeof setTimeout> | null = null;
   let stalled = false;
-  const rearm = () => {
+  const disarm = () => {
     if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = null;
+  };
+  const rearm = () => {
+    disarm();
+    // Only a KNOWN background state disarms: `inactive` and Android's `unknown` still run JS,
+    // and treating "not certainly active" as suspended would switch the watchdog off wholesale.
+    if (AppState.currentState === 'background') return;
     stallTimer = setTimeout(() => {
       stalled = true;
       watchdog.abort();
@@ -350,29 +429,54 @@ export async function downloadSurah(
   };
   const forwardAbort = () => watchdog.abort();
   options.signal?.addEventListener('abort', forwardAbort);
+  const appState = AppState.addEventListener('change', (next) =>
+    next === 'background' ? disarm() : rearm()
+  );
   rearm();
 
+  const url = surahAudioUrl(reciterId, surah);
+  const onProgress = ({
+    bytesWritten,
+    totalBytes,
+  }: {
+    bytesWritten: number;
+    totalBytes: number;
+  }) => {
+    rearm();
+    // `-1` is "the server sent no Content-Length" — a real state, and one that must not
+    // produce a negative fraction the progress ring would draw backwards.
+    if (!(totalBytes > 0)) return;
+    options.onProgress?.(Math.min(1, bytesWritten / totalBytes));
+  };
+
   try {
-    await File.downloadFileAsync(surahAudioUrl(reciterId, surah), surahPartFile(reciterId, surah), {
-      idempotent: true,
-      signal: watchdog.signal,
-      onProgress: ({ bytesWritten, totalBytes }) => {
-        rearm();
-        // `-1` is "the server sent no Content-Length" — a real state, and one that must not
-        // produce a negative fraction the progress ring would draw backwards.
-        if (!(totalBytes > 0)) return;
-        options.onProgress?.(Math.min(1, bytesWritten / totalBytes));
-      },
-    });
+    if (BACKGROUND_TRANSFERS) {
+      // ⚠️ `idempotent` IS NOT AN OPTION ON THE TASK API, AND DOES NOT NEED TO BE: the `.part`
+      // path was deleted above, and iOS removes an existing destination before its move anyway.
+      await File.createDownloadTask(url, surahPartFile(reciterId, surah), {
+        sessionType: 'background',
+        signal: watchdog.signal,
+        onProgress,
+      }).downloadAsync();
+    } else {
+      await File.downloadFileAsync(url, surahPartFile(reciterId, surah), {
+        idempotent: true,
+        signal: watchdog.signal,
+        onProgress,
+      });
+    }
     // ⚠️ THE COMMIT. Nothing else in this module ever creates `{NNN}.mp3`.
     deleteQuietly(surahFile(reciterId, surah));
+    // ⚠️ A FRESH HANDLE, NOT THE ONE THE TRANSFER WROTE THROUGH: `moveSync` REWRITES the instance
+    // it is called on, so a shared one would silently start pointing at the committed path.
     surahPartFile(reciterId, surah).moveSync(surahFile(reciterId, surah));
   } catch (error) {
     deleteQuietly(surahPartFile(reciterId, surah));
     if (stalled) throw new DownloadStalledError(reciterId, surah);
     throw error;
   } finally {
-    if (stallTimer) clearTimeout(stallTimer);
+    disarm();
+    appState.remove();
     options.signal?.removeEventListener('abort', forwardAbort);
   }
 }

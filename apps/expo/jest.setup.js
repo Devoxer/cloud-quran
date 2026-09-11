@@ -475,6 +475,14 @@ jest.mock('expo-file-system', () => ({
     static downloadFileAsync() {
       return Promise.reject(new Error('expo-file-system is stubbed empty in jest.setup.js'));
     }
+    // The SDK-56 task API (iOS background transfers) — stubbed the same way: a real download
+    // fails rather than silently resolving on a filesystem that holds nothing.
+    static createDownloadTask() {
+      return {
+        downloadAsync: () =>
+          Promise.reject(new Error('expo-file-system is stubbed empty in jest.setup.js')),
+      };
+    }
   },
 }));
 

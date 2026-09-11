@@ -18,6 +18,9 @@ const mockDeleteOrphans = jest.fn();
 const mockHydrate = jest.fn();
 let mockBytesOnDisk = 0;
 let mockOrphanBytes = 0;
+/** Free bytes the platform reports; `null` is "it would not say". */
+let mockFreeSpace: number | null = null;
+let mockMetered = false;
 
 jest.mock('../lib/audioDownloads', () => ({
   DOWNLOADS_SUPPORTED: true,
@@ -29,6 +32,7 @@ jest.mock('../lib/audioDownloads', () => ({
   deleteOrphanedDownloads: (...args: unknown[]) => mockDeleteOrphans(...args),
   reciterBytesOnDisk: () => mockBytesOnDisk,
   orphanedDownloadBytes: () => mockOrphanBytes,
+  availableDownloadSpace: () => mockFreeSpace,
   // The real arithmetic is `audioDownloads.test.ts`'s; here it only has to be deterministic.
   estimateReciterDownload: () => ({ bytes: 1_000_000, surahs: 114 }),
 }));
@@ -62,6 +66,10 @@ jest.mock('@/components/ui/Dialog', () => ({
   },
 }));
 
+jest.mock('@/lib/connectivity', () => ({
+  isMeteredConnection: jest.fn(async () => mockMetered),
+}));
+
 let mockManifestFails = false;
 jest.mock('@/lib/reciterManifest', () => ({
   loadReciterManifest: jest.fn(async () => {
@@ -82,6 +90,8 @@ beforeEach(() => {
   mockManifestFails = false;
   mockBytesOnDisk = 0;
   mockOrphanBytes = 0;
+  mockFreeSpace = null;
+  mockMetered = false;
   useDownloadQueueStore.setState({ entries: {} });
 });
 
@@ -128,6 +138,68 @@ describe('the estimate is shown BEFORE the confirmation', () => {
     expect(screen.queryByText(/About/)).toBeNull();
     expect(screen.getByTestId(`${PREFIX}-estimate-failed`)).toBeTruthy();
     expect(mockQueueAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('before a gigabyte is spent', () => {
+  /**
+   * ⚠️ A REFUSAL THAT SAYS NOTHING IS A BROKEN BUTTON. The estimate is 1,000,000 bytes here and
+   * the device has 500,000 free: no dialog opens, nothing queues, and the row says why.
+   */
+  it('refuses when there is not room, and states the size', async () => {
+    mockFreeSpace = 500_000;
+    renderBlock();
+    await pressDownloadAll();
+
+    expect(screen.queryByText(/About/)).toBeNull();
+    expect(mockQueueAll).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        'Not enough free space for about 976.6 KB. Free some up, or download surahs one by one.'
+      )
+    ).toBeTruthy();
+  });
+
+  /** ⚠️ UNKNOWN IS NOT FULL — `null` must never stop a reader whose device has plenty. */
+  it('asks anyway when the platform will not say how much room there is', async () => {
+    mockFreeSpace = null;
+    renderBlock();
+    await pressDownloadAll();
+
+    expect(screen.getByText(/About 976.6 KB/)).toBeTruthy();
+  });
+
+  it('asks when there is room', async () => {
+    mockFreeSpace = 8_000_000_000;
+    renderBlock();
+    await pressDownloadAll();
+
+    expect(screen.getByText(/About 976.6 KB/)).toBeTruthy();
+  });
+
+  /**
+   * A metered connection WARNS rather than refusing: it is the situation the reader is
+   * downloading for, and the only failure worth preventing is spending an allowance unaware.
+   */
+  it('names a metered connection in the confirmation', async () => {
+    mockMetered = true;
+    renderBlock();
+    await pressDownloadAll();
+
+    expect(
+      screen.getByText(
+        'About 976.6 KB across 114 files, on a metered connection. The size is approximate.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('says nothing about the connection when it is not metered', async () => {
+    renderBlock();
+    await pressDownloadAll();
+
+    expect(
+      screen.getByText('About 976.6 KB across 114 files. The size is approximate.')
+    ).toBeTruthy();
   });
 });
 

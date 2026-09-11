@@ -10,6 +10,9 @@
  * other global store.
  */
 
+// ── story 7-5: offline downloads. Biome sorts this list by path, so the story's three exports
+//    (DownloadKeepAwake here, ReciterDownloads and SurahDownloadButton below) are not adjacent ──
+export { DownloadKeepAwake, type DownloadKeepAwakeProps } from './components/DownloadKeepAwake';
 // ── story 7-4: speed + the sleep timer — the controls, and the sheet that hosts them ──
 export { PlaybackOptions, type PlaybackOptionsProps } from './components/PlaybackOptions';
 export {
@@ -17,7 +20,6 @@ export {
   type PlaybackOptionsSheetProps,
 } from './components/PlaybackOptionsSheet';
 export { RecitationEngineHost } from './components/RecitationEngineHost';
-// ── story 7-5: offline downloads — the per-surah control and the whole-reciter block ──
 export {
   ReciterDownloads,
   type ReciterDownloadsProps,

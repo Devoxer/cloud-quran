@@ -60,6 +60,7 @@ import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
 import {
   DOWNLOADS_SUPPORTED,
+  DownloadKeepAwake,
   hydrateDownloadState,
   SurahDownloadButton,
   useDownloadReciterId,
@@ -272,6 +273,9 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
 
   return (
     <View style={styles.screen} testID="quran-index-screen">
+      {/* The percentages on this screen's rows are the only live progress in the app, so this is
+          the only screen that keeps itself lit — and only while a queue is actually moving. */}
+      {reciterId === null ? null : <DownloadKeepAwake reciterId={reciterId} />}
       <AppHeader title={t('titles.index')} />
       <View style={styles.segments}>
         <SegmentedControl

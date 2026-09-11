@@ -133,6 +133,7 @@
     "keptValue": "{{kept}} of {{total}} surahs · {{size}}",
     "confirmTitle": "Download all surahs?",
     "confirmMessage": "About {{size}} across {{total}} files. The size is approximate.",
+    "confirmMessageMetered": "About {{size}} across {{total}} files, on a metered connection. The size is approximate.",
     "confirmAction": "Download",
     "removeAll": "Remove all downloads",
     "removeAllTitle": "Remove all downloads?",
@@ -148,6 +149,7 @@
     "retryFailed": "Retry failed downloads",
     "failedValue": "{{failed}} could not be downloaded",
     "estimateFailed": "Could not estimate the size. Check your connection and try again.",
+    "noSpace": "Not enough free space for about {{size}}. Free some up, or download surahs one by one.",
     "removeOrphans": "Remove unavailable voices",
     "orphansValue": "{{size}} kept for reciters no longer offered"
   },

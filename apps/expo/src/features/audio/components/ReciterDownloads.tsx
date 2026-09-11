@@ -24,6 +24,20 @@
  * the first cut then did was nothing at all: a pressed row, a blinking spinner, silence. The
  * reasoning was sound and the silence was the defect. (Story 7-5 review, P15.)
  *
+ * ⚠️ TWO THINGS ARE CHECKED BETWEEN THE ESTIMATE AND THE DIALOG, AND THEY ARE NOT THE SAME KIND
+ * OF THING. Free space REFUSES — a gigabyte that cannot fit is not a decision the reader should
+ * be allowed to confirm, and the refusal states the size rather than doing nothing, because a
+ * button that quietly declines is indistinguishable from a broken one. A metered connection only
+ * WARNS, in the confirmation's own copy: a metered connection is precisely the situation the
+ * reader is downloading FOR (it is the owner's stated motivation for the feature), so the app's
+ * job there is to make sure nobody spends an allowance by accident, not to decide for them.
+ *
+ * ⚠️ THE SPACE CHECK IS AS APPROXIMATE AS THE ESTIMATE IT USES, WHICH IS WHY IT IS A FLOOR AND
+ * NOT A GUARANTEE. `NOMINAL_BITRATE_BPS` can be out by a factor of two at the extremes, so a
+ * download that passes here can still fill the disk — and that lands on the per-row storage-full
+ * error the frozen matrix already asks for. What this stops is the obvious case: 1.6 GB onto a
+ * device with 400 MB left, discovered 114 failures later.
+ *
  * ⚠️ A RUNNING QUEUE HAS A VISIBLE STOP, AND IT IS NOT OPTIONAL. Per-row cancel lives on another
  * screen, remove-all renders only once something is kept, and the reciter picker sits directly
  * below this block — so switching voice used to hide a 114-file queue that kept running with no
@@ -45,6 +59,7 @@ import { View } from 'react-native';
 
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
+import { isMeteredConnection } from '@/lib/connectivity';
 import { formatBytes } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { loadReciterManifest } from '@/lib/reciterManifest';
@@ -52,6 +67,7 @@ import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
 import { RECITERS } from '../data/reciters';
 import {
+  availableDownloadSpace,
   cancelReciterDownloads,
   deleteOrphanedDownloads,
   deleteReciterDownloads,
@@ -72,6 +88,20 @@ export interface ReciterDownloadsProps {
 /** Which dialog, if any, is open. `null` is the ordinary state. */
 type Prompt = 'download-all' | 'remove-all' | null;
 
+/**
+ * Why "download all" did not open its confirmation. `null` is the ordinary state.
+ *
+ * Both are shown in the same inline error, under the row that was pressed, because both answer
+ * the same question the reader just asked and neither is worth a modal.
+ */
+type Refusal = 'estimate' | 'space' | null;
+
+/** The testID suffix each refusal renders under — the two states are told apart by a test. */
+const REFUSAL_TEST_IDS: Record<Exclude<Refusal, null>, string> = {
+  estimate: 'estimate-failed',
+  space: 'no-space',
+};
+
 /** How long the disk reads wait for the queue to stop moving. See the docblock. */
 const DISK_READ_DEBOUNCE_MS = 400;
 
@@ -82,7 +112,9 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [estimate, setEstimate] = useState<{ bytes: number; surahs: number } | null>(null);
   const [estimating, setEstimating] = useState(false);
-  const [estimateFailed, setEstimateFailed] = useState(false);
+  const [refusal, setRefusal] = useState<Refusal>(null);
+  /** Whether the confirmation should mention what this will cost. See the docblock. */
+  const [metered, setMetered] = useState(false);
   const [bytesOnDisk, setBytesOnDisk] = useState(0);
   const [orphanBytes, setOrphanBytes] = useState(0);
   /** Bumped by anything that changes the disk behind the store's back, to force a re-read. */
@@ -120,17 +152,29 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
     if (estimating) return;
     haptics.selection();
     setEstimating(true);
-    setEstimateFailed(false);
+    setRefusal(null);
     try {
       const computed = estimateReciterDownload(await loadReciterManifest(reciterId));
       if (!mounted.current) return;
       setEstimate(computed);
+
+      // ⚠️ REFUSED, WITH THE SIZE NAMED. `null` is "the platform would not say" and is not a
+      // reason to stop anybody — see `availableDownloadSpace`.
+      const free = availableDownloadSpace();
+      if (free !== null && free < computed.bytes) {
+        setRefusal('space');
+        return;
+      }
+
+      const onMetered = await isMeteredConnection();
+      if (!mounted.current) return;
+      setMetered(onMetered);
       setPrompt('download-all');
     } catch {
       // No estimate means no dialog — see the docblock. What it does NOT mean is silence.
       if (!mounted.current) return;
       setEstimate(null);
-      setEstimateFailed(true);
+      setRefusal('estimate');
     } finally {
       if (mounted.current) setEstimating(false);
     }
@@ -216,21 +260,28 @@ export function ReciterDownloads({ reciterId, testIDPrefix }: ReciterDownloadsPr
         ) : null}
       </SettingsGroup>
 
-      {estimateFailed ? (
+      {refusal === null ? null : (
         <InlineError
-          message={t('player:download.estimateFailed')}
+          message={
+            refusal === 'space'
+              ? t('player:download.noSpace', { size: formatBytes(estimate?.bytes ?? 0) })
+              : t('player:download.estimateFailed')
+          }
           style={styles.error}
-          testID={`${testIDPrefix}-estimate-failed`}
+          testID={`${testIDPrefix}-${REFUSAL_TEST_IDS[refusal]}`}
         />
-      ) : null}
+      )}
 
       <ConfirmDialog
         visible={prompt === 'download-all'}
         title={t('player:download.confirmTitle')}
-        message={t('player:download.confirmMessage', {
-          total: estimate?.surahs ?? 0,
-          size: formatBytes(estimate?.bytes ?? 0),
-        })}
+        message={t(
+          metered ? 'player:download.confirmMessageMetered' : 'player:download.confirmMessage',
+          {
+            total: estimate?.surahs ?? 0,
+            size: formatBytes(estimate?.bytes ?? 0),
+          }
+        )}
         confirmText={t('player:download.confirmAction')}
         onConfirm={confirmDownloadAll}
         onCancel={() => setPrompt(null)}

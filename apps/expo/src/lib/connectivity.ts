@@ -128,6 +128,35 @@ export async function checkConnectivity(): Promise<ConnectivityState> {
 }
 
 /**
+ * Whether the active connection costs the reader money or allowance.
+ *
+ * ⚠️ IT READS NETINFO, NOT `expo-network`, AND THE REASON IS THAT `expo-network` CANNOT ANSWER
+ * THE QUESTION. Its `getNetworkStateAsync()` returns `{ type, isConnected, isInternetReachable }`
+ * and its `NetworkStateType` enum has no metered/expensive member — the closest available answer
+ * is `type === CELLULAR`, which misses a metered wifi hotspot, the exact case a reader tethering
+ * from a phone is in. Netinfo's `details.isConnectionExpensive` IS the platform flag (Android's
+ * `NET_CAPABILITY_NOT_METERED`, iOS's `NWPath.isExpensive`), and netinfo is this module's
+ * standard already.
+ *
+ * ⚠️ AND THE DEFAULT IS "NOT METERED" WHENEVER THE PLATFORM WILL NOT SAY. This warns; it does not
+ * gate. A false positive spends a reader's attention on a warning about a connection they are not
+ * paying for, which is the failure that teaches people to dismiss warnings unread.
+ */
+export async function isMeteredConnection(): Promise<boolean> {
+  try {
+    const netState = await NetInfo.fetch();
+    const details: unknown = netState.details;
+    if (details && typeof details === 'object' && 'isConnectionExpensive' in details) {
+      const expensive = (details as { isConnectionExpensive?: unknown }).isConnectionExpensive;
+      if (typeof expensive === 'boolean') return expensive;
+    }
+    return netState.type === 'cellular';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if device is currently offline
  *
  * Convenience function for quick offline check.

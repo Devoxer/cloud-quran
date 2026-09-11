@@ -133,6 +133,7 @@
     "keptValue": "{{kept}} sourates sur {{total}} · {{size}}",
     "confirmTitle": "Télécharger toutes les sourates ?",
     "confirmMessage": "Environ {{size}} sur {{total}} fichiers. Taille approximative.",
+    "confirmMessageMetered": "Environ {{size}} sur {{total}} fichiers, en connexion facturée. Taille approximative.",
     "confirmAction": "Télécharger",
     "removeAll": "Supprimer les téléchargements",
     "removeAllTitle": "Supprimer les téléchargements ?",
@@ -148,6 +149,7 @@
     "retryFailed": "Réessayer les échecs",
     "failedValue": "{{failed}} n'ont pas pu être téléchargées",
     "estimateFailed": "Taille non estimable. Vérifiez votre connexion et réessayez.",
+    "noSpace": "Espace libre insuffisant pour environ {{size}}. Libérez de la place ou téléchargez une par une.",
     "removeOrphans": "Supprimer les voix indisponibles",
     "orphansValue": "{{size}} pour des récitateurs non proposés"
   },

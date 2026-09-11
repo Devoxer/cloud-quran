@@ -24,6 +24,17 @@ const mockDirs = new Set<string>();
 const mockDownload = jest.fn<Promise<void>, [string, { uri: string }, Record<string, unknown>]>(
   () => Promise.resolve()
 );
+/**
+ * Which API the transfer went through — `mockDownload` is shared by both so every case below is
+ * blind to the choice, and these two say which door it came in by.
+ *
+ * ⚠️ THE SUITE RUNS AS `ios`, so the TASK API is the live path here; `downloadFileAsync` is the
+ * Android one and must stay uncalled. See `BACKGROUND_TRANSFERS` for why the two differ at all.
+ */
+const mockTaskDownload = jest.fn();
+const mockRequestDownload = jest.fn();
+/** What `Paths.availableDiskSpace` answers. `undefined` is "the platform would not say". */
+const mockDiskSpace: { value: number | undefined } = { value: undefined };
 /** Flipped by the P3 case: every `list()` throws, the way a real filesystem failure would. */
 const mockListingBroken = { value: false };
 const mockAddBreadcrumb = jest.fn();
@@ -121,16 +132,35 @@ jest.mock('expo-file-system', () => {
       this.uri = destination.uri;
     }
     static downloadFileAsync(url: string, destination: any, options: any) {
+      mockRequestDownload(url, destination, options);
       return mockDownload(url, destination, options);
+    }
+    static createDownloadTask(url: string, destination: any, options: any) {
+      mockTaskDownload(url, destination, options);
+      return { downloadAsync: () => mockDownload(url, destination, options) };
     }
   }
 
-  return { __esModule: true, Directory, File, Paths: { document: 'file:///documents' } };
+  return {
+    __esModule: true,
+    Directory,
+    File,
+    Paths: {
+      document: 'file:///documents',
+      get availableDiskSpace() {
+        return mockDiskSpace.value;
+      },
+    },
+  };
 });
+
+import { AppState } from 'react-native';
 
 import { useDownloadQueueStore } from '@/stores/downloadQueueStore';
 import {
   __resetDownloadRunner,
+  availableDownloadSpace,
+  BACKGROUND_TRANSFERS,
   cancelReciterDownloads,
   cancelSurahDownload,
   DOWNLOAD_STALL_TIMEOUT_MS,
@@ -174,6 +204,7 @@ beforeEach(() => {
   mockFiles.clear();
   mockDirs.clear();
   mockListingBroken.value = false;
+  mockDiskSpace.value = undefined;
   __resetDownloadRunner();
   useDownloadQueueStore.setState({ entries: {} });
   // The default transfer behaves: it writes the `.part` file the rename then commits.
@@ -217,6 +248,65 @@ describe('the on-disk layout', () => {
     seedFile(uriFor('alafasy', 18));
     expect(isDownloaded('alafasy', 18)).toBe(true);
     expect(isDownloaded('husary', 18)).toBe(false);
+  });
+});
+
+describe('the transfer is handed to the OS where the OS will take it', () => {
+  /**
+   * ⚠️ THE FLAG IS THE WHOLE FEATURE AND IT IS INVISIBLE EVERYWHERE ELSE. Dropping `sessionType`
+   * leaves a download that works perfectly on the bench and dies the moment the reader locks the
+   * phone — no error, no failed row, just a transfer that stopped. Only this assertion reddens.
+   */
+  it('asks for a background session on iOS', async () => {
+    expect(BACKGROUND_TRANSFERS).toBe(true);
+    await downloadSurah('husary', 18);
+
+    expect(mockTaskDownload).toHaveBeenCalledTimes(1);
+    expect(mockTaskDownload.mock.calls[0][2]).toMatchObject({ sessionType: 'background' });
+    // ⚠️ AND NOT THROUGH THE REQUEST API, which has no `sessionType` at all — a silent revert to
+    // a foreground session is exactly what this pairs with.
+    expect(mockRequestDownload).not.toHaveBeenCalled();
+  });
+
+  it('still commits by renaming, so an interrupted background transfer leaves no surah', async () => {
+    mockDownload.mockImplementation((_url, file) => {
+      expect(file.uri).toBe(`${uriFor('husary', 18)}.part`);
+      mockFiles.set(file.uri, 1000);
+      return Promise.resolve();
+    });
+
+    await downloadSurah('husary', 18);
+    expect(isDownloaded('husary', 18)).toBe(true);
+  });
+
+  it('still cancels through the caller signal', async () => {
+    mockDownload.mockImplementation((_url, _file, options) => {
+      return new Promise((_resolve, reject) => {
+        (options.signal as AbortSignal).addEventListener('abort', () =>
+          reject(new Error('AbortError'))
+        );
+      });
+    });
+
+    startSurahDownload('husary', 18);
+    await flush();
+    cancelSurahDownload('husary', 18);
+    await flush();
+
+    expect(useDownloadQueueStore.getState().entries['husary:18']).toBeUndefined();
+  });
+});
+
+describe('free space', () => {
+  it('is reported when the platform knows it', () => {
+    mockDiskSpace.value = 5_000_000_000;
+    expect(availableDownloadSpace()).toBe(5_000_000_000);
+  });
+
+  /** ⚠️ UNKNOWN IS NOT ZERO. A caller refuses on this number; `null` must never refuse. */
+  it('is null — not 0 — when the platform will not say', () => {
+    mockDiskSpace.value = undefined;
+    expect(availableDownloadSpace()).toBeNull();
   });
 });
 
@@ -511,6 +601,39 @@ describe('a transfer that stalls', () => {
       expect(entries['husary:1'].error).toBe('stalled');
       expect(entries['husary:2'].status).toBe('downloaded');
     } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  /**
+   * ⚠️ A SUSPENDED APP IS NOT A STALLED TRANSFER, AND BACKGROUND TRANSFERS MADE THE DIFFERENCE
+   * MATTER. iOS keeps the download running while it freezes the JS that would re-arm this timer,
+   * so an unguarded watchdog aborts a healthy transfer the moment the reader comes back — killing
+   * precisely the downloads `sessionType: 'background'` was added to keep alive.
+   */
+  it('is not declared stalled while the app is in the background', async () => {
+    jest.useFakeTimers();
+    const appState = AppState as unknown as { currentState: string };
+    const wasActive = appState.currentState;
+    try {
+      appState.currentState = 'background';
+      mockDownload.mockImplementation(
+        (_url, _file, options) =>
+          new Promise((_resolve, reject) => {
+            (options.signal as AbortSignal).addEventListener('abort', () =>
+              reject(new Error('aborted'))
+            );
+          })
+      );
+
+      startSurahDownload('husary', 1);
+      await Promise.resolve();
+      jest.advanceTimersByTime(DOWNLOAD_STALL_TIMEOUT_MS * 4);
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+
+      expect(useDownloadQueueStore.getState().entries['husary:1'].status).toBe('downloading');
+    } finally {
+      appState.currentState = wasActive;
       jest.useRealTimers();
     }
   });

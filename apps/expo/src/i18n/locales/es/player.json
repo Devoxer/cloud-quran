@@ -133,6 +133,7 @@
     "keptValue": "{{kept}} de {{total}} suras · {{size}}",
     "confirmTitle": "¿Descargar todas las suras?",
     "confirmMessage": "Unos {{size}} en {{total}} archivos. El tamaño es aproximado.",
+    "confirmMessageMetered": "Unos {{size}} en {{total}} archivos, con conexión de pago. El tamaño es aproximado.",
     "confirmAction": "Descargar",
     "removeAll": "Eliminar todas las descargas",
     "removeAllTitle": "¿Eliminar todas las descargas?",
@@ -148,6 +149,7 @@
     "retryFailed": "Reintentar las fallidas",
     "failedValue": "No se pudieron descargar {{failed}}",
     "estimateFailed": "No se pudo estimar el tamaño. Revisa tu conexión e inténtalo de nuevo.",
+    "noSpace": "No hay espacio libre para unos {{size}}. Libera espacio o descarga las suras una a una.",
     "removeOrphans": "Eliminar voces no disponibles",
     "orphansValue": "{{size}} de recitadores que ya no se ofrecen"
   },
