@@ -279,7 +279,7 @@ index 5157ef3b5f3a1c224cddf97cc46b174c675eacb9..66dde9ff3183c8a1fc80a5c08c90a951
  ) : Record
  
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
-index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d4838484b 100644
+index 196a5d57f887c2667a88543bd2f6a80044a044f2..7b6758cb1d11bc5d7045351cae080311ccf13a53 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 +++ b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 @@ -25,6 +25,7 @@ import androidx.media3.session.MediaStyleNotificationHelper
@@ -582,7 +582,7 @@ index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d
            .build()
  
          player.mediaSession.release()
-@@ -482,6 +623,92 @@ class AudioControlsService : MediaSessionService() {
+@@ -482,6 +623,110 @@ class AudioControlsService : MediaSessionService() {
      clearSessionInternal()
    }
  
@@ -613,12 +613,26 @@ index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d
 +      // new one loads.
 +      currentArtwork = null
 +
-+      val session = MediaSession.Builder(context, playlist.ref)
++      /**
++       * cloud-quran: WRAP THE PLAYLIST IN `MetadataInjectingPlayer`, LIKE THE SINGLE-PLAYER PATH
++       * ALREADY DID. The session was built on the RAW `playlist.ref`, so the system media card —
++       * which renders from the MediaSession, not from our notification — could only show the
++       * MediaItem's title and whatever ID3 tags the MP3 carried. The ayah and the reciter never
++       * reached it, while the notification beside it had both. One wrapper closes that, and it is
++       * the SAME class the single-player branch uses, so there is no second mechanism to keep in
++       * step. Transport is unaffected: `ForwardingPlayer` forwards next/previous/seek, which is
++       * what the playlist path relies on for native prev/next.
++       */
++      val sessionPlayer = MetadataInjectingPlayer(playlist.ref).apply {
++        updateMetadata(metadata)
++      }
++      val session = MediaSession.Builder(context, sessionPlayer)
 +        .setId("expo-audio-playlist-${playlist.id}")
 +        .build()
 +
 +      addSession(session)
 +      mediaSession = session
++      sessionMetadataPlayer = sessionPlayer
 +
 +      // Custom MediaStyle notification tied to the session (the PROVEN single-player path). For
 +      // the multi-item playlist the system lock screen reads transport from the session player
@@ -644,6 +658,10 @@ index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d
 +      return
 +    }
 +    currentMetadata = metadata
++    // cloud-quran: push it to the SESSION as well, or the system media card keeps the text it was
++    // built with while the notification below moves on. This is the per-ayah refresh — the engine
++    // calls `updateLockScreenMetadata` every time the recited ayah changes.
++    sessionMetadataPlayer?.updateMetadata(metadata)
 +    // wisdom-fruits 22.10 (Task 3): refresh the book cover on each track change (the JS engine
 +    // calls updateLockScreenMetadata on trackChanged). Per-MediaItem titles already update the
 +    // lock screen natively; the cover comes from the notification large icon, so re-load + re-post.
@@ -675,7 +693,7 @@ index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d
    private fun loadArtworkFromUrl(url: URL, callback: (Bitmap?) -> Unit) {
      if (url != currentArtworkUrl) {
        currentArtworkUrl = url
-@@ -493,10 +720,16 @@ class AudioControlsService : MediaSessionService() {
+@@ -493,10 +738,16 @@ class AudioControlsService : MediaSessionService() {
            val bitmap = BitmapFactory.decodeStream(inputStream)
  
            if (isActive) {
@@ -692,7 +710,7 @@ index 196a5d57f887c2667a88543bd2f6a80044a044f2..04d9c7da980636ebd425b41ec364684d
              callback(null)
            }
          }
-@@ -558,6 +791,9 @@ class AudioControlsService : MediaSessionService() {
+@@ -558,6 +809,9 @@ class AudioControlsService : MediaSessionService() {
  
      const val ACTION_SEEK_FORWARD = "expo.modules.audio.action.SEEK_FORWARD"
      const val ACTION_SEEK_BACKWARD = "expo.modules.audio.action.SEEK_BACKWARD"
