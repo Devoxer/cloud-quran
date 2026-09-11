@@ -42,6 +42,40 @@ export const SHADOWS = {
     shadowRadius: 6,
     elevation: 2,
   },
+  /**
+   * The chrome bars' boundary, and the ONLY thing that now separates `AppHeader` /
+   * `AppTabBar` from the Quran beneath them (owner call 2026-09-11 — the 1px edge read as
+   * "distracting and outdated").
+   *
+   * ⚠️ TUNE THIS AND YOU ARE TUNING THE DELIMITER, NOT A DECORATION. The bars OVERLAY the
+   * reading surface and `background.secondary` is measured at **1.08–1.16:1 against
+   * `background.primary` in all twelve slices** — bar and page are the same colour to the
+   * eye, so "let the contrast do the work" was not on the table and the cast is carrying it
+   * alone. Heavier than `card` for that reason.
+   *
+   * ⚠️ AND IT IS WEAKEST EXACTLY WHERE IT MATTERS MOST: a black cast over a near-black page
+   * is nearly invisible, and on `contrast · dark` the page is `#000000`, so there is no
+   * boundary there at all. The real fix for the dark slices is to lift `background.secondary`
+   * into a genuine elevated surface; that is a palette edit reaching every Card and sheet, so
+   * it is parked rather than smuggled in here.
+   */
+  chromeDown: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  /** `chromeDown` cast upward, for the tab bar. ⚠️ Android's `elevation` has no direction —
+   *  it casts by height alone — so the up-cast is an iOS/web effect and Android gets a
+   *  symmetric lift instead. Read `chromeDown`'s note before touching either. */
+  chromeUp: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   /** Floating chrome - tab bar / mini-player */
   floating: {
     shadowColor: '#000',

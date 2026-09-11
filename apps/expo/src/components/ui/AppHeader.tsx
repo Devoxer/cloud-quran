@@ -50,6 +50,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
+import { SHADOWS } from '@/constants/shadows';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { useTheme } from '@/lib/theme';
@@ -117,14 +118,15 @@ export function AppHeader({
     },
     bar: {
       backgroundColor: theme.colors.background.secondary,
-      borderBottomWidth: 1,
-      // ⚠️ `text.secondary`, NOT `background.tertiary` — the bar floats OVER the reading page, so
-      // this edge is the only thing saying where chrome stops and the Quran starts. Measured:
-      // tertiary-on-page is 1.21–1.49:1 and tertiary-on-bar 1.09–1.25:1, i.e. the same 1.11–1.24:1
-      // band that made story 6-0 reject a background-toned edge in the first place. This restores
-      // 6-0's measured choice (≥6.0:1 in all twelve slices) and `palettes.contrast.test.ts` now
-      // gates it, so a palette edit cannot quietly walk it back down.
-      borderBottomColor: theme.colors.text.secondary,
+      /**
+       * ⚠️ THE BOUNDARY IS A CAST, NOT A LINE, AND THAT IS AN OWNER CALL (2026-09-11) — the 1px
+       * `text.secondary` edge 6-0 measured and 6-6 restored read as "distracting and outdated"
+       * on the device. It is REMOVED here and in `AppTabBar`; `SHADOWS.chromeDown` is what now
+       * says where the chrome stops and the Quran starts, and its docblock carries the
+       * measurement and the one slice where it does not hold. Do not re-add a border without
+       * re-opening that call: the previous edge was itself the fix for a fainter edge.
+       */
+      ...SHADOWS.chromeDown,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: SPACING.md,

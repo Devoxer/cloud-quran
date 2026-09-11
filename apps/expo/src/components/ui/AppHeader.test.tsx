@@ -6,7 +6,7 @@
  */
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>(() => true);
@@ -88,5 +88,20 @@ describe('the slots and the title', () => {
     // The bar overlays a scrolling surface on the reading routes; an `auto` band swallows drags.
     render(<AppHeader title="Al-Baqarah" />);
     expect(screen.getByTestId('app-header').props.pointerEvents).toBe('box-none');
+  });
+
+  it('draws NO bottom border, and carries the cast that replaced it', () => {
+    // ⚠️ The 1px `text.secondary` edge was removed on the owner's call (2026-09-11) and
+    // `SHADOWS.chromeDown` is now the ONLY thing separating the bar from the Quran under it —
+    // `palettes.contrast.test.ts` measures the bar at 1.08–1.16:1 against the page, so there is
+    // no fallback. Literal expected values, not `SHADOWS.chromeDown` spread back in: reading the
+    // token here would keep this green with the cast set to `shadowOpacity: 0`.
+    render(<AppHeader title="Al-Baqarah" />);
+    const bar = StyleSheet.flatten(screen.getByTestId('app-header').props.style);
+    expect(bar.borderBottomWidth).toBeUndefined();
+    expect(bar.shadowOpacity).toBe(0.22);
+    expect(bar.shadowRadius).toBe(8);
+    // Downward: the page is BELOW the header.
+    expect(bar.shadowOffset).toEqual({ width: 0, height: 3 });
   });
 });

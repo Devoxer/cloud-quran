@@ -229,18 +229,23 @@ describe('navigation chrome contrast (story 6-0)', () => {
           expect(meetsContrast(s.accent.primary, s.background.secondary, AA_LARGE)).toBe(true);
         });
 
-        it('the bar EDGE delimits chrome from the page ≥ 3 (WCAG 1.4.11 non-text)', () => {
-          // ⚠️ THE CASE STORY 6-6 SHIPPED WITHOUT, AND THE ONE THE PAGE ACTUALLY NEEDS. Under
-          // native chrome the navigator drew its own hairline; ours does not — `AppHeader` and
-          // `AppTabBar` OVERLAY the reading surface, so this 1px line is the entire boundary
-          // between the chrome and the Quran beneath it. 6-6 first shipped it as
-          // `background.tertiary`, measured here at 1.21–1.49:1 over the page and 1.09–1.25:1
-          // over the bar — the very band whose invisibility made story 6-0 reject a
-          // background-toned edge. Both surfaces are gated because the header's underside meets
-          // the page while its topside meets the bar, and an edge that vanishes into either one
-          // has stopped being an edge.
-          expect(meetsContrast(s.text.secondary, s.background.primary, AA_LARGE)).toBe(true);
-          expect(meetsContrast(s.text.secondary, s.background.secondary, AA_LARGE)).toBe(true);
+        it('the bar SURFACE cannot delimit chrome on its own — the cast has to (1.08–1.16:1)', () => {
+          // ⚠️ THIS CASE REPLACES "the bar EDGE delimits chrome from the page", DELETED
+          // 2026-09-11 WITH THE 1px EDGE IT GATED (owner: the line read as "distracting and
+          // outdated"). It is not a weaker version of that case — it asserts the OPPOSITE fact,
+          // and asserts it because a future palette edit is the thing most likely to make
+          // somebody believe the border was safe to drop for the ordinary reason.
+          //
+          // `AppHeader` and `AppTabBar` OVERLAY the reading surface, and "let the contrast do the
+          // work" is NOT available to them: bar-on-page measures 1.08–1.16:1 in every slice, i.e.
+          // the same colour to the eye. `SHADOWS.chromeDown` / `chromeUp` are the whole boundary.
+          //
+          // So this pins the premise rather than a floor. If a palette edit ever lifts
+          // `background.secondary` into a genuine elevated surface, THIS case reddens — and the
+          // right response is to re-read the shadow docblock and decide whether the cast is still
+          // load-bearing, not to raise a number here.
+          const barOnPage = contrastRatio(s.background.secondary, s.background.primary);
+          expect(barOnPage).toBeLessThan(1.25);
         });
       });
     }

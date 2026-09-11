@@ -39,6 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CHROME_BAR_HEIGHT, TABS } from '@/constants/navigation';
 import { RADII } from '@/constants/radii';
+import { SHADOWS } from '@/constants/shadows';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { withAlpha } from '@/lib/color';
@@ -83,10 +84,9 @@ export function AppTabBar({ testID = 'app-tab-bar', interactive = true }: AppTab
     },
     bar: {
       backgroundColor: theme.colors.background.secondary,
-      borderTopWidth: 1,
-      // See `AppHeader`'s edge: same reason, same measurement, same gate. The tab bar overlays the
-      // last line of the page, so a 1.09:1 edge is not a delimiter.
-      borderTopColor: theme.colors.text.secondary,
+      // See `AppHeader`'s bar: the 1px edge is gone on the owner's call and the cast replaces it.
+      // This one points UP, because the page is above the tab bar rather than below it.
+      ...SHADOWS.chromeUp,
       flexDirection: 'row',
       alignItems: 'stretch',
     },

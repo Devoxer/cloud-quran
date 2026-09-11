@@ -161,6 +161,20 @@ describe.each(COMBOS)('tab chrome on %s · %s · %s', (os, palette, scheme) => {
     );
     expect(styleOf('chrome-tab-index-pill').backgroundColor).toBeUndefined();
   });
+
+  it('draws NO top border, and casts UPWARD instead — on every slice', () => {
+    // ⚠️ The 1px edge is gone on the owner's call (2026-09-11); `SHADOWS.chromeUp` is the whole
+    // boundary, and the bar is measured at 1.08–1.16:1 against the page in every slice, so
+    // nothing else is holding it. Run per palette × scheme because the border it replaced was
+    // palette-derived (`text.secondary`) and a reader re-adding one would reach for a token.
+    // Literal values on purpose — spreading the token back in would pass with the cast zeroed.
+    renderAs(os, palette, scheme);
+    const bar = styleOf('app-tab-bar');
+    expect(bar.borderTopWidth).toBeUndefined();
+    expect(bar.shadowOpacity).toBe(0.22);
+    // NEGATIVE height: the page sits ABOVE the tab bar, unlike the header's.
+    expect(bar.shadowOffset).toEqual({ width: 0, height: -3 });
+  });
 });
 
 describe('the control set is the table, on every slice', () => {
