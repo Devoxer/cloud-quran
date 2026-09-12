@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import { RADII } from '@/constants/radii';
+import { isRTL } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 /**
@@ -49,8 +50,22 @@ const TRACK_HEIGHT = 4;
 /** Thumb size in pixels */
 const THUMB_SIZE = 16;
 
-/** Minimum hit target for accessibility */
+/** Minimum hit target for accessibility. Symmetric, so it needs no logical spelling. */
 const HIT_SLOP = { top: 12, bottom: 12, left: 0, right: 0 };
+
+/**
+ * The 0-1 progress a touch at `locationX` means — the ONE place direction enters the maths.
+ *
+ * ⚠️ `locationX` IS PHYSICAL AND THE TRACK IS NOT (story 8-1). The fill and the thumb are placed
+ * with `start`, so under `I18nManager.isRTL` zero progress sits at the RIGHT edge while a touch is
+ * still measured from the left — seek without this reads every tap as its own mirror image. Pure
+ * and exported so both directions can be asserted without a layout.
+ */
+export function progressFromTouch(locationX: number, width: number, rtl: boolean): number {
+  if (width <= 0) return 0;
+  const fraction = locationX / width;
+  return Math.max(0, Math.min(1, rtl ? 1 - fraction : fraction));
+}
 
 /**
  * ProgressBar Component
@@ -78,7 +93,9 @@ export function ProgressBar({
       height: '100%',
       borderRadius: RADII.sm,
       position: 'absolute',
-      left: 0,
+      // ⚠️ LOGICAL, NOT `left` — the fill grows from the reading edge, which is the right one in
+      // an RTL layout (story 8-1). Same for the thumb's offset and its half-width pull-back.
+      start: 0,
       backgroundColor: t.colors.accent.primary,
     },
     thumb: {
@@ -86,11 +103,13 @@ export function ProgressBar({
       width: THUMB_SIZE,
       height: THUMB_SIZE,
       borderRadius: THUMB_SIZE / 2,
-      marginLeft: -THUMB_SIZE / 2,
+      marginStart: -THUMB_SIZE / 2,
       top: (TRACK_HEIGHT - THUMB_SIZE) / 2,
       backgroundColor: t.colors.accent.primary,
     },
   }));
+  // Constant for the process (`lib/rtl.ts`), read per render rather than captured at module scope.
+  const rtl = isRTL();
   const widthRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState(0);
@@ -119,10 +138,9 @@ export function ProgressBar({
     (locationX: number): number => {
       if (widthRef.current === 0 || durationMs <= 0) return 0;
 
-      const percentage = Math.max(0, Math.min(1, locationX / widthRef.current));
-      return Math.round(percentage * durationMs);
+      return Math.round(progressFromTouch(locationX, widthRef.current, rtl) * durationMs);
     },
-    [durationMs]
+    [durationMs, rtl]
   );
 
   /**
@@ -152,8 +170,7 @@ export function ProgressBar({
           if (disabled) return;
           setIsDragging(true);
           const locationX = event.nativeEvent.locationX;
-          const percentage = Math.max(0, Math.min(1, locationX / (widthRef.current || 1)));
-          setDragProgress(percentage);
+          setDragProgress(progressFromTouch(locationX, widthRef.current || 1, rtl));
         },
 
         onPanResponderMove: (event, gestureState) => {
@@ -161,8 +178,7 @@ export function ProgressBar({
           // Calculate position based on starting point + movement
           const startX = event.nativeEvent.locationX - gestureState.dx;
           const currentX = startX + gestureState.dx;
-          const percentage = Math.max(0, Math.min(1, currentX / widthRef.current));
-          setDragProgress(percentage);
+          setDragProgress(progressFromTouch(currentX, widthRef.current, rtl));
         },
 
         onPanResponderRelease: (event, gestureState) => {
@@ -184,7 +200,7 @@ export function ProgressBar({
           setIsDragging(false);
         },
       }),
-    [disabled, durationMs, calculateSeekPosition, onSeek]
+    [disabled, durationMs, calculateSeekPosition, onSeek, rtl]
   );
 
   return (
@@ -222,7 +238,7 @@ export function ProgressBar({
         style={[
           styles.thumb,
           {
-            left: `${progress * 100}%`,
+            start: `${progress * 100}%`,
           },
         ]}
         testID={testID ? `${testID}-thumb` : undefined}

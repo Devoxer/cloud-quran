@@ -30,7 +30,7 @@ export interface RowSeparatorProps {
 
 export function RowSeparator({ inset = BOOK_ROW_INSET }: RowSeparatorProps) {
   const styles = useStyles();
-  return <View style={[styles.separator, { marginLeft: inset }]} />;
+  return <View style={[styles.separator, { marginStart: inset }]} />;
 }
 
 const useStyles = () =>

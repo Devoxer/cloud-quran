@@ -65,17 +65,12 @@ const mockReloadAppAsync = (globalThis as unknown as { expo: { reloadAppAsync: j
 // (Sentry itself is mocked globally, so the real `captureException` is inert here.)
 let captureExceptionSpy: jest.SpyInstance;
 
-import {
-  CANONICAL_CATEGORY_SLUGS,
-  CATEGORY_DISPLAY_NAMES,
-  CATEGORY_SHORT_NAMES,
-  LOCALIZED_BOOK_ATTRS,
-  localizedBookFields,
-  TOPIC_DISPLAY_NAMES,
-} from '@cloudquran/shared';
+// The taxonomy maps (`CATEGORY_DISPLAY_NAMES`, `TOPIC_DISPLAY_NAMES`, `CATEGORY_SHORT_NAMES`,
+// `CANONICAL_CATEGORY_SLUGS`, `POPULAR_TOPICS`) went with the two cases story 8-1 deleted — see the
+// note in § EXPOSED_LANGUAGES for why a catalog this app does not have cannot be guarded here.
+import { LOCALIZED_BOOK_ATTRS, localizedBookFields } from '@cloudquran/shared';
 import * as languageConstants from '@/constants/language';
 import { BASE_LANGUAGE } from '@/constants/language';
-import { POPULAR_TOPICS } from '@/constants/popularTaxonomy.generated';
 import { initI18n } from '@/i18n';
 import { getCachedContent, setCachedContent } from './contentCache';
 import * as errors from './errors';
@@ -161,26 +156,30 @@ const UNSHIPPED = 'ja';
 const UNSHIPPED2 = 'ko';
 
 describe('AVAILABLE_UI_LANGUAGES', () => {
-  it('is derived from the shipped bundles — `en` + `es` + `fr` today', () => {
-    // Order matters: it IS the picker's on-screen order (see `i18n/resources.ts`).
-    expect(AVAILABLE_UI_LANGUAGES).toEqual(['en', 'es', 'fr']);
+  it('is derived from the shipped bundles — `en` + `ar` + `es` + `fr` today', () => {
+    // Order matters: it IS the picker's on-screen order (see `i18n/resources.ts` — `en` first,
+    // then every target sorted by code, which is where `ar` slots in as of story 8-1).
+    expect(AVAILABLE_UI_LANGUAGES).toEqual(['en', 'ar', 'es', 'fr']);
   });
 });
 
 describe('EXPOSED_LANGUAGES — AC-1/AC-34, the exposure gate', () => {
-  it('ships `en` only — the deliberate exposure set', () => {
+  it('ships `en` + `ar` — the deliberate exposure set', () => {
     // ⚠️ A CHANGE HERE IS A RELEASE DECISION, never incidental.
     //
-    // Cloud Quran ships ONE locale. Story 5-1's Design Note 2 kept i18next and `lint:i18n` —
-    // because routing strings through `t()` from the start is cheap and retrofitting it across a
-    // finished app is not — while PRD NFR29 makes the interface English-only. The `es`/`fr`
-    // bundles inherited from wisdom-fruits stay on disk so the parity gate keeps working, but
-    // they are not offered: `AVAILABLE_UI_LANGUAGES` (what i18next can render) and
-    // `EXPOSED_LANGUAGES` (what we OFFER) have deliberately come apart here, which is exactly
-    // why the next test insists they stay separate constants.
+    // Story 5-1's Design Note 2 kept i18next and `lint:i18n` — routing strings through `t()` from
+    // the start is cheap and retrofitting it across a finished app is not — while PRD NFR29 made
+    // the interface English-only. ⚠️ STORY 8-1 REVERSED NFR29 AND ADDED `ar`: the only
+    // redistributable tafsir is Arabic (story 8-2's licence research), so an English-only
+    // interface makes the deepest content this app will ever carry unreadable.
+    //
+    // The `es`/`fr` bundles inherited from wisdom-fruits stay on disk and stay UNOFFERED, so
+    // `AVAILABLE_UI_LANGUAGES` (what i18next can render) and `EXPOSED_LANGUAGES` (what we OFFER)
+    // are still deliberately apart — which is why the next test insists they stay separate
+    // constants.
     //
     // If this fails unexpectedly, a language went live (or dark) by accident.
-    expect(REAL_EXPOSED).toEqual(['en']);
+    expect(REAL_EXPOSED).toEqual(['en', 'ar']);
   });
 
   it('stays a SEPARATE constant from AVAILABLE_UI_LANGUAGES even when the values coincide', () => {
@@ -203,86 +202,27 @@ describe('EXPOSED_LANGUAGES — AC-1/AC-34, the exposure gate', () => {
     expect(REAL_EXPOSED.every((code) => isAvailableLanguage(code))).toBe(true);
   });
 
-  it('every exposed non-base language has its `books` display-metadata columns (Story 24.14)', () => {
-    // ⚠️ THE OTHER HALF OF "ADDING A LANGUAGE", and the one with no runtime signal at all. Exposing
-    // a code whose `LOCALIZED_BOOK_ATTRS` entry is missing does not crash and does not warn: every
-    // `localizedBookFields(code)` returns `[]`, every projection silently omits the columns, and
-    // `displayTitle` falls back to `books.title` — so the app ships a fully translated body under
-    // an English title on every list, grid, search row, player and lock screen. That is exactly the
-    // defect this story exists to remove, re-introduced by the same one-line edit that adds the
-    // next language. Pin it here, beside the ⊆-chrome invariant it mirrors.
-    const missing = REAL_EXPOSED.filter(
-      (code) => code !== BASE_LANGUAGE && !(code in LOCALIZED_BOOK_ATTRS)
-    );
-    expect(missing).toEqual([]);
-  });
-
-  it('every exposed non-base language has its TAXONOMY label rows (Story 24.14 Step G)', () => {
-    // ⚠️ The SAME class as the `LOCALIZED_BOOK_ATTRS` invariant above, on the other display
-    // authority — and it was unguarded: a language could be exposed with its two `books` columns
-    // and pass the whole net while every category chip, topic chip, filter label, quiz-hub tile
-    // and stats label rendered English. `CATEGORY_SHORT_NAMES` is included because it is what the
-    // icon-on-top cards actually render, and its fallback is the FULL display name — so a missing
-    // short row does not degrade to a short English label, it degrades to a long one that
-    // truncates, which is the whole reason the map exists.
-    //
-    // ⚠️ PRESENCE IS NOT ENOUGH (Step I). `code in MAP` is satisfied by `de: {}`, so the guard as
-    // first written would have passed a language shipped with three EMPTY maps — the exact outcome
-    // it exists to prevent, since a missing key falls back to the English label just as silently as
-    // a missing map. The completeness assertions that would have caught it live in
-    // `packages/shared/taxonomy.test.ts` and are hard-coded to `.fr`, so they do not generalize to
-    // the next language either. Assert COVERAGE here, per exposed language.
-    const nonBase = REAL_EXPOSED.filter((code) => code !== BASE_LANGUAGE);
-
-    // ⚠️ ANTI-VACUITY, RESHAPED — NOT DELETED. Every assertion below is a
-    // `filter(...).toEqual([])`, which an empty `nonBase` satisfies trivially. The original
-    // guard was `expect(nonBase.length).toBeGreaterThan(0)`, which held while wisdom-fruits
-    // exposed three languages. Cloud Quran exposes one (PRD NFR29), so `nonBase` is legitimately
-    // empty and that assertion would now fail on a CORRECT tree — the classic way a fail-closed
-    // check gets deleted rather than fixed.
-    //
-    // Instead: assert the reference set is still non-empty (it can go vacuous on its own, which
-    // is a real bug), and make the English-only state EXPLICIT so this test starts enforcing
-    // coverage again the moment a second language is exposed, rather than passing silently.
-    expect(CANONICAL_CATEGORY_SLUGS.length).toBeGreaterThan(0);
-    if (nonBase.length === 0) {
-      expect(REAL_EXPOSED).toEqual([BASE_LANGUAGE]);
-    }
-    expect(nonBase.filter((code) => !(code in CATEGORY_DISPLAY_NAMES))).toEqual([]);
-    expect(nonBase.filter((code) => !(code in TOPIC_DISPLAY_NAMES))).toEqual([]);
-    expect(nonBase.filter((code) => !(code in CATEGORY_SHORT_NAMES))).toEqual([]);
-
-    // Every canonical category slug, in every exposed non-base language. Reported as
-    // `[code, slug]` pairs so a failure names the language AND the slug (jest's `expect` takes no
-    // message argument — that is vitest, and this suite is jest-expo).
-    const missingCats = nonBase.flatMap((code) =>
-      CANONICAL_CATEGORY_SLUGS.filter((slug) => !CATEGORY_DISPLAY_NAMES[code]?.[slug]).map(
-        (slug) => [code, slug] as const
-      )
-    );
-    expect(missingCats).toEqual([]);
-
-    // ⚠️ THE TOPIC REFERENCE IS `POPULAR_TOPICS`, NOT THE UNION OF THE MAPS (Step I round 3).
-    // The union was `Object.values(TOPIC_DISPLAY_NAMES).flatMap(Object.keys)` — and
-    // `TOPIC_DISPLAY_NAMES` holds exactly one row (`fr`), which is also the only entry in
-    // `nonBase`. So the assertion reduced to `fr ⊇ union(fr)`: true by construction, unfailable,
-    // and it would have passed a French map shipped with 200 of 240 entries. The anti-vacuity pin
-    // above did not catch it because the set was non-empty — just self-referential.
-    //
-    // `POPULAR_TOPICS` is an INDEPENDENT, committed, English-keyed list (generated from the live
-    // catalog) and it is exactly the set rendered as chips through `getTopicDisplayName`
-    // (`discover.tsx`, `filters.tsx`), so a missing entry is a visibly English chip in a French
-    // app — the defect this story exists to remove. Deriving the reference from the translations
-    // themselves could never express that. (`CATEGORY_SHORT_NAMES` stays presence-only: it is a
-    // deliberately PARTIAL override map for labels that would truncate.)
-    expect(POPULAR_TOPICS.length).toBeGreaterThan(0);
-    const missingTopics = nonBase.flatMap((code) =>
-      POPULAR_TOPICS.filter((name) => !TOPIC_DISPLAY_NAMES[code]?.[name]).map(
-        (name) => [code, name] as const
-      )
-    );
-    expect(missingTopics).toEqual([]);
-  });
+  /**
+   * ⚠️ TWO CASES WERE DELETED HERE BY STORY 8-1, AND THE REASON IS "NO SUBJECT", NOT "IN THE WAY".
+   *
+   * They were wisdom-fruits' invariants: "every exposed non-base language has its `books`
+   * display-metadata columns" (`LOCALIZED_BOOK_ATTRS`) and "…has its taxonomy label rows"
+   * (`CATEGORY_DISPLAY_NAMES` / `TOPIC_DISPLAY_NAMES` / `CATEGORY_SHORT_NAMES`). Both guarded one
+   * real defect — a fully translated book app rendering English TITLES and English category chips
+   * — and both were written while exposing a language meant shipping a translated CATALOG with it.
+   *
+   * Cloud Quran has no catalog. There is no `books` table, no category taxonomy and no localized
+   * title; the content is the Quran, which is in Arabic already and is never localized. The three
+   * maps survive only as unreferenced inheritance (`lib/bookDisplay.ts` and `constants/taxonomy.ts`
+   * have no consumer outside `components/ui/FilterPills.tsx`, which nothing renders). So the guards
+   * did not merely go vacuous — they went RED on a correct tree the moment a second language was
+   * exposed, demanding Arabic rows in maps this app does not read. A gate that fails for the
+   * absence of a thing the product does not have is not protection, it is a tax with a veto.
+   *
+   * What replaced them is nothing, deliberately. The live half of "adding a language" — the chrome
+   * bundle — is guarded above by the ⊆-AVAILABLE_UI_LANGUAGES invariant and by
+   * `i18n/parity.test.ts`, which is fail-closed over every key in every locale.
+   */
 
   it('has no `books` display-metadata columns for the BASE language', () => {
     // The inverse drift, and it is not cosmetic: an `en` entry would make `localizedBookFields('en')`

@@ -158,7 +158,7 @@ export function AppHeader({
      * which a literal right-pointing glyph would not.
      */
     titleChevron: {
-      marginLeft: SPACING.xs,
+      marginStart: SPACING.xs,
     },
     titleInPress: {
       flex: 0,

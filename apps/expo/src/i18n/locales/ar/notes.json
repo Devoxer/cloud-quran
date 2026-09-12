@@ -1,0 +1,81 @@
+{
+  "sections": {
+    "myNotes": "ملاحظاتي",
+    "addButton": "إضافة"
+  },
+  "counts": {
+    "noteCount_zero": "{{count}} ملاحظة",
+    "noteCount_one": "{{count}} ملاحظة",
+    "noteCount_two": "{{count}} ملاحظتان",
+    "noteCount_few": "{{count}} ملاحظات",
+    "noteCount_many": "{{count}} ملاحظة",
+    "noteCount_other": "{{count}} ملاحظة",
+    "bookCount_zero": "{{count}} كتاب",
+    "bookCount_one": "{{count}} كتاب",
+    "bookCount_two": "{{count}} كتابان",
+    "bookCount_few": "{{count}} كتب",
+    "bookCount_many": "{{count}} كتابًا",
+    "bookCount_other": "{{count}} كتاب",
+    "summary": "{{notes}} · {{books}}"
+  },
+  "editor": {
+    "addTitle": "إضافة ملاحظة",
+    "editTitle": "تعديل الملاحظة",
+    "placeholder": "اكتب ملاحظتك...",
+    "deleteButton": "حذف الملاحظة",
+    "notFound": "تعذّر العثور على هذه الملاحظة."
+  },
+  "discardDialog": {
+    "title": "تجاهل التغييرات؟",
+    "message": "لديك تغييرات غير محفوظة. هل تريد تجاهلها؟",
+    "confirm": "تجاهل",
+    "cancel": "متابعة التعديل"
+  },
+  "deleteDialog": {
+    "title": "حذف الملاحظة؟",
+    "message": "لا يمكن التراجع عن هذا الإجراء."
+  },
+  "emptyState": {
+    "title": "لا توجد ملاحظات بعد",
+    "bookDescription": "اضغط على إضافة لتدوين أول ملاحظة على هذا الكتاب.",
+    "allNotesDescription": "أضف ملاحظات من شاشات تفاصيل الكتب لتظهر هنا",
+    "discoverCta": "اكتشف الكتب"
+  },
+  "errorState": {
+    "title": "تعذّر تحميل الملاحظات",
+    "description": "يرجى المحاولة لاحقًا"
+  },
+  "search": {
+    "placeholder": "ابحث في الملاحظات",
+    "noResultsTitle": "لا نتائج لـ \"{{query}}\"",
+    "noResultsDescription": "جرّب كلمة بحث أخرى"
+  },
+  "signUpPrompt": {
+    "message": "احتفظ بملاحظاتك وزامنها بين أجهزتك"
+  },
+  "errors": {
+    "mustSignInCreate": "يجب تسجيل الدخول لإنشاء الملاحظات",
+    "mustSignInUpdate": "يجب تسجيل الدخول لتحديث الملاحظات",
+    "mustSignInDelete": "يجب تسجيل الدخول لحذف الملاحظات",
+    "noBookSelected": "لم يتم اختيار كتاب",
+    "contentEmpty": "لا يمكن أن يكون محتوى الملاحظة فارغًا",
+    "noteIdRequired": "معرّف الملاحظة مطلوب",
+    "createFailed": "تعذّر إنشاء الملاحظة",
+    "updateFailed": "تعذّر تحديث الملاحظة",
+    "deleteFailed": "تعذّر حذف الملاحظة"
+  },
+  "a11y": {
+    "notePreview": "ملاحظة على {{book}}: {{preview}}",
+    "notePreviewShort": "ملاحظة: {{preview}}",
+    "unknownBook": "كتاب غير معروف",
+    "editNote": "تعديل الملاحظة",
+    "editNoteHint": "اضغط لتعديل هذه الملاحظة",
+    "bookCover": "غلاف {{title}}",
+    "viewBook": "عرض {{title}} لـ {{author}}",
+    "viewBookHint": "اضغط لفتح تفاصيل الكتاب",
+    "addNote": "إضافة ملاحظة",
+    "saveNote": "حفظ الملاحظة",
+    "noteContent": "محتوى الملاحظة",
+    "noteContentHint": "أدخل نص ملاحظتك"
+  }
+}

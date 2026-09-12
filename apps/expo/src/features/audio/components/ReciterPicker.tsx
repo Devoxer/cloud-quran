@@ -355,12 +355,12 @@ const useStyles = () =>
     refusal: {
       marginBottom: SPACING.sm,
     },
-    // The row and its two controls, side by side. `paddingRight` replaces the inset the row
+    // The row and its two controls, side by side. `paddingEnd` replaces the inset the row
     // used to own; on web, where both controls are absent, it would just be missing inset.
     row: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      paddingRight: DOWNLOADS_SUPPORTED ? SPACING.sm : 0,
+      paddingEnd: DOWNLOADS_SUPPORTED ? SPACING.sm : 0,
     },
     rowFlex: {
       flex: 1,

@@ -173,7 +173,7 @@ const useStyles = () =>
     },
     divider: {
       height: 1,
-      marginLeft: 16,
+      marginStart: 16,
       backgroundColor: t.colors.separator,
     },
   }));

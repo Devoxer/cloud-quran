@@ -106,7 +106,8 @@ describe('DurationBadge', () => {
       const flatStyle = Array.isArray(iconStyle)
         ? iconStyle.reduce((acc, style) => ({ ...acc, ...style }), {})
         : iconStyle;
-      expect(flatStyle.marginLeft).toBe(4); // SPACING.xs
+      // LOGICAL, so the gap follows the reading direction (story 8-1).
+      expect(flatStyle.marginStart).toBe(4); // SPACING.xs
     });
   });
 

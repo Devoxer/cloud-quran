@@ -12,8 +12,9 @@
  * see STACK-CHEAT-SHEET § Don't / RN).
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { isRTL } from '@/lib/rtl';
 import { IconFrame, type IconProps } from './IconBase';
-import { ICON_REGISTRY } from './icon-registry';
+import { ICON_REGISTRY, mirrorIcon } from './icon-registry';
 
 export type { IconProps };
 
@@ -28,7 +29,13 @@ export function Icon({
   accessibilityElementsHidden,
   testID,
 }: IconProps) {
-  const entry = ICON_REGISTRY[name];
+  /**
+   * ⚠️ THE GLYPH IS MIRRORED HERE AND NOWHERE ELSE (story 8-1). Ionicons' `chevron-back` is a
+   * literal left-pointing glyph — `Font.loadAsync`-style silence, not an error — so under RTL a
+   * back control would point AWAY from where the reader came from. `Icon.ios.tsx` does NOT do this:
+   * its SF names are Apple's direction-aware ones and mirror themselves.
+   */
+  const entry = ICON_REGISTRY[mirrorIcon(name, isRTL())];
   // Defensive: a name absent from the registry renders the fallback instead of crashing.
   if (!entry) {
     return <>{fallback ?? null}</>;

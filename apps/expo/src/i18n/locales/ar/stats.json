@@ -1,0 +1,138 @@
+{
+  "emptyState": {
+    "title": "لا توجد إحصاءات بعد",
+    "body": "ابدأ الاستماع لبناء سلسلتك.",
+    "cta": "استكشف الكتب"
+  },
+  "statGrid": {
+    "hoursSaved": "ساعات موفّرة",
+    "longestStreak": "أطول سلسلة",
+    "booksFinished": "كتب مكتملة",
+    "sectionsDone": "أقسام مكتملة",
+    "daysActive": "أيام النشاط",
+    "listenedTotal": "إجمالي الاستماع"
+  },
+  "streakHero": {
+    "encouragementActive": "أنت في تقدّم — استمع أو اقرأ اليوم للحفاظ على سلسلتك.",
+    "encouragementInactive": "استمع أو اقرأ اليوم لبدء سلسلتك.",
+    "unit_zero": "يوم",
+    "unit_one": "يوم",
+    "unit_two": "يومان",
+    "unit_few": "أيام",
+    "unit_many": "يومًا",
+    "unit_other": "يوم"
+  },
+  "todaysGoal": {
+    "title": "هدف اليوم",
+    "reached": "تحقّق الهدف — {{minutes}} دقيقة اليوم",
+    "progress": "استمعت إلى {{minutes}} من {{goal}} دقيقة"
+  },
+  "yearHeatmap": {
+    "title": "هذا العام",
+    "less": "أقل",
+    "more": "أكثر"
+  },
+  "topCategories": {
+    "title": "أبرز التصنيفات"
+  },
+  "topTopics": {
+    "title": "أبرز المواضيع"
+  },
+  "achievements": {
+    "title": "الإنجازات",
+    "firstFinish": {
+      "name": "أول كتاب مكتمل",
+      "description": "أكمل أول كتاب لك"
+    },
+    "weekStreak": {
+      "name": "سلسلة أسبوع",
+      "description": "سلسلة من 7 أيام"
+    },
+    "nightOwl": {
+      "name": "طائر الليل",
+      "description": "استمع بعد الساعة 10 مساءً"
+    },
+    "explorer": {
+      "name": "مستكشف",
+      "description": "اقرأ من 5 تصنيفات أو أكثر"
+    },
+    "books25": {
+      "name": "25 كتابًا",
+      "description": "أكمل 25 كتابًا"
+    },
+    "monthStreak": {
+      "name": "سلسلة شهر",
+      "description": "سلسلة من 30 يومًا"
+    },
+    "powerHour": {
+      "name": "ساعة نشاط",
+      "description": "60 دقيقة في يوم واحد"
+    },
+    "dedicated": {
+      "name": "مواظب",
+      "description": "30 يومًا من النشاط"
+    },
+    "bookworm": {
+      "name": "عاشق الكتب",
+      "description": "أكمل 50 كتابًا"
+    }
+  },
+  "recordBanner": {
+    "dayCount_zero": "{{count}} يوم",
+    "dayCount_one": "{{count}} يوم",
+    "dayCount_two": "{{count}} يومان",
+    "dayCount_few": "{{count}} أيام",
+    "dayCount_many": "{{count}} يومًا",
+    "dayCount_other": "{{count}} يوم",
+    "atBest": "أنت عند أفضل سلسلة لديك",
+    "toRecord": "{{days}} للوصول إلى رقم قياسي جديد",
+    "andCounting": "{{days}} والعدّ مستمر.",
+    "longestIs": "أطول سلسلة لديك هي {{days}}."
+  },
+  "quizEmptyState": {
+    "title": "لا توجد إحصاءات اختبارات بعد",
+    "body": "شارك في اختبار لعرض نتائجك هنا."
+  },
+  "overall": {
+    "title": "الإجمالي"
+  },
+  "support": {
+    "quizzesTaken": "اختبارات مُنجزة",
+    "avgScore": "متوسط النتيجة",
+    "categories": "التصنيفات",
+    "booksQuizzed": "كتب مختبَرة"
+  },
+  "scope": {
+    "byBook": "حسب الكتاب",
+    "byCategory": "حسب التصنيف",
+    "wholeLibrary": "المكتبة كاملة"
+  },
+  "trailing": {
+    "best": "الأفضل"
+  },
+  "bookSubline_zero": "{{count}} كتاب · متوسط {{avg}}%",
+  "bookSubline_one": "{{count}} كتاب · متوسط {{avg}}%",
+  "bookSubline_two": "{{count}} كتابان · متوسط {{avg}}%",
+  "bookSubline_few": "{{count}} كتب · متوسط {{avg}}%",
+  "bookSubline_many": "{{count}} كتابًا · متوسط {{avg}}%",
+  "bookSubline_other": "{{count}} كتاب · متوسط {{avg}}%",
+  "scopeSubline_zero": "{{count}} محاولة · متوسط {{avg}}% · {{relative}}",
+  "scopeSubline_one": "{{count}} محاولة · متوسط {{avg}}% · {{relative}}",
+  "scopeSubline_two": "{{count}} محاولتان · متوسط {{avg}}% · {{relative}}",
+  "scopeSubline_few": "{{count}} محاولات · متوسط {{avg}}% · {{relative}}",
+  "scopeSubline_many": "{{count}} محاولة · متوسط {{avg}}% · {{relative}}",
+  "scopeSubline_other": "{{count}} محاولة · متوسط {{avg}}% · {{relative}}",
+  "insights": {
+    "title": "رؤى",
+    "coverage": "استكشفت {{explored}} من {{total}} تصنيفًا",
+    "strongest": "الأقوى · {{name}}",
+    "needsWork": "بحاجة إلى تحسين · {{name}}"
+  },
+  "quizStatsCard": {
+    "title": "الاختبارات",
+    "bestScore": "أفضل نتيجة"
+  },
+  "a11y": {
+    "loadingQuizStats": "جارٍ تحميل إحصاءات الاختبارات"
+  }
+}

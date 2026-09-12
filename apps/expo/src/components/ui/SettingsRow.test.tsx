@@ -197,13 +197,13 @@ describe('SettingsRow', () => {
       // The first child is the divider View (separator color, 64 inset for an iconed row).
       const dividerStyle = flatten(outer.props.children[0].props.style);
       expect(dividerStyle.height).toBe(1);
-      expect(dividerStyle.marginLeft).toBe(64);
+      expect(dividerStyle.marginStart).toBe(64);
     });
 
     it('insets the divider to 16 when the row has no icon', () => {
       const { getByTestId } = render(<SettingsRow label="A" showDivider testID="row" />);
       const dividerStyle = flatten(getByTestId('row').props.children[0].props.style);
-      expect(dividerStyle.marginLeft).toBe(16);
+      expect(dividerStyle.marginStart).toBe(16);
     });
 
     it('omits the divider when showDivider is false (no hairline before the first row)', () => {
@@ -229,8 +229,8 @@ describe('SettingsRow', () => {
       const body = flatten(contentOf('row', tree).props.style);
       // The first cut of this prop set `paddingHorizontal: 12`, pulling this one row's icon 4pt left
       // of the five rows below it in the same group while the hairline stayed at its fixed inset.
-      expect(body.paddingLeft ?? body.paddingHorizontal).toBe(16);
-      expect(body.paddingRight).toBe(12);
+      expect(body.paddingStart ?? body.paddingHorizontal).toBe(16);
+      expect(body.paddingEnd).toBe(12);
     });
 
     it('keeps the LABEL rail identical to a standard row (16 + icon 20 + 14 = 50)', () => {
@@ -245,11 +245,11 @@ describe('SettingsRow', () => {
         const body = flatten(content.props.style);
         const iconStyle = flatten(content.props.children[0].props.style);
         // gap sits between icon and label; the wide variant narrows it and adds the difference back
-        // as the icon's own marginRight, so the sum — the label's x — must not move.
+        // as the icon's own marginEnd, so the sum — the label's x — must not move.
         return (
-          (body.paddingLeft ?? body.paddingHorizontal) +
+          (body.paddingStart ?? body.paddingHorizontal) +
           iconStyle.width +
-          (iconStyle.marginRight ?? 0) +
+          (iconStyle.marginEnd ?? 0) +
           body.gap
         );
       };
@@ -262,9 +262,9 @@ describe('SettingsRow', () => {
       const content = contentOf('row', tree);
       const body = flatten(content.props.style);
       expect(body.paddingHorizontal).toBe(16);
-      expect(body.paddingRight).toBeUndefined();
+      expect(body.paddingEnd).toBeUndefined();
       expect(body.gap).toBe(14);
-      expect(flatten(content.props.children[0].props.style).marginRight).toBeUndefined();
+      expect(flatten(content.props.children[0].props.style).marginEnd).toBeUndefined();
     });
   });
 });

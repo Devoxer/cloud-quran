@@ -24,6 +24,20 @@
  * later story ever re-derives it; each addition just has to slot into the right place.
  */
 
+import arA11y from './locales/ar/a11y.json';
+import arBook from './locales/ar/book.json';
+import arCommon from './locales/ar/common.json';
+import arDiscover from './locales/ar/discover.json';
+import arFeed from './locales/ar/feed.json';
+import arLibrary from './locales/ar/library.json';
+import arNavigation from './locales/ar/navigation.json';
+import arNotes from './locales/ar/notes.json';
+import arNotifications from './locales/ar/notifications.json';
+import arPlayer from './locales/ar/player.json';
+import arProfile from './locales/ar/profile.json';
+import arQuiz from './locales/ar/quiz.json';
+import arQuotes from './locales/ar/quotes.json';
+import arStats from './locales/ar/stats.json';
 import a11y from './locales/en/a11y.json';
 import book from './locales/en/book.json';
 import common from './locales/en/common.json';
@@ -94,6 +108,22 @@ export const resources = {
     stats,
     profile,
     notifications,
+  },
+  ar: {
+    common: arCommon,
+    a11y: arA11y,
+    navigation: arNavigation,
+    discover: arDiscover,
+    library: arLibrary,
+    feed: arFeed,
+    player: arPlayer,
+    book: arBook,
+    notes: arNotes,
+    quotes: arQuotes,
+    quiz: arQuiz,
+    stats: arStats,
+    profile: arProfile,
+    notifications: arNotifications,
   },
   es: {
     common: esCommon,

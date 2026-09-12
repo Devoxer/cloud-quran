@@ -248,12 +248,12 @@ const useStyles = () =>
       paddingHorizontal: 16,
     },
     // See `wideTrailing` — reclaims ~12pt of row chrome for a wide inline control, all of it from
-    // the TRAILING side. `paddingLeft` stays at `rowBody`'s 16 (the group's alignment rail); the
-    // narrowed `gap` is the label→control gap, and `*IconWide`'s `marginRight` adds the 8pt back on
+    // the TRAILING side. `paddingStart` stays at `rowBody`'s 16 (the group's alignment rail); the
+    // narrowed `gap` is the label→control gap, and `*IconWide`'s `marginEnd` adds the 8pt back on
     // the icon→label side so the label rail stays 16 + 20 + 14 = 50, identical to a standard row.
     rowBodyWide: {
       gap: 6,
-      paddingRight: 12,
+      paddingEnd: 12,
     },
     badge: {
       width: 34,
@@ -272,10 +272,10 @@ const useStyles = () =>
     // `wideTrailing` narrows the row's uniform `gap` to 6 for the label→control side; these add the
     // 8pt back on the icon→label side so the label starts at the same x as every other row's.
     inlineIconWide: {
-      marginRight: 8,
+      marginEnd: 8,
     },
     badgeWide: {
-      marginRight: 8,
+      marginEnd: 8,
     },
     textBlock: {
       flex: 1,
@@ -319,10 +319,10 @@ const useStyles = () =>
     },
     divider: {
       height: 1,
-      marginLeft: 16,
+      marginStart: 16,
       backgroundColor: t.colors.separator,
     },
     dividerInsetIcon: {
-      marginLeft: 64,
+      marginStart: 64,
     },
   }));

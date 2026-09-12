@@ -1,7 +1,7 @@
 /**
  * Tests for RowSeparator primitive (Story 23.4)
  *
- * RNTL render-smoke: a themed 1px hairline; the `inset` prop drives `marginLeft`
+ * RNTL render-smoke: a themed 1px hairline; the `inset` prop drives `marginStart`
  * (default `BOOK_ROW_INSET` = 66). Mocks useTheme with the FULL real dark palette
  * so the eager `useThemedStyles` factory never reads an undefined token.
  */
@@ -40,12 +40,12 @@ describe('RowSeparator', () => {
   it('renders a 1px hairline inset to the default BOOK_ROW_INSET', () => {
     const style = rootStyle(render(<RowSeparator />).toJSON());
     expect(style.height).toBe(1);
-    expect(style.marginLeft).toBe(66);
+    expect(style.marginStart).toBe(66);
     expect(style.backgroundColor).toBeDefined();
   });
 
   it('honors a custom inset', () => {
     const style = rootStyle(render(<RowSeparator inset={82} />).toJSON());
-    expect(style.marginLeft).toBe(82);
+    expect(style.marginStart).toBe(82);
   });
 });

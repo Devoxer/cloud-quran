@@ -103,11 +103,14 @@ export const BASE_LANGUAGE = 'en';
  * with a `quizQuestions` bank. A scope with none lands on the runner's empty state, which is the
  * same honest surface a French reader already sees for a category with no French books.
  */
-// Story 5-1 Design Note 2 and PRD NFR29: keep i18next and `lint:i18n`, route strings through
-// `t()`, and ship EXACTLY ONE locale. The es/fr bundles are wisdom-fruits' book-app copy; they
-// stay on disk so the parity gate keeps working and so adding a real locale later is a
-// translation job rather than a retrofit, but they are not offered in the picker.
-export const EXPOSED_LANGUAGES: readonly string[] = ['en'];
+// Story 5-1 Design Note 2 and PRD NFR29 shipped EXACTLY ONE locale, keeping i18next and
+// `lint:i18n` so that adding a real one later would be a translation job rather than a retrofit.
+// ⚠️ STORY 8-1 IS THAT LATER, AND NFR29 IS REVERSED: story 8-2's licence research found the only
+// redistributable tafsir is ARABIC, so the deepest content this app will ever carry is unreadable
+// to an English-only interface. `ar` ships with a full bundle and a real right-to-left layout
+// (`lib/rtl.ts`). The es/fr bundles are still wisdom-fruits' book-app copy and are still NOT
+// offered — they stay on disk so the parity gate keeps measuring more than one target.
+export const EXPOSED_LANGUAGES: readonly string[] = ['en', 'ar'];
 
 /**
  * Endonyms for the languages the app ships chrome for — the fallback label each option shows in
@@ -129,6 +132,7 @@ export const EXPOSED_LANGUAGES: readonly string[] = ['en'];
  */
 export const UI_LANGUAGE_NATIVE_NAMES: Readonly<Record<string, string>> = {
   en: 'English',
+  ar: 'العربية',
   es: 'Español',
   fr: 'Français',
 };

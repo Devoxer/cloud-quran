@@ -136,7 +136,9 @@
   "language": {
     "footnote": "Définit menus et narration sur cet appareil. Les téléchargements gardent leur langue d'origine.",
     "switchFailedTitle": "Changement de langue impossible",
-    "switchFailedMessage": "Votre langue n’a pas changé. Vérifiez votre connexion et réessayez."
+    "switchFailedMessage": "Votre langue n’a pas changé. Vérifiez votre connexion et réessayez.",
+    "group": "LANGUE DE L’INTERFACE",
+    "restartNote": "La langue et son sens de lecture s’appliquent dès le redémarrage de l’app."
   },
   "auth": {
     "intro": "Cloud Quran fonctionne sans compte. La connexion synchronise position de lecture, signets et préférences.",

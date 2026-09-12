@@ -1,0 +1,114 @@
+{
+  "actions": {
+    "ok": "حسنًا",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "retry": "إعادة المحاولة",
+    "tryAgain": "حاول مرة أخرى",
+    "done": "تم",
+    "save": "حفظ",
+    "delete": "حذف",
+    "remove": "إزالة",
+    "back": "رجوع",
+    "seeAll": "عرض الكل",
+    "clearAll": "مسح الكل",
+    "dismiss": "إخفاء",
+    "signUp": "إنشاء حساب",
+    "maybeLater": "ربما لاحقًا",
+    "newMix": "مزيج جديد",
+    "manageOfflineBooks": "إدارة الكتب دون اتصال"
+  },
+  "badge": {
+    "premium": "مميّز",
+    "premiumCaps": "مميّز"
+  },
+  "search": {
+    "booksPlaceholder": "ابحث في الكتب..."
+  },
+  "notFound": {
+    "title": "عذرًا!",
+    "message": "هذه الشاشة غير موجودة.",
+    "goHome": "العودة إلى الشاشة الرئيسية!"
+  },
+  "sectionPicker": {
+    "title": "اختيار الأقسام",
+    "sectionsPerBook": "الأقسام لكل كتاب",
+    "hint": "اختر الأقسام التي تُشغَّل من كل كتاب",
+    "apply": "تطبيق ({{selected}})"
+  },
+  "sections": {
+    "aboutBook": "عن الكتاب",
+    "summaryBrief": "ملخص موجز",
+    "summaryCore": "الملخص الأساسي",
+    "summaryInDepth": "ملخص معمّق",
+    "keyTakeaways": "أهم الأفكار",
+    "notableQuotes": "اقتباسات بارزة",
+    "faq": "الأسئلة الشائعة"
+  },
+  "durationBadge": {
+    "1min": "دقيقة واحدة",
+    "5min": "5 دقائق",
+    "15min": "15 دقيقة"
+  },
+  "moreCount": "+{{moreCount}} أخرى",
+  "unknownTitle": "عنوان غير معروف",
+  "unknownAuthor": "مؤلف غير معروف",
+  "dialogs": {
+    "removeOffline": {
+      "title": "إزالة التنزيل؟",
+      "message": "إزالة \"{{title}}\" من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيله مجددًا."
+    },
+    "offlineLimit": {
+      "title": "بلغت حد التنزيل",
+      "message": "حفظت {{saved}} من {{limit}} كتابًا. أزل واحدًا لحفظ غيره."
+    }
+  },
+  "errors": {
+    "network": "تعذّر الوصول إلى الخادم. تحقق من اتصالك."
+  },
+  "signUpPrompt": {
+    "defaultMessage": "أنشئ حسابًا للوصول إلى هذه الميزة"
+  },
+  "relativeTime": {
+    "justNow": "الآن",
+    "minutesAgo": "قبل {{minutes}} د",
+    "hoursAgo": "قبل {{hours}} س",
+    "daysAgo": "قبل {{days}} ي",
+    "weeksAgo": "قبل {{weeks}} أسبوع"
+  },
+  "byteSize": "{{value}} {{unit}}",
+  "byteUnits": {
+    "b": "بايت",
+    "kb": "ك.ب",
+    "mb": "م.ب",
+    "gb": "غ.ب"
+  },
+  "reading": {
+    "nextSurah": "التالية: {{name}}",
+    "unreadableTitle": "تعذّر فتح نص القرآن",
+    "unreadableBody": "النص المضمّن مفقود أو غير قابل للقراءة على هذا الجهاز.",
+    "noVersesTitle": "لا توجد آيات لعرضها",
+    "noVersesBody": "عادت هذه السورة فارغة. أعد المحاولة أو انتقل إلى التالية.",
+    "prevSurah": "السابقة: {{name}}",
+    "welcomeBack": "أهلًا بعودتك. كنت تقرأ {{name}}."
+  },
+  "mushaf": {
+    "juzHizb": "الجزء {{juz}} · الحزب {{hizb}}",
+    "pageA11y": "صفحة {{page}}، سورة {{name}}",
+    "pageLoadingA11y": "صفحة {{page}}، جارٍ التحميل",
+    "pageErrorA11y": "صفحة {{page}}، تعذّر التحميل",
+    "pageErrorTitle": "تعذّر تحميل هذه الصفحة",
+    "pageErrorBody": "خطّها غير موجود على الجهاز بعد. تحقق من اتصالك وأعد المحاولة.",
+    "toggleChrome": "إظهار أشرطة الأدوات أو إخفاؤها"
+  },
+  "bookmarks": {
+    "add": "إضافة علامة",
+    "remove": "إزالة العلامة",
+    "rowTitle": "{{name}} · {{surah}}:{{verse}}",
+    "rowA11y": "{{name}}، الآية {{verse}}",
+    "deleteA11y": "إزالة علامة {{name}} {{surah}}:{{verse}}",
+    "surahFallback": "سورة {{number}}",
+    "emptyTitle": "لا توجد علامات بعد",
+    "emptyBody": "في وضع القراءة، المس أيقونة العلامة على أي آية لحفظها هنا."
+  }
+}

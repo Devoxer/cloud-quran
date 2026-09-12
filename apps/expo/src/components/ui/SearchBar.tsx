@@ -100,7 +100,7 @@ export function SearchBar({
       backgroundColor: t.colors.background.secondary,
     },
     searchIcon: {
-      marginRight: SPACING.sm,
+      marginEnd: SPACING.sm,
     },
     input: {
       flex: 1,
@@ -111,7 +111,7 @@ export function SearchBar({
     },
     clearButton: {
       padding: SPACING.xs,
-      marginLeft: SPACING.xs,
+      marginStart: SPACING.xs,
     },
     clearButtonInner: {
       width: SPACING.lg + SPACING.xs,

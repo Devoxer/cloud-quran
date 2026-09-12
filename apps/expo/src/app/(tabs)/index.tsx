@@ -8,6 +8,7 @@ import { useWindowDimensions, View, type ViewToken } from 'react-native';
 import { useResumeListening } from '@/features/audio';
 import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
+import { isRTL } from '@/lib/rtl';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import {
@@ -31,10 +32,16 @@ import {
  *
  * ── The shapes that are load-bearing here (6-2, plus 6-6's resync) ───────────────────────────
  *
- * 1. **REVERSED DATA, NOT `inverted`.** `PAGE_DATA` is `[604 … 1]`, one strategy on every
- *    platform: page 1 sits at index 603, and advancing a finger left-to-right lands on a LOWER
- *    index = HIGHER page — the RTL page turn. The pre-fork ran `inverted` on native and reversed
- *    data on web because `inverted` broke web scroll/drag.
+ * 1. **REVERSED DATA, NOT `inverted` — AND ONLY IN LTR (story 8-1).** In an LTR layout the data
+ *    is `[604 … 1]`: page 1 sits at index 603, and advancing a finger left-to-right lands on a
+ *    LOWER index = HIGHER page — the RTL page turn, on every platform. The pre-fork ran
+ *    `inverted` on native and reversed data on web because `inverted` broke web scroll/drag.
+ *    ⚠️ Under `I18nManager.isRTL` the data is NOT reversed, because FlashList already is: it
+ *    anchors a horizontal list at the right edge and re-aims every offset, so a rising index
+ *    already walks leftward through the book. Reversing as well is the double inversion, and it
+ *    turns pages backwards. `pagerData` / `pageToIndex` are pure and take the direction, because
+ *    a device can only be smoked in ONE direction at a time — the other one lives in the tests
+ *    (`mushaf-pager-direction.test.ts`).
  *
  * 2. **`initialScrollIndex` IS ALLOWED HERE, AND THE DIFFERENCE FROM `read.tsx` IS THE ITEM.**
  *    A mushaf page is a UNIFORM full-screen item — index × width IS the offset, exactly, so the
@@ -80,11 +87,27 @@ import {
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 } as const;
 
 /** All 604 pages, REVERSED — see shape 1 in the header. Index i holds page 604 − i. */
-const PAGE_DATA: number[] = Array.from({ length: TOTAL_PAGES }, (_, i) => TOTAL_PAGES - i);
+const PAGE_DATA_LTR: number[] = Array.from({ length: TOTAL_PAGES }, (_, i) => TOTAL_PAGES - i);
 
-/** The list index a page sits at, under the reversed data. */
-function pageToIndex(page: number): number {
-  return TOTAL_PAGES - page;
+/** All 604 pages in reading order. Index i holds page i + 1 — see shape 1 in the header. */
+const PAGE_DATA_RTL: number[] = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
+
+/**
+ * The pager's data, given the layout direction — shape 1 in the header.
+ *
+ * ⚠️ REVERSE ONLY IN LTR. Under `I18nManager.isRTL` FlashList already anchors a horizontal list at
+ * the right edge and re-aims every offset (`RecyclerView.js`: `isHorizontalRTL = I18nManager.isRTL
+ * && horizontal`; `useRecyclerViewController.js` → `adjustOffsetForRTL`), so index 0 IS the
+ * rightmost item and a rising index already walks leftward through the book. Reversing the data on
+ * top of that is the double inversion: it would turn pages backwards in Arabic.
+ */
+export function pagerData(rtl: boolean): number[] {
+  return rtl ? PAGE_DATA_RTL : PAGE_DATA_LTR;
+}
+
+/** The list index a page sits at, in the data {@link pagerData} returns for that direction. */
+export function pageToIndex(page: number, rtl: boolean): number {
+  return rtl ? page - 1 : TOTAL_PAGES - page;
 }
 
 /**
@@ -101,6 +124,14 @@ function openingPage(saved: ReadingPositionPair | null): number {
 export default function Mushaf() {
   const { t } = useTranslation();
   const reveal = useChromeReveal();
+  /**
+   * ⚠️ READ ONCE PER RENDER, NEVER CAPTURED AT MODULE SCOPE. The direction cannot change without
+   * an app restart (`lib/rtl.ts`), so this is effectively a constant — but a module-scope `const`
+   * would freeze whatever `I18nManager.isRTL` said when THIS module happened to be evaluated,
+   * which on the boot path can precede `applyStoredDirection()`.
+   */
+  const rtl = isRTL();
+  const pages = useMemo(() => pagerData(rtl), [rtl]);
   const { saved, reportVerse } = usePosition('mushaf');
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   // Three separate subscriptions, for `read.tsx`'s reason: only the key moves per ayah.
@@ -164,8 +195,8 @@ export default function Mushaf() {
       moved.current = false;
       currentPageRef.current = fresh;
       setCurrentPage(fresh);
-      listRef.current?.scrollToIndex({ index: pageToIndex(fresh), animated: false });
-    }, [clearSelection])
+      listRef.current?.scrollToIndex({ index: pageToIndex(fresh, rtl), animated: false });
+    }, [clearSelection, rtl])
   );
 
   /**
@@ -197,8 +228,8 @@ export default function Mushaf() {
     restoreTarget.current = fresh;
     currentPageRef.current = fresh;
     setCurrentPage(fresh);
-    listRef.current?.scrollToIndex({ index: pageToIndex(fresh), animated: false });
-  }, [saved]);
+    listRef.current?.scrollToIndex({ index: pageToIndex(fresh, rtl), animated: false });
+  }, [saved, rtl]);
 
   // ±2 neighbour fonts, re-aimed on every settled page (and at the opening page on mount).
   // Fire-and-forget: `preloadAdjacentPageFonts` never throws; a miss becomes that page's own
@@ -274,8 +305,8 @@ export default function Mushaf() {
     if (page < 1 || page > TOTAL_PAGES || page === currentPageRef.current) return;
     currentPageRef.current = page;
     setCurrentPage(page);
-    listRef.current?.scrollToIndex({ index: pageToIndex(page), animated: true });
-  }, [activeVerseKey, playback.surah]);
+    listRef.current?.scrollToIndex({ index: pageToIndex(page, rtl), animated: true });
+  }, [activeVerseKey, playback.surah, rtl]);
 
   /**
    * The one position write a listening session makes here — `read.tsx`'s effect, same reason, and
@@ -422,13 +453,13 @@ export default function Mushaf() {
     <View style={styles.screen} testID="mushaf-surface">
       <FlashList
         ref={listRef}
-        data={PAGE_DATA}
+        data={pages}
         renderItem={renderPage}
         keyExtractor={keyExtractor}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        initialScrollIndex={pageToIndex(opening)}
+        initialScrollIndex={pageToIndex(opening, rtl)}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={VIEWABILITY_CONFIG}
         /* ⚠️ NO `delaysContentTouches` HERE EITHER — see `read.tsx` for the whole answer.

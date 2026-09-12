@@ -1,0 +1,68 @@
+{
+  "search": {
+    "placeholder": "ابحث عن كتب أو مؤلفين",
+    "booksHeader": "الكتب",
+    "authorsLabel": "المؤلفون",
+    "noResults": {
+      "title": "لا نتائج عن \"{{query}}\"",
+      "description": "جرّب مصطلح بحث آخر"
+    },
+    "error": {
+      "title": "حدث خطأ ما",
+      "message": "تعذّر إكمال هذا البحث."
+    }
+  },
+  "recentSearches": {
+    "title": "عمليات البحث الأخيرة",
+    "clear": "مسح"
+  },
+  "filters": {
+    "searchPlaceholder": "تصفية التصنيفات والمواضيع",
+    "showLess": "عرض أقل",
+    "seeAllCount": "عرض الكل ({{total}})"
+  },
+  "sections": {
+    "categories": "التصنيفات",
+    "topics": "المواضيع",
+    "popular": "الأكثر رواجًا",
+    "newAdditions": "إضافات جديدة",
+    "shuffle": "خلط",
+    "allBooks": "كل الكتب",
+    "filteredBooks": "الكتب المُصفّاة"
+  },
+  "empty": {
+    "noBooks": {
+      "title": "لا توجد كتب متاحة",
+      "description": "تُضاف ملخصات جديدة بانتظام — عد قريبًا."
+    },
+    "noMatches": {
+      "title": "لا شيء يطابق هذه المرشّحات",
+      "description": "جرّب إزالة مرشّح لعرض مزيد من الكتب.",
+      "cta": "مسح المرشّحات"
+    }
+  },
+  "errors": {
+    "failedToLoad": "تعذّر تحميل الكتب"
+  },
+  "a11y": {
+    "viewMode": {
+      "compact": "عرض مضغوط",
+      "grid": "عرض شبكي",
+      "hero": "عرض غامر"
+    },
+    "filters": "المرشّحات",
+    "applyFilters": "تطبيق المرشّحات",
+    "showAll": "عرض كل {{title}}",
+    "showFewer": "عرض عدد أقل من {{title}}",
+    "clearAllRecent": "مسح كل عمليات البحث الأخيرة",
+    "removeRecentSearch": "إزالة البحث الأخير: {{query}}",
+    "language": "لغة المحتوى: {{language}}",
+    "languageHint": "يفتح إعدادات اللغة",
+    "filtersActive_zero": "المرشّحات، {{count}} نشط",
+    "filtersActive_one": "المرشّحات، {{count}} نشط",
+    "filtersActive_two": "المرشّحات، {{count}} نشطان",
+    "filtersActive_few": "المرشّحات، {{count}} نشطة",
+    "filtersActive_many": "المرشّحات، {{count}} نشطًا",
+    "filtersActive_other": "المرشّحات، {{count}} نشط"
+  }
+}

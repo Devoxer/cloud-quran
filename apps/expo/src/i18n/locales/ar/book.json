@@ -1,0 +1,92 @@
+{
+  "byline": {
+    "by": "بقلم"
+  },
+  "sectionTitles": {
+    "aboutBook": "عن هذا الكتاب",
+    "summaryBrief": "ملخص موجز",
+    "summaryCore": "الملخص الأساسي",
+    "summaryInDepth": "ملخص مفصّل"
+  },
+  "sections": {
+    "categories": "التصنيفات",
+    "topics": "المواضيع",
+    "keyTakeaways": "أبرز الأفكار",
+    "notableQuotes": "اقتباسات بارزة",
+    "faq": "الأسئلة الشائعة",
+    "readMore": "قراءة المزيد",
+    "moreCount": "+{{moreCount}} أخرى"
+  },
+  "actions": {
+    "quiz": "اختبار",
+    "note": "ملاحظة",
+    "save": "حفظ",
+    "favorite": "مفضّلة",
+    "download": "تنزيل"
+  },
+  "favorites": {
+    "title": "المفضّلة",
+    "count_zero": "{{count}} كتاب",
+    "count_one": "{{count}} كتاب",
+    "count_two": "{{count}} كتابان",
+    "count_few": "{{count}} كتب",
+    "count_many": "{{count}} كتابًا",
+    "count_other": "{{count}} كتاب"
+  },
+  "quiz": {
+    "complete": "اكتمل الاختبار",
+    "perfectScore": "نتيجة كاملة — لقد أتقنت هذا.",
+    "goodScore": "عمل رائع — أعد الاختبار لترفع نتيجتك.",
+    "lowScore": "يستحق جولة أخرى — أعد الاختبار لترسيخه.",
+    "retake": "إعادة",
+    "progress": "{{current}} من {{total}}",
+    "next": "التالي",
+    "seeResults": "عرض النتائج"
+  },
+  "share": {
+    "message": "اطّلع على \"{{title}}\" لـ {{author}} على Wisdom Fruits!"
+  },
+  "errors": {
+    "failedToLoad": "تعذّر تحميل الكتاب",
+    "quizFailed": "تعذّر تحميل الاختبار. يرجى المحاولة لاحقًا.",
+    "contentUnavailable": "هذا المحتوى غير متاح الآن. يرجى المحاولة لاحقًا."
+  },
+  "notFound": {
+    "title": "الكتاب غير موجود",
+    "description": "ربما تمت إزالته أو انتهت صلاحية الرابط.",
+    "goBack": "رجوع"
+  },
+  "navFallbackTitle": "كتاب",
+  "a11y": {
+    "view": "عرض {{title}}",
+    "elapsed": "الوقت المنقضي {{time}}",
+    "booksByAuthor": "كتب {{name}}",
+    "titleByAuthor": "{{title}} لـ {{author}}",
+    "opensBookDetails": "يفتح تفاصيل الكتاب",
+    "listeningTime": "{{duration}} مدة الاستماع",
+    "percentComplete": "اكتمل {{percent}}%",
+    "seeMore": "عرض {{moreCount}} أخرى",
+    "contentTapToReadMore": "محتوى {{title}}. اضغط لقراءة المزيد.",
+    "tapToReadMore": "{{title}}. اضغط لقراءة المزيد.",
+    "availableOffline": " متاح دون اتصال.",
+    "showMore": "عرض المزيد",
+    "shareThisBook": "مشاركة هذا الكتاب",
+    "takeQuiz": "خوض اختبار هذا الكتاب",
+    "addNote": "إضافة ملاحظة",
+    "addToCollection": "إضافة إلى مجموعة",
+    "removeFromFavorites": "إزالة من المفضّلة",
+    "addToFavorites": "إضافة إلى المفضّلة",
+    "retryDownload": "إعادة محاولة التنزيل",
+    "downloadingPercent": "جارٍ التنزيل {{percent}} بالمئة",
+    "removeOfflineDownload": "إزالة التنزيل دون اتصال",
+    "downloadForOffline": "تنزيل للاستخدام دون اتصال",
+    "retakeQuiz": "إعادة الاختبار",
+    "youScored": "حصلت على {{correct}} من {{total}}",
+    "questionProgress": "السؤال {{current}} من {{total}}، {{correct}} صحيحة",
+    "scoreAnswered": "النتيجة {{correct}} من {{answered}} مُجابة",
+    "optionRevealed": "{{option}}. {{status}}",
+    "correctAnswer": "إجابة صحيحة",
+    "incorrect": "غير صحيحة",
+    "nextQuestion": "السؤال التالي"
+  }
+}

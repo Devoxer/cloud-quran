@@ -92,8 +92,8 @@ export function FilterPills({
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: SPACING.xs,
-      paddingLeft: SPACING.sm,
-      paddingRight: SPACING.xs,
+      paddingStart: SPACING.sm,
+      paddingEnd: SPACING.xs,
       borderRadius: RADII.pill,
       gap: SPACING.xs,
     },
@@ -124,7 +124,7 @@ export function FilterPills({
       color: t.colors.text.onAccent,
     },
     closeIcon: {
-      marginLeft: SPACING.xs / 2,
+      marginStart: SPACING.xs / 2,
     },
     clearAllButton: {
       paddingVertical: SPACING.xs,

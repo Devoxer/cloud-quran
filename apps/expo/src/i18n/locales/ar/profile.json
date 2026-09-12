@@ -1,0 +1,204 @@
+{
+  "hero": {
+    "guestName": "زائر",
+    "guestSubtitle": "زامن تقدّمك بين أجهزتك",
+    "noName": "لم يُحدَّد اسم",
+    "edit": "تعديل",
+    "stats": {
+      "dayStreak": "أيام متتالية",
+      "hoursSaved": "ساعات موفَّرة",
+      "finished": "مكتملة"
+    }
+  },
+  "appearance": {
+    "paletteGroup": "سمة القراءة",
+    "paletteFootnote": "تُطبَّق في كل مكان. كل سمة تعمل في الوضع الفاتح والداكن.",
+    "modeGroup": "الفاتح والداكن",
+    "modeFootnote": "«النظام» يتبع إعداد جهازك الفاتح أو الداكن.",
+    "mode": {
+      "auto": "النظام",
+      "light": "فاتح",
+      "dark": "داكن"
+    },
+    "fontSizeGroup": "حجم نص القرآن",
+    "fontSizeLabel": "الحجم",
+    "fontSizeFootnote": "في وضع القراءة فقط. صفحات المصحف تحتفظ بحجمها المطبوع."
+  },
+  "palette": {
+    "terracotta": "دافئ",
+    "sepia": "رَقّ",
+    "linen": "ورقي",
+    "contrast": "تباين عالٍ",
+    "olive": "أخضر",
+    "midnight": "ليلي"
+  },
+  "groups": {
+    "preferences": "التفضيلات",
+    "support": "الدعم",
+    "about": "حول",
+    "account": "الحساب"
+  },
+  "rows": {
+    "playback": "التشغيل",
+    "language": "اللغة",
+    "notifications": "الإشعارات",
+    "privacy": "الخصوصية",
+    "sendFeedback": "إرسال ملاحظات",
+    "restorePurchases": "استعادة المشتريات",
+    "signOut": "تسجيل الخروج",
+    "privacyPolicy": "سياسة الخصوصية",
+    "termsOfService": "شروط الخدمة",
+    "refundPolicy": "سياسة الاسترداد",
+    "contactUs": "اتصل بنا",
+    "version": "الإصدار",
+    "signIn": "تسجيل الدخول",
+    "yourData": "بياناتك",
+    "recitation": "التلاوة",
+    "appearance": "المظهر"
+  },
+  "signOutDialog": {
+    "title": "تسجيل الخروج",
+    "message": "هل تريد تسجيل الخروج؟",
+    "confirm": "تسجيل الخروج"
+  },
+  "restore": {
+    "restoredTitle": "استُعيدت المشتريات",
+    "restoredMessage": "أُعيد اشتراكك إلى هذا الحساب.",
+    "noneTitle": "لا توجد مشتريات",
+    "noneMessage": "لا توجد مشتريات سابقة لاستعادتها.",
+    "failedTitle": "فشلت الاستعادة"
+  },
+  "editProfile": {
+    "title": "تعديل الملف الشخصي",
+    "nameLabel": "الاسم المعروض",
+    "namePlaceholder": "أدخل اسمك",
+    "updateFailed": "تعذّر حفظ ملفك الشخصي. أعد المحاولة."
+  },
+  "feedback": {
+    "title": "إرسال ملاحظات",
+    "categoryLabel": "الفئة",
+    "category": {
+      "bug": "خلل",
+      "suggestion": "اقتراح",
+      "general": "عام"
+    },
+    "messageLabel": "الرسالة",
+    "messagePlaceholder": "أخبرنا بما يدور في ذهنك...",
+    "submit": "إرسال",
+    "unavailable": "الإرسال غير متاح بعد. لم يُرسل شيء، ورسالتك ما زالت هنا."
+  },
+  "playback": {
+    "audioGroup": "الصوت",
+    "readingGroup": "القراءة",
+    "speed": "سرعة التشغيل",
+    "voice": "صوت السرد",
+    "deviceFootnote": "تنطبق هذه التفضيلات على هذا الجهاز فقط.",
+    "pauseOnRead": "إيقاف الصوت عند القراءة",
+    "autoScroll": "التمرير التلقائي",
+    "highlight": "إبراز النص"
+  },
+  "privacySettings": {
+    "crashReportsLabel": "إرسال تقارير الأعطال",
+    "crashReportsDescription": "شارك تقارير أعطال منقّاة لتُصلَح الأخطاء.",
+    "crashReportsFootnote": "تُنقّى التقارير من البيانات الشخصية. بلا تحليلات ولا إعلانات. يسري التفعيل عند التشغيل التالي.",
+    "updateError": "تعذّر تحديث الإعداد. أعد المحاولة."
+  },
+  "a11y": {
+    "editProfile": "تعديل الملف الشخصي",
+    "viewStats": "عرض إحصاءاتك",
+    "playbackSettings": "إعدادات التشغيل",
+    "privacy": "إعدادات الخصوصية",
+    "restorePurchases": "استعادة المشتريات",
+    "signOut": "تسجيل الخروج",
+    "deleteAccount": "حذف الحساب",
+    "feedbackMessage": "نص الملاحظات",
+    "submitFeedback": "إرسال الملاحظات",
+    "displayName": "الاسم المعروض",
+    "displayNameHint": "أدخل اسمك المعروض، بحد أقصى {{max}} حرفًا",
+    "legal": {
+      "privacyPolicyHint": "يفتح سياسة الخصوصية في متصفحك",
+      "termsOfServiceHint": "يفتح شروط الخدمة في متصفحك",
+      "refundPolicyHint": "يفتح سياسة الاسترداد في متصفحك",
+      "contactUsHint": "يفتح صفحة الاتصال في متصفحك"
+    },
+    "language": "اللغة",
+    "signIn": "تسجيل الدخول",
+    "copyEmail": "نسخ البريد الإلكتروني لحسابك",
+    "yourData": "بياناتك",
+    "exportData": "تصدير بياناتي",
+    "purgeData": "حذف بياناتي المتزامنة",
+    "syncToggle": "المزامنة مع حسابي",
+    "appearance": "المظهر",
+    "readingTheme": "سمة القراءة",
+    "fontSize": "حجم نص القرآن",
+    "recitation": "التلاوة"
+  },
+  "language": {
+    "footnote": "تضبط القوائم والسرد على هذا الجهاز. التنزيلات تبقى بلغتها الأصلية.",
+    "switchFailedTitle": "تعذّر تغيير اللغة",
+    "switchFailedMessage": "لم تتغير لغتك. تحقق من اتصالك وأعد المحاولة.",
+    "group": "لغة الواجهة",
+    "restartNote": "تُطبَّق اللغة والاتجاه فور إعادة تشغيل التطبيق."
+  },
+  "auth": {
+    "intro": "يعمل Cloud Quran بلا حساب. تسجيل الدخول يزامن موضع قراءتك وعلاماتك وتفضيلاتك.",
+    "syncDetailsLink": "ما الذي يُزامَن ومن يراه",
+    "apple": "المتابعة عبر Apple",
+    "google": "المتابعة عبر Google",
+    "emailLabel": "البريد الإلكتروني",
+    "emailPlaceholder": "you@example.com",
+    "sendCode": "أرسل لي رمزًا",
+    "sending": "جارٍ الإرسال...",
+    "codeSentTo": "أدخل الرمز المكوّن من 6 أرقام المرسل إلى {{email}}.",
+    "useAnotherEmail": "استخدام عنوان آخر",
+    "or": "أو",
+    "cancelled": "أُلغي تسجيل الدخول. لم يتغير شيء.",
+    "failed": "لم ينجح تسجيل الدخول. أعد المحاولة.",
+    "sendFailed": "تعذّر إرسال رمز إلى هذا العنوان. تحقق منه وأعد المحاولة.",
+    "codeFailed": "الرمز غير صحيح أو انتهت صلاحيته. اطلب رمزًا جديدًا.",
+    "emailInvalid": "أدخل بريدًا إلكترونيًا صالحًا.",
+    "unavailable": "هذه الطريقة غير متاحة في هذه النسخة. استخدم بريدك الإلكتروني."
+  },
+  "account": {
+    "signedIn": "مسجَّل الدخول",
+    "syncFootnote": "اختياري. تسجيل الدخول ينقل موضع قراءتك وعلاماتك وتفضيلاتك إلى أجهزتك الأخرى.",
+    "othersGroup": "التطبيق",
+    "emailPending": "لم تُشارك أي عنوان بعد — سجّل الدخول ثانيةً على هذا الجهاز لمشاركته.",
+    "emailFootnote": "عنوان هذا الحساب. عنوان Apple الوسيط الخاص يعمل بالطريقة نفسها.",
+    "copyEmail": "نسخ العنوان",
+    "emailCopied": "نُسخ العنوان"
+  },
+  "data": {
+    "syncGroup": "المزامنة",
+    "syncToggle": "المزامنة مع حسابي",
+    "syncToggleDescription": "تنقل موضع قراءتك وعلاماتك وتفضيلاتك إلى أجهزتك الأخرى.",
+    "syncFootnote": "الإيقاف يمنع هذا الجهاز من الإرسال والجلب. لا يُحذف شيء. ويسري قبل تسجيل الدخول أيضًا.",
+    "syncProcessors": "تخزّنها Cloudflare — لا تُباع ولا تُستخدم للإعلانات. مزوّد الدخول يعلم أنك دخلت لا ما تقرأ.",
+    "syncToggleFailed": "تعذّر حفظ هذا الإعداد على الجهاز. أعد المحاولة.",
+    "group": "بياناتك",
+    "footnote": "تعمل هذه الإجراءات على البيانات المتزامنة فقط. التنزيلات وإعدادات الجهاز لا تُمس.",
+    "export": "تصدير بياناتي",
+    "exportDescription": "ملف JSON يضم كل ما يُزامَن مع حسابك.",
+    "exportFailed": "تعذّر تجهيز التصدير. تحقق من اتصالك وأعد المحاولة.",
+    "exportUnavailable": "لا مكان لحفظ الملف على هذا الجهاز. جرّب التصدير من تطبيق الهاتف.",
+    "purge": "حذف بياناتي المتزامنة",
+    "purgeDescription": "يفرغ كل ما يُزامَن مع حسابك. ويبقى حسابك.",
+    "purgeDone": "حُذفت بياناتك المتزامنة. حسابك لم يُمس.",
+    "purgeFailed": "لم يُحذف شيء. تحقق من اتصالك وأعد المحاولة.",
+    "purgeDialog": {
+      "title": "حذف بياناتي المتزامنة",
+      "message": "يحذف بياناتك المتزامنة من كل جهاز. ويبقى حسابك. لا يمكن التراجع.",
+      "confirm": "حذف البيانات"
+    },
+    "deleteAccount": "حذف حسابي",
+    "deleteAccountDescription": "يحذف الحساب وبياناته وطرق دخولك. وتواصل القراءة كزائر.",
+    "deleteAccountDone": "حُذف حسابك وبياناته. أنت تتصفح كزائر من جديد.",
+    "deleteAccountFailed": "لم يُحذف حسابك ولم يتغير شيء. أعد المحاولة.",
+    "deleteAccountOffline": "تحتاج إلى اتصال لحذف حسابك. لم يتغير شيء.",
+    "deleteAccountDialog": {
+      "title": "حذف حسابي",
+      "message": "يحذف حسابك وبياناته المتزامنة وطرق دخولك. لا يمكن التراجع.",
+      "confirm": "حذف الحساب"
+    }
+  }
+}

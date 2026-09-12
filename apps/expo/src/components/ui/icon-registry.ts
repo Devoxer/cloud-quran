@@ -72,8 +72,13 @@ export const ICON_REGISTRY = {
   'settings-outline': { sf: 'gearshape', ion: 'settings-outline' },
 
   // ── navigation / chevrons / arrows ──
-  'arrow-back': { sf: 'arrow.left', ion: 'arrow-back' },
-  'arrow-forward': { sf: 'arrow.right', ion: 'arrow-forward' },
+  // ⚠️ THE `sf` NAMES HERE ARE THE DIRECTION-AWARE ONES ON PURPOSE (story 8-1). `arrow.backward` /
+  // `arrow.forward` / `chevron.backward` / `chevron.forward` are defined by Apple in terms of the
+  // READING direction and mirror themselves under RTL; `arrow.left` / `arrow.right` are literal
+  // and do not, which is why the two arrows moved. The Ionicons glyphs on Android and web are
+  // literal whatever they are called, so THEY are swapped in code — see `RTL_MIRRORED_ICONS`.
+  'arrow-back': { sf: 'arrow.backward', ion: 'arrow-back' },
+  'arrow-forward': { sf: 'arrow.forward', ion: 'arrow-forward' },
   'chevron-back': { sf: 'chevron.backward', ion: 'chevron-back' },
   'chevron-forward': { sf: 'chevron.forward', ion: 'chevron-forward' },
   'chevron-up': { sf: 'chevron.up', ion: 'chevron-up' },
@@ -187,3 +192,25 @@ export const ICON_REGISTRY = {
 
 /** Semantic icon-name union — the `name` prop of `<Icon>`. */
 export type IconName = keyof typeof ICON_REGISTRY;
+
+/**
+ * Semantic icon names whose Ionicons glyph is a LITERAL direction, and the name that means the
+ * same thing in a mirrored layout (story 8-1).
+ *
+ * ⚠️ ANDROID AND WEB ONLY, WHICH IS WHY THE SWAP LIVES IN `Icon.tsx` AND NOT HERE. `Icon.ios.tsx`
+ * draws SF Symbols, and the four `sf` names above are the direction-aware ones — they already
+ * mirror themselves under RTL, so applying this table there would flip them BACK. A `chevron-back`
+ * that points the wrong way is the kind of defect that typechecks, passes every test and is
+ * obvious in one second on a device.
+ */
+export const RTL_MIRRORED_ICONS: Readonly<Partial<Record<IconName, IconName>>> = {
+  'arrow-back': 'arrow-forward',
+  'arrow-forward': 'arrow-back',
+  'chevron-back': 'chevron-forward',
+  'chevron-forward': 'chevron-back',
+};
+
+/** The icon to draw for `name` in a layout of the given direction. Identity when LTR. */
+export function mirrorIcon(name: IconName, rtl: boolean): IconName {
+  return rtl ? (RTL_MIRRORED_ICONS[name] ?? name) : name;
+}

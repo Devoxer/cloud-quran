@@ -159,6 +159,6 @@ const useDurationPickerStyles = () =>
       fontSize: FONT_SIZE.body,
       fontWeight: FONT_WEIGHT.semibold,
       color: t.colors.text.secondary,
-      marginRight: SPACING.sm,
+      marginEnd: SPACING.sm,
     },
   }));

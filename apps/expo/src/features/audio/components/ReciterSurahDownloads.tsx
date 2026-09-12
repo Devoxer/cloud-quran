@@ -194,7 +194,7 @@ const useStyles = () =>
     row: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      paddingRight: DOWNLOADS_SUPPORTED ? SPACING.md : 0,
+      paddingEnd: DOWNLOADS_SUPPORTED ? SPACING.md : 0,
     },
     rowFlex: {
       flex: 1,

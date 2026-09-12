@@ -1,0 +1,27 @@
+{
+  "sectionTitle": "اقتباسات",
+  "quoteCount_zero": "{{count}} اقتباس",
+  "quoteCount_one": "{{count}} اقتباس",
+  "quoteCount_two": "{{count}} اقتباسان",
+  "quoteCount_few": "{{count}} اقتباسات",
+  "quoteCount_many": "{{count}} اقتباسًا",
+  "quoteCount_other": "{{count}} اقتباس",
+  "dailyQuoteTitle": "اقتباس اليوم",
+  "segments": {
+    "all": "الكل",
+    "favorites": "المفضلة"
+  },
+  "emptyFavorites": {
+    "title": "لا توجد مفضلات بعد",
+    "description": "اضغط على القلب في أي اقتباس لحفظه هنا."
+  },
+  "a11y": {
+    "quoteFrom": "اقتباس من {{title}} لـ {{author}}",
+    "openBook": "فتح {{title}} لـ {{author}}",
+    "addFavorite": "إضافة إلى المفضلة",
+    "removeFavorite": "إزالة من المفضلة",
+    "previousPage": "الصفحة السابقة",
+    "nextPage": "الصفحة التالية",
+    "page": "صفحة {{pageNumber}}"
+  }
+}

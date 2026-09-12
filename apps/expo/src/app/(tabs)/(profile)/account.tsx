@@ -24,11 +24,13 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
+import { uiLanguageLabel } from '@/constants/language';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { RECITERS, resolveReciterId } from '@/features/audio';
 import { isPlaceholderEmail, signOut, useSession } from '@/lib/auth';
 import { setString } from '@/lib/clipboard';
 import { haptics } from '@/lib/haptics';
+import { useLanguage } from '@/lib/language';
 import { usePreferences } from '@/lib/sync';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -41,6 +43,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const { data: session } = useSession();
   const { data: preferences } = usePreferences();
+  const { language } = useLanguage();
 
   // The row's subtitle names the voice that would actually play — RESOLVED, so a row holding a
   // withdrawn id reads "Mishary Rashid Al-Afasy" like the picker does, rather than a raw id or a
@@ -195,6 +198,18 @@ export default function AccountScreen() {
           onPress={() => router.push('/appearance')}
           accessibilityLabel={t('profile:a11y.appearance')}
           testID="appearance-row"
+        />
+        {/* story 8-1: below Appearance, above Privacy. The interface language is the other
+            thing a reader changes about how the app LOOKS to them, and the two below it are
+            still the visit-once rows. */}
+        <SettingsRow
+          icon="globe-outline"
+          label={t('profile:rows.language')}
+          description={uiLanguageLabel(language)}
+          trailing="chevron"
+          onPress={() => router.push('/language')}
+          accessibilityLabel={t('profile:a11y.language')}
+          testID="language-row"
         />
         <SettingsRow
           icon="lock-closed-outline"

@@ -61,7 +61,7 @@ const useStyles = () =>
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
       letterSpacing: 1.0,
-      paddingLeft: SPACING.md,
+      paddingStart: SPACING.md,
       paddingBottom: SPACING.sm,
       color: t.colors.text.tertiary,
     },

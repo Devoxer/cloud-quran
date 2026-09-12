@@ -1,0 +1,33 @@
+{
+  "strip": {
+    "sections": "الأقسام",
+    "upNext": "التالي"
+  },
+  "sections": {
+    "aboutBook": "عن هذا الكتاب",
+    "summaryBrief": "ملخص موجز",
+    "summaryCore": "الملخص الأساسي",
+    "summaryInDepth": "ملخص مفصّل",
+    "keyTakeaways": "أبرز الأفكار",
+    "notableQuotes": "اقتباسات بارزة",
+    "faq": "الأسئلة الشائعة"
+  },
+  "timeout": {
+    "title": "استغرق وقتًا طويلًا",
+    "message": "تعذّر تحميل محتوى الموجز. تحقّق من اتصالك وحاول مرة أخرى."
+  },
+  "error": {
+    "title": "حدث خطأ ما",
+    "message": "تعذّر تحميل الموجز. اضغط أدناه للمحاولة مرة أخرى."
+  },
+  "empty": {
+    "title": "نهاية المزيج",
+    "description": "جرّب تغيير الأقسام أو عد لاحقًا.",
+    "cta": "خلط من جديد"
+  },
+  "a11y": {
+    "queueRow": "{{title}} لـ {{author}}، {{section}}",
+    "sectionsAndNewMix": "أقسام الموجز ومزيج جديد",
+    "playFeed": "تشغيل الموجز"
+  }
+}

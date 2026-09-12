@@ -114,7 +114,7 @@ describe('ListRow', () => {
       const { getByTestId } = render(<ListRow title="My note" showDivider testID="row" />);
       const dividerStyle = flatten(getByTestId('row-divider').props.style);
       expect(dividerStyle.height).toBe(1);
-      expect(dividerStyle.marginLeft).toBe(16);
+      expect(dividerStyle.marginStart).toBe(16);
     });
 
     it('omits the divider when showDivider is false', () => {

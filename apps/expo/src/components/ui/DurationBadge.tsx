@@ -98,7 +98,7 @@ export function DurationBadge({
       color: t.colors.text.secondary,
     },
     lockIcon: {
-      marginLeft: SPACING.xs, // 4px gap after text
+      marginStart: SPACING.xs, // 4px gap after text
     },
   }));
 

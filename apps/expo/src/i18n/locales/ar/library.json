@@ -1,0 +1,185 @@
+{
+  "sections": {
+    "continueReading": "متابعة القراءة",
+    "collections": "المجموعات",
+    "offline": "دون اتصال"
+  },
+  "counts": {
+    "books_zero": "{{count}} كتاب",
+    "books_one": "{{count}} كتاب",
+    "books_two": "{{count}} كتابان",
+    "books_few": "{{count}} كتب",
+    "books_many": "{{count}} كتابًا",
+    "books_other": "{{count}} كتاب",
+    "sections_zero": "{{count}} قسم",
+    "sections_one": "{{count}} قسم",
+    "sections_two": "{{count}} قسمان",
+    "sections_few": "{{count}} أقسام",
+    "sections_many": "{{count}} قسمًا",
+    "sections_other": "{{count}} قسم"
+  },
+  "actions": {
+    "create": "إنشاء",
+    "deleteAll_zero": "حذف الكل",
+    "deleteAll_one": "حذف",
+    "deleteAll_two": "حذف الكل",
+    "deleteAll_few": "حذف الكل",
+    "deleteAll_many": "حذف الكل",
+    "deleteAll_other": "حذف الكل",
+    "goBack": "رجوع",
+    "renew": "تجديد",
+    "upgrade": "ترقية",
+    "browseBooks": "تصفح الكتب",
+    "discoverBooks": "اكتشف الكتب"
+  },
+  "form": {
+    "collectionName": "اسم المجموعة",
+    "collectionNamePlaceholder": "أدخل اسم المجموعة"
+  },
+  "continueReading": {
+    "emptyTitle": "ابدأ الاستماع ليظهر تقدمك هنا"
+  },
+  "collections": {
+    "createCollection": "إنشاء مجموعة",
+    "organizeHint": "أنشئ مجموعة لتنظيم كتبك"
+  },
+  "picker": {
+    "title": "إضافة إلى مجموعة",
+    "emptyTitle": "لا توجد مجموعات بعد"
+  },
+  "createModal": {
+    "limitReached": "لقد بلغت الحد الأقصى وهو {{max}} مجموعة"
+  },
+  "renameModal": {
+    "title": "إعادة تسمية المجموعة"
+  },
+  "deleteDialog": {
+    "title": "حذف المجموعة؟",
+    "message": "سيتم حذف \"{{name}}\". لن تتأثر كتبك."
+  },
+  "offline": {
+    "webOnly": "التنزيلات دون اتصال متاحة في تطبيق الجوال",
+    "premiumTitle": "التنزيلات دون اتصال ميزة مدفوعة",
+    "errorTitle": "تعذّر تحميل التنزيلات",
+    "errorDescription": "يرجى المحاولة لاحقًا",
+    "emptyTitle": "لا توجد كتب محفوظة للاستخدام دون اتصال",
+    "emptyDescription": "نزّل الكتب للوصول إليها دون إنترنت",
+    "countSummary_zero": "{{count}} كتاب · {{size}}",
+    "countSummary_one": "{{count}} كتاب · {{size}}",
+    "countSummary_two": "{{count}} كتابان · {{size}}",
+    "countSummary_few": "{{count}} كتب · {{size}}",
+    "countSummary_many": "{{count}} كتابًا · {{size}}",
+    "countSummary_other": "{{count}} كتاب · {{size}}",
+    "expiredTitle": "انتهى الاشتراك",
+    "expiredSubtitle": "جدّد اشتراكك للوصول إلى كتبك المنزّلة",
+    "deleteAllTitle_zero": "حذف كل التنزيلات؟",
+    "deleteAllTitle_one": "حذف التنزيل؟",
+    "deleteAllTitle_two": "حذف كل التنزيلات؟",
+    "deleteAllTitle_few": "حذف كل التنزيلات؟",
+    "deleteAllTitle_many": "حذف كل التنزيلات؟",
+    "deleteAllTitle_other": "حذف كل التنزيلات؟",
+    "removeFailed": "تعذّرت الإزالة. يرجى المحاولة مجددًا.",
+    "deleteAllMessage_zero": "إزالة {{count}} كتاب من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيلها مجددًا.",
+    "deleteAllMessage_one": "إزالة {{count}} كتاب من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيله مجددًا.",
+    "deleteAllMessage_two": "إزالة {{count}} كتابين من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيلهما مجددًا.",
+    "deleteAllMessage_few": "إزالة {{count}} كتب من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيلها مجددًا.",
+    "deleteAllMessage_many": "إزالة {{count}} كتابًا من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيلها مجددًا.",
+    "deleteAllMessage_other": "إزالة {{count}} كتاب من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيلها مجددًا."
+  },
+  "history": {
+    "emptyTitle": "لا يوجد سجل قراءة بعد",
+    "emptyDescription": "ستظهر هنا الكتب التي تستمع إليها",
+    "clearDialogTitle": "مسح كل السجل؟",
+    "clearDialogMessage": "سيؤدي هذا إلى إزالة كل الكتب من سجلك.",
+    "removeFailed": "تعذّرت الإزالة. حاول مجددًا.",
+    "clearFailed": "تعذّر مسح السجل."
+  },
+  "favorites": {
+    "errorTitle": "تعذّر تحميل المفضلة",
+    "errorDescription": "يرجى المحاولة لاحقًا",
+    "emptyTitle": "لا توجد مفضلات بعد",
+    "emptyDescription": "اضغط على القلب في أي كتاب لحفظه هنا."
+  },
+  "collectionDetail": {
+    "emptyTitle": "هذه المجموعة فارغة",
+    "emptyDescription": "أضف كتبًا من شاشة تفاصيل الكتاب",
+    "notFound": "المجموعة غير موجودة",
+    "savePreferenceFailed": "تعذّر حفظ التفضيل.",
+    "deleteFailed": "تعذّر حذف المجموعة.",
+    "removeBookFailed": "تعذّرت إزالة الكتاب.",
+    "allDownloaded": "كل الكتب منزّلة بالفعل.",
+    "downloadCancelled_zero": "أُلغي التنزيل. حُفظ {{count}} كتاب.",
+    "downloadCancelled_one": "أُلغي التنزيل. حُفظ {{count}} كتاب.",
+    "downloadCancelled_two": "أُلغي التنزيل. حُفظ {{count}} كتابان.",
+    "downloadCancelled_few": "أُلغي التنزيل. حُفظت {{count}} كتب.",
+    "downloadCancelled_many": "أُلغي التنزيل. حُفظ {{count}} كتابًا.",
+    "downloadCancelled_other": "أُلغي التنزيل. حُفظ {{count}} كتاب.",
+    "downloadPartialFailed": "نُزّل {{completed}} من {{total}} كتاب. فشل {{failed}}.",
+    "downloadLimitReached": "نُزّل {{completed}} من {{total}}. بلغت حد الاستخدام دون اتصال.",
+    "downloadFailed": "فشل التنزيل. يرجى المحاولة مجددًا."
+  },
+  "playlist": {
+    "errorTitle": "تعذّر تحميل المجموعة"
+  },
+  "sectionLabels": {
+    "aboutBook": "عن الكتاب",
+    "brief": "موجز",
+    "core": "الأساسيات",
+    "inDepth": "بالتفصيل",
+    "takeaways": "الخلاصات",
+    "quotes": "اقتباسات",
+    "faq": "الأسئلة الشائعة"
+  },
+  "signUpPrompt": {
+    "library": "احتفظ بمكتبتك وزامنها بين أجهزتك",
+    "history": "احتفظ بسجل قراءتك وزامنه بين أجهزتك"
+  },
+  "errors": {
+    "downloadWebUnavailable": "التنزيلات دون اتصال غير متاحة على الويب",
+    "signInToDownload": "يجب تسجيل الدخول لتنزيل الكتب",
+    "offlineLimitReached": "بلغت حد الاستخدام دون اتصال ({{limit}} كتاب)",
+    "bookNotFound": "الكتاب غير موجود",
+    "downloadFailedConnection": "فشل التنزيل. تحقق من اتصالك.",
+    "noContentAvailable": "لا يوجد محتوى متاح للتنزيل",
+    "languageNotAvailable": "هذا الكتاب غير متوفر بلغتك بعد",
+    "notEnoughStorage": "لا توجد مساحة تخزين كافية.",
+    "signInToSaveOffline": "يجب تسجيل الدخول لحفظ الكتب دون اتصال",
+    "invalidOfflineData": "بيانات الكتاب دون اتصال غير صالحة",
+    "saveOfflineFailed": "تعذّر حفظ سجل الاستخدام دون اتصال",
+    "signInToRemoveOffline": "يجب تسجيل الدخول لإزالة الكتب دون اتصال",
+    "bookIdRequired": "معرّف الكتاب مطلوب",
+    "removeOfflineFailed": "تعذّرت إزالة الكتاب دون اتصال",
+    "removeOfflineBooksFailed": "تعذّرت إزالة الكتب دون اتصال",
+    "removeItemFailed": "تعذّرت إزالة العنصر",
+    "clearHistoryFailed": "تعذّر مسح السجل",
+    "addBookFailed": "تعذّرت إضافة الكتاب إلى المجموعة",
+    "removeBookFromCollectionFailed": "تعذّرت إزالة الكتاب من المجموعة",
+    "createCollectionFailed": "تعذّر إنشاء المجموعة",
+    "nameLength": "يجب أن يكون الاسم من 1 إلى {{max}} حرفًا",
+    "renameCollectionFailed": "تعذّرت إعادة تسمية المجموعة",
+    "deleteCollectionFailed": "تعذّر حذف المجموعة"
+  },
+  "a11y": {
+    "collectionWithCount": "{{name}}، {{bookCount}} كتاب",
+    "createNewCollection": "إنشاء مجموعة جديدة",
+    "collectionNameInput": "اسم المجموعة",
+    "collectionNameHintCreate": "أدخل اسم المجموعة، بحد أقصى {{max}} حرفًا",
+    "collectionNameHintRename": "أدخل اسمًا جديدًا للمجموعة، بحد أقصى {{max}} حرفًا",
+    "historyItem": "{{title}} لـ {{author}}، شُغّل {{time}}",
+    "removeFromHistory": "إزالة {{title}} من السجل",
+    "bookWithSize": "{{title}} لـ {{author}}، {{size}}",
+    "removeFromOffline": "إزالة {{title}} من التنزيلات",
+    "clearAllHistory": "مسح كل السجل",
+    "deleteAllDownloads": "حذف كل التنزيلات",
+    "renewSubscription": "تجديد الاشتراك",
+    "sectionsChange": "الأقسام: {{sections}}. اضغط للتغيير.",
+    "renameCollection": "إعادة تسمية المجموعة",
+    "downloadingProgress": "جارٍ تنزيل {{current}} من {{total}}. اضغط للإلغاء.",
+    "allBooksDownloaded": "نُزّلت كل الكتب",
+    "downloadAllBooks": "تنزيل كل الكتب للاستخدام دون اتصال",
+    "playCollection": "تشغيل المجموعة",
+    "deleteCollection": "حذف المجموعة",
+    "downloadBookOffline": "تنزيل {{title}} للاستخدام دون اتصال",
+    "removeFromCollection": "إزالة {{title}} من المجموعة"
+  }
+}

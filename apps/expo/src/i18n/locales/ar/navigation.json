@@ -1,0 +1,42 @@
+{
+  "tabs": {
+    "mushaf": "المصحف",
+    "read": "القراءة",
+    "bookmarks": "العلامات",
+    "settings": "الإعدادات"
+  },
+  "actions": {
+    "openMushaf": "التبديل إلى وضع المصحف",
+    "openReading": "التبديل إلى وضع القراءة",
+    "hideChrome": "إخفاء أشرطة الأدوات"
+  },
+  "titles": {
+    "account": "الإعدادات",
+    "signIn": "تسجيل الدخول",
+    "data": "بياناتك",
+    "feedback": "ملاحظاتك",
+    "privacy": "الخصوصية",
+    "index": "القرآن",
+    "bookmarks": "العلامات",
+    "appearance": "المظهر",
+    "recitation": "التلاوة",
+    "reciterDownloads": "التنزيلات",
+    "language": "اللغة"
+  },
+  "index": {
+    "segments": {
+      "surahs": "السور",
+      "juz": "الأجزاء",
+      "hizb": "الأحزاب"
+    },
+    "surahSubtitle": "{{name}} · {{verses}} آية · {{revelation}}",
+    "revelation": {
+      "meccan": "مكية",
+      "medinan": "مدنية"
+    },
+    "juzTitle": "الجزء {{number}}",
+    "hizbTitle": "الحزب {{number}}",
+    "boundarySubtitle": "{{name}} {{surah}}:{{verse}} · صفحة {{page}}",
+    "titleHint": "يفتح فهرس السور والأجزاء والأحزاب"
+  }
+}

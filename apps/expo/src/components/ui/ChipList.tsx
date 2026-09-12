@@ -117,10 +117,10 @@ export function ChipList({
       paddingHorizontal: SPACING.lg,
     },
     chipGap: {
-      marginRight: SPACING.sm, // 8px gap between chips
+      marginEnd: SPACING.sm, // 8px gap between chips
     },
     chipGapWrapped: {
-      marginRight: SPACING.sm, // 8px gap between chips
+      marginEnd: SPACING.sm, // 8px gap between chips
       marginBottom: SPACING.sm, // 8px gap between rows
     },
     seeAllChip: {

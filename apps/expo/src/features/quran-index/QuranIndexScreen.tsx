@@ -134,13 +134,13 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
       fontSize: FONT_SIZE.h2,
     },
     // The row and its offline control, side by side — see the docblock for why the control is
-    // not in the row's `trailing` slot. `paddingRight` replaces the inset the control used to
+    // not in the row's `trailing` slot. `paddingEnd` replaces the inset the control used to
     // sit inside, so the glyph lands where it did — and on web, where the control is absent
     // entirely, it would just be 16pt of missing row inset. (Review P19.)
     surahRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      paddingRight: DOWNLOADS_SUPPORTED ? SPACING.md : 0,
+      paddingEnd: DOWNLOADS_SUPPORTED ? SPACING.md : 0,
     },
     rowFlex: {
       flex: 1,

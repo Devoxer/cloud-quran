@@ -9,7 +9,7 @@
  */
 import { render } from '@testing-library/react-native';
 import { Icon } from './Icon';
-import { ICON_REGISTRY, type IconName } from './icon-registry';
+import { ICON_REGISTRY, type IconName, mirrorIcon, RTL_MIRRORED_ICONS } from './icon-registry';
 
 describe('Icon', () => {
   it('renders for a semantic name and forwards testID', () => {
@@ -36,5 +36,40 @@ describe('ICON_REGISTRY', () => {
     expect(entry.sf.length).toBeGreaterThan(0);
     expect(typeof entry.ion).toBe('string');
     expect(entry.ion.length).toBeGreaterThan(0);
+  });
+});
+
+describe('mirrorIcon — the RTL swap for literal Ionicons glyphs (story 8-1)', () => {
+  it('is the identity in LTR', () => {
+    for (const name of Object.keys(RTL_MIRRORED_ICONS) as IconName[]) {
+      expect(mirrorIcon(name, false)).toBe(name);
+    }
+  });
+
+  it('swaps every directional pair in RTL', () => {
+    expect(mirrorIcon('chevron-back', true)).toBe('chevron-forward');
+    expect(mirrorIcon('chevron-forward', true)).toBe('chevron-back');
+    expect(mirrorIcon('arrow-back', true)).toBe('arrow-forward');
+    expect(mirrorIcon('arrow-forward', true)).toBe('arrow-back');
+  });
+
+  it('leaves a non-directional glyph alone in RTL', () => {
+    expect(mirrorIcon('search', true)).toBe('search');
+    expect(mirrorIcon('bookmark', true)).toBe('bookmark');
+  });
+
+  it('is an INVOLUTION — every mirror is itself mirrored back', () => {
+    // A half-filled table is the live failure mode: map `chevron-back` without its partner and
+    // one of the two chevrons points the wrong way in Arabic, which nothing else here can see.
+    for (const name of Object.keys(RTL_MIRRORED_ICONS) as IconName[]) {
+      expect(mirrorIcon(mirrorIcon(name, true), true)).toBe(name);
+    }
+  });
+
+  it('names only icons the registry actually has', () => {
+    for (const [from, to] of Object.entries(RTL_MIRRORED_ICONS)) {
+      expect(ICON_REGISTRY).toHaveProperty(from);
+      expect(ICON_REGISTRY).toHaveProperty(to as string);
+    }
   });
 });

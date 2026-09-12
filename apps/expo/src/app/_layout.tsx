@@ -24,6 +24,7 @@ import { createNavigationTheme } from '@/lib/nav-theme';
 import '@/lib/nativeBaseline';
 import { initializeNotifications } from '@/lib/notifications';
 import { isTelemetryEnabled } from '@/lib/privacyPrefs';
+import { applyStoredDirection } from '@/lib/rtl';
 import { prefetchSyncReads, queryClient, setSyncUserId, startSyncManagers } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 
@@ -47,6 +48,12 @@ if (isTelemetryEnabled()) {
 // when i18next initializes, so every device-seeded launch silently falls back to `en` — with no
 // error and no test signal outside `language.test.ts`.
 initLocalization();
+// ⚠️ DIRECTION BEFORE i18next, AND BOTH BEFORE THE FIRST RENDER (story 8-1). `I18nManager.forceRTL`
+// writes a native preference that is read when VIEWS ARE CREATED, so it has to land before React
+// mounts anything; it reads the same stored language `initI18n()` is about to commit, which is why
+// it sits between the localization cache and i18next rather than anywhere else. `lib/rtl.ts` is the
+// only module in the app allowed to call it (`rtl-direction.test.ts` scans for that).
+applyStoredDirection();
 initI18n();
 
 // Attach additive device/app context to Sentry (additive only — Sentry-RN
