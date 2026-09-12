@@ -64,6 +64,25 @@ export default function LanguageScreen() {
 
   const options = AVAILABLE_UI_LANGUAGES.filter(isExposedLanguage);
 
+  /**
+   * ⚠️ EVERY EXIT FROM `choose` MUST CLEAR `pending`, INCLUDING THE ONE THAT LOOKS LIKE SUCCESS.
+   * `setLanguage` resolves and THEN restarts the JS context, so on the happy path this component
+   * is simply destroyed and the spinner goes with it. But `reloadAppAsync` can resolve without
+   * reloading (no `globalThis.expo` — SSR, a test) and can reject outright (Android with no
+   * current activity, where `setLanguage` swallows it and applies the language live instead). In
+   * both cases the promise settles, nothing restarts, and without this the row spins forever with
+   * the native preference already flipped and the tree still drawn the old way — the one state a
+   * reader cannot get out of except by force-quitting.
+   *
+   * ⚠️ AND IT RAISES NO ERROR, DELIBERATELY. Settling without a restart is not a failure: either
+   * the choice applies at the next launch, or (Android, where `setLanguage` answers a rejected
+   * reload by switching i18next live) it has already applied. The footnote under the list —
+   * "the language and its text direction apply as soon as the app restarts" — is the true thing
+   * to say in both cases, and it is already on screen. `switchFailedMessage` belongs to the
+   * `catch`, where the preference really did roll back.
+   */
+  const stopSpinning = () => setPending(null);
+
   const choose = async (code: string) => {
     // Re-picking what is already rendering is a no-op, not a switch — and `setLanguage`'s
     // non-moving branch is the only one that can reject, so refusing here keeps the rejection
@@ -82,13 +101,25 @@ export default function LanguageScreen() {
       applyDirectionForLanguage(code);
       await setLanguage(code);
     } catch {
-      // The preference rolled itself back, so the reader is still in the language they were in —
-      // and the direction has to roll back with it, or the next launch mirrors for a language
-      // nobody is in.
-      applyStoredDirection();
+      // The reader is still in the language they were in, so the direction has to come back with
+      // them or the NEXT launch mirrors for a language nobody is in.
+      //
+      // ⚠️ GUARDED, AND NOT BECAUSE IT IS LIKELY. This `catch` also covers a throw from
+      // `applyDirectionForLanguage` itself — and the first thing the recovery does is re-enter the
+      // same two `I18nManager` calls. An unguarded re-entry turns one swallowed failure into a
+      // second, UNHANDLED one, from a `catch` block, where nothing can report it.
+      try {
+        applyStoredDirection();
+      } catch {
+        // Nothing left to try: the preference is what the next launch reads, and the message
+        // below is what the reader acts on.
+      }
       setError(t('profile:language.switchFailedMessage'));
-      setPending(null);
+      stopSpinning();
+      return;
     }
+    // Reached only when the reload did not happen — see `stopSpinning`.
+    stopSpinning();
   };
 
   return (
@@ -98,11 +129,10 @@ export default function LanguageScreen() {
       contentInsetAdjustmentBehavior="automatic"
       testID="language-screen"
     >
-      <SettingsGroup
-        label={t('profile:language.group')}
-        footnote={t('profile:language.restartNote')}
-        testID="language-section"
-      >
+      {/* ⚠️ NO GROUP LABEL. `SettingsGroup`'s caps header would read "LANGUAGE" directly under a
+          screen title that already says Language — the same word twice, and in Arabic a caps
+          treatment that does nothing. The footnote is the only thing this group has to add. */}
+      <SettingsGroup footnote={t('profile:language.restartNote')} testID="language-section">
         {options.map((code) => {
           const selected = code === language;
           return (

@@ -70,9 +70,10 @@ import {
   SettingsRow,
 } from '@/components/ui';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
-import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
+import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { formatBytes } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
+import { isRTL } from '@/lib/rtl';
 import { patchPreferences, usePreferences } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -390,7 +391,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase' as const,
-      letterSpacing: 1,
+      letterSpacing: captionLetterSpacing(isRTL()),
       color: t.colors.text.tertiary,
     },
     // Sentence case under the caps heading — the caption treatment, without the caps.

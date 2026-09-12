@@ -49,7 +49,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { CodeInput, GoogleGLogo, InlineError, Text } from '@/components/ui';
 import { RADII } from '@/constants/radii';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
-import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import {
   requestEmailCode,
   type SignInResult,
@@ -59,6 +59,7 @@ import {
 } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { haptics } from '@/lib/haptics';
+import { isRTL } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -477,7 +478,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
-      letterSpacing: 1.0,
+      letterSpacing: captionLetterSpacing(isRTL()),
       marginBottom: SPACING.sm,
       color: t.colors.text.tertiary,
     },

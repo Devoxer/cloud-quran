@@ -49,9 +49,11 @@ const useStyles = () =>
       flex: 1,
       alignItems: 'center' as const,
     },
+    // LOGICAL, like every other inset in the tree (story 8-1): the divider sits on the cell's
+    // leading edge, which is the right one in a mirrored layout.
     statCellDivider: {
-      borderLeftWidth: 1,
-      borderLeftColor: t.colors.separator,
+      borderStartWidth: 1,
+      borderStartColor: t.colors.separator,
     },
     statTop: {
       flexDirection: 'row' as const,

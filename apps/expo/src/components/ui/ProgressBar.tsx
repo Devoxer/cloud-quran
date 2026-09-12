@@ -167,10 +167,14 @@ export function ProgressBar({
         onMoveShouldSetPanResponder: () => !disabled,
 
         onPanResponderGrant: (event) => {
-          if (disabled) return;
+          // ⚠️ THE WIDTH GUARD IS `=== 0`, NOT `|| 1`. A touch that lands before `onLayout` has
+          // reported has no track to measure against, and substituting a 1pt width does not
+          // decline the question — it answers it with a fraction of at least 1, which pins the
+          // thumb to an edge (the far end in LTR, the near one in RTL) and then seeks there on
+          // release. Taking the touch and doing nothing with it is the honest answer.
+          if (disabled || widthRef.current === 0) return;
           setIsDragging(true);
-          const locationX = event.nativeEvent.locationX;
-          setDragProgress(progressFromTouch(locationX, widthRef.current || 1, rtl));
+          setDragProgress(progressFromTouch(event.nativeEvent.locationX, widthRef.current, rtl));
         },
 
         onPanResponderMove: (event, gestureState) => {

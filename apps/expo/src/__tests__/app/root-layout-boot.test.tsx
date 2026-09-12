@@ -84,6 +84,8 @@ function loadRootLayout({
   let unmountRoot: (() => void) | undefined;
   /** Every font map the layout registered, in call order. */
   const fontMaps: Record<string, unknown>[] = [];
+  /** The module-scope boot calls, IN ORDER — see the § boot order suite. */
+  const bootOrder: string[] = [];
   jest.isolateModules(() => {
     // ⚠️ story 6-1: `expo-font` IS MOCKED HERE, NOT JUST IN `jest.setup.js`, BECAUSE THE GLOBAL
     // MOCK DISCARDS ITS ARGUMENT AND ITS CALL COUNT. That is what made the whole web-only Arabic
@@ -188,6 +190,42 @@ function loadRootLayout({
       ...jest.requireActual('@/lib/privacyPrefs'),
       isTelemetryEnabled: () => optIn,
     }));
+    /**
+     * ⚠️ RECORDERS, NOT REPLACEMENTS. Each wrapper pushes its name and then calls THROUGH to the
+     * real implementation, so the boot behaves exactly as it does in every other case in this
+     * file — what is added is the only thing a render cannot show: the ORDER these three ran in.
+     *
+     * ⚠️ AND THE ORDER IS LOAD-BEARING TWICE OVER. `initLocalization()` fills the cache that
+     * `getStoredLanguage()`'s device seed reads, and BOTH direction and i18next read that seed —
+     * so either running first would silently floor a device-seeded launch to English. Direction
+     * then has to precede `initI18n()` for a different reason: `applyStoredDirection` may RELOAD,
+     * and there is no point initializing i18next into a context that is about to be thrown away.
+     */
+    const actualLocalization =
+      jest.requireActual<typeof import('@/lib/localization')>('@/lib/localization');
+    jest.doMock('@/lib/localization', () => ({
+      ...actualLocalization,
+      initLocalization: (...args: Parameters<typeof actualLocalization.initLocalization>) => {
+        bootOrder.push('initLocalization');
+        return actualLocalization.initLocalization(...args);
+      },
+    }));
+    const actualRtl = jest.requireActual<typeof import('@/lib/rtl')>('@/lib/rtl');
+    jest.doMock('@/lib/rtl', () => ({
+      ...actualRtl,
+      applyStoredDirection: () => {
+        bootOrder.push('applyStoredDirection');
+        return actualRtl.applyStoredDirection();
+      },
+    }));
+    const actualI18n = jest.requireActual<typeof import('@/i18n')>('@/i18n');
+    jest.doMock('@/i18n', () => ({
+      ...actualI18n,
+      initI18n: () => {
+        bootOrder.push('initI18n');
+        return actualI18n.initI18n();
+      },
+    }));
     mod = require('@/app/_layout');
     // ⚠️ THE ISOLATED REGISTRY'S COPY OF THE STORE. An outer `require` is a DIFFERENT module
     // instance — the same trap this file already documents for `@sentry/react-native` — so an
@@ -231,8 +269,41 @@ function loadRootLayout({
     renderRoot: renderRoot as () => { toJSON: () => unknown },
     unmountRoot: unmountRoot as () => void,
     audioStore: audioStore as NonNullable<typeof audioStore>,
+    bootOrder,
   };
 }
+
+describe('root layout — the module-scope boot order (story 8-1)', () => {
+  /**
+   * ⚠️ A MISSING CALL SITE IS INVISIBLE TO EVERY OTHER GUARD IN THE REPO, AND THAT WAS MEASURED.
+   * Commenting `applyStoredDirection()` out of `app/_layout.tsx` left 58 suites / 1288 tests green
+   * at this story's review — including `lib/rtl.test.ts`, whose source scan asks "who CALLS
+   * `forceRTL`" and is therefore blind to nobody calling it. Without the line an Arabic-locale
+   * reader gets `isRTL()` true, chrome that never mirrors and a pager on its RTL branch —
+   * permanently, because nothing else ever writes the native preference.
+   */
+  beforeEach(() => {
+    jest.resetModules();
+    privacyStore.clearAll();
+    jest.clearAllMocks();
+  });
+
+  it('applies the stored direction at module scope', () => {
+    expect(loadRootLayout().bootOrder).toContain('applyStoredDirection');
+  });
+
+  it('reads the device locale, then applies direction, then starts i18next — in that order', () => {
+    // A literal sequence, not a set of `toContain`s: all three of these calls exist today, and
+    // what breaks silently is their ORDER. `initLocalization()` fills the cache the device seed
+    // reads, and both of the others read that seed; direction goes before `initI18n()` because it
+    // may reload, and there is no point initializing i18next into a context about to be discarded.
+    expect(loadRootLayout().bootOrder).toEqual([
+      'initLocalization',
+      'applyStoredDirection',
+      'initI18n',
+    ]);
+  });
+});
 
 describe('root layout — the NFR8 consent gate at its call site', () => {
   beforeEach(() => {

@@ -23,3 +23,6 @@ export { type SurahContent, useSurah } from './hooks/useSurah';
 // story 7-6: the surface tap and its empty-area rule — one gesture, both reading surfaces.
 export { type SurfaceTap, useSurfaceTap } from './hooks/useSurfaceTap';
 export { MushafPage, type MushafPageProps } from './mushaf/MushafPage';
+// story 8-1: the pager's direction-aware index maths. Pure, and out of the route module so the
+// suite that asserts both directions does not have to evaluate the whole home surface.
+export { pagerData, pageToIndex } from './mushaf/mushafPager';

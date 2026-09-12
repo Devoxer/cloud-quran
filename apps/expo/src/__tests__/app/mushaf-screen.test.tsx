@@ -110,6 +110,7 @@ import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import type { ViewToken } from 'react-native';
 import Mushaf from '@/app/(tabs)/index';
 import { DURATIONS } from '@/constants/animation';
+import * as rtl from '@/lib/rtl';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 
 /** The most recent props the list was rendered with. */
@@ -313,6 +314,42 @@ describe('where it opens', () => {
     mockReadingPositionRow.current = { surah: 1, verse: 999 };
     render(<Mushaf />);
     expect(listProps().initialScrollIndex).toBe(TOTAL_PAGES - 1);
+  });
+});
+
+describe('the pager is wired to the layout direction (story 8-1)', () => {
+  /**
+   * ⚠️ THE WIRING WAS UNTESTED AND THE WHOLE RTL HALF COULD BE DELETED IN SILENCE. Demonstrated at
+   * this story's review: replacing `const rtl = isRTL()` with a literal `false` left every suite
+   * green, because `isRTL()` answers `false` under Jest and so every screen case only ever ran the
+   * LTR side. `mushaf-pager-direction.test.ts` proves the MATHS in both directions; nothing proved
+   * this screen asks. These two cases are the join.
+   */
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('hands FlashList the REVERSED data and an LTR index when the layout is LTR', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(false);
+    mockReadingPositionRow.current = { surah: 2, verse: 255 }; // page 42
+    render(<Mushaf />);
+    expect(listProps().initialScrollIndex).toBe(TOTAL_PAGES - 42);
+    const data = listProps().data as number[];
+    expect(data[0]).toBe(TOTAL_PAGES);
+    expect(data[TOTAL_PAGES - 1]).toBe(1);
+  });
+
+  it('hands FlashList the NATURAL data and an RTL index when the layout is RTL', () => {
+    // Page 42 sits at index 41 under RTL, where FlashList anchors at the right edge itself.
+    // A literal, not `pageToIndex(42, true)` — deriving the expectation from the code under test
+    // would survive the very mutation this case exists to catch.
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    render(<Mushaf />);
+    expect(listProps().initialScrollIndex).toBe(41);
+    const data = listProps().data as number[];
+    expect(data[0]).toBe(1);
+    expect(data[TOTAL_PAGES - 1]).toBe(TOTAL_PAGES);
   });
 });
 

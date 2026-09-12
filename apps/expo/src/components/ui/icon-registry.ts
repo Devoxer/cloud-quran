@@ -202,6 +202,25 @@ export type IconName = keyof typeof ICON_REGISTRY;
  * mirror themselves under RTL, so applying this table there would flip them BACK. A `chevron-back`
  * that points the wrong way is the kind of defect that typechecks, passes every test and is
  * obvious in one second on a device.
+ *
+ * ── ⚠️ WHAT IS DELIBERATELY *NOT* IN HERE, BECAUSE A SELF-CONSISTENCY TEST CANNOT SAY SO ─────
+ *
+ * `Icon.test.tsx` can prove this table is complete in the sense of being an involution over its
+ * own keys. It cannot prove the KEY SET is the right one — so the exclusions are written down:
+ *
+ *  • **Playback transports** (`play`, `play-back`, `play-forward`, `play-skip-*`, the 15-second
+ *    skips) stay LITERAL ON PURPOSE. A transport points along the TIMELINE, not along the text,
+ *    and every platform's media UI — iOS, Android, the lock screen this app already draws on —
+ *    keeps play pointing right in Arabic. Mirroring them would make "play" read as "rewind".
+ *  • **Glyphs whose arrow is decorative rather than directional**: `log-out` (a door, not a
+ *    journey), `open-outline` and `share-outline` (both "leaves this app", where the diagonal is
+ *    an idiom rather than a heading). Ionicons draws all three with a right-leaning arrow, and
+ *    all three are idioms readers meet unmirrored in every RTL app on the same device. Revisit
+ *    them on a report from an Arabic reader, not on the shape of the glyph.
+ *  • Everything else in the registry has no direction to mirror.
+ *
+ * So the table is the NAVIGATIONAL set — the glyphs that mean "the way you came" and "the way you
+ * are going" — and nothing else.
  */
 export const RTL_MIRRORED_ICONS: Readonly<Partial<Record<IconName, IconName>>> = {
   'arrow-back': 'arrow-forward',

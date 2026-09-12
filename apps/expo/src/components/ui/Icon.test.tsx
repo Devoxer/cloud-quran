@@ -8,6 +8,7 @@
  *   allow only if widened — it stays a real, cheap regression net. Story 28.2: `md` → `ion`.
  */
 import { render } from '@testing-library/react-native';
+import * as rtl from '@/lib/rtl';
 import { Icon } from './Icon';
 import { ICON_REGISTRY, type IconName, mirrorIcon, RTL_MIRRORED_ICONS } from './icon-registry';
 
@@ -71,5 +72,56 @@ describe('mirrorIcon — the RTL swap for literal Ionicons glyphs (story 8-1)', 
       expect(ICON_REGISTRY).toHaveProperty(from);
       expect(ICON_REGISTRY).toHaveProperty(to as string);
     }
+  });
+});
+
+describe('Icon — the RTL swap is WIRED, not merely available (story 8-1)', () => {
+  /**
+   * ⚠️ THE TABLE'S TESTS CANNOT SEE THE WIRING, AND THAT WAS MEASURED. Dropping the RTL branch
+   * from `mirrorIcon` AND from `progressFromTouch` at the same time left 63 suites / 1005 tests
+   * green at this story's review: the pure helpers are well covered and were simply never routed
+   * through, because `isRTL()` answers `false` under Jest. These cases render the real components
+   * with the direction forced, and assert the GLYPH NAME that reaches the icon font.
+   *
+   * ⚠️ THE ANDROID/WEB RENDERER IS REQUIRED BY ITS EXACT FILENAME. `jest-expo` resolves a bare
+   * `./Icon` to `Icon.ios.tsx`, so the suite above — and every other suite in the app — only ever
+   * exercises the SF Symbols path. The Ionicons path is the one that needs the swap, and it is
+   * reachable only like this.
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: a platform-suffixed module has no static type here
+  const IonIcon = (require('./Icon.tsx') as any).Icon as typeof Icon;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  /** The glyph name the icon font is actually handed. */
+  const glyphOf = (tree: ReturnType<typeof render>, testID: string): unknown =>
+    // biome-ignore lint/suspicious/noExplicitAny: the mock's node shape is untyped
+    (tree.getByTestId(testID).children[0] as any).props.name;
+
+  it('Android/web: draws `chevron-back` as the FORWARD glyph under RTL', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    expect(glyphOf(render(<IonIcon name="chevron-back" testID="i" />), 'i')).toBe(
+      'chevron-forward'
+    );
+  });
+
+  it('Android/web: draws `chevron-back` as itself under LTR — the mutation control', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(false);
+    expect(glyphOf(render(<IonIcon name="chevron-back" testID="i" />), 'i')).toBe('chevron-back');
+  });
+
+  it('Android/web: leaves a non-directional glyph alone under RTL', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    expect(glyphOf(render(<IonIcon name="search" testID="i" />), 'i')).toBe('search');
+  });
+
+  it('iOS: does NOT swap, because the SF names mirror themselves', () => {
+    // ⚠️ THE DOUBLE INVERSION, ON THE OTHER PLATFORM. `chevron.backward` is defined by Apple in
+    // terms of the reading direction; applying our table on top would point it the wrong way in
+    // Arabic — the exact defect the table exists to fix, reintroduced by fixing it twice.
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    expect(glyphOf(render(<Icon name="chevron-back" testID="i" />), 'i')).toBe('chevron.backward');
   });
 });

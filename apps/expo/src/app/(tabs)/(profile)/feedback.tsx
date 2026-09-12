@@ -21,9 +21,10 @@ import { Icon, Text } from '@/components/ui';
 import type { IconName } from '@/components/ui/icon-registry';
 import { RADII } from '@/constants/radii';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
-import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { feedbackMessageSchema } from '@/lib/forms/schemas';
 import { haptics } from '@/lib/haptics';
+import { isRTL } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -207,7 +208,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
-      letterSpacing: 1.0,
+      letterSpacing: captionLetterSpacing(isRTL()),
       marginBottom: SPACING.sm,
       marginTop: SPACING.lg,
       color: t.colors.text.tertiary,

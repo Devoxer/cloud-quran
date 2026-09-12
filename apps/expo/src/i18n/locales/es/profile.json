@@ -134,10 +134,7 @@
     "recitation": "Recitación"
   },
   "language": {
-    "footnote": "Define menús y narración en este dispositivo. Las descargas mantienen su idioma original.",
-    "switchFailedTitle": "No se pudo cambiar el idioma",
     "switchFailedMessage": "Tu idioma no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
-    "group": "IDIOMA DE LA INTERFAZ",
     "restartNote": "El idioma y su dirección de texto se aplican al reiniciar la app."
   },
   "auth": {

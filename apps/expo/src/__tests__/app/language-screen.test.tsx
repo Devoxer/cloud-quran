@@ -82,6 +82,25 @@ describe('language picker', () => {
     expect(calls).toEqual([]);
   });
 
+  it('stops spinning when the switch settles WITHOUT restarting the app', async () => {
+    /**
+     * ⚠️ THE PATH THAT LOOKS LIKE SUCCESS IS THE ONE THAT STRANDS THE READER. `setLanguage`
+     * resolves and THEN reloads, so normally this screen is destroyed and the spinner goes with
+     * it. But `reloadAppAsync` resolves without reloading where there is no `globalThis.expo`,
+     * and REJECTS on Android with no current activity — in both cases the promise settles,
+     * nothing restarts, and an unreleased `pending` leaves the row spinning forever with the
+     * native preference already flipped. Under Jest the reload is a resolving stub, so this is
+     * exactly that shape.
+     */
+    const { getByTestId, queryByTestId } = render(<LanguageScreen />);
+    fireEvent.press(getByTestId('language-option-ar'));
+    await waitFor(() => expect(mockSetLanguage).toHaveBeenCalled());
+    await waitFor(() => expect(queryByTestId('language-option-ar-spinner')).toBeNull());
+    // And it raises NO error: settling without a restart is not a failure. The footnote already
+    // says the choice applies when the app restarts.
+    expect(queryByTestId('language-error')).toBeNull();
+  });
+
   it('rolls the direction back when the switch rejects', async () => {
     mockSetLanguage.mockImplementation(() => {
       calls.push('setLanguage');

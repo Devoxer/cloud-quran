@@ -51,8 +51,12 @@ initLocalization();
 // ⚠️ DIRECTION BEFORE i18next, AND BOTH BEFORE THE FIRST RENDER (story 8-1). `I18nManager.forceRTL`
 // writes a native preference that is read when VIEWS ARE CREATED, so it has to land before React
 // mounts anything; it reads the same stored language `initI18n()` is about to commit, which is why
-// it sits between the localization cache and i18next rather than anywhere else. `lib/rtl.ts` is the
-// only module in the app allowed to call it (`rtl-direction.test.ts` scans for that).
+// it sits between the localization cache and i18next rather than anywhere else. It may also RELOAD
+// the app once, when the framework's captured `isRTL` disagrees with the language — `lib/rtl.ts`
+// carries that reasoning, and is the only module allowed to call `forceRTL` at all
+// (`lib/rtl.test.ts` scans every source file for a second caller; `__tests__/app/
+// root-layout-boot.test.tsx` pins THIS call site and its position relative to `initI18n()`, which
+// a source scan for the callee cannot see).
 applyStoredDirection();
 initI18n();
 

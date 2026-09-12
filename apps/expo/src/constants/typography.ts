@@ -63,6 +63,23 @@ export const FONT_FAMILY = {
 } as const;
 
 /**
+ * Letter-spacing for the uppercase section-label caption (settings groups, the reciter picker's
+ * headers, the sign-in and feedback screens) — the ONE number all five copies of that treatment
+ * read (story 8-1).
+ *
+ * ⚠️ IT IS ZERO UNDER RTL, AND THAT IS A SCRIPT FACT RATHER THAN A PREFERENCE. Arabic is cursive:
+ * letters JOIN, and tracking prises the joins apart into something that reads as broken rather
+ * than as emphasis. (`textTransform: 'uppercase'` beside it is simply inert for Arabic — there is
+ * no case — so it needs no branch; this does.)
+ *
+ * Pure, and it takes the direction rather than reading it, so `constants/` stays a leaf that
+ * imports nothing from `lib/`. Callers pass `isRTL()`.
+ */
+export function captionLetterSpacing(rtl: boolean): number {
+  return rtl ? 0 : 1.0;
+}
+
+/**
  * Combined typography constant with nested structure
  */
 export const TYPOGRAPHY = {

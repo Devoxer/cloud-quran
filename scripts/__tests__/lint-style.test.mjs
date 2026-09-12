@@ -16,11 +16,15 @@ import {
   COLOR_EXCEPTIONS,
   findColorLiterals,
   findInlineThemeTokens,
+  findPhysicalProps,
   findSpacingLiterals,
   findTemplateAlphaTokens,
   inlineStylePropSpans,
   isColorAllowed,
   isInlineThemeTokenAllowed,
+  isPhysicalPropAllowed,
+  logicalSpelling,
+  PHYSICAL_PROP_EXCEPTIONS,
   styleSheetSpans,
   THEME_TOKEN_EXCEPTIONS,
 } from '../lint-style.mjs';
@@ -236,4 +240,60 @@ test('findTemplateAlphaTokens: comment-stripping removes a commented-out residue
     findTemplateAlphaTokens(stripComments('// old: `${t.colors.x}26`\nconst y=1;')),
     []
   );
+});
+
+// ── Scan 5 — physical direction properties (story 8-1) ───────────────────────────────────────
+
+test('findPhysicalProps: catches every margin/padding/border spelling', () => {
+  assert.deepEqual(findPhysicalProps('const s={marginLeft:4};'), ['marginLeft']);
+  assert.deepEqual(findPhysicalProps('const s={marginRight:4};'), ['marginRight']);
+  assert.deepEqual(findPhysicalProps('const s={paddingLeft:4};'), ['paddingLeft']);
+  assert.deepEqual(findPhysicalProps('const s={paddingRight:4};'), ['paddingRight']);
+  assert.deepEqual(findPhysicalProps('const s={borderLeftWidth:1};'), ['borderLeftWidth']);
+  assert.deepEqual(findPhysicalProps('const s={borderRightColor:x};'), ['borderRightColor']);
+  assert.deepEqual(findPhysicalProps('const s={borderTopLeftRadius:8};'), ['borderTopLeftRadius']);
+  assert.deepEqual(findPhysicalProps('const s={ marginLeft : 4 };'), ['marginLeft']);
+});
+
+test('findPhysicalProps: does NOT fire on the LOGICAL spellings that replaced them', () => {
+  // The migration target. If these fired, the gate would forbid its own fix.
+  assert.deepEqual(
+    findPhysicalProps('const s={marginStart:4,paddingEnd:8,borderStartWidth:1};'),
+    []
+  );
+});
+
+test('findPhysicalProps: leaves bare `left:` / `right:` alone — symmetric, and out of scope', () => {
+  // A hitSlop and a pinned overlay mirror to themselves; flagging them would be noise that
+  // teaches people to allow-list. See the docblock on PHYSICAL_PROP_RE.
+  assert.deepEqual(findPhysicalProps('const HIT={top:12,bottom:12,left:0,right:0};'), []);
+  assert.deepEqual(findPhysicalProps('const o={position:"absolute",left:0,right:0};'), []);
+});
+
+test('findPhysicalProps: leaves `textAlign` alone — the content contract needs it', () => {
+  // The Quran text sets `textAlign: 'right'` locally and must KEEP it; `lib/rtl.test.ts` asserts
+  // the opposite of what flagging this would.
+  assert.deepEqual(findPhysicalProps("const s={textAlign:'right',writingDirection:'rtl'};"), []);
+});
+
+test('findPhysicalProps: comment- and string-stripped, so prose about the rule is not a violation', () => {
+  // Every in-tree note explaining the conversion names `marginLeft`; so does the gate's own
+  // docblock. A scan that fired on them would be unlivable.
+  assert.deepEqual(findPhysicalProps('// was marginLeft: 4\nconst s={marginStart:4};'), []);
+  assert.deepEqual(findPhysicalProps('/* marginRight: 8 */ const s={marginEnd:8};'), []);
+  assert.deepEqual(findPhysicalProps('const msg = "use marginStart, not marginLeft: 4";'), []);
+});
+
+test('logicalSpelling: names the replacement, for every family', () => {
+  assert.equal(logicalSpelling('marginLeft'), 'marginStart');
+  assert.equal(logicalSpelling('paddingRight'), 'paddingEnd');
+  assert.equal(logicalSpelling('borderLeftWidth'), 'borderStartWidth');
+  assert.equal(logicalSpelling('borderTopRightRadius'), 'borderTopEndRadius');
+});
+
+test('PHYSICAL_PROP_EXCEPTIONS: ships EMPTY, and the predicate reads it', () => {
+  // The 8-1 sweep left zero sites, so the first carve-out has to argue for itself rather than
+  // inherit a precedent. Asserting the predicate too keeps the map from becoming decorative.
+  assert.equal(PHYSICAL_PROP_EXCEPTIONS.size, 0);
+  assert.equal(isPhysicalPropAllowed('apps/expo/src/components/ui/SettingsRow.tsx'), false);
 });

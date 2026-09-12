@@ -6,6 +6,10 @@
  * pager are never both observable in one session — whichever one is smoked, the other's
  * regression is carried here or nowhere.
  *
+ * ⚠️ It imports the FEATURE, not the route (story 8-1's review): the maths moved out of
+ * `app/(tabs)/index.tsx` so that asserting two array lookups does not mean evaluating the home
+ * surface, FlashList, the audio store and the Quran database with it.
+ *
  * The invariant both halves encode: **the page the reader turns TO is the same page in either
  * direction.** Under LTR the data is reversed so that dragging a finger left-to-right lands on a
  * LOWER index and therefore a HIGHER page. Under RTL FlashList already anchors a horizontal list
@@ -16,7 +20,7 @@
 
 import { TOTAL_PAGES } from 'quran-data';
 
-import { pagerData, pageToIndex } from '@/app/(tabs)/index';
+import { pagerData, pageToIndex } from '@/features/reading';
 
 const LTR = false;
 const RTL = true;

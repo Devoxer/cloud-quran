@@ -6,7 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View, type ViewToken } from 'react-native';
 
 import { useResumeListening } from '@/features/audio';
-import { MushafPage, ReadingChrome, useChromeReveal, WelcomeBackBanner } from '@/features/reading';
+import {
+  MushafPage,
+  pagerData,
+  pageToIndex,
+  ReadingChrome,
+  useChromeReveal,
+  WelcomeBackBanner,
+} from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { isRTL } from '@/lib/rtl';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
@@ -32,16 +39,11 @@ import {
  *
  * ── The shapes that are load-bearing here (6-2, plus 6-6's resync) ───────────────────────────
  *
- * 1. **REVERSED DATA, NOT `inverted` — AND ONLY IN LTR (story 8-1).** In an LTR layout the data
- *    is `[604 … 1]`: page 1 sits at index 603, and advancing a finger left-to-right lands on a
- *    LOWER index = HIGHER page — the RTL page turn, on every platform. The pre-fork ran
- *    `inverted` on native and reversed data on web because `inverted` broke web scroll/drag.
- *    ⚠️ Under `I18nManager.isRTL` the data is NOT reversed, because FlashList already is: it
- *    anchors a horizontal list at the right edge and re-aims every offset, so a rising index
- *    already walks leftward through the book. Reversing as well is the double inversion, and it
- *    turns pages backwards. `pagerData` / `pageToIndex` are pure and take the direction, because
- *    a device can only be smoked in ONE direction at a time — the other one lives in the tests
- *    (`mushaf-pager-direction.test.ts`).
+ * 1. **REVERSED DATA, NOT `inverted` — AND ONLY IN LTR (story 8-1).** The index maths live in
+ *    `features/reading/mushaf/mushafPager.ts`, which carries the whole argument: reversed `[604 …
+ *    1]` in LTR, natural order under RTL because FlashList already compensates, and the direction
+ *    as a PARAMETER because a device can only be smoked one way at a time. This screen's part is
+ *    one line — `isRTL()` — and the regression surface is both directions, not only Arabic.
  *
  * 2. **`initialScrollIndex` IS ALLOWED HERE, AND THE DIFFERENCE FROM `read.tsx` IS THE ITEM.**
  *    A mushaf page is a UNIFORM full-screen item — index × width IS the offset, exactly, so the
@@ -86,30 +88,6 @@ import {
 /** Module scope — FlashList refuses a changing viewabilityConfig (see `read.tsx`). */
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 } as const;
 
-/** All 604 pages, REVERSED — see shape 1 in the header. Index i holds page 604 − i. */
-const PAGE_DATA_LTR: number[] = Array.from({ length: TOTAL_PAGES }, (_, i) => TOTAL_PAGES - i);
-
-/** All 604 pages in reading order. Index i holds page i + 1 — see shape 1 in the header. */
-const PAGE_DATA_RTL: number[] = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
-
-/**
- * The pager's data, given the layout direction — shape 1 in the header.
- *
- * ⚠️ REVERSE ONLY IN LTR. Under `I18nManager.isRTL` FlashList already anchors a horizontal list at
- * the right edge and re-aims every offset (`RecyclerView.js`: `isHorizontalRTL = I18nManager.isRTL
- * && horizontal`; `useRecyclerViewController.js` → `adjustOffsetForRTL`), so index 0 IS the
- * rightmost item and a rising index already walks leftward through the book. Reversing the data on
- * top of that is the double inversion: it would turn pages backwards in Arabic.
- */
-export function pagerData(rtl: boolean): number[] {
-  return rtl ? PAGE_DATA_RTL : PAGE_DATA_LTR;
-}
-
-/** The list index a page sits at, in the data {@link pagerData} returns for that direction. */
-export function pageToIndex(page: number, rtl: boolean): number {
-  return rtl ? page - 1 : TOTAL_PAGES - page;
-}
-
 /**
  * The page this screen targets — the saved pair resolved as a PAIR. A pair the map does not hold
  * answers -1, which clamps to page 1; there is no half-trusted surah or verse for the clamp to
@@ -131,7 +109,9 @@ export default function Mushaf() {
    * which on the boot path can precede `applyStoredDirection()`.
    */
   const rtl = isRTL();
-  const pages = useMemo(() => pagerData(rtl), [rtl]);
+  // `pagerData` returns one of two module constants, so there is nothing here to memoize — the
+  // identity FlashList needs is already stable.
+  const pages = pagerData(rtl);
   const { saved, reportVerse } = usePosition('mushaf');
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   // Three separate subscriptions, for `read.tsx`'s reason: only the key moves per ayah.

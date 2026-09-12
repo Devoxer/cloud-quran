@@ -23,6 +23,9 @@
  *      legitimately take a raw token (`color={colors.x}` on Icon, `tintColor`,
  *      `placeholderTextColor`, gradient `colors={[…]}`) are NOT flagged — the scan targets
  *      the `style` prop only. Documented carve-outs live in THEME_TOKEN_EXCEPTIONS.
+ *   5. PHYSICAL DIRECTION PROPERTIES (`marginLeft`, `paddingRight`, `borderLeftWidth`, …) —
+ *      the app ships a right-to-left interface language, and a physical inset does not
+ *      mirror. See `findPhysicalProps` for what is deliberately out of scope.
  *
  *   4. Template-alpha scan (Story 23.5) — flags a theme-token reference (`colors.*` /
  *      `theme.colors.*` / `t.colors.*`) interpolated into a template literal and
@@ -120,6 +123,63 @@ export const THEME_TOKEN_EXCEPTIONS = new Map();
 /** True if `relFile` may legitimately apply a theme token inline in a `style` prop. */
 export function isInlineThemeTokenAllowed(relFile) {
   return THEME_TOKEN_EXCEPTIONS.has(relFile);
+}
+
+/**
+ * Scan 5 — PHYSICAL direction properties (story 8-1).
+ *
+ * ⚠️ THIS EXISTS BECAUSE THE APP IS BIDIRECTIONAL NOW AND NOTHING ELSE NOTICES. `ar` ships with a
+ * real right-to-left layout, and the whole reason that cost one story instead of every story is
+ * that `marginStart`/`paddingEnd`/`borderStartWidth` resolve through `I18nManager.isRTL` and
+ * mirror for free. A `marginLeft` does not: it stays on the left in Arabic, silently, and there is
+ * no render, no type and no test that can see one inset out of forty pointing the wrong way. The
+ * 8-1 sweep converted 40 sites across 14 files; without a gate the next story re-introduces the
+ * first one and nothing reds. Budgets, not discipline.
+ *
+ * ⚠️ IT MATCHES PROPERTY KEYS, NOT THE WORDS `left`/`right`. Bare `left:` / `right:` are
+ * deliberately OUT OF SCOPE: a `hitSlop` of `{ left: 10, right: 10 }` and an overlay pinned with
+ * `left: 0, right: 0` are symmetric, so they mirror to themselves — flagging them would be noise
+ * that teaches people to allow-list. The asymmetric absolute case (`left: '50%'`) is caught by
+ * review, not here; `ProgressBar` uses `start` for exactly that reason.
+ *
+ * ⚠️ `textAlign: 'right'` IS ALSO OUT OF SCOPE, AND THAT IS LOAD-BEARING RATHER THAN AN OMISSION.
+ * The Quran text, the mushaf lines, the bookmark previews and the appearance sample set it
+ * locally and must KEEP it whatever the interface language does — `apps/expo/src/lib/rtl.test.ts`
+ * § "content direction is not UI direction" is the gate for that half, and it asserts the
+ * opposite of what this one would.
+ */
+const PHYSICAL_PROP_RE =
+  /\b((?:margin|padding)(?:Left|Right)|border(?:Top|Bottom)?(?:Left|Right)(?:Width|Color|Radius|Style))\s*:/g;
+
+/**
+ * Documented carve-outs for a physical property that genuinely cannot be logical, each with the
+ * reason. Ships EMPTY: the 8-1 sweep left zero sites in the tree, so the first entry has to argue
+ * for itself rather than inherit a precedent.
+ */
+export const PHYSICAL_PROP_EXCEPTIONS = new Map();
+
+/** True if `relFile` may legitimately contain a physical direction property. */
+export function isPhysicalPropAllowed(relFile) {
+  return PHYSICAL_PROP_EXCEPTIONS.has(relFile);
+}
+
+/**
+ * The physical direction properties a file sets. Comment- AND string-stripped, so prose naming
+ * `marginLeft` (this very docblock, and the several in-tree notes explaining the conversion) and
+ * a string holding one are not violations — the same discipline scans 1 and 3 already use.
+ */
+export function findPhysicalProps(code) {
+  const stripped = stripStringContents(stripComments(code));
+  const out = [];
+  PHYSICAL_PROP_RE.lastIndex = 0;
+  let m;
+  while ((m = PHYSICAL_PROP_RE.exec(stripped)) !== null) out.push(m[1]);
+  return out;
+}
+
+/** The logical spelling a physical property should have used. */
+export function logicalSpelling(prop) {
+  return prop.replace(/Left/, 'Start').replace(/Right/, 'End');
 }
 
 /** Replace string/template literal CONTENTS with spaces (length-preserving) so a string
@@ -294,6 +354,16 @@ export function runStyleScan() {
       violations.push(
         `[template-alpha-token] ${relFile} interpolates a theme token then a hex alpha in "${ref}" — use withAlpha(token, fraction) from @/lib/color (STACK-CHEAT-SHEET § Theme)`
       );
+    }
+
+    // Scan 5 — physical direction properties (story 8-1). The app ships a right-to-left interface
+    // language; a physical inset does not mirror and nothing else in the net can see that.
+    if (!isPhysicalPropAllowed(relFile)) {
+      for (const prop of findPhysicalProps(raw)) {
+        violations.push(
+          `[physical-direction] ${relFile} sets "${prop}" — use "${logicalSpelling(prop)}", which mirrors under I18nManager.isRTL (apps/expo/src/lib/rtl.ts)`
+        );
+      }
     }
   }
   return violations;

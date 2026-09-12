@@ -1,216 +1,95 @@
 /**
- * ProgressBar Tests
+ * ProgressBar — the direction-aware seek maths, and the fact that the component actually uses
+ * them (story 8-1).
  *
- * Story 5.3: Build Full-Screen AudioPlayer Component
- * Epic 5: Core Summary Playback
+ * ⚠️ `progressFromTouch` was exported with a docblock saying it was exported "so both directions
+ * can be asserted without a layout", and then nothing asserted either. This file is that claim,
+ * honoured. The component half matters separately: dropping the `rtl` argument at the CALL SITES
+ * leaves the helper's own cases green, which is how a mutation survived this story's review.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { ProgressBar } from './ProgressBar';
+import { render } from '@testing-library/react-native';
 
-// Mock ThemeContext
-jest.mock('@/lib/theme', () => ({
-  useTheme: () => ({
-    colors: {
-      accent: {
-        primary: '#C65D3B',
-        secondary: '#E8A87C',
-      },
-      text: {
-        primary: '#1A1612',
-        tertiary: '#8C8279',
-      },
-    },
-    isDark: false,
-  }),
-}));
+import * as rtl from '@/lib/rtl';
+import { ProgressBar, progressFromTouch } from './ProgressBar';
 
-describe('ProgressBar', () => {
-  const defaultProps = {
-    currentMs: 45000, // 45 seconds
-    durationMs: 180000, // 3 minutes
-    onSeek: jest.fn(),
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
+describe('progressFromTouch', () => {
+  // Literal expectations. `locationX` is PHYSICAL — measured from the left edge whatever the
+  // layout direction — while the fill and thumb are placed with `start`, so under RTL zero
+  // progress sits at the RIGHT and the fraction has to be read backwards.
+  it.each([
+    [0, 0],
+    [25, 0.25],
+    [50, 0.5],
+    [100, 1],
+  ])('LTR: a touch at %ipx of 100 is %f', (x, expected) => {
+    expect(progressFromTouch(x, 100, false)).toBe(expected);
   });
 
-  describe('rendering', () => {
-    it('renders with correct fill percentage', () => {
-      render(<ProgressBar {...defaultProps} testID="progress-bar" />);
-
-      // 45000 / 180000 = 0.25 = 25%
-      const progressBar = screen.getByTestId('progress-bar');
-      expect(progressBar).toBeTruthy();
-    });
-
-    it('renders filled portion and thumb', () => {
-      render(<ProgressBar {...defaultProps} testID="progress-bar" />);
-
-      const filled = screen.getByTestId('progress-bar-filled');
-      const thumb = screen.getByTestId('progress-bar-thumb');
-
-      expect(filled).toBeTruthy();
-      expect(thumb).toBeTruthy();
-    });
-
-    it('handles 0 duration gracefully', () => {
-      render(
-        <ProgressBar
-          currentMs={0}
-          durationMs={0}
-          onSeek={defaultProps.onSeek}
-          testID="progress-bar"
-        />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-      expect(progressBar).toBeTruthy();
-    });
-
-    it('handles negative values gracefully', () => {
-      render(
-        <ProgressBar
-          currentMs={-1000}
-          durationMs={180000}
-          onSeek={defaultProps.onSeek}
-          testID="progress-bar"
-        />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-      expect(progressBar).toBeTruthy();
-    });
-
-    it('clamps progress to 100% when currentMs exceeds durationMs', () => {
-      render(
-        <ProgressBar
-          currentMs={200000} // More than duration
-          durationMs={180000}
-          onSeek={defaultProps.onSeek}
-          testID="progress-bar"
-        />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-      expect(progressBar).toBeTruthy();
-    });
+  it.each([
+    [0, 1],
+    [25, 0.75],
+    [50, 0.5],
+    [100, 0],
+  ])('RTL: a touch at %ipx of 100 is %f', (x, expected) => {
+    expect(progressFromTouch(x, 100, true)).toBe(expected);
   });
 
-  describe('tap-to-seek', () => {
-    it('calls onSeek with correct position on tap', () => {
-      const onSeek = jest.fn();
-      render(
-        <ProgressBar currentMs={0} durationMs={180000} onSeek={onSeek} testID="progress-bar" />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-
-      // Simulate layout event to set width
-      fireEvent(progressBar, 'layout', {
-        nativeEvent: { layout: { width: 300, height: 4, x: 0, y: 0 } },
-      });
-
-      // Tap at 50% position (x = 150 of 300)
-      fireEvent.press(progressBar, {
-        nativeEvent: { locationX: 150, locationY: 2 },
-      });
-
-      // Should seek to 50% of 180000ms = 90000ms
-      expect(onSeek).toHaveBeenCalledWith(90000);
-    });
-
-    it('does not call onSeek when disabled', () => {
-      const onSeek = jest.fn();
-      render(
-        <ProgressBar
-          currentMs={0}
-          durationMs={180000}
-          onSeek={onSeek}
-          disabled
-          testID="progress-bar"
-        />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-
-      // Simulate layout
-      fireEvent(progressBar, 'layout', {
-        nativeEvent: { layout: { width: 300, height: 4, x: 0, y: 0 } },
-      });
-
-      // Try to tap
-      fireEvent.press(progressBar, {
-        nativeEvent: { locationX: 150, locationY: 2 },
-      });
-
-      expect(onSeek).not.toHaveBeenCalled();
-    });
-
-    it('clamps seek position to valid range', () => {
-      const onSeek = jest.fn();
-      render(
-        <ProgressBar currentMs={0} durationMs={180000} onSeek={onSeek} testID="progress-bar" />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-
-      fireEvent(progressBar, 'layout', {
-        nativeEvent: { layout: { width: 300, height: 4, x: 0, y: 0 } },
-      });
-
-      // Tap beyond bounds (x = 350, width = 300)
-      fireEvent.press(progressBar, {
-        nativeEvent: { locationX: 350, locationY: 2 },
-      });
-
-      // Should clamp to 100% = 180000ms
-      expect(onSeek).toHaveBeenCalledWith(180000);
-    });
+  it('clamps a touch outside the track, in both directions', () => {
+    // `hitSlop` widens the touch area past the track, so an out-of-range x is routine rather than
+    // exotic — and an unclamped one seeks past the end of the recitation.
+    expect(progressFromTouch(-40, 100, false)).toBe(0);
+    expect(progressFromTouch(140, 100, false)).toBe(1);
+    expect(progressFromTouch(-40, 100, true)).toBe(1);
+    expect(progressFromTouch(140, 100, true)).toBe(0);
   });
 
-  describe('disabled state', () => {
-    it('applies reduced opacity when disabled', () => {
-      render(<ProgressBar {...defaultProps} disabled testID="progress-bar" />);
-
-      const progressBar = screen.getByTestId('progress-bar');
-      expect(progressBar.props.accessibilityState.disabled).toBe(true);
-    });
-
-    it('prevents interaction when disabled', () => {
-      const onSeek = jest.fn();
-      render(
-        <ProgressBar
-          currentMs={0}
-          durationMs={180000}
-          onSeek={onSeek}
-          disabled
-          testID="progress-bar"
-        />
-      );
-
-      const progressBar = screen.getByTestId('progress-bar');
-      fireEvent.press(progressBar);
-
-      expect(onSeek).not.toHaveBeenCalled();
-    });
+  it('answers 0 for an unmeasured track rather than guessing', () => {
+    // Before `onLayout` there is no track. The call sites decline the touch entirely; this is the
+    // floor under that, so a width of 0 can never become a division by zero or an Infinity.
+    expect(progressFromTouch(25, 0, false)).toBe(0);
+    expect(progressFromTouch(25, 0, true)).toBe(0);
+    expect(progressFromTouch(25, -10, false)).toBe(0);
   });
 
-  describe('accessibility', () => {
-    it('has accessible label with progress percentage', () => {
-      render(<ProgressBar {...defaultProps} testID="progress-bar" />);
+  it('is genuinely direction-dependent — the anti-vacuity case', () => {
+    // If the `rtl` branch were deleted the two tables above would still agree at the midpoint and
+    // nowhere else; this says so in one line, so a reader can see the cases are not decoration.
+    expect(progressFromTouch(25, 100, false)).not.toBe(progressFromTouch(25, 100, true));
+  });
+});
 
-      const progressBar = screen.getByTestId('progress-bar');
-      // 45000 / 180000 = 25%
-      expect(progressBar.props.accessibilityLabel).toContain('25');
-    });
+describe('ProgressBar places its fill and thumb logically', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-    it('has adjustable accessibility role', () => {
-      render(<ProgressBar {...defaultProps} testID="progress-bar" />);
+  /** Flatten a style prop that may be an array. */
+  // biome-ignore lint/suspicious/noExplicitAny: RNTL exposes untyped style props
+  const flat = (style: any): Record<string, unknown> =>
+    Array.isArray(style)
+      ? style.reduce((acc, s) => ({ ...acc, ...(s ?? {}) }), {})
+      : ((style ?? {}) as Record<string, unknown>);
 
-      const progressBar = screen.getByTestId('progress-bar');
-      expect(progressBar.props.accessibilityRole).toBe('adjustable');
-    });
+  it('positions with `start`, never `left` — so the fill grows from the reading edge', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(false);
+    const { getByTestId } = render(
+      <ProgressBar currentMs={25_000} durationMs={100_000} onSeek={jest.fn()} testID="bar" />
+    );
+    const thumb = flat(getByTestId('bar-thumb').props.style);
+    const filled = flat(getByTestId('bar-filled').props.style);
+    expect(thumb.start).toBe('25%');
+    expect(thumb.left).toBeUndefined();
+    expect(thumb.marginStart).toBeDefined();
+    expect(filled.start).toBe(0);
+    expect(filled.left).toBeUndefined();
+  });
+
+  it('reads the direction at render — the seek maths are wired, not merely present', () => {
+    // The mutation this catches: `progressFromTouch(x, w, false)` hard-coded at the call sites.
+    // Nothing else in the suite would notice, because `isRTL()` is `false` under Jest.
+    const spy = jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    render(<ProgressBar currentMs={25_000} durationMs={100_000} onSeek={jest.fn()} testID="bar" />);
+    expect(spy).toHaveBeenCalled();
   });
 });

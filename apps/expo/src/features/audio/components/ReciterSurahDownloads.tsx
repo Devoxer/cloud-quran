@@ -53,8 +53,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ConfirmDialog, ListRow, SettingsGroup, SettingsRow, Text } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
-import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
+import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { haptics } from '@/lib/haptics';
+import { isRTL } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
 import { RECITERS, resolveReciterId } from '../data/reciters';
@@ -182,7 +183,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase' as const,
-      letterSpacing: 1,
+      letterSpacing: captionLetterSpacing(isRTL()),
       color: theme.colors.text.tertiary,
     },
     footer: {
