@@ -75,7 +75,7 @@ import { SURAH_COUNT } from 'quran-data';
 import { AppState, Platform } from 'react-native';
 
 import { surahAudioUrl } from '@/constants/audio';
-import { excludeFromBackup } from '@/lib/backupExclusion';
+import { excludeFromBackup, isExcludedFromBackup } from '@/lib/backupExclusion';
 import { addBreadcrumb, captureException, isDeviceOfflineError } from '@/lib/errors';
 import type { ReciterManifest } from '@/lib/reciterManifest';
 import {
@@ -346,11 +346,34 @@ export function availableDownloadSpace(): number | null {
  * re-apply the flag to the recreated one. The native call is a single `setResourceValues`, and it
  * runs where a directory is created rather than per download.
  */
+let backupStateReported = false;
+
 function ensureAudioRoot(): Directory {
   const root = new Directory(Paths.document, AUDIO_DOWNLOAD_DIR);
   if (!root.exists) root.create({ intermediates: true });
   // Never throws, answers `false` everywhere but Apple — see `lib/backupExclusion.ts`.
   excludeFromBackup(root.uri);
+  /**
+   * ⚠️ READ IT BACK, ONCE PER PROCESS, BECAUSE A SILENT FAILURE HERE HAS NO OTHER SYMPTOM. If the
+   * native module fails to load, `requireOptionalNativeModule` answers `null` and
+   * `excludeFromBackup` returns `false` — downloads keep working perfectly and a gigabyte of
+   * recitation quietly joins every iCloud backup. There is no screen that would look wrong. This
+   * is the only thing standing between "excluded" and "we called something once", and it is what
+   * `isExcludedFromBackup` was built for.
+   *
+   * `null` is the honest answer on Android and web, where the question is meaningless rather than
+   * failing — the breadcrumb records it as such rather than as `false`.
+   */
+  if (!backupStateReported) {
+    backupStateReported = true;
+    const excluded = isExcludedFromBackup(root.uri);
+    addBreadcrumb('ui', 'audio backup exclusion', { excluded });
+    // ⚠️ AND A DEV LINE, BECAUSE THE BREADCRUMB IS INVISIBLE WHERE IT IS NEEDED MOST. Sentry is
+    // opt-in and OFF by default here, so the breadcrumb only exists inside a crash report somebody
+    // has consented to send — which is exactly nobody while this is being verified on a device.
+    // One line in the Metro log is what makes the native call checkable at all.
+    if (__DEV__) console.log(`[audio] backup-excluded=${excluded} ${root.uri}`);
+  }
   return root;
 }
 
