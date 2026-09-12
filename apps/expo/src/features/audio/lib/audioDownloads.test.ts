@@ -37,6 +37,12 @@ const mockRequestDownload = jest.fn();
 const mockDiskSpace: { value: number | undefined } = { value: undefined };
 /** Flipped by the P3 case: every `list()` throws, the way a real filesystem failure would. */
 const mockListingBroken = { value: false };
+const mockExcludeFromBackup = jest.fn<boolean, [string]>(() => true);
+jest.mock('@/lib/backupExclusion', () => ({
+  excludeFromBackup: (uri: string) => mockExcludeFromBackup(uri),
+  isExcludedFromBackup: () => null,
+}));
+
 const mockAddBreadcrumb = jest.fn();
 const mockCaptureException = jest.fn();
 
@@ -295,6 +301,39 @@ describe('the transfer is handed to the OS where the OS will take it', () => {
     await flush();
 
     expect(useDownloadQueueStore.getState().entries['husary:18']).toBeUndefined();
+  });
+});
+
+describe('the audio tree is kept out of iCloud/iTunes backup', () => {
+  /**
+   * ⚠️ THIS CALL HAS NO USER-VISIBLE SYMPTOM WHEN IT SILENTLY STOPS HAPPENING, which is the only
+   * reason it is worth a test. Recitation lives in the DOCUMENT directory on purpose
+   * (`Paths.cache` is OS-evictable and an evicted download is a broken offline promise), and
+   * Apple's iOS Data Storage Guidelines then require re-downloadable content there to carry
+   * `NSURLIsExcludedFromBackupKey` — otherwise up to ~1 GB of MP3s joins every backup. Nothing in
+   * the app would look wrong; it surfaces as an App Review finding.
+   */
+  it('flags the ROOT once, not each file — the flag covers the whole subtree', async () => {
+    // MUTATION: move `ensureAudioRoot()` below `dir.create({ intermediates: true })` and the root
+    // is created unflagged by the intermediates; drop the call entirely and this reds at zero.
+    await downloadSurah('husary', 1);
+    await downloadSurah('husary', 2);
+
+    const flagged = mockExcludeFromBackup.mock.calls.map(([uri]) => uri);
+    expect(flagged.length).toBeGreaterThan(0);
+    // Every call names the audio ROOT — never a reciter directory and never a surah file.
+    for (const uri of flagged) {
+      expect(uri).toContain('audio');
+      expect(uri).not.toContain('husary');
+      expect(uri).not.toContain('.mp3');
+    }
+  });
+
+  it('does not stop a download when the platform cannot answer', async () => {
+    // Android, web and Jest have no such module; the door returns `false` rather than throwing.
+    mockExcludeFromBackup.mockReturnValueOnce(false);
+    await downloadSurah('husary', 3);
+    expect(isDownloaded('husary', 3)).toBe(true);
   });
 });
 

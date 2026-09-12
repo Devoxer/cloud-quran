@@ -75,6 +75,7 @@ import { SURAH_COUNT } from 'quran-data';
 import { AppState, Platform } from 'react-native';
 
 import { surahAudioUrl } from '@/constants/audio';
+import { excludeFromBackup } from '@/lib/backupExclusion';
 import { addBreadcrumb, captureException, isDeviceOfflineError } from '@/lib/errors';
 import type { ReciterManifest } from '@/lib/reciterManifest';
 import {
@@ -329,6 +330,30 @@ export function availableDownloadSpace(): number | null {
   }
 }
 
+/**
+ * The audio root, created if absent AND kept out of iCloud/iTunes backup.
+ *
+ * ⚠️ THE EXCLUSION IS SET ONCE, ON THE ROOT, AND THAT IS DELIBERATE ON BOTH COUNTS.
+ * `NSURLIsExcludedFromBackupKey` on a directory covers its whole subtree, so per-file would mean a
+ * native call per surah on the download path AND would miss any file created later. Apple's iOS
+ * Data Storage Guidelines ask for exactly this: recitation is re-downloadable, it lives in the
+ * DOCUMENT directory because `Paths.cache` is OS-evictable and an evicted download is a broken
+ * offline promise, and re-downloadable content in Documents has to carry the flag or it joins
+ * every backup — up to ~1 GB of it.
+ *
+ * ⚠️ IT IS NOT LATCHED IN A MODULE-SCOPE FLAG. The directory can be removed underneath us by
+ * `deleteReciterDownloads` or by the reader clearing storage, and a latch would then never
+ * re-apply the flag to the recreated one. The native call is a single `setResourceValues`, and it
+ * runs where a directory is created rather than per download.
+ */
+function ensureAudioRoot(): Directory {
+  const root = new Directory(Paths.document, AUDIO_DOWNLOAD_DIR);
+  if (!root.exists) root.create({ intermediates: true });
+  // Never throws, answers `false` everywhere but Apple — see `lib/backupExclusion.ts`.
+  excludeFromBackup(root.uri);
+  return root;
+}
+
 /** Every reciter directory under the audio root, whether or not the catalogue still names it. */
 function reciterDirectories(): Directory[] {
   const root = new Directory(Paths.document, AUDIO_DOWNLOAD_DIR);
@@ -483,6 +508,9 @@ export async function downloadSurah(
 ): Promise<void> {
   if (!DOWNLOADS_SUPPORTED) throw new Error('audio downloads are not available on web');
 
+  // ⚠️ THE ROOT FIRST, so the backup flag lands on `{document}/audio` before anything is written
+  // beneath it. `intermediates: true` below would otherwise create the root silently and unflagged.
+  ensureAudioRoot();
   const dir = reciterDirectory(reciterId);
   if (!dir.exists) dir.create({ intermediates: true });
   // A `.part` left by a killed run belongs to nobody; this attempt owns the path.
