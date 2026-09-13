@@ -37,6 +37,9 @@
  *   • {@link formatRelativeTime}    — "3d ago" / "3 j" · "2w ago" / "2 sem."
  *   • {@link formatBytes}           — "245.3 MB" / "245,3 Mo"
  *   • {@link compareInAppLanguage}  — label collation in the app's language, not the device's
+ *   • {@link formatQuranNumber}     — "3" / "٣", the Quran's OWN structure numbers only (story
+ *                                     8-1 follow-up; it carries the boundary in its docblock, and
+ *                                     it is the ONE function here that does not pin Latin digits)
  *
  * `numberingSystem: 'latn'` on every `Intl` call is the standing rule from Story 20.2 AC-7:
  * Android Hermes's Intl polyfill returns Arabic-Indic / Devanagari digits for `ar` / `hi`, and a
@@ -58,6 +61,7 @@
  * for the whole session (`stack/i18n.md`). See `useOfflineStorage` for the shape that works.
  */
 import i18n from '@/i18n';
+import { isArabicUi } from './rtl';
 
 /** "December 25, 2026" / "25 décembre 2026" — long form, in the app's current language. */
 export function formatLongDate(date: Date): string {
@@ -258,4 +262,52 @@ export function formatBytes(bytes: number): string {
     }).format(bytes / 1024 ** exponent),
     unit: unitAt(exponent),
   });
+}
+
+/** `'٠'`–`'٩'` indexed by the Western digit's value. Arabic-Indic (`U+0660`–`U+0669`). */
+const ARABIC_INDIC_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'] as const;
+
+/**
+ * A QURAN STRUCTURE NUMBER — a page, a juz', a hizb, a surah number, an ayah number — rendered in
+ * the numerals the UI language writes. `3` under English, `٣` under Arabic.
+ *
+ * ── ⚠️ THIS REVERSES STORY 8-1's RECORDED "DIGITS STAY WESTERN" DECISION (2026-09-13) ────────
+ *
+ * 8-1 argued the chrome could stay Latin because the facsimile already carries Arabic-Indic
+ * numerals. On the device it reads as a bug rather than a choice: the QPC font draws the ayah
+ * markers `٦ ٧ ٨` and our own page number under them said `3`, and the page header said
+ * `الجزء 1 · الحزب 1`. The reversal and its reason are in 8-1's Design Notes.
+ *
+ * ── ⚠️ THE BOUNDARY, WHICH IS THE WHOLE DESIGN — SCOPE IT OR IT SPREADS ──────────────────────
+ *
+ * **CONVERT** the numbers that belong to the Quran's own structure, because they sit beside the
+ * mushaf's own numerals and are read as part of the book: page, juz', hizb, surah, ayah.
+ *
+ * **DO NOT CONVERT** anything a reader compares against a Latin-digit source outside the app:
+ *   • durations and timestamps in the audio UI (`lib/formatTime.ts` — a scrubber position, a
+ *     sleep countdown; these are wall-clock arithmetic, and platform media UI is Latin),
+ *   • byte sizes and download progress ({@link formatBytes} — a figure the reader checks against
+ *     a storage settings screen the OS draws in Latin digits),
+ *   • dates, times and relative times (every other function in this file, all of which pin
+ *     `numberingSystem: 'latn'` for the reason in the module header),
+ *   • playback speed, font size, and any other machine value.
+ *
+ * ── ⚠️ AN EXPLICIT DIGIT MAP, NOT `Intl.NumberFormat('ar-EG')`, AND THE REASON IS THIS FILE ──
+ *
+ * Every other function here pins `numberingSystem: 'latn'` because **Android Hermes's Intl
+ * polyfill is the thing that made that necessary** (Story 20.2 AC-7: it returned Arabic-Indic
+ * digits for `ar` unasked). Reaching for the same API to get the digits deliberately would make
+ * the output depend on the ICU data an engine happens to ship — and Node's full-ICU under Jest is
+ * NOT the engine the app runs on, so a green suite would prove nothing about the device. It also
+ * groups (`١٬٠٢٤`) at four digits, which a page number must never do. A ten-entry table is
+ * identical on every engine, needs no locale tag, and is exactly as correct under Jest as it is
+ * on a phone.
+ *
+ * Accepts a number or a pre-composed string (`"2:255"`, `"1/604"`), so a caller that has already
+ * joined its parts converts once rather than per part. Every non-digit character is left alone.
+ */
+export function formatQuranNumber(value: number | string): string {
+  const text = String(value);
+  if (!isArabicUi()) return text;
+  return text.replace(/[0-9]/g, (d) => ARABIC_INDIC_DIGITS[Number(d)]);
 }

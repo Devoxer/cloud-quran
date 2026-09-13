@@ -40,6 +40,7 @@ import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
+import { surahDisplayName } from '@/lib/surahName';
 import { useReadingPosition } from '@/lib/sync';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -130,7 +131,7 @@ export function WelcomeBackBanner({ dismissed }: WelcomeBackBannerProps) {
       testID="welcome-back-banner"
     >
       <Text style={styles.copy}>
-        {t('common:reading.welcomeBack', { name: metadata.nameTransliteration })}
+        {t('common:reading.welcomeBack', { name: surahDisplayName(metadata) })}
       </Text>
     </Animated.View>
   );

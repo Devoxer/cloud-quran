@@ -32,8 +32,10 @@ export function Icon({
   /**
    * ⚠️ THE GLYPH IS MIRRORED HERE AND NOWHERE ELSE (story 8-1). Ionicons' `chevron-back` is a
    * literal left-pointing glyph — `Font.loadAsync`-style silence, not an error — so under RTL a
-   * back control would point AWAY from where the reader came from. `Icon.ios.tsx` does NOT do this:
-   * its SF names are Apple's direction-aware ones and mirror themselves.
+   * back control would point AWAY from where the reader came from. ⚠️ `Icon.ios.tsx` DOES THE SAME
+   * THING as of 2026-09-13 (this comment said it deliberately did not): SF's direction-aware names
+   * turned out not to self-mirror inside `SymbolView`, so the registry's `sf` names became absolute
+   * and both renderers share this one swap.
    */
   const entry = ICON_REGISTRY[mirrorIcon(name, isRTL())];
   // Defensive: a name absent from the registry renders the fallback instead of crashing.

@@ -33,6 +33,8 @@
  * hand-maintained boolean.
  */
 
+import { isArabicUi } from '@/lib/rtl';
+
 /** The three recitation styles, in the order the picker groups them. */
 export const RECITER_STYLES = ['murattal', 'mujawwad', 'muallim'] as const;
 
@@ -315,6 +317,27 @@ export function resolveReciterId(id: string | null | undefined): string {
 }
 
 /**
+ * The name a surface should print for ONE reciter row, in the UI LANGUAGE (story 8-1 follow-up).
+ *
+ * ⚠️ THE CATALOGUE CARRIES BOTH NAMES AND EVERY SURFACE PRINTED THE ENGLISH ONE until 2026-09-13,
+ * so an Arabic interface said `إدارة تنزيلات Mishary Rashid Al-Afasy` and the mini player named
+ * the voice in Latin over Arabic recitation — the same mixed-script defect the surah names had
+ * (`lib/surahName.ts`). Script, not direction: `isArabicUi()`, never `isRTL()`, because a web
+ * reader gets Arabic copy in an LTR layout.
+ *
+ * ⚠️ THE PICKER IS NOT A CALLER, ON PURPOSE. `ReciterPicker` draws both names on every row (label
+ * + description) in both languages and folds both into its search, because choosing among 39
+ * voices is a cross-script lookup — the same exception the surah index gets. This function is for
+ * the places that print ONE name, usually inside a translated sentence.
+ *
+ * `undefined` in, `undefined` out, so a caller that did not find a row keeps its own fallback.
+ */
+export function reciterNameOf(reciter: Reciter | undefined): string | undefined {
+  if (!reciter) return undefined;
+  return isArabicUi() ? reciter.nameArabic : reciter.nameEnglish;
+}
+
+/**
  * The name a surface should print for an id — RESOLVED first, so it can never print a withdrawn
  * one back at the reader.
  *
@@ -326,5 +349,5 @@ export function resolveReciterId(id: string | null | undefined): string {
  */
 export function reciterDisplayName(id: string | null | undefined): string {
   const resolved = resolveReciterId(id);
-  return RECITERS.find((reciter) => reciter.id === resolved)?.nameEnglish ?? resolved;
+  return reciterNameOf(RECITERS.find((reciter) => reciter.id === resolved)) ?? resolved;
 }

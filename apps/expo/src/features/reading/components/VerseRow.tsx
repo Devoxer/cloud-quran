@@ -82,6 +82,7 @@ import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/co
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_WEIGHT } from '@/constants/typography';
+import { formatQuranNumber } from '@/lib/format';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -312,7 +313,7 @@ function VerseRowInner({
         </Pressable>
         {/* A bare numeral: no run of two letters, so `lint:i18n` correctly leaves it alone. */}
         <View style={[styles.badge, badgeSize]} testID={`ayah-badge-${verse}`}>
-          <Text style={[styles.badgeNumber, badgeNumberSize]}>{verse}</Text>
+          <Text style={[styles.badgeNumber, badgeNumberSize]}>{formatQuranNumber(verse)}</Text>
         </View>
       </View>
       {/* ⚠️ THE PRESS IS ON THE TEXT, NOT ON THE ROW. The row's meta strip already holds the
@@ -328,7 +329,11 @@ function VerseRowInner({
         onPressIn={onInteractionStart}
         disabled={!onSelectVerse}
         accessibilityRole={onSelectVerse ? 'button' : undefined}
-        accessibilityLabel={onSelectVerse ? t('player:a11y.selectVerse', { verse }) : undefined}
+        accessibilityLabel={
+          onSelectVerse
+            ? t('player:a11y.selectVerse', { verse: formatQuranNumber(verse) })
+            : undefined
+        }
         // The current state, as state — a screen reader otherwise never hears which ayah the
         // contextual row is acting on.
         accessibilityState={onSelectVerse ? { selected } : undefined}

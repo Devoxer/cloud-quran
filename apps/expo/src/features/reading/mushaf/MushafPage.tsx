@@ -100,6 +100,8 @@ import { OPACITY } from '@/constants/opacity';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
+import { formatQuranNumber } from '@/lib/format';
+import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { MushafPageHeader } from './MushafPageHeader';
 import { useMushafPage } from './useMushafPage';
@@ -309,7 +311,9 @@ export function MushafPage({
     return (
       <View
         style={[styles.container, safeArea]}
-        accessibilityLabel={t('common:mushaf.pageErrorA11y', { page: pageNumber })}
+        accessibilityLabel={t('common:mushaf.pageErrorA11y', {
+          page: formatQuranNumber(pageNumber),
+        })}
         testID={`mushaf-page-error-${pageNumber}`}
       >
         {/* ⚠️ THE RETRY REPORTS THE TOUCH TOO, AND HERE IT MATTERS MOST: this surface was
@@ -331,7 +335,9 @@ export function MushafPage({
     return (
       <View
         style={[styles.container, safeArea]}
-        accessibilityLabel={t('common:mushaf.pageLoadingA11y', { page: pageNumber })}
+        accessibilityLabel={t('common:mushaf.pageLoadingA11y', {
+          page: formatQuranNumber(pageNumber),
+        })}
         testID={`mushaf-page-loading-${pageNumber}`}
       >
         {Array.from({ length: isSpecialPage ? SPECIAL_PAGE_LINES : PAGE_LINES }, (_, i) => (
@@ -347,7 +353,11 @@ export function MushafPage({
   const firstLocation = layout.lines.find((l) => l.type === 'text' && l.words?.length)?.words?.[0]
     ?.location;
   const surahNumber = firstLocation ? Number.parseInt(firstLocation.split(':')[0], 10) : 1;
-  const surahName = SURAH_METADATA[surahNumber - 1]?.nameTransliteration ?? '';
+  // ⚠️ THE UI LANGUAGE'S NAME, NOT THE TRANSLITERATION (2026-09-13). This feeds the page's
+  // `accessibilityLabel`, and the Arabic bundle's `mushaf.pageA11y` is an Arabic sentence — so the
+  // hardcoded transliteration made a screen reader in Arabic announce `صفحة ٣، سورة Al-Baqarah`,
+  // one Latin token in the middle of an Arabic sentence, for exactly the reader Arabic exists for.
+  const surahName = surahDisplayName(SURAH_METADATA[surahNumber - 1]) ?? '';
   const activePrefix = activeVerseKey ? `${activeVerseKey}:` : null;
   // The same `+ ':'` guard the highlight uses — without it "2:1" matches every word of 2:15.
   const selectedPrefix = selectedVerseKey ? `${selectedVerseKey}:` : null;
@@ -369,7 +379,10 @@ export function MushafPage({
   return (
     <View
       style={[styles.container, safeArea]}
-      accessibilityLabel={t('common:mushaf.pageA11y', { page: pageNumber, name: surahName })}
+      accessibilityLabel={t('common:mushaf.pageA11y', {
+        page: formatQuranNumber(pageNumber),
+        name: surahName,
+      })}
       testID={`mushaf-page-${pageNumber}`}
     >
       {/* ⚠️ BAND ONE OF TWO. `Pressable`, not a gesture: with no surface recogniser left on this
@@ -426,7 +439,7 @@ export function MushafPage({
         accessibilityLabel={onToggleChrome ? t('common:mushaf.toggleChrome') : undefined}
         testID={`mushaf-chrome-band-footer-${pageNumber}`}
       >
-        <Text style={styles.pageNumber}>{pageNumber}</Text>
+        <Text style={styles.pageNumber}>{formatQuranNumber(pageNumber)}</Text>
       </Pressable>
     </View>
   );

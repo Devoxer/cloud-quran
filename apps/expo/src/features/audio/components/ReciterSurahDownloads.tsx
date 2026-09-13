@@ -54,11 +54,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmDialog, ListRow, SettingsGroup, SettingsRow, Text } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
+import { formatQuranNumber } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { isRTL } from '@/lib/rtl';
+import { surahIndexNames } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
-import { RECITERS, resolveReciterId } from '../data/reciters';
+import { RECITERS, reciterNameOf, resolveReciterId } from '../data/reciters';
 import {
   DOWNLOADS_SUPPORTED,
   deleteReciterDownloads,
@@ -81,7 +83,7 @@ export function ReciterSurahDownloads({ reciterId }: ReciterSurahDownloadsProps)
   const styles = useStyles();
   const resolved = resolveReciterId(reciterId);
   const reciter = RECITERS.find((entry) => entry.id === resolved);
-  const reciterName = reciter?.nameEnglish ?? resolved;
+  const reciterName = reciterNameOf(reciter) ?? resolved;
   const summary = useReciterDownloadSummary(resolved);
   const [removing, setRemoving] = useState(false);
 
@@ -97,24 +99,32 @@ export function ReciterSurahDownloads({ reciterId }: ReciterSurahDownloadsProps)
   };
 
   const renderRow = useCallback(
-    ({ item }: { item: SurahRow }) => (
-      <View style={styles.row}>
-        <ListRow
-          leading={<Text style={styles.number}>{item.number}</Text>}
-          title={item.nameTransliteration}
-          subtitle={item.nameEnglish}
-          trailing={<Text style={styles.arabicName}>{item.nameArabic}</Text>}
-          style={styles.rowFlex}
-          testID={`reciter-surah-row-${item.number}`}
-        />
-        <SurahDownloadButton
-          reciterId={resolved}
-          surah={item.number}
-          surahName={item.nameTransliteration}
-          testID={`reciter-surah-download-${item.number}`}
-        />
-      </View>
-    ),
+    ({ item }: { item: SurahRow }) => {
+      // Same cross-script row as the surah index, through the same door (`lib/surahName.ts`).
+      const names = surahIndexNames(item);
+      return (
+        <View style={styles.row}>
+          <ListRow
+            leading={<Text style={styles.number}>{formatQuranNumber(item.number)}</Text>}
+            title={names.title}
+            subtitle={names.gloss}
+            trailing={
+              names.trailing === null ? null : (
+                <Text style={styles.arabicName}>{names.trailing}</Text>
+              )
+            }
+            style={styles.rowFlex}
+            testID={`reciter-surah-row-${item.number}`}
+          />
+          <SurahDownloadButton
+            reciterId={resolved}
+            surah={item.number}
+            surahName={names.title}
+            testID={`reciter-surah-download-${item.number}`}
+          />
+        </View>
+      );
+    },
     [resolved, styles]
   );
 

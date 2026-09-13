@@ -198,6 +198,7 @@ import Read from '@/app/(tabs)/read';
 import { DURATIONS } from '@/constants/animation';
 import { ARABIC_FONT_SIZE, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
+import i18n from '@/i18n';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 
 type TestVerse = { surah: number; verse: number; textUthmani: string; textSimple: string };
@@ -345,7 +346,9 @@ beforeEach(() => {
     surah >= 1 && surah <= 114
       ? {
           number: surah,
-          nameArabic: 'x',
+          // Real Arabic names, because the chrome title picks one of the two by UI language
+          // (story 8-1 follow-up) — a placeholder here would make the Arabic case unfalsifiable.
+          nameArabic: surah === 1 ? 'الفاتحة' : 'البقرة',
           nameEnglish: 'x',
           nameTransliteration: surah === 1 ? 'Al-Fatihah' : 'Al-Baqarah',
           verseCount: surah === 2 ? 286 : 7,
@@ -456,6 +459,15 @@ describe('it shows verses', () => {
 });
 
 describe('what the chrome says', () => {
+  // ⚠️ INSIDE `act`. i18next's `languageChanged` re-renders every `useTranslation` subscriber, so
+  // switching back while the tree is still mounted is a React update — unwrapped it is a warning
+  // on a passing test, which is how real act violations get ignored.
+  afterEach(async () => {
+    await act(async () => {
+      await i18n.changeLanguage('en');
+    });
+  });
+
   // ⚠️ NOTHING OBSERVED THE TITLE FOR A ROUND ONCE, AND `const title = null` (a blank header
   // forever) passed 1826 tests. The screen's side of the wiring is covered here; the chrome's
   // own render behaviour is `ReadingChrome.test.tsx`'s.
@@ -464,6 +476,19 @@ describe('what the chrome says', () => {
     await screen.findByText('أية 1:1');
     await revealChrome();
     expect(screen.getByText('Al-Fatihah')).toBeTruthy();
+  });
+
+  it('names it in ARABIC under Arabic — and from the DATABASE row, not the table', async () => {
+    // ⚠️ This title is the one read from `lib/quranDb.ts`'s row rather than `quran-data`'s table
+    // (the surface's docblock says why), so it is its own wiring: a helper applied only to the
+    // table-backed sites would leave exactly this one Latin. The fixture's surah 1 row carries
+    // `nameArabic: 'الفاتحة'`.
+    await i18n.changeLanguage('ar');
+    render(<Read />);
+    await screen.findByText('أية 1:1');
+    await revealChrome();
+    expect(screen.getByText('الفاتحة')).toBeTruthy();
+    expect(screen.queryByText('Al-Fatihah')).toBeNull();
   });
 });
 

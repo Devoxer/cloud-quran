@@ -26,7 +26,7 @@ import { ScrollView } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
 import { uiLanguageLabel } from '@/constants/language';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
-import { RECITERS, resolveReciterId } from '@/features/audio';
+import { RECITERS, reciterNameOf, resolveReciterId } from '@/features/audio';
 import { isPlaceholderEmail, signOut, useSession } from '@/lib/auth';
 import { setString } from '@/lib/clipboard';
 import { haptics } from '@/lib/haptics';
@@ -183,7 +183,7 @@ export default function AccountScreen() {
         <SettingsRow
           icon="musical-notes-outline"
           label={t('profile:rows.recitation')}
-          description={currentReciter?.nameEnglish}
+          description={reciterNameOf(currentReciter)}
           trailing="chevron"
           onPress={() => router.push('/recitation')}
           accessibilityLabel={t('profile:a11y.recitation')}

@@ -10,8 +10,9 @@
  * — that is a Metro self-cycle; see STACK-CHEAT-SHEET § Don't / RN).
  */
 import { SymbolView } from 'expo-symbols';
+import { isRTL } from '@/lib/rtl';
 import { IconFrame, type IconProps } from './IconBase';
-import { ICON_REGISTRY } from './icon-registry';
+import { ICON_REGISTRY, mirrorIcon } from './icon-registry';
 
 export type { IconProps };
 
@@ -27,7 +28,16 @@ export function Icon({
   accessibilityElementsHidden,
   testID,
 }: IconProps) {
-  const entry = ICON_REGISTRY[name];
+  /**
+   * ⚠️ iOS MIRRORS HERE TOO, AND IT DID NOT UNTIL 2026-09-13. This file used to read the registry
+   * directly, because the four navigational `sf` names were Apple's direction-aware ones and were
+   * expected to mirror themselves from `semanticContentAttribute`. Measured in the Arabic build on
+   * the owner's iPhone: they do NOT inside `expo-symbols`' `SymbolView` — the settings chevrons had
+   * moved to the leading edge and still pointed right, and the index's back chevron pointed left
+   * while sitting on the right. The registry's names are absolute now and the swap is explicit and
+   * identical on every platform. See `RTL_MIRRORED_ICONS`.
+   */
+  const entry = ICON_REGISTRY[mirrorIcon(name, isRTL())];
   // Defensive: a name absent from the registry (only reachable if the typed union is widened /
   // a value is `as IconName`-cast) renders the fallback instead of crashing on `entry.sf`.
   if (!entry) {

@@ -41,8 +41,10 @@ import { Pressable, Text, View } from 'react-native';
 import { HeaderActionButton, Icon } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { RECITERS, resolveReciterId, useVerseSeek } from '@/features/audio';
+import { RECITERS, reciterNameOf, resolveReciterId, useVerseSeek } from '@/features/audio';
+import { formatQuranNumber } from '@/lib/format';
 import { formatSleepRemaining } from '@/lib/formatTime';
+import { surahDisplayName } from '@/lib/surahName';
 import { addBookmark, removeBookmark, useBookmarks } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 import type { VersePair } from '@/lib/usePosition';
@@ -208,15 +210,18 @@ export function ChromeVerseRow({
    *
    * ⚠️ THE NAME IS DATA AND THE SEPARATOR IS THE COPY, which is why this goes through `t()` at
    * all: a locale that wants the ayah first, or a different separator, changes the string rather
-   * than this code. A surah the table cannot name falls back to its number, never to an empty
+   * than this code. The NAME itself is still language-dependent — `surahDisplayName` answers
+   * `البقرة` under Arabic — and the ayah number is `formatQuranNumber`'d for the same reason. A surah the table cannot name falls back to its number, never to an empty
    * label. Defined in the body rather than at module scope so it can hold the typed `t` — the
    * generated key union does not survive being passed as a plain function.
    */
   const verseLabel = (surah: number, verse: number | null): string => {
     const name =
-      SURAH_METADATA[surah - 1]?.nameTransliteration ??
-      t('common:bookmarks.surahFallback', { number: surah });
-    return verse === null ? name : t('player:nowPlayingVerse', { name, verse });
+      surahDisplayName(SURAH_METADATA[surah - 1]) ??
+      t('common:bookmarks.surahFallback', { number: formatQuranNumber(surah) });
+    return verse === null
+      ? name
+      : t('player:nowPlayingVerse', { name, verse: formatQuranNumber(verse) });
   };
 
   /**
@@ -282,7 +287,9 @@ export function ChromeVerseRow({
           name="play"
           onPress={playFromSelection}
           color={colors.accent.primary}
-          accessibilityLabel={t('player:a11y.playFromVerse', { verse: selected.verse })}
+          accessibilityLabel={t('player:a11y.playFromVerse', {
+            verse: formatQuranNumber(selected.verse),
+          })}
           focusable={interactive}
           testID="chrome-verse-play"
         />
@@ -332,7 +339,7 @@ export function ChromeVerseRow({
   // the NEXT track will use. See `usePlaybackStatus` for the wrong-source class this closes.
   const reciterId = resolveReciterId(playback.reciterId);
   // The names are DATA — a reciter is called what he is called in every locale.
-  const reciterName = RECITERS.find((r) => r.id === reciterId)?.nameEnglish ?? reciterId;
+  const reciterName = reciterNameOf(RECITERS.find((r) => r.id === reciterId)) ?? reciterId;
   const playing = playback.playbackState === 'playing';
   // The recited ayah when the manifest can name one; an untimed surah names only its track, and
   // `isSurahTimed` leaving `activeVerseKey` null is exactly that case.

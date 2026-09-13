@@ -26,7 +26,8 @@ jest.mock('@/lib/sync', () => ({
 // `expo-crypto`'s native module is absent under Jest — the `auth.test.ts` convention.
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'uuid-under-test' }));
 
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import i18n from '@/i18n';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { ChromeVerseRow } from './ChromeVerseRow';
 
@@ -74,6 +75,15 @@ const mockOpenReciters = jest.fn();
 const mockOpenPlaybackOptions = jest.fn();
 /** `useChromeReveal`'s `keepAlive` — every control here owes it a call. */
 const mockInteract = jest.fn();
+
+// ⚠️ A SUITE-LEVEL RESET, NOT A LINE AT THE END OF THE ARABIC CASE: a failing assertion above it
+// would never reach an inline reset, and every later case in the file would then run in Arabic.
+// Inside `act` because `languageChanged` re-renders every `useTranslation` subscriber.
+afterEach(async () => {
+  await act(async () => {
+    await i18n.changeLanguage('en');
+  });
+});
 
 describe('state 1 — an ayah is selected', () => {
   it('draws the verse actions and names the ayah', () => {
@@ -157,6 +167,23 @@ describe('state 2 — audio is loaded and nothing is selected', () => {
     expect(screen.getByTestId('chrome-now-playing').props.children).toBe('Al-Kahf · 23');
     expect(screen.getByTestId('chrome-reciter')).toBeTruthy();
     expect(screen.queryByTestId('chrome-verse-row')).toBeNull();
+  });
+
+  it('names the LOADED voice and the ayah in Arabic under Arabic (story 8-1 follow-up)', async () => {
+    // ⚠️ BOTH HALVES OF ONE STRING WERE LATIN under Arabic chrome: the surah name and the ayah
+    // number. `Al-Kahf · 23` inside an Arabic interface, over Arabic recitation, with the voice
+    // named `Mishary Rashid Al-Afasy` beside it. Literals, not `surahDisplayName(...)` run back.
+    await i18n.changeLanguage('ar');
+    act(() => {
+      store().setTrack(18, 'alafasy', true);
+      store().setPlaybackState('playing');
+      store().setActiveVerse(23);
+    });
+    renderRow(null);
+    expect(screen.getByTestId('chrome-now-playing').props.children).toBe('الكهف · ٢٣');
+    expect(
+      within(screen.getByTestId('chrome-reciter')).getByText('مشاري راشد العفاسي')
+    ).toBeTruthy();
   });
 
   it('gives way to the verse actions the moment an ayah is selected', () => {

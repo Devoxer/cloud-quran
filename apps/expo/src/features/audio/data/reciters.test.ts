@@ -12,12 +12,15 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import i18n from '@/i18n';
 import { DEFAULT_PREFERENCES } from '@/lib/sync';
 import {
   DEFAULT_RECITER_ID,
   RECITER_STYLES,
   RECITERS,
   type ReciterStyle,
+  reciterDisplayName,
+  reciterNameOf,
   resolveReciterId,
 } from './reciters';
 
@@ -163,5 +166,42 @@ describe('resolveReciterId — an unknown stored id never reaches the CDN', () =
     expect(resolveReciterId('')).toBe('alafasy');
     expect(resolveReciterId(null)).toBe('alafasy');
     expect(resolveReciterId(undefined)).toBe('alafasy');
+  });
+});
+
+/**
+ * Naming a voice in the UI language (story 8-1 follow-up).
+ *
+ * ⚠️ EVERY SURFACE PRINTED `nameEnglish` UNTIL 2026-09-13, so an Arabic interface said
+ * `إدارة تنزيلات Mishary Rashid Al-Afasy` and the mini player named the voice in Latin over
+ * Arabic recitation. Literal expectations, like the rest of this file: `alafasy`'s two names are
+ * catalogue data, and deriving the expectation from `RECITERS` would agree with whatever the
+ * resolver picked.
+ */
+describe('reciterNameOf / reciterDisplayName — the voice’s name in the UI language', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  const alafasy = RECITERS.find((reciter) => reciter.id === 'alafasy');
+
+  it('is the English spelling under English', async () => {
+    await i18n.changeLanguage('en');
+    expect(reciterNameOf(alafasy)).toBe('Mishary Rashid Al-Afasy');
+    expect(reciterDisplayName('alafasy')).toBe('Mishary Rashid Al-Afasy');
+  });
+
+  it('is the Arabic name under Arabic', async () => {
+    await i18n.changeLanguage('ar');
+    expect(reciterNameOf(alafasy)).toBe('مشاري راشد العفاسي');
+    expect(reciterDisplayName('alafasy')).toBe('مشاري راشد العفاسي');
+  });
+
+  it('keeps resolving an unknown id to the DEFAULT voice, in either language', async () => {
+    // The behaviour `reciterDisplayName` is named for, unchanged by the language rule — and the
+    // reason `reciterNameOf` exists beside it (the now-playing card must never guess a voice).
+    await i18n.changeLanguage('ar');
+    expect(reciterDisplayName('nope')).toBe('مشاري راشد العفاسي');
+    expect(reciterNameOf(undefined)).toBeUndefined();
   });
 });

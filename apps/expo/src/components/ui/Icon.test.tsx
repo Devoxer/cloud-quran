@@ -117,11 +117,58 @@ describe('Icon — the RTL swap is WIRED, not merely available (story 8-1)', () 
     expect(glyphOf(render(<IonIcon name="search" testID="i" />), 'i')).toBe('search');
   });
 
-  it('iOS: does NOT swap, because the SF names mirror themselves', () => {
-    // ⚠️ THE DOUBLE INVERSION, ON THE OTHER PLATFORM. `chevron.backward` is defined by Apple in
-    // terms of the reading direction; applying our table on top would point it the wrong way in
-    // Arabic — the exact defect the table exists to fix, reintroduced by fixing it twice.
+  /**
+   * ⚠️ THESE FOUR CASES REPLACE ONE THAT PINNED THE OPPOSITE, AND THE OLD ONE WAS GREEN THE WHOLE
+   * TIME THE APP WAS BROKEN. It asserted `chevron-back` stays `chevron.backward` on iOS under RTL,
+   * on the theory that Apple's direction-aware SF names mirror themselves from
+   * `semanticContentAttribute`. `expo-symbols`' `SymbolView` does not do that: measured in the
+   * Arabic build on the owner's iPhone 2026-09-13, every directional glyph pointed the wrong way
+   * inside a correctly mirrored layout. The registry's `sf` names are absolute now and iOS runs the
+   * same `mirrorIcon` swap Android and web do, so what must be pinned is that it DOES swap — and
+   * that the absolute name is what the swap starts from, since a registry that quietly went back to
+   * `chevron.backward` would leave these passing while the device regressed.
+   */
+  it('iOS: draws `chevron-back` as the RIGHT-pointing SF glyph under RTL', () => {
     jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
-    expect(glyphOf(render(<Icon name="chevron-back" testID="i" />), 'i')).toBe('chevron.backward');
+    expect(glyphOf(render(<Icon name="chevron-back" testID="i" />), 'i')).toBe('chevron.right');
+  });
+
+  it('iOS: draws `chevron-back` as the LEFT-pointing SF glyph under LTR — the mutation control', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(false);
+    expect(glyphOf(render(<Icon name="chevron-back" testID="i" />), 'i')).toBe('chevron.left');
+  });
+
+  it('iOS: mirrors the arrows too, in both directions', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    expect(glyphOf(render(<Icon name="arrow-back" testID="a" />), 'a')).toBe('arrow.right');
+    expect(glyphOf(render(<Icon name="arrow-forward" testID="b" />), 'b')).toBe('arrow.left');
+  });
+
+  it('iOS: leaves a non-directional glyph alone under RTL', () => {
+    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    expect(glyphOf(render(<Icon name="search" testID="i" />), 'i')).toBe('magnifyingglass');
+  });
+});
+
+describe('ICON_REGISTRY — the navigational SF names are ABSOLUTE (story 8-1 follow-up)', () => {
+  /**
+   * The swap above cannot see this, and it is the half that regresses by "helpfully" restoring
+   * Apple's semantic names: paired with `mirrorIcon` they would be mirrored TWICE — once by our
+   * table, once by whatever honours `semanticContentAttribute` — which is how this defect gets
+   * reintroduced by someone fixing it.
+   */
+  it.each([
+    ['chevron-back', 'chevron.left'],
+    ['chevron-forward', 'chevron.right'],
+    ['arrow-back', 'arrow.left'],
+    ['arrow-forward', 'arrow.right'],
+  ] as const)('%s maps to the literal SF name %s', (name, sf) => {
+    expect(ICON_REGISTRY[name].sf).toBe(sf);
+  });
+
+  it('names no direction-aware SF symbol anywhere in the registry', () => {
+    for (const entry of Object.values(ICON_REGISTRY)) {
+      expect(entry.sf).not.toMatch(/\.(backward|forward)$/);
+    }
   });
 });

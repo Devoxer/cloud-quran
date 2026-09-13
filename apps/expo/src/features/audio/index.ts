@@ -54,6 +54,7 @@ export {
   type Reciter,
   type ReciterStyle,
   reciterDisplayName,
+  reciterNameOf,
   resolveReciterId,
 } from './data/reciters';
 export { useDownloadReciterId } from './hooks/useDownloadReciterId';

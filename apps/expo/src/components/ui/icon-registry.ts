@@ -72,15 +72,23 @@ export const ICON_REGISTRY = {
   'settings-outline': { sf: 'gearshape', ion: 'settings-outline' },
 
   // ── navigation / chevrons / arrows ──
-  // ⚠️ THE `sf` NAMES HERE ARE THE DIRECTION-AWARE ONES ON PURPOSE (story 8-1). `arrow.backward` /
-  // `arrow.forward` / `chevron.backward` / `chevron.forward` are defined by Apple in terms of the
-  // READING direction and mirror themselves under RTL; `arrow.left` / `arrow.right` are literal
-  // and do not, which is why the two arrows moved. The Ionicons glyphs on Android and web are
-  // literal whatever they are called, so THEY are swapped in code — see `RTL_MIRRORED_ICONS`.
-  'arrow-back': { sf: 'arrow.backward', ion: 'arrow-back' },
-  'arrow-forward': { sf: 'arrow.forward', ion: 'arrow-forward' },
-  'chevron-back': { sf: 'chevron.backward', ion: 'chevron-back' },
-  'chevron-forward': { sf: 'chevron.forward', ion: 'chevron-forward' },
+  // ⚠️ THE `sf` NAMES HERE ARE THE ABSOLUTE ONES ON PURPOSE — AND THIS COMMENT ARGUED THE EXACT
+  // OPPOSITE UNTIL 2026-09-13, SO DO NOT TRUST A REMEMBERED VERSION OF IT. Story 8-1 chose
+  // `chevron.backward` / `chevron.forward` / `arrow.backward` / `arrow.forward` because Apple
+  // defines them in terms of the READING direction, and expected UIKit to mirror them from the
+  // view's `semanticContentAttribute` under `forceRTL`. **It does not, inside `expo-symbols`'
+  // `SymbolView`.** Measured on the owner's iPhone, Arabic UI, 2026-09-13: the settings rows'
+  // chevrons had correctly moved to the leading (left) edge and still POINTED RIGHT, and the
+  // surah index's back chevron sat on the right still pointing left. Android was correct
+  // throughout — because Android goes through `mirrorIcon`.
+  // So there is now ONE mechanism on all three platforms: the names here are literal, and every
+  // renderer swaps them through `RTL_MIRRORED_ICONS` (see `mirrorIcon`, and the two `Icon`
+  // files). A literal name plus an explicit swap is deterministic and testable; "the platform
+  // mirrors it for us" was neither, and failed silently on the platform it was chosen for.
+  'arrow-back': { sf: 'arrow.left', ion: 'arrow-back' },
+  'arrow-forward': { sf: 'arrow.right', ion: 'arrow-forward' },
+  'chevron-back': { sf: 'chevron.left', ion: 'chevron-back' },
+  'chevron-forward': { sf: 'chevron.right', ion: 'chevron-forward' },
   'chevron-up': { sf: 'chevron.up', ion: 'chevron-up' },
   'chevron-down': { sf: 'chevron.down', ion: 'chevron-down' },
   'keyboard-double-arrow-down': { sf: 'chevron.down.2', ion: 'chevron-down' },
@@ -194,14 +202,18 @@ export const ICON_REGISTRY = {
 export type IconName = keyof typeof ICON_REGISTRY;
 
 /**
- * Semantic icon names whose Ionicons glyph is a LITERAL direction, and the name that means the
- * same thing in a mirrored layout (story 8-1).
+ * Semantic icon names whose drawn glyph is a LITERAL direction, and the name that means the same
+ * thing in a mirrored layout (story 8-1).
  *
- * ⚠️ ANDROID AND WEB ONLY, WHICH IS WHY THE SWAP LIVES IN `Icon.tsx` AND NOT HERE. `Icon.ios.tsx`
- * draws SF Symbols, and the four `sf` names above are the direction-aware ones — they already
- * mirror themselves under RTL, so applying this table there would flip them BACK. A `chevron-back`
- * that points the wrong way is the kind of defect that typechecks, passes every test and is
- * obvious in one second on a device.
+ * ⚠️ EVERY PLATFORM, NOT ONLY ANDROID AND WEB — THIS DOCBLOCK SAID "ANDROID AND WEB ONLY" UNTIL
+ * 2026-09-13 AND IT WAS WRONG ON A DEVICE. The iOS renderer was exempted on the theory that SF's
+ * direction-aware names (`chevron.backward`, …) self-mirror under RTL; `SymbolView` does not
+ * honour that, so every directional glyph in the Arabic interface pointed the wrong way while the
+ * layout around it was correctly mirrored. The registry's `sf` names are now absolute and BOTH
+ * `Icon.tsx` and `Icon.ios.tsx` call `mirrorIcon` — one mechanism, one table, one test. A
+ * `chevron-back` that points the wrong way is the kind of defect that typechecks, passes every
+ * test and is obvious in one second on a device, which is why the swap is explicit rather than
+ * delegated to a platform.
  *
  * ── ⚠️ WHAT IS DELIBERATELY *NOT* IN HERE, BECAUSE A SELF-CONSISTENCY TEST CANNOT SAY SO ─────
  *

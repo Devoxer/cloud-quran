@@ -58,13 +58,14 @@
  *
  * ── Decisions recorded here because nothing else in the tree states them ─────────────────────
  *
- * ⚠️ **DIGITS STAY WESTERN (`1`, `2`, `3`) IN EVERY LANGUAGE.** Page numbers, ayah badges,
- * juz'/hizb labels, durations and byte sizes are all rendered from the `ar` bundle's own literal
- * digits and from `lib/format.ts`, neither of which switches numbering system. That is a choice,
- * not an oversight: the mushaf's own ayah markers are drawn by the QPC font as Arabic-Indic
- * glyphs, so the page already carries both, and the numbers OUTSIDE the facsimile are chrome the
- * reader cross-references against a page number printed in the book. Changing it means one place
- * (`lib/format.ts`) and a re-smoke of the mushaf header, not a sweep.
+ * ⚠️ **QURAN STRUCTURE NUMBERS ARE ARABIC-INDIC UNDER ARABIC — THIS PARAGRAPH SAID THE OPPOSITE
+ * UNTIL 2026-09-13.** Story 8-1 shipped "digits stay Western in every language", arguing that the
+ * page already carries Arabic-Indic numerals in the facsimile so the chrome could stay Latin. On
+ * the device that reads as a defect rather than a choice: the QPC font draws the ayah markers
+ * `٦ ٧ ٨` and our own page number underneath them said `3`. The reversal is recorded in story
+ * 8-1's Design Notes and implemented in ONE place — `lib/format.ts` § `formatQuranNumber`, which
+ * also carries the BOUNDARY (durations, byte sizes and anything a reader compares against a
+ * Latin-digit source stay Western).
  *
  * ⚠️ **`app.json` GAINS NO `locales` / `CFBundleLocalizations`, SO iOS OFFERS NO PER-APP LANGUAGE
  * ROW IN SYSTEM SETTINGS.** Deliberate for this story: the picker is in-app and device-local, and
@@ -76,7 +77,7 @@
 import { reloadAppAsync } from 'expo';
 import { I18nManager, Platform } from 'react-native';
 
-import { getStoredLanguage } from './language';
+import { getLanguage, getStoredLanguage } from './language';
 import { createAppMMKV } from './mmkv';
 
 /**
@@ -100,6 +101,26 @@ export function isRTLLanguage(code: string | undefined | null): boolean {
  */
 export function resolveDirection(code: string | undefined | null): boolean {
   return Platform.OS !== 'web' && isRTLLanguage(code);
+}
+
+/**
+ * Whether the COMMITTED UI language is written in the Arabic SCRIPT — the question every surface
+ * asks that is about the copy rather than about the layout (story 8-1 follow-up): which of a
+ * surah's two names to print, which of a reciter's two names to say, and which numerals a Quran
+ * structure number gets. See `lib/surahName.ts` and `lib/format.ts` § `formatQuranNumber`.
+ *
+ * ⚠️ IT IS NOT {@link isRTL}, AND THE DIFFERENCE IS WEB. `isRTL()` answers "is THIS PROCESS laid
+ * out right to left", which is floored to `false` on web because `react-native-web`'s
+ * `I18nManager` is a stub (see the header). A web reader on Arabic still gets Arabic COPY — so a
+ * web build asking `isRTL()` here would print `Al-Baqarah` inside an otherwise Arabic interface,
+ * which is the mixed-script defect this predicate exists to close. Script, not direction.
+ *
+ * ⚠️ AND IT READS THE COMMITTED LANGUAGE PER CALL, never a module-scope constant: `getLanguage()`
+ * floors to the device seed before `initI18n()` runs, so a value captured at import time can be a
+ * different answer from the one the app commits to (`lib/language.ts` § `getLanguage`).
+ */
+export function isArabicUi(): boolean {
+  return isRTLLanguage(getLanguage());
 }
 
 /** The answer {@link isRTL} caches. Resolved at boot by {@link applyStoredDirection}. */

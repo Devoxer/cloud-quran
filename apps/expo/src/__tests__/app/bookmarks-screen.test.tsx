@@ -89,6 +89,7 @@ import { join } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { getPageForVerse } from 'quran-data';
 import Bookmarks from '@/app/(tabs)/bookmarks';
+import i18n from '@/i18n';
 
 jest.useFakeTimers();
 
@@ -118,6 +119,15 @@ beforeEach(() => {
   mockGetVersesForPositions.mockResolvedValue([]);
 });
 
+// ⚠️ A SUITE-LEVEL RESET, NOT A LINE AT THE END OF THE ARABIC CASE: a failing assertion above it
+// would never reach an inline reset, and every later case in the file would then run in Arabic.
+// Inside `act` because `languageChanged` re-renders every `useTranslation` subscriber.
+afterEach(async () => {
+  await act(async () => {
+    await i18n.changeLanguage('en');
+  });
+});
+
 describe('the list', () => {
   it('renders the matrix row: transliteration name + ref, Arabic preview, delete — newest first', async () => {
     mockBookmarksRow.current = [bookmark('bk-old', 1, 1, 100), bookmark('bk-new', 2, 255, 200)];
@@ -133,6 +143,20 @@ describe('the list', () => {
     // Most-recent-first: the list's data is the sorted rows, ids in createdAt-desc order.
     const data = mockListProps[mockListProps.length - 1].data as { id: string }[];
     expect(data.map((r) => r.id)).toEqual(['bk-new', 'bk-old']);
+  });
+
+  it('names the surah and its ref in Arabic under Arabic (story 8-1 follow-up)', async () => {
+    // The row title is one translated string carrying a surah name AND two numbers, so all three
+    // had to move together: `Al-Baqarah · 2:255` inside Arabic chrome was the story's F2/F5
+    // complaint in a single line. Literals, so the case cannot restate the formatter.
+    await i18n.changeLanguage('ar');
+    mockBookmarksRow.current = [bookmark('bk-new', 2, 255, 200)];
+    mockGetVersesForPositions.mockResolvedValue([
+      { surah: 2, verse: 255, textUthmani: 'آية الكرسي', textSimple: 'a' },
+    ]);
+    await renderScreen();
+    expect(screen.getByText('البقرة · ٢:٢٥٥')).toBeTruthy();
+    expect(screen.queryByText('Al-Baqarah · 2:255')).toBeNull();
   });
 
   it('keys rows by the bookmark ID, not by index or pair', async () => {

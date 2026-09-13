@@ -16,6 +16,7 @@ import {
 } from '@/features/reading';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
 import { isRTL } from '@/lib/rtl';
+import { surahDisplayName } from '@/lib/surahName';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import {
@@ -427,7 +428,8 @@ export default function Mushaf() {
   // What the chrome names: the settled page's surah. The page number is not repeated — the
   // facsimile page draws its own (story 6-6's intent: the header carries controls).
   const surahNumber = getFirstVerseForPage(currentPage).surah;
-  const title = SURAH_METADATA[surahNumber - 1]?.nameTransliteration ?? null;
+  // The UI language's name — the same answer the page header under it gives (`lib/surahName.ts`).
+  const title = surahDisplayName(SURAH_METADATA[surahNumber - 1]);
 
   return (
     <View style={styles.screen} testID="mushaf-surface">

@@ -65,6 +65,8 @@ import {
   SurahDownloadButton,
   useDownloadReciterId,
 } from '@/features/audio';
+import { formatQuranNumber } from '@/lib/format';
+import { surahDisplayName, surahIndexNames } from '@/lib/surahName';
 import { usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -209,7 +211,11 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
   const renderRow = useCallback(
     ({ item }: { item: IndexRow }) => {
       if ('verseCount' in item) {
-        const verses = String(item.verseCount);
+        // ⚠️ THE INDEX IS THE ONE CROSS-SCRIPT SURFACE (`lib/surahName.ts`): the UI language's name
+        // as the title, the other script in the supporting line, nothing repeated. Under Arabic
+        // the trailing slot goes away rather than printing `البقرة` a second time.
+        const names = surahIndexNames(item);
+        const verses = formatQuranNumber(item.verseCount);
         const revelation =
           item.revelationType === 'meccan'
             ? t('index.revelation.meccan')
@@ -223,10 +229,14 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
             testID={`surah-row-${item.number}-container`}
           >
             <ListRow
-              leading={<Text style={styles.number}>{item.number}</Text>}
-              title={item.nameTransliteration}
-              subtitle={t('index.surahSubtitle', { name: item.nameEnglish, verses, revelation })}
-              trailing={<Text style={styles.arabicName}>{item.nameArabic}</Text>}
+              leading={<Text style={styles.number}>{formatQuranNumber(item.number)}</Text>}
+              title={names.title}
+              subtitle={t('index.surahSubtitle', { name: names.gloss, verses, revelation })}
+              trailing={
+                names.trailing === null ? null : (
+                  <Text style={styles.arabicName}>{names.trailing}</Text>
+                )
+              }
               onPress={() => onSelectSurah(item.number)}
               style={styles.rowFlex}
               testID={`surah-row-${item.number}`}
@@ -235,7 +245,7 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
               <SurahDownloadButton
                 reciterId={reciterId}
                 surah={item.number}
-                surahName={item.nameTransliteration}
+                surahName={names.title}
                 testID={`surah-download-${item.number}`}
               />
             )}
@@ -243,22 +253,22 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
         );
       }
       const name =
-        SURAH_METADATA[item.startSurah - 1]?.nameTransliteration ?? String(item.startSurah);
+        surahDisplayName(SURAH_METADATA[item.startSurah - 1]) ?? formatQuranNumber(item.startSurah);
       const page = getPageForVerse(item.startSurah, item.startVerse);
       const isJuz = segment === 'juz';
       return (
         <ListRow
-          leading={<Text style={styles.number}>{item.number}</Text>}
+          leading={<Text style={styles.number}>{formatQuranNumber(item.number)}</Text>}
           title={
             isJuz
-              ? t('index.juzTitle', { number: item.number })
-              : t('index.hizbTitle', { number: item.number })
+              ? t('index.juzTitle', { number: formatQuranNumber(item.number) })
+              : t('index.hizbTitle', { number: formatQuranNumber(item.number) })
           }
           subtitle={t('index.boundarySubtitle', {
             name,
-            surah: item.startSurah,
-            verse: item.startVerse,
-            page,
+            surah: formatQuranNumber(item.startSurah),
+            verse: formatQuranNumber(item.startVerse),
+            page: formatQuranNumber(page),
           })}
           onPress={() => onSelectBoundary(item.startSurah, item.startVerse)}
           testID={`${isJuz ? 'juz' : 'hizb'}-row-${item.number}`}

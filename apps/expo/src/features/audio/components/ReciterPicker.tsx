@@ -83,6 +83,7 @@ import {
   RECITERS,
   type Reciter,
   type ReciterStyle,
+  reciterNameOf,
   resolveReciterId,
 } from '../data/reciters';
 import { useDownloadAllPrompt } from '../hooks/useDownloadAllPrompt';
@@ -225,7 +226,12 @@ export function ReciterPicker({ listFooter }: ReciterPickerProps) {
     return (
       <View style={styles.row} testID={`reciter-row-${reciter.id}-container`}>
         <SettingsRow
-          // The names are DATA, not copy — a reciter is called what he is called in every locale.
+          // ⚠️ BOTH NAMES IN BOTH LANGUAGES, AND THIS ROW IS THE EXCEPTION rather than the
+          // oversight (story 8-1 follow-up). Every other surface prints ONE name in the UI
+          // language through `reciterNameOf`; choosing among 39 voices is a cross-script LOOKUP —
+          // the search folds over both names for the same reason — so the row keeps showing both.
+          // The two sites below, which put ONE name inside a translated sentence, do go through
+          // that door.
           label={reciter.nameEnglish}
           description={reciter.nameArabic}
           // ⚠️ `selected` is what carries the choice to VoiceOver and TalkBack. The checkmark
@@ -244,7 +250,7 @@ export function ReciterPicker({ listFooter }: ReciterPickerProps) {
             `ReciterDownloadButton`'s docblock for the measured nesting defect. */}
         <ReciterDownloadButton
           reciterId={reciter.id}
-          reciterName={reciter.nameEnglish}
+          reciterName={reciterNameOf(reciter) ?? reciter.nameEnglish}
           keptCount={kept}
           estimating={prompt.estimatingId === reciter.id}
           onDownloadAll={() => prompt.ask(reciter.id)}
@@ -257,7 +263,9 @@ export function ReciterPicker({ listFooter }: ReciterPickerProps) {
             }
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel={t('player:download.reciterOpenA11y', { name: reciter.nameEnglish })}
+            accessibilityLabel={t('player:download.reciterOpenA11y', {
+              name: reciterNameOf(reciter) ?? reciter.nameEnglish,
+            })}
             style={({ pressed }) => [styles.chevron, pressed ? styles.pressed : null]}
             testID={`reciter-open-${reciter.id}`}
           >

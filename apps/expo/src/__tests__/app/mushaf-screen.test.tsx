@@ -110,6 +110,7 @@ import { getFirstVerseForPage, getPageForVerse, TOTAL_PAGES } from 'quran-data';
 import type { ViewToken } from 'react-native';
 import Mushaf from '@/app/(tabs)/index';
 import { DURATIONS } from '@/constants/animation';
+import i18n from '@/i18n';
 import * as rtl from '@/lib/rtl';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 
@@ -223,6 +224,15 @@ beforeEach(() => {
   mockCanGoBack.mockReturnValue(true);
   mockReadingPositionRow.current = null;
   mockAudioPositionRow.current = null;
+});
+
+// ⚠️ A SUITE-LEVEL RESET, NOT A LINE AT THE END OF THE ARABIC CASE: a failing assertion above it
+// would never reach an inline reset, and every later case in the file would then run in Arabic.
+// Inside `act` because `languageChanged` re-renders every `useTranslation` subscriber.
+afterEach(async () => {
+  await act(async () => {
+    await i18n.changeLanguage('en');
+  });
 });
 
 describe('the reversed pager', () => {
@@ -509,6 +519,19 @@ describe('the chrome, and the two bands that toggle it', () => {
     expect(screen.queryByText('Page 42')).toBeNull();
   });
 
+  it('names it in ARABIC under Arabic — the same answer the page header gives (story 8-1 F3)', async () => {
+    // ⚠️ THE TWO USED TO DISAGREE ON ONE SCREEN: this title printed `Al-Baqarah` while the page
+    // header under it printed `البقرة · Al-Baqarah`. Both go through `lib/surahName.ts` now, so
+    // the chrome and the page say the same thing — which is what makes the mushaf↔reading toggle
+    // mean "same place, different renderer" in either language.
+    await i18n.changeLanguage('ar');
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    render(<Mushaf />);
+    await revealChrome();
+    expect(screen.getByText('البقرة')).toBeTruthy();
+    expect(screen.queryByText('Al-Baqarah')).toBeNull();
+  });
+
   it('carries the mode toggle, and it navigates to reading mode', async () => {
     render(<Mushaf />);
     await revealChrome();
@@ -536,6 +559,19 @@ describe('the welcome-back banner (story 6-3)', () => {
     render(<Mushaf />);
     expect(screen.getByTestId('welcome-back-banner')).toBeTruthy();
     expect(screen.getByText('Welcome back. You were reading Al-Baqarah.')).toBeTruthy();
+  });
+
+  it('names the saved surah in Arabic under Arabic', async () => {
+    // The banner interpolates the name into a translated sentence, so under Arabic it read
+    // `كنت تقرأ Al-Baqarah` — one Latin token mid-sentence, the story's F2 complaint verbatim.
+    await i18n.changeLanguage('ar');
+    mockReadingPositionRow.current = {
+      surah: 2,
+      verse: 255,
+      updatedAt: Date.now() - EIGHT_DAYS_MS,
+    };
+    render(<Mushaf />);
+    expect(screen.getByText('أهلًا بعودتك. كنت تقرأ البقرة.')).toBeTruthy();
   });
 
   it('does not mount for a fresh row', () => {

@@ -80,6 +80,7 @@ jest.mock('@/lib/sync', () => ({
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { getPageForVerse } from 'quran-data';
 import Surahs from '@/app/surahs';
+import i18n from '@/i18n';
 
 /**
  * ⚠️ THE EXIT IS DEFERRED ONE MACROTASK, SO A PRESS ALONE NAVIGATES NOTHING IN A TEST.
@@ -151,6 +152,54 @@ describe('the Surahs segment', () => {
     render(<Surahs />);
     expect(styleOf('surah-row-1-container').backgroundColor).toBeTruthy();
     expect(listProps().initialScrollIndex).toBeUndefined();
+  });
+
+  /**
+   * ⚠️ THE INDEX IS THE ONE SURFACE THAT KEEPS BOTH SCRIPTS (story 8-1 follow-up). Everywhere else
+   * a surah is named ONCE in the UI language; a picker is a lookup, and a reader finds a surah by
+   * whichever name they know. What changes under Arabic is which name LEADS — and that each script
+   * still appears exactly once per row, so `الفاتحة` is never printed twice and `The Opening`
+   * never lands inside an otherwise Arabic subtitle.
+   */
+  describe('under Arabic', () => {
+    // ⚠️ INSIDE `act`: `languageChanged` re-renders every `useTranslation` subscriber, so putting
+    // the language back while the tree is mounted is a React update like any other.
+    afterEach(async () => {
+      await act(async () => {
+        await i18n.changeLanguage('en');
+      });
+    });
+
+    it('leads with the Arabic name, glosses with the romanization, and drops the trailing copy', async () => {
+      await i18n.changeLanguage('ar');
+      render(<Surahs />);
+      const row = within(screen.getByTestId('surah-row-1-container'));
+      expect(row.getByText('الفاتحة')).toBeTruthy();
+      // ONE `الفاتحة` in the row — the trailing slot is gone rather than repeating the title.
+      expect(row.getAllByText('الفاتحة')).toHaveLength(1);
+      // The subtitle's name slot is the ROMANIZATION, not the English meaning.
+      expect(row.getByText('Al-Fatihah · ٧ آية · مكية')).toBeTruthy();
+      expect(screen.queryByText(/The Opening/)).toBeNull();
+    });
+
+    it('numbers every row in Arabic-Indic digits', async () => {
+      await i18n.changeLanguage('ar');
+      render(<Surahs />);
+      // Literals: surah 114 is `١١٤`, and no row may still carry the Latin `114`.
+      expect(within(screen.getByTestId('surah-row-114-container')).getByText('١١٤')).toBeTruthy();
+      expect(screen.queryByText('114')).toBeNull();
+    });
+
+    it('numbers a juz’ boundary row — title, start pair and derived page — in Arabic-Indic', async () => {
+      await i18n.changeLanguage('ar');
+      render(<Surahs />);
+      fireEvent.press(screen.getByTestId('index-segment-1'));
+      // Juz' 3 starts at 2:253 on page 42 — the same row the English case above pins, so the pair
+      // of them is the mutation control: a digit map applied to only one of the four numbers, or
+      // applied to none, reddens one side or the other.
+      expect(screen.getByText('الجزء ٣')).toBeTruthy();
+      expect(screen.getByText('البقرة ٢:٢٥٣ · صفحة ٤٢')).toBeTruthy();
+    });
   });
 });
 

@@ -51,8 +51,9 @@ import { Card, Icon, Text } from '@/components/ui';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { formatBytes } from '@/lib/format';
+import { formatBytes, formatQuranNumber } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
+import { surahDisplayName } from '@/lib/surahName';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useActiveDownload, useReciterDownloadSummary } from '@/stores/downloadQueueStore';
@@ -94,7 +95,7 @@ export function DownloadProgress({
   const name =
     active === null
       ? t('player:download.queuedTitle')
-      : (SURAH_METADATA[active.surah - 1]?.nameTransliteration ?? String(active.surah));
+      : (surahDisplayName(SURAH_METADATA[active.surah - 1]) ?? formatQuranNumber(active.surah));
   const known = active !== null && active.totalBytes > 0;
   const detail =
     active === null

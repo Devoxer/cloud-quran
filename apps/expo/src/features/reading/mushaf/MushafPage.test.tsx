@@ -46,6 +46,7 @@ import {
   MUSHAF_LINE_HEIGHT_RATIO,
   MUSHAF_WEB_MAX_WIDTH,
 } from '@/constants/mushaf';
+import i18n from '@/i18n';
 import { MushafPage } from './MushafPage';
 
 /** What the component computes for a native run at the default window — width is the binding
@@ -576,5 +577,65 @@ describe('the word press', () => {
     render(<MushafPage pageNumber={40} onSelectVerse={jest.fn()} />);
     await screen.findByTestId('mushaf-page-40');
     expect(screen.getByText('ﭑ').props.suppressHighlighting).toBe(true);
+  });
+});
+
+/**
+ * The page's chrome-side numbers and its spoken label (story 8-1 follow-up, F4 + F5).
+ *
+ * ⚠️ MEASURED ON THE OWNER'S iPHONE, NOT INFERRED: with the interface in Arabic the page announced
+ * `صفحة 3، سورة Al-Baqarah` — an Arabic sentence carrying a Latin surah name and a Latin numeral,
+ * read out by a screen reader that is itself in Arabic. That is the worst case for exactly the
+ * reader the Arabic interface exists for, and nothing in the tree could see it: the name is a data
+ * binding (no literal for `lint:i18n`) and the numeral came from i18next's own interpolation.
+ */
+describe('the page’s own numbers and its spoken label', () => {
+  // ⚠️ INSIDE `act`: `languageChanged` re-renders every `useTranslation` subscriber, so putting the
+  // language back while the tree is still mounted is a React update like any other.
+  afterEach(async () => {
+    await act(async () => {
+      await i18n.changeLanguage('en');
+    });
+  });
+
+  it('English: the page number is Western and the label names the transliteration', async () => {
+    render(<MushafPage pageNumber={40} />);
+    const page = await screen.findByTestId('mushaf-page-40');
+    expect(page.props.accessibilityLabel).toBe('Page 40, Surah Al-Baqarah');
+    expect(screen.getByText('40')).toBeTruthy();
+  });
+
+  it('Arabic: the page number is Arabic-Indic', async () => {
+    await i18n.changeLanguage('ar');
+    render(<MushafPage pageNumber={40} />);
+    await screen.findByTestId('mushaf-page-40');
+    // A LITERAL expectation, not `formatQuranNumber(40)` — that would restate the code under test.
+    expect(screen.getByText('٤٠')).toBeTruthy();
+    expect(screen.queryByText('40')).toBeNull();
+  });
+
+  it('Arabic: the spoken label carries NO Latin character at all', async () => {
+    await i18n.changeLanguage('ar');
+    render(<MushafPage pageNumber={40} />);
+    const page = await screen.findByTestId('mushaf-page-40');
+    expect(page.props.accessibilityLabel).toBe('صفحة ٤٠، سورة البقرة');
+    // The property behind the literal, so a future copy edit cannot quietly re-open the defect:
+    // no Latin letter and no Latin digit may appear anywhere in an Arabic announcement.
+    expect(page.props.accessibilityLabel).not.toMatch(/[A-Za-z0-9]/);
+  });
+
+  it('Arabic: the loading and error labels are Latin-free too', async () => {
+    // The two states the page spends its first frames in — both interpolate the page number, and
+    // both were Latin-digit under Arabic. `mockGetPageLayout` is left unresolved for loading.
+    await i18n.changeLanguage('ar');
+    mockGetPageLayout.mockImplementation(() => new Promise(() => {}));
+    render(<MushafPage pageNumber={40} />);
+    const loading = await screen.findByTestId('mushaf-page-loading-40');
+    expect(loading.props.accessibilityLabel).not.toMatch(/[A-Za-z0-9]/);
+
+    mockGetPageLayout.mockRejectedValue(new Error('nope'));
+    render(<MushafPage pageNumber={41} />);
+    const failed = await screen.findByTestId('mushaf-page-error-41');
+    expect(failed.props.accessibilityLabel).not.toMatch(/[A-Za-z0-9]/);
   });
 });

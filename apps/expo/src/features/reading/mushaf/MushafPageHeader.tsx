@@ -2,10 +2,21 @@
  * MushafPageHeader — the strip a printed mushaf runs across the top of every page (story 6-2,
  * adapted from the pre-fork `MushafMode/MushafPageHeader.tsx`).
  *
- * Juz' and Hizb on one side, the surah's Arabic name and transliteration on the other. It is part
- * of the PAGE — it scrolls with it and is always visible — not part of the reveal-on-tap chrome,
- * which overlays it. Both lookups are table reads from `quran-data`; the surah names are data
- * bindings, so only the Juz'/Hizb label is translatable copy.
+ * Juz' and Hizb on one side, the surah's name on the other. It is part of the PAGE — it scrolls
+ * with it and is always visible — not part of the reveal-on-tap chrome, which overlays it. Both
+ * lookups are table reads from `quran-data`; the surah name is a data binding, so only the
+ * Juz'/Hizb label is translatable copy.
+ *
+ * ⚠️ **ONE NAME, IN THE UI LANGUAGE — this strip printed `البقرة · Al-Baqarah` until 2026-09-13.**
+ * The chrome title that overlays this same page printed `Al-Baqarah` alone, so one screen carried
+ * two disagreeing renderings of one fact, and the Arabic half was only ever there because the
+ * interface had no Arabic. Both go through `surahDisplayName` now: `Al-Baqarah` under English,
+ * `البقرة` under Arabic. The rule and its one exception (the index, a cross-script picker) are in
+ * `lib/surahName.ts`.
+ *
+ * ⚠️ The Juz'/Hizb numbers are `formatQuranNumber`'d — `الجزء ١ · الحزب ١` sits under a facsimile
+ * whose own ayah markers are Arabic-Indic. See `lib/format.ts` for the boundary that keeps
+ * durations and byte sizes Western.
  */
 
 import { getHizbForPage, getJuzForPage, SURAH_METADATA } from 'quran-data';
@@ -15,6 +26,8 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
+import { formatQuranNumber } from '@/lib/format';
+import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 export interface MushafPageHeaderProps {
@@ -47,13 +60,11 @@ function MushafPageHeaderInner({ pageNumber, surahNumber }: MushafPageHeaderProp
     <View style={styles.container} testID={`mushaf-page-header-${pageNumber}`}>
       <Text style={styles.caption}>
         {t('common:mushaf.juzHizb', {
-          juz: getJuzForPage(pageNumber),
-          hizb: getHizbForPage(pageNumber),
+          juz: formatQuranNumber(getJuzForPage(pageNumber)),
+          hizb: formatQuranNumber(getHizbForPage(pageNumber)),
         })}
       </Text>
-      <Text
-        style={styles.caption}
-      >{`${metadata.nameArabic} · ${metadata.nameTransliteration}`}</Text>
+      <Text style={styles.caption}>{surahDisplayName(metadata)}</Text>
     </View>
   );
 }

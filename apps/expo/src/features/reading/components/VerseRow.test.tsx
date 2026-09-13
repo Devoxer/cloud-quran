@@ -34,9 +34,10 @@
  * component's own ratio constants: a test that recomputes the formula agrees with any formula.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { memo } from 'react';
 import { ARABIC_LINE_HEIGHT, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
+import i18n from '@/i18n';
 import { VerseRow, type VerseRowProps } from './VerseRow';
 
 /** ARABIC SMALL HIGH ROUNDED ZERO — the mark the KFGQPC face draws at full letter size. */
@@ -145,6 +146,16 @@ describe('U+06DF is stripped for display', () => {
 });
 
 describe('the ayah reference is a circular badge, sized off the reader', () => {
+  // ⚠️ A SUITE-LEVEL RESET, NOT A LINE AT THE END OF THE ARABIC CASE: a failing assertion above it
+  // would never reach an inline reset, and every later case in the file would then run in Arabic —
+  // a one-line failure turning into a dozen. Inside `act` because `languageChanged` re-renders
+  // every `useTranslation` subscriber.
+  afterEach(async () => {
+    await act(async () => {
+      await i18n.changeLanguage('en');
+    });
+  });
+
   /**
    * The badge `View`'s flattened style. Reached by `testID` rather than by walking up from the
    * numeral: RNTL's `.parent` lands on the `Text` host, not on the ring around it.
@@ -160,6 +171,16 @@ describe('the ayah reference is a circular badge, sized off the reader', () => {
     renderRow({ verse: 16 });
     expect(screen.getByText('16')).toBeTruthy();
     expect(screen.queryByText('2:16')).toBeNull();
+  });
+
+  it('draws the numeral in Arabic-Indic under Arabic (story 8-1 follow-up)', async () => {
+    // ⚠️ THE BADGE SITS BESIDE THE QURAN, and in the mushaf the book's own ayah markers are drawn
+    // by the QPC font as `٦ ٧ ٨`. A Latin `16` in the reading surface's badge next to that is
+    // what made story 8-1's "digits stay Western" decision read as a defect on the device.
+    await i18n.changeLanguage('ar');
+    renderRow({ verse: 16 });
+    expect(screen.getByText('١٦')).toBeTruthy();
+    expect(screen.queryByText('16')).toBeNull();
   });
 
   it('is a circle at the measured geometry — 28pt verse ⇒ 26pt ring, 14.3pt numeral', () => {

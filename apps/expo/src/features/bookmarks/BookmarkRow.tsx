@@ -31,6 +31,8 @@ import { RowDeleteButton } from '@/components/ui';
 import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { formatQuranNumber } from '@/lib/format';
+import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 /** The pre-fork's measured slice: one shaped line's worth of the longest ayat. */
@@ -94,8 +96,8 @@ function BookmarkRowInner({
   // The name falls back rather than trusting the cache row — a corrupt surah number still
   // renders, still navigates (read.tsx clamps on its side), and can still be deleted.
   const name =
-    SURAH_METADATA[surah - 1]?.nameTransliteration ??
-    t('common:bookmarks.surahFallback', { number: surah });
+    surahDisplayName(SURAH_METADATA[surah - 1]) ??
+    t('common:bookmarks.surahFallback', { number: formatQuranNumber(surah) });
   // Strip FIRST, so marks the strip removes never spend preview budget; then slice. The slice
   // cuts UTF-16 code units, which can sever a final combining mark right at the ellipsis —
   // accepted: it is the last glyph of a one-line truncated preview, and the grapheme-safe
@@ -114,11 +116,18 @@ function BookmarkRowInner({
         style={styles.info}
         onPress={() => onPress(surah, verse)}
         accessibilityRole="button"
-        accessibilityLabel={t('common:bookmarks.rowA11y', { name, verse })}
+        accessibilityLabel={t('common:bookmarks.rowA11y', {
+          name,
+          verse: formatQuranNumber(verse),
+        })}
         testID={testID ? `${testID}-open` : undefined}
       >
         <Text style={styles.title} numberOfLines={1}>
-          {t('common:bookmarks.rowTitle', { name, surah, verse })}
+          {t('common:bookmarks.rowTitle', {
+            name,
+            surah: formatQuranNumber(surah),
+            verse: formatQuranNumber(verse),
+          })}
         </Text>
         {previewText === null ? null : (
           <Text
@@ -132,7 +141,11 @@ function BookmarkRowInner({
       </Pressable>
       <RowDeleteButton
         onPress={() => onDelete(id)}
-        accessibilityLabel={t('common:bookmarks.deleteA11y', { name, surah, verse })}
+        accessibilityLabel={t('common:bookmarks.deleteA11y', {
+          name,
+          surah: formatQuranNumber(surah),
+          verse: formatQuranNumber(verse),
+        })}
         testID={testID ? `${testID}-delete` : undefined}
       />
     </View>

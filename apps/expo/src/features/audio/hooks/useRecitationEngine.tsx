@@ -91,6 +91,7 @@ import {
 } from '@/constants/audio';
 import i18n from '@/i18n';
 import { addBreadcrumb, captureException } from '@/lib/errors';
+import { formatQuranNumber } from '@/lib/format';
 import {
   isSurahTimed,
   loadReciterManifest,
@@ -98,9 +99,10 @@ import {
   type ReciterManifest,
   verseAtMs,
 } from '@/lib/reciterManifest';
+import { surahDisplayName } from '@/lib/surahName';
 import { setAudioPosition } from '@/lib/sync';
 import { type PlaybackState, useAudioPlayerStore } from '@/stores/audioPlayerStore';
-import { RECITERS } from '../data/reciters';
+import { RECITERS, reciterNameOf } from '../data/reciters';
 import { resolveSurahUris } from '../lib/audioSource';
 import { readStoredSpeed, writeStoredSpeed } from '../lib/playbackPrefs';
 
@@ -200,9 +202,15 @@ function lockScreenArtworkUri(): Promise<string | undefined> {
   return artworkPromise;
 }
 
-/** The surah name the lock screen prints — the same string `buildSources` gives each track. */
+/**
+ * The surah name the lock screen prints — the same string `buildSources` gives each track.
+ *
+ * ⚠️ IN THE UI LANGUAGE (`lib/surahName.ts`), not the transliteration: the lock screen is chrome
+ * like any other, and an Arabic interface naming `Al-Baqarah` over Arabic recitation is the same
+ * mixed-script defect the in-app surfaces had.
+ */
 function surahName(surah: number): string {
-  return SURAH_METADATA[surah - 1]?.nameTransliteration ?? String(surah);
+  return surahDisplayName(SURAH_METADATA[surah - 1]) ?? formatQuranNumber(surah);
 }
 
 /**
@@ -221,7 +229,7 @@ function surahName(surah: number): string {
  * duplicates lives in a different file and could be dropped there without anything failing here.
  */
 function loadedReciterName(id: string | null): string | undefined {
-  return RECITERS.find((reciter) => reciter.id === id)?.nameEnglish;
+  return reciterNameOf(RECITERS.find((reciter) => reciter.id === id));
 }
 
 /**

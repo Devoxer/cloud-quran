@@ -18,6 +18,7 @@ import {
   formatBytes,
   formatClockTime,
   formatLongDate,
+  formatQuranNumber,
   formatRelativeTime,
 } from './format';
 
@@ -286,6 +287,52 @@ describe('format', () => {
 
     it('sorts numeric prefixes by value, not by digit order', () => {
       expect(['10 Rules', '2 Rules'].sort(compareInAppLanguage)).toEqual(['2 Rules', '10 Rules']);
+    });
+  });
+
+  /**
+   * `formatQuranNumber` — the ONE function in this file that does NOT pin Western digits, and the
+   * reversal of story 8-1's recorded "digits stay Western" decision. The cases that matter are the
+   * BOUNDARY ones: this file's other formatters must keep answering `0`–`9` under Arabic, because
+   * a duration or a byte size is compared against a source outside the app.
+   */
+  describe('formatQuranNumber', () => {
+    it('is Western digits under English', async () => {
+      await i18n.changeLanguage('en');
+      expect(formatQuranNumber(3)).toBe('3');
+      expect(formatQuranNumber(604)).toBe('604');
+    });
+
+    it('is Arabic-Indic digits under Arabic', async () => {
+      await i18n.changeLanguage('ar');
+      expect(formatQuranNumber(3)).toBe('٣');
+      expect(formatQuranNumber(604)).toBe('٦٠٤');
+      expect(formatQuranNumber(1)).toBe('١');
+    });
+
+    it('never GROUPS, which is the reason it is a digit map and not `Intl.NumberFormat`', async () => {
+      // `new Intl.NumberFormat('ar-EG').format(1024)` is `١٬٠٢٤` — a grouping separator inside a
+      // page number. A table cannot do that, on any engine.
+      await i18n.changeLanguage('ar');
+      expect(formatQuranNumber(1024)).toBe('١٠٢٤');
+      expect(formatQuranNumber(1024)).not.toMatch(/[٬,]/);
+    });
+
+    it('converts every digit of a composed string and leaves the rest alone', async () => {
+      await i18n.changeLanguage('ar');
+      expect(formatQuranNumber('2:255')).toBe('٢:٢٥٥');
+    });
+
+    it('THE BOUNDARY: durations, byte sizes and dates stay Western under Arabic', async () => {
+      // ⚠️ The anti-vacuity control for this whole describe — if `formatQuranNumber` ever grew into
+      // a global numeral switch (a `toLocaleString` in the wrong place, a numbering-system flip),
+      // these four would go Arabic-Indic with it and this case is what says so.
+      await i18n.changeLanguage('ar');
+      expect(formatQuranNumber(9)).toBe('٩'); // the switch IS on…
+      expect(formatBytes(1536)).not.toMatch(/[٠-٩]/); // …and these are not carried with it
+      expect(formatClockTime(21, 5)).not.toMatch(/[٠-٩]/);
+      expect(formatLongDate(new Date(2026, 11, 25))).not.toMatch(/[٠-٩]/);
+      expect(formatRelativeTime(Date.now() - 3 * 24 * 3600 * 1000)).not.toMatch(/[٠-٩]/);
     });
   });
 });

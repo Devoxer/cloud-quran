@@ -23,6 +23,8 @@ import {
   useSurfaceTap,
   VerseRow,
 } from '@/features/reading';
+import { formatQuranNumber } from '@/lib/format';
+import { surahDisplayName } from '@/lib/surahName';
 import { addBookmark, removeBookmark, useBookmarks, usePreferences } from '@/lib/sync';
 import { openingPosition, usePosition, verseKey } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -607,7 +609,10 @@ export default function Read() {
     ]
   );
 
-  const title = content.meta?.nameTransliteration ?? null;
+  // ⚠️ THE UI LANGUAGE'S NAME. Hardcoding the transliteration put `Al-Baqarah` in the chrome of an
+  // otherwise Arabic interface — and disagreed with the mushaf's page header, which printed the
+  // Arabic name alongside it. `lib/surahName.ts` owns the rule both surfaces now share.
+  const title = surahDisplayName(content.meta);
   /**
    * ⚠️ DERIVED ONCE, EACH DIRECTION. It used to be computed three times per press — three places
    * for the label and the destination to drift apart. Story 6-3 adds the previous direction under
@@ -621,9 +626,11 @@ export default function Read() {
    * 114, which is what makes this safe to say.
    */
   const upcoming = nextSurah(surah);
-  const nextSurahName = SURAH_METADATA[upcoming - 1]?.nameTransliteration ?? String(upcoming);
+  const nextSurahName =
+    surahDisplayName(SURAH_METADATA[upcoming - 1]) ?? formatQuranNumber(upcoming);
   const preceding = prevSurah(surah);
-  const prevSurahName = SURAH_METADATA[preceding - 1]?.nameTransliteration ?? String(preceding);
+  const prevSurahName =
+    surahDisplayName(SURAH_METADATA[preceding - 1]) ?? formatQuranNumber(preceding);
 
   return (
     <View style={styles.screen} testID="reading-surface">
