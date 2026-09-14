@@ -35,6 +35,7 @@ import { Chip, SpeedSelector } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { formatSleepRemaining } from '@/lib/formatTime';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import {
   usePlaybackOptionActions,
@@ -145,6 +146,7 @@ const useStyles = () =>
       paddingBottom: SPACING.md,
     },
     sectionLabel: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.semibold,
       color: theme.colors.text.secondary,
@@ -156,6 +158,7 @@ const useStyles = () =>
       gap: SPACING.sm,
     },
     armed: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.semibold,
       color: theme.colors.accent.primary,

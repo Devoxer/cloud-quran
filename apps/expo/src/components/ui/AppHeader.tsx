@@ -53,6 +53,7 @@ import { CHROME_BAR_HEIGHT } from '@/constants/navigation';
 import { SHADOWS } from '@/constants/shadows';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { HeaderActionButton } from './HeaderActionButton';
@@ -132,6 +133,7 @@ export function AppHeader({
       paddingHorizontal: SPACING.md,
     },
     title: {
+      textAlign: TEXT_ALIGN_START,
       flex: 1,
       color: theme.colors.text.primary,
       marginHorizontal: SPACING.sm,

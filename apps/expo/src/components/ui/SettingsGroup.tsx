@@ -21,7 +21,7 @@ import { Children, cloneElement, isValidElement, type ReactElement, type ReactNo
 import { Text, View } from 'react-native';
 import { SPACING } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { isRTL } from '@/lib/rtl';
+import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { Card } from './Card';
 
@@ -58,6 +58,7 @@ const useStyles = () =>
     // The screen's scroll padding provides the outer inset; this is the small extra
     // inset that aligns the header with the card content (iOS section-header look).
     label: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
@@ -67,6 +68,7 @@ const useStyles = () =>
       color: t.colors.text.tertiary,
     },
     footnote: {
+      textAlign: TEXT_ALIGN_START,
       marginTop: SPACING.sm,
       paddingHorizontal: SPACING.md,
       fontSize: FONT_SIZE.bodySmall,

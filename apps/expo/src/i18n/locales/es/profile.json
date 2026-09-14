@@ -137,6 +137,12 @@
     "switchFailedMessage": "Tu idioma no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
     "restartNote": "El idioma y su dirección de texto se aplican al reiniciar la app."
   },
+  "numerals": {
+    "group": "Números",
+    "western": "Occidentales",
+    "arabicIndic": "Arábigo-índicos",
+    "footnote": "Números de página, yuz, hizb, sura y aleya. Horas, tamaños y fechas siguen occidentales."
+  },
   "auth": {
     "intro": "Cloud Quran funciona sin cuenta. Iniciar sesión sincroniza tu posición de lectura, marcadores y preferencias.",
     "syncDetailsLink": "Qué se sincroniza y quién lo ve",

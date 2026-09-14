@@ -16,6 +16,7 @@ import { Pressable, type StyleProp, Text, View, type ViewStyle } from 'react-nat
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { Icon } from './Icon';
@@ -59,6 +60,7 @@ export function InlineError({
       backgroundColor: t.colors.semantic.errorBg,
     },
     message: {
+      textAlign: TEXT_ALIGN_START,
       flex: 1,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.medium,

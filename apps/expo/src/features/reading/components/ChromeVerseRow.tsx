@@ -42,7 +42,7 @@ import { HeaderActionButton, Icon } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { RECITERS, reciterNameOf, resolveReciterId, useVerseSeek } from '@/features/audio';
-import { formatQuranNumber } from '@/lib/format';
+import { useQuranNumerals } from '@/lib/format';
 import { formatSleepRemaining } from '@/lib/formatTime';
 import { surahDisplayName } from '@/lib/surahName';
 import { addBookmark, removeBookmark, useBookmarks } from '@/lib/sync';
@@ -113,6 +113,10 @@ export function ChromeVerseRow({
   onInteract,
 }: ChromeVerseRowProps) {
   const { t } = useTranslation();
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that
+  // DRAWS a structure number subscribes to it — a module-level read would keep the digits it
+  // first rendered until something else happened to re-render this component.
+  const formatQuranNumber = useQuranNumerals();
   const { colors } = useTheme();
   const styles = useStyles();
   const seekToVerse = useVerseSeek();

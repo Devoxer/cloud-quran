@@ -59,7 +59,7 @@ import {
 } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { haptics } from '@/lib/haptics';
-import { isRTL } from '@/lib/rtl';
+import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -429,6 +429,7 @@ const useStyles = () =>
       paddingBottom: SPACING.xxxl,
     },
     intro: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       lineHeight: FONT_SIZE.bodySmall * LINE_HEIGHT.body,
       marginBottom: SPACING.xl,
@@ -475,6 +476,7 @@ const useStyles = () =>
       color: t.colors.text.tertiary,
     },
     label: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
@@ -483,6 +485,7 @@ const useStyles = () =>
       color: t.colors.text.tertiary,
     },
     sentence: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       lineHeight: FONT_SIZE.bodySmall * LINE_HEIGHT.body,
       marginBottom: SPACING.lg,

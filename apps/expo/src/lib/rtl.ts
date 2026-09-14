@@ -58,14 +58,15 @@
  *
  * ── Decisions recorded here because nothing else in the tree states them ─────────────────────
  *
- * ⚠️ **QURAN STRUCTURE NUMBERS ARE ARABIC-INDIC UNDER ARABIC — THIS PARAGRAPH SAID THE OPPOSITE
- * UNTIL 2026-09-13.** Story 8-1 shipped "digits stay Western in every language", arguing that the
- * page already carries Arabic-Indic numerals in the facsimile so the chrome could stay Latin. On
- * the device that reads as a defect rather than a choice: the QPC font draws the ayah markers
- * `٦ ٧ ٨` and our own page number underneath them said `3`. The reversal is recorded in story
- * 8-1's Design Notes and implemented in ONE place — `lib/format.ts` § `formatQuranNumber`, which
- * also carries the BOUNDARY (durations, byte sizes and anything a reader compares against a
- * Latin-digit source stay Western).
+ * ⚠️ **QURAN STRUCTURE NUMBERS ARE A READER SETTING, NOT A CONSEQUENCE OF THE LANGUAGE — AND
+ * THIS PARAGRAPH HAS NOW SAID ALL THREE THINGS.** It first said "digits stay Western in every
+ * language" (8-1), then "Arabic-Indic whenever the UI is Arabic" (2026-09-13, after the QPC font
+ * drew the ayah markers `٦ ٧ ٨` above our own page number reading `3`), and since 2026-09-14 the
+ * answer is a DEVICE-LOCAL PREFERENCE defaulting to Western in every language, including Arabic.
+ * Nothing here decides it: `lib/numerals.ts` owns the preference and carries all three states,
+ * `lib/format.ts` § `formatQuranNumber` owns the rendering and the BOUNDARY (durations, byte
+ * sizes and anything a reader compares against a Latin-digit source stay Western whatever the
+ * setting says). ⚠️ Do NOT re-couple it to {@link isArabicUi} — that coupling IS state 2.
  *
  * ⚠️ **`app.json` GAINS NO `locales` / `CFBundleLocalizations`, SO iOS OFFERS NO PER-APP LANGUAGE
  * ROW IN SYSTEM SETTINGS.** Deliberate for this story: the picker is in-app and device-local, and
@@ -79,6 +80,54 @@ import { I18nManager, Platform } from 'react-native';
 
 import { getLanguage, getStoredLanguage } from './language';
 import { createAppMMKV } from './mmkv';
+
+/**
+ * START-EDGE TEXT ALIGNMENT — the value a UI `Text` must SPELL OUT, and the reason it is the word
+ * `'left'` (bug fix, 2026-09-14).
+ *
+ * ── ⚠️ THE DEFECT: AN UNSET `textAlign` DOES NOT FOLLOW `forceRTL` ON iOS ────────────────────
+ *
+ * Reported on the owner's iPhone in the Arabic build: on `/surahs` the header title `القرآن` sat
+ * at the FAR LEFT and every row's title/subtitle was LEFT-aligned, while the row's own flex
+ * container had mirrored correctly (the surah number on the right, the download control on the
+ * left). One screen, two halves disagreeing.
+ *
+ * The cause is in React Native's iOS text layer, and it is a HOLE rather than a choice.
+ * `RCTAttributedTextUtils.mm` writes a paragraph style's `alignment` **only inside
+ * `if (textAttributes.alignment.has_value())`** — i.e. only when `textAlign` was explicitly set —
+ * and it is that same block that swaps `Left`↔`Right` under an RTL layout direction. With no
+ * `textAlign`, no `NSParagraphStyle` alignment is written at all, so TextKit falls back to
+ * `NSTextAlignmentNatural`, which resolves from the app BUNDLE's localization
+ * (`defaultWritingDirectionForLanguage:`) — and `app.json` deliberately declares no `locales` /
+ * `CFBundleLocalizations` (see the note at the foot of this header). `I18nManager.forceRTL` is
+ * not part of that resolution on any path. Android has no such hole: `ReactTextViewManager`
+ * defaults to `Gravity.START`, which follows the view's layout direction — which is why the bug
+ * was iOS-only, exactly like this story's SF-symbol one.
+ *
+ * ⚠️ IT ONLY SHOWS IN A BOX WIDER THAN THE TEXT, which is what made it look local rather than
+ * global. A `Text` that hugs its content is already placed by the flex container, so the mirror
+ * is correct and the alignment inside it is unobservable — the mushaf chrome's title
+ * (`flex: 0` beside its chevron), the tab-bar labels (centred) and every pill and button. The
+ * symptom appears exactly where a `Text` STRETCHES: `flex: 1` (a settings/list row's text block,
+ * this app's header title when it has no press target) or a full-width column child (a group
+ * label, a footnote, a paragraph).
+ *
+ * ── ⚠️ WHY THE VALUE IS `'left'`, AND WHY THAT IS NOT A PHYSICAL PROPERTY IN DISGUISE ────────
+ *
+ * RN has no `textAlign: 'start'`. It does not need one: BOTH platforms swap `left`↔`right` for
+ * `textAlign` under an RTL layout direction — iOS in the block quoted above, Android in
+ * `TextAttributeProps.kt` (`"left" -> if (isRTL) Gravity.RIGHT else Gravity.LEFT`). So `'left'`
+ * IS the logical start edge, in both directions, on both platforms; on web it is literally left,
+ * which is also start there because {@link resolveDirection} floors web to LTR. Spelling it as a
+ * named constant is what stops the next reader "fixing" it to `'right'` — which would align to
+ * the END edge under Arabic and be correct nowhere.
+ *
+ * ⚠️ NEVER PUT THIS ON QURAN CONTENT. Verse rows, mushaf lines, bookmark previews and the
+ * appearance sample set `writingDirection: 'rtl'` + `textAlign: 'right'` themselves and must keep
+ * it whatever the interface language is — content direction is not UI direction
+ * (`lib/rtl.test.ts` § "content direction is not UI direction" is the gate for that half).
+ */
+export const TEXT_ALIGN_START = 'left' as const;
 
 /**
  * The UI languages written right to left. A set rather than a per-language flag on the bundle:

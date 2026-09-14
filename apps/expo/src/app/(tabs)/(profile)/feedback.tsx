@@ -24,7 +24,7 @@ import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { feedbackMessageSchema } from '@/lib/forms/schemas';
 import { haptics } from '@/lib/haptics';
-import { isRTL } from '@/lib/rtl';
+import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -205,6 +205,7 @@ const useStyles = () =>
     // form's section labels match the other settings screens. The form fields stay form
     // elements (primitives don't fit form controls — see story Dev Notes "feedback scope").
     label: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
@@ -246,6 +247,7 @@ const useStyles = () =>
       color: t.colors.text.primary,
     },
     messageInput: {
+      textAlign: TEXT_ALIGN_START,
       minHeight: MESSAGE_INPUT_MIN_HEIGHT,
       borderWidth: 1,
       borderRadius: RADII.md,
@@ -263,6 +265,7 @@ const useStyles = () =>
       borderColor: t.colors.semantic.error,
     },
     validationError: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.regular,
       marginTop: SPACING.xs,
@@ -279,6 +282,7 @@ const useStyles = () =>
       backgroundColor: t.colors.background.secondary,
     },
     noticeText: {
+      textAlign: TEXT_ALIGN_START,
       flex: 1,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.regular,

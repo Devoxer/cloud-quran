@@ -15,6 +15,7 @@ import { RADII } from '@/constants/radii';
 import { SHADOWS } from '@/constants/shadows';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { Icon } from './Icon';
@@ -55,6 +56,7 @@ export function SearchEntryButton({ placeholder, onPress, style, testID }: Searc
       ...SHADOWS.card, // unified soft elevation (matches the cards/chips app-wide)
     },
     placeholder: {
+      textAlign: TEXT_ALIGN_START,
       flex: 1,
       fontSize: FONT_SIZE.body,
       color: t.colors.text.tertiary,

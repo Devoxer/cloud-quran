@@ -28,6 +28,13 @@
  * they are wisdom-fruits' book-app copy, not this app's. Order is `resources.ts`'s declaration
  * order, which that file documents as the picker's on-screen order.
  *
+ * ⚠️ IT ALSO CARRIES THE NUMERAL SYSTEM (2026-09-14), WHICH IS NOT A LANGUAGE SETTING. Western
+ * `0-9` vs Arabic-Indic `٠-٩` for the Quran's own structure numbers is orthogonal to the UI
+ * language and defaults to Western in every one of them — `lib/numerals.ts` carries the decision
+ * and the two reversals behind it. It shares this screen because both are WRITING-SYSTEM choices,
+ * and the two groups are deliberately not alike: the language list spins, can fail and restarts
+ * the app; the numeral rows write MMKV and are already on screen before the finger lifts.
+ *
  * No native header slot and no `Stack.Screen` toolbar: the `(profile)` layout mounts `AppHeader` +
  * `AppTabBar` around this whole group, and the title comes from that layout's `TITLE_KEYS`.
  */
@@ -41,6 +48,13 @@ import { uiLanguageLabel } from '@/constants/language';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { haptics } from '@/lib/haptics';
 import { AVAILABLE_UI_LANGUAGES, isExposedLanguage, useLanguage } from '@/lib/language';
+import {
+  NUMERAL_SYSTEMS,
+  type NumeralSystem,
+  numeralSampleLabel,
+  setNumeralSystem,
+  useNumeralSystem,
+} from '@/lib/numerals';
 import { applyDirectionForLanguage, applyStoredDirection } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -48,11 +62,24 @@ import { useThemedStyles } from '@/lib/useThemedStyles';
 /** The checkmark beside the language in force — sized like every other trailing affordance. */
 const CHECK_SIZE = 18;
 
+/**
+ * The bundle key for each numeral system's row label. WHOLE KEYS in a map, rather than one
+ * assembled from the system id: the ids are wire-ish kebab-case (`arabic-indic`), and a key built
+ * by string surgery is a key neither `lint:i18n` nor the parity gate can follow to the bundle.
+ */
+const NUMERAL_LABEL_KEYS = {
+  western: 'profile:numerals.western',
+  'arabic-indic': 'profile:numerals.arabicIndic',
+  // `as const` is load-bearing: `t()`'s key parameter is the generated union, so a `string`-typed
+  // map compiles to a call tsc cannot check and a typo would ship as a raw key on screen.
+} as const satisfies Record<NumeralSystem, string>;
+
 export default function LanguageScreen() {
   const { t } = useTranslation();
   const styles = useStyles();
   const { colors } = useTheme();
   const { language, setLanguage } = useLanguage();
+  const numerals = useNumeralSystem();
   /**
    * The row the reader just tapped. ONE-SHOT PER MOUNT: a committed switch is followed by a reload,
    * so the screen is on borrowed time from here — letting a second tap start a second switch is how
@@ -122,6 +149,18 @@ export default function LanguageScreen() {
     stopSpinning();
   };
 
+  /**
+   * ⚠️ NO SPINNER, NO TICKET, NO RELOAD — the whole reason this sits beside a control that needs
+   * all three. The write is synchronous MMKV and every surface that draws a structure number is
+   * subscribed to it (`lib/format.ts` § `useQuranNumerals`), so the digits have already changed
+   * by the time the reader looks up. Re-picking the active system writes nothing.
+   */
+  const chooseNumerals = (system: NumeralSystem) => {
+    if (system === numerals) return;
+    haptics.selection();
+    setNumeralSystem(system);
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -158,6 +197,42 @@ export default function LanguageScreen() {
       </SettingsGroup>
 
       {error && <InlineError message={error} style={styles.error} testID="language-error" />}
+
+      {/* ⚠️ THE NUMERAL SYSTEM LIVES HERE RATHER THAN IN ITS OWN ROW, AND IT IS NOT A LANGUAGE
+          SETTING — see `lib/numerals.ts` for why the two are deliberately orthogonal. It shares
+          this screen because both are WRITING-SYSTEM choices and a reader looking for one is
+          looking for the other; giving it a settings row of its own would put a two-option
+          preference one tap from the top of a list whose other rows are whole screens.
+
+          ⚠️ AND IT IS OFFERED IN EVERY LANGUAGE, NOT ONLY ARABIC. The default is Western
+          everywhere, so hiding the group under a non-Arabic interface would mean an English
+          reader beside a printed mushaf could never reach `٣` at all — which is the coupling
+          this control exists to break. It also applies with NO restart, unlike the list above,
+          which is why it carries its own footnote rather than sharing that one. */}
+      <SettingsGroup
+        label={t('profile:numerals.group')}
+        footnote={t('profile:numerals.footnote')}
+        testID="numerals-section"
+      >
+        {NUMERAL_SYSTEMS.map((system) => {
+          const active = system === numerals;
+          return (
+            <SettingsRow
+              key={system}
+              label={t(NUMERAL_LABEL_KEYS[system])}
+              description={numeralSampleLabel(system)}
+              selected={active}
+              trailing={
+                active ? (
+                  <Icon name="checkmark" size={CHECK_SIZE} color={colors.accent.primary} />
+                ) : undefined
+              }
+              onPress={() => chooseNumerals(system)}
+              testID={`numeral-option-${system}`}
+            />
+          );
+        })}
+      </SettingsGroup>
     </ScrollView>
   );
 }

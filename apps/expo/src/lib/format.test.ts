@@ -21,10 +21,14 @@ import {
   formatQuranNumber,
   formatRelativeTime,
 } from './format';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from './numerals';
 
 describe('format', () => {
   afterEach(async () => {
     await i18n.changeLanguage('en');
+    // The numeral system is a DEVICE preference, so it outlives a test the way MMKV outlives a
+    // launch — put it back or the next case inherits it.
+    setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
   });
 
   describe('formatLongDate', () => {
@@ -291,43 +295,75 @@ describe('format', () => {
   });
 
   /**
-   * `formatQuranNumber` — the ONE function in this file that does NOT pin Western digits, and the
-   * reversal of story 8-1's recorded "digits stay Western" decision. The cases that matter are the
-   * BOUNDARY ones: this file's other formatters must keep answering `0`–`9` under Arabic, because
-   * a duration or a byte size is compared against a source outside the app.
+   * `formatQuranNumber` — the ONE function in this file that does not pin Western digits, and the
+   * subject of TWO reversals: 8-1 shipped Western-always, 2026-09-13 tied the digits to the UI
+   * LANGUAGE, and 2026-09-14 made them a device preference that defaults to Western in every
+   * language. `lib/numerals.ts` carries all three states.
+   *
+   * ⚠️ SO THE CASES THAT MATTER ARE THE ORTHOGONALITY ONES. A test that only checked
+   * `ar + arabic-indic → ٣` would stay green under a re-coupling to `isArabicUi()` — which is
+   * state 2, i.e. the exact regression this setting exists to prevent. The two CROSS cases
+   * (Arabic UI on the default, English UI on the setting) are the ones that can red for it.
+   *
+   * The BOUNDARY cases matter for the other reason: durations, byte sizes and dates must keep
+   * answering `0`–`9` however this preference is set.
    */
   describe('formatQuranNumber', () => {
-    it('is Western digits under English', async () => {
-      await i18n.changeLanguage('en');
+    it('is Western digits by DEFAULT — the shipped state, with nothing stored', () => {
       expect(formatQuranNumber(3)).toBe('3');
       expect(formatQuranNumber(604)).toBe('604');
     });
 
-    it('is Arabic-Indic digits under Arabic', async () => {
-      await i18n.changeLanguage('ar');
+    it('is Arabic-Indic digits when the reader has chosen them', () => {
+      setNumeralSystem('arabic-indic');
       expect(formatQuranNumber(3)).toBe('٣');
       expect(formatQuranNumber(604)).toBe('٦٠٤');
       expect(formatQuranNumber(1)).toBe('١');
     });
 
-    it('never GROUPS, which is the reason it is a digit map and not `Intl.NumberFormat`', async () => {
+    /**
+     * ⚠️ THE ANTI-REGRESSION PAIR. Between 2026-09-13 and 2026-09-14 the answer was
+     * `isArabicUi() ? ٣ : 3`; re-introducing that reads as an obvious simplification and passes
+     * every other case in this file. These two are the only ones that red for it.
+     */
+    it('stays Western under an ARABIC interface on the default — the setting, not the language', async () => {
+      await i18n.changeLanguage('ar');
+      expect(formatQuranNumber(3)).toBe('3');
+      expect(formatQuranNumber('2:255')).toBe('2:255');
+    });
+
+    it('is Arabic-Indic under an ENGLISH interface when the reader asks for it', async () => {
+      await i18n.changeLanguage('en');
+      setNumeralSystem('arabic-indic');
+      expect(formatQuranNumber(3)).toBe('٣');
+    });
+
+    it('falls back to Western for a stored value this build does not know', () => {
+      // MMKV is a device store, so a retired value from an older build is reachable. There is no
+      // migration table (`lib/numerals.ts`), deliberately — the guard IS the migration.
+      setNumeralSystem('devanagari' as never);
+      expect(formatQuranNumber(3)).toBe('3');
+    });
+
+    it('never GROUPS, which is the reason it is a digit map and not `Intl.NumberFormat`', () => {
       // `new Intl.NumberFormat('ar-EG').format(1024)` is `١٬٠٢٤` — a grouping separator inside a
       // page number. A table cannot do that, on any engine.
-      await i18n.changeLanguage('ar');
+      setNumeralSystem('arabic-indic');
       expect(formatQuranNumber(1024)).toBe('١٠٢٤');
       expect(formatQuranNumber(1024)).not.toMatch(/[٬,]/);
     });
 
-    it('converts every digit of a composed string and leaves the rest alone', async () => {
-      await i18n.changeLanguage('ar');
+    it('converts every digit of a composed string and leaves the rest alone', () => {
+      setNumeralSystem('arabic-indic');
       expect(formatQuranNumber('2:255')).toBe('٢:٢٥٥');
     });
 
-    it('THE BOUNDARY: durations, byte sizes and dates stay Western under Arabic', async () => {
+    it('THE BOUNDARY: durations, byte sizes and dates stay Western with the setting ON', async () => {
       // ⚠️ The anti-vacuity control for this whole describe — if `formatQuranNumber` ever grew into
       // a global numeral switch (a `toLocaleString` in the wrong place, a numbering-system flip),
       // these four would go Arabic-Indic with it and this case is what says so.
       await i18n.changeLanguage('ar');
+      setNumeralSystem('arabic-indic');
       expect(formatQuranNumber(9)).toBe('٩'); // the switch IS on…
       expect(formatBytes(1536)).not.toMatch(/[٠-٩]/); // …and these are not carried with it
       expect(formatClockTime(21, 5)).not.toMatch(/[٠-٩]/);

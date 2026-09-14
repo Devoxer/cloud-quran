@@ -54,9 +54,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmDialog, ListRow, SettingsGroup, SettingsRow, Text } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { formatQuranNumber } from '@/lib/format';
+import { useQuranNumerals } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
-import { isRTL } from '@/lib/rtl';
+import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahIndexNames } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
@@ -79,6 +79,10 @@ type SurahRow = (typeof SURAH_METADATA)[number];
 
 export function ReciterSurahDownloads({ reciterId }: ReciterSurahDownloadsProps) {
   const { t } = useTranslation();
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that
+  // DRAWS a structure number subscribes to it — a module-level read would keep the digits it
+  // first rendered until something else happened to re-render this component.
+  const formatQuranNumber = useQuranNumerals();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const resolved = resolveReciterId(reciterId);
@@ -125,7 +129,7 @@ export function ReciterSurahDownloads({ reciterId }: ReciterSurahDownloadsProps)
         </View>
       );
     },
-    [resolved, styles]
+    [resolved, styles, formatQuranNumber]
   );
 
   return (
@@ -187,6 +191,7 @@ const useStyles = () =>
       backgroundColor: theme.colors.background.primary,
     },
     listLabel: {
+      textAlign: TEXT_ALIGN_START,
       paddingHorizontal: SPACING.lg,
       paddingTop: SPACING.md,
       paddingBottom: SPACING.xs,

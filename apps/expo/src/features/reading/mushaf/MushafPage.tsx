@@ -100,7 +100,7 @@ import { OPACITY } from '@/constants/opacity';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
-import { formatQuranNumber } from '@/lib/format';
+import { useQuranNumerals } from '@/lib/format';
 import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { MushafPageHeader } from './MushafPageHeader';
@@ -272,6 +272,10 @@ export function MushafPage({
   onToggleChrome,
 }: MushafPageProps) {
   const { t } = useTranslation();
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that
+  // DRAWS a structure number subscribes to it — a module-level read would keep the digits it
+  // first rendered until something else happened to re-render this component.
+  const formatQuranNumber = useQuranNumerals();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const content = useMushafPage(pageNumber);

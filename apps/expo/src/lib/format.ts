@@ -40,6 +40,9 @@
  *   • {@link formatQuranNumber}     — "3" / "٣", the Quran's OWN structure numbers only (story
  *                                     8-1 follow-up; it carries the boundary in its docblock, and
  *                                     it is the ONE function here that does not pin Latin digits)
+ *   • {@link useQuranNumerals}      — the same function, SUBSCRIBED: the numeral system is a live
+ *                                     device preference, so a surface that draws structure
+ *                                     numbers must re-render when it moves
  *
  * `numberingSystem: 'latn'` on every `Intl` call is the standing rule from Story 20.2 AC-7:
  * Android Hermes's Intl polyfill returns Arabic-Indic / Devanagari digits for `ar` / `hi`, and a
@@ -61,7 +64,7 @@
  * for the whole session (`stack/i18n.md`). See `useOfflineStorage` for the shape that works.
  */
 import i18n from '@/i18n';
-import { isArabicUi } from './rtl';
+import { getNumeralSystem, type NumeralSystem, useNumeralSystem } from './numerals';
 
 /** "December 25, 2026" / "25 décembre 2026" — long form, in the app's current language. */
 export function formatLongDate(date: Date): string {
@@ -268,22 +271,41 @@ export function formatBytes(bytes: number): string {
 const ARABIC_INDIC_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'] as const;
 
 /**
+ * The two renderings, as MODULE-LEVEL functions so each has a STABLE IDENTITY.
+ *
+ * ⚠️ That stability is load-bearing, not tidiness: {@link useQuranNumerals} hands one of these to
+ * components that put it in a `useCallback`/`useMemo` dependency array (the index's `renderRow`,
+ * the mushaf page's labels). A fresh closure per render would invalidate those memos on every
+ * render; a value that never changed would never invalidate them when the preference DOES move.
+ * Two constants give exactly the right answer to both.
+ */
+const toWesternDigits = (value: number | string): string => String(value);
+const toArabicIndicDigits = (value: number | string): string =>
+  String(value).replace(/[0-9]/g, (d) => ARABIC_INDIC_DIGITS[Number(d)]);
+
+function quranNumeralsFor(system: NumeralSystem): (value: number | string) => string {
+  return system === 'arabic-indic' ? toArabicIndicDigits : toWesternDigits;
+}
+
+/**
  * A QURAN STRUCTURE NUMBER — a page, a juz', a hizb, a surah number, an ayah number — rendered in
- * the numerals the UI language writes. `3` under English, `٣` under Arabic.
+ * the numerals the READER has chosen. `3` by default, `٣` under the Arabic-Indic setting.
  *
- * ── ⚠️ THIS REVERSES STORY 8-1's RECORDED "DIGITS STAY WESTERN" DECISION (2026-09-13) ────────
+ * ── ⚠️ THE DECISION BEHIND THIS HAS REVERSED TWICE; `lib/numerals.ts` CARRIES ALL THREE STATES ─
  *
- * 8-1 argued the chrome could stay Latin because the facsimile already carries Arabic-Indic
- * numerals. On the device it reads as a bug rather than a choice: the QPC font draws the ayah
- * markers `٦ ٧ ٨` and our own page number under them said `3`, and the page header said
- * `الجزء 1 · الحزب 1`. The reversal and its reason are in 8-1's Design Notes.
+ * Short version: 8-1 shipped Western-always, 2026-09-13 made it follow the UI LANGUAGE, and
+ * 2026-09-14 made it a DEVICE-LOCAL SETTING that defaults to Western in every language. So this
+ * function no longer asks `isArabicUi()` — the language does not decide it, the reader does, and
+ * every one of the four (language × numerals) combinations is reachable on purpose.
  *
  * ── ⚠️ THE BOUNDARY, WHICH IS THE WHOLE DESIGN — SCOPE IT OR IT SPREADS ──────────────────────
  *
  * **CONVERT** the numbers that belong to the Quran's own structure, because they sit beside the
  * mushaf's own numerals and are read as part of the book: page, juz', hizb, surah, ayah.
  *
- * **DO NOT CONVERT** anything a reader compares against a Latin-digit source outside the app:
+ * **DO NOT CONVERT** anything a reader compares against a Latin-digit source outside the app —
+ * and note that the SETTING does not widen this list either; it only decides the digits for the
+ * items above:
  *   • durations and timestamps in the audio UI (`lib/formatTime.ts` — a scrubber position, a
  *     sleep countdown; these are wall-clock arithmetic, and platform media UI is Latin),
  *   • byte sizes and download progress ({@link formatBytes} — a figure the reader checks against
@@ -305,9 +327,25 @@ const ARABIC_INDIC_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨
  *
  * Accepts a number or a pre-composed string (`"2:255"`, `"1/604"`), so a caller that has already
  * joined its parts converts once rather than per part. Every non-digit character is left alone.
+ *
+ * ⚠️ USE {@link useQuranNumerals} FROM ANYTHING THAT RENDERS. This reads the preference at call
+ * time, which is right, but a component that called it during render would keep the digits it
+ * first drew until something else re-rendered it — and a reader flipping the setting in Settings
+ * would come back to a mushaf still in the old numerals. This plain form is for the non-render
+ * callers: lock-screen metadata, and anything building a string outside React.
  */
 export function formatQuranNumber(value: number | string): string {
-  const text = String(value);
-  if (!isArabicUi()) return text;
-  return text.replace(/[0-9]/g, (d) => ARABIC_INDIC_DIGITS[Number(d)]);
+  return quranNumeralsFor(getNumeralSystem())(value);
+}
+
+/**
+ * {@link formatQuranNumber}, SUBSCRIBED — the form every rendering surface uses.
+ *
+ * Returns a stable function per numeral system (see {@link toWesternDigits}), so it is safe in a
+ * dependency array and changes identity exactly when the preference does. The subscription is
+ * per-LEAF on purpose: a `FlashList` item is memoized against its parent, so a subscription held
+ * higher up could not re-render the 114 rows that are the whole point.
+ */
+export function useQuranNumerals(): (value: number | string) => string {
+  return quranNumeralsFor(useNumeralSystem());
 }

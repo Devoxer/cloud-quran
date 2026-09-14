@@ -137,6 +137,12 @@
     "switchFailedMessage": "Votre langue n’a pas changé. Vérifiez votre connexion et réessayez.",
     "restartNote": "La langue et son sens de lecture s’appliquent dès le redémarrage de l’app."
   },
+  "numerals": {
+    "group": "Chiffres",
+    "western": "Occidentaux",
+    "arabicIndic": "Arabo-indiens",
+    "footnote": "Numéros de page, juz', hizb, sourate et verset. Durées, tailles et dates restent occidentaux."
+  },
   "auth": {
     "intro": "Cloud Quran fonctionne sans compte. La connexion synchronise position de lecture, signets et préférences.",
     "syncDetailsLink": "Ce qui se synchronise et qui le voit",

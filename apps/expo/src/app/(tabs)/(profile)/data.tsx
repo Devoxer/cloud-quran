@@ -44,6 +44,7 @@ import { deleteAccount } from '@/lib/auth';
 import { captureException } from '@/lib/errors';
 import { haptics } from '@/lib/haptics';
 import { useSyncEnabled } from '@/lib/privacyPrefs';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { exportMyData, purgeMyData } from '@/lib/sync';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -278,6 +279,7 @@ const useStyles = () =>
     // Deliberately the same treatment as `SettingsGroup`'s own footnote — it reads as a second
     // paragraph of the same note, not as a new section with no heading.
     processors: {
+      textAlign: TEXT_ALIGN_START,
       paddingHorizontal: SPACING.md,
       fontSize: FONT_SIZE.bodySmall,
       lineHeight: FONT_SIZE.bodySmall * LINE_HEIGHT.body,
@@ -287,6 +289,7 @@ const useStyles = () =>
       marginTop: SPACING.lg,
     },
     notice: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       lineHeight: FONT_SIZE.bodySmall * LINE_HEIGHT.body,
       marginTop: SPACING.lg,

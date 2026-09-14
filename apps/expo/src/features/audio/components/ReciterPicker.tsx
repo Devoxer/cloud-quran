@@ -73,7 +73,7 @@ import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { formatBytes } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
-import { isRTL } from '@/lib/rtl';
+import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
 import { patchPreferences, usePreferences } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -393,6 +393,7 @@ const useStyles = () =>
     },
     // The grouped-list caption treatment, matching `SettingsGroup`'s section label.
     groupLabel: {
+      textAlign: TEXT_ALIGN_START,
       paddingHorizontal: SPACING.lg,
       paddingTop: SPACING.lg,
       paddingBottom: SPACING.xs,
@@ -404,6 +405,7 @@ const useStyles = () =>
     },
     // Sentence case under the caps heading — the caption treatment, without the caps.
     groupGloss: {
+      textAlign: TEXT_ALIGN_START,
       paddingHorizontal: SPACING.lg,
       paddingBottom: SPACING.sm,
       fontSize: FONT_SIZE.caption,

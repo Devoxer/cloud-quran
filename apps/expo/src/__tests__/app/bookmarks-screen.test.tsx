@@ -90,6 +90,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { getPageForVerse } from 'quran-data';
 import Bookmarks from '@/app/(tabs)/bookmarks';
 import i18n from '@/i18n';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 
 jest.useFakeTimers();
 
@@ -126,6 +127,9 @@ afterEach(async () => {
   await act(async () => {
     await i18n.changeLanguage('en');
   });
+  // The numeral system is a DEVICE preference — it outlives a test the way MMKV outlives a
+  // launch, so it is reset here beside the language.
+  setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
 });
 
 describe('the list', () => {
@@ -145,11 +149,14 @@ describe('the list', () => {
     expect(data.map((r) => r.id)).toEqual(['bk-new', 'bk-old']);
   });
 
-  it('names the surah and its ref in Arabic under Arabic (story 8-1 follow-up)', async () => {
+  it('names the surah in Arabic and its ref in Arabic-Indic, each from its own preference', async () => {
     // The row title is one translated string carrying a surah name AND two numbers, so all three
     // had to move together: `Al-Baqarah · 2:255` inside Arabic chrome was the story's F2/F5
     // complaint in a single line. Literals, so the case cannot restate the formatter.
+    // ⚠️ The NAME follows the UI language; the two NUMBERS follow the numeral setting, which
+    // defaults to Western in every language (`lib/numerals.ts`). One string, two preferences.
     await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     mockBookmarksRow.current = [bookmark('bk-new', 2, 255, 200)];
     mockGetVersesForPositions.mockResolvedValue([
       { surah: 2, verse: 255, textUthmani: 'آية الكرسي', textSimple: 'a' },

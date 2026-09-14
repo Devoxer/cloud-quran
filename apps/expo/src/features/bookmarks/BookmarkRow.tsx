@@ -31,7 +31,8 @@ import { RowDeleteButton } from '@/components/ui';
 import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
-import { formatQuranNumber } from '@/lib/format';
+import { useQuranNumerals } from '@/lib/format';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -65,6 +66,10 @@ function BookmarkRowInner({
   testID,
 }: BookmarkRowProps) {
   const { t } = useTranslation();
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that
+  // DRAWS a structure number subscribes to it — a module-level read would keep the digits it
+  // first rendered until something else happened to re-render this component.
+  const formatQuranNumber = useQuranNumerals();
   const styles = useThemedStyles((theme) => ({
     row: {
       flexDirection: 'row',
@@ -78,6 +83,7 @@ function BookmarkRowInner({
       gap: SPACING.xs,
     },
     title: {
+      textAlign: TEXT_ALIGN_START,
       color: theme.colors.text.primary,
       fontSize: FONT_SIZE.body,
       fontWeight: FONT_WEIGHT.medium,

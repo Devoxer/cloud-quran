@@ -51,8 +51,9 @@ import { Card, Icon, Text } from '@/components/ui';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { formatBytes, formatQuranNumber } from '@/lib/format';
+import { formatBytes, useQuranNumerals } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -82,6 +83,10 @@ export function DownloadProgress({
   testID,
 }: DownloadProgressProps) {
   const { t } = useTranslation();
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that
+  // DRAWS a structure number subscribes to it — a module-level read would keep the digits it
+  // first rendered until something else happened to re-render this component.
+  const formatQuranNumber = useQuranNumerals();
   const { colors } = useTheme();
   const styles = useStyles();
   const active = useActiveDownload(reciterId);
@@ -205,15 +210,18 @@ const useStyles = () =>
       backgroundColor: theme.colors.accent.primary,
     },
     title: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.body,
       fontWeight: FONT_WEIGHT.semibold,
       color: theme.colors.text.primary,
     },
     detail: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       color: theme.colors.text.secondary,
     },
     note: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.caption,
       color: theme.colors.text.tertiary,
     },

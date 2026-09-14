@@ -84,6 +84,7 @@ import { RADII } from '@/constants/radii';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { haptics } from '@/lib/haptics';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { patchPreferences, usePreferences } from '@/lib/sync';
 import { type ThemeMode, useTheme } from '@/lib/theme';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -375,6 +376,7 @@ const useStyles = () =>
       justifyContent: 'center' as const,
     },
     paletteName: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.semibold,
       color: t.colors.text.secondary,

@@ -23,7 +23,7 @@ import {
   useSurfaceTap,
   VerseRow,
 } from '@/features/reading';
-import { formatQuranNumber } from '@/lib/format';
+import { useQuranNumerals } from '@/lib/format';
 import { surahDisplayName } from '@/lib/surahName';
 import { addBookmark, removeBookmark, useBookmarks, usePreferences } from '@/lib/sync';
 import { openingPosition, usePosition, verseKey } from '@/lib/usePosition';
@@ -107,6 +107,10 @@ const FIRST_VERSE = 1;
 
 export default function Read() {
   const { t } = useTranslation();
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that
+  // DRAWS a structure number subscribes to it — a module-level read would keep the digits it
+  // first rendered until something else happened to re-render this component.
+  const formatQuranNumber = useQuranNumerals();
   const insets = useSafeAreaInsets();
   /**
    * ⚠️ THE HEADER OVERLAYS THE LIST, SO EVERY PROGRAMMATIC SCROLL MUST SUBTRACT IT. `paddingTop`

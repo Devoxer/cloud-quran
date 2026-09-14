@@ -14,6 +14,7 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import LanguageScreen from '@/app/(tabs)/(profile)/language';
+import { DEFAULT_NUMERAL_SYSTEM, getNumeralSystem, setNumeralSystem } from '@/lib/numerals';
 import * as rtl from '@/lib/rtl';
 
 // ⚠️ `mock`-prefixed: jest's factory guard allows only out-of-scope names that start with it.
@@ -49,6 +50,8 @@ beforeEach(() => {
 afterEach(() => {
   directionSpy.mockRestore();
   storedDirectionSpy.mockRestore();
+  // A DEVICE preference outlives a test the way MMKV outlives a launch.
+  setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
 });
 
 describe('language picker', () => {
@@ -112,5 +115,70 @@ describe('language picker', () => {
     // for a language nobody is in — that state survives to the NEXT launch.
     await findByTestId('language-error');
     expect(calls).toEqual(['applyDirectionForLanguage', 'setLanguage', 'applyStoredDirection']);
+  });
+});
+
+/**
+ * The numeral system shares this screen (2026-09-14) and is deliberately NOT a language setting —
+ * `lib/numerals.ts` carries the decision and the two reversals behind it. These cases are about
+ * the two things that make it different from the list above it: it is reachable in every
+ * language, and it applies with none of the ceremony a language switch needs.
+ */
+describe('numeral system', () => {
+  it('is offered in EVERY language, not only Arabic', () => {
+    // `useLanguage` is mocked to `en` for this whole suite — so this render IS the English
+    // interface, and both rows still have to be here. Hiding the group under a non-Arabic UI
+    // would put `٣` out of reach of an English reader beside a printed mushaf, which is the
+    // coupling this setting exists to break.
+    const { getByTestId } = render(<LanguageScreen />);
+    expect(getByTestId('numeral-option-western')).toBeTruthy();
+    expect(getByTestId('numeral-option-arabic-indic')).toBeTruthy();
+  });
+
+  it('marks Western as the one in force by default, and only that one', () => {
+    const { getByTestId } = render(<LanguageScreen />);
+    expect(getByTestId('numeral-option-western').props.accessibilityState?.selected).toBe(true);
+    expect(getByTestId('numeral-option-arabic-indic').props.accessibilityState?.selected).toBe(
+      false
+    );
+  });
+
+  it('shows each system as its own glyphs, so the row is decidable without the label', () => {
+    // A `SettingsRow` description carries no testID of its own, so this reads the rendered text —
+    // which is the assertion that matters anyway: the SAMPLE is the affordance.
+    const { getByText } = render(<LanguageScreen />);
+    expect(getByText('٠ ١ ٢ ٣')).toBeTruthy();
+    expect(getByText('0 1 2 3')).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ NO RELOAD AND NO LANGUAGE CALL — the two things that separate this control from the one
+   * above it. A numeral change that restarted the app, or that went anywhere near `setLanguage`,
+   * would be this control borrowing the language switch's machinery for a preference that needs
+   * none of it.
+   */
+  it('writes the preference on press, with no language switch and no restart', () => {
+    const { getByTestId } = render(<LanguageScreen />);
+    fireEvent.press(getByTestId('numeral-option-arabic-indic'));
+    expect(getNumeralSystem()).toBe('arabic-indic');
+    expect(mockSetLanguage).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
+  it('moves the selection live, without a remount', () => {
+    const { getByTestId } = render(<LanguageScreen />);
+    fireEvent.press(getByTestId('numeral-option-arabic-indic'));
+    expect(getByTestId('numeral-option-arabic-indic').props.accessibilityState?.selected).toBe(
+      true
+    );
+    expect(getByTestId('numeral-option-western').props.accessibilityState?.selected).toBe(false);
+  });
+
+  it('does nothing at all when the reader re-picks the system already in force', () => {
+    setNumeralSystem('arabic-indic');
+    const { getByTestId } = render(<LanguageScreen />);
+    fireEvent.press(getByTestId('numeral-option-arabic-indic'));
+    expect(getNumeralSystem()).toBe('arabic-indic');
+    expect(calls).toEqual([]);
   });
 });

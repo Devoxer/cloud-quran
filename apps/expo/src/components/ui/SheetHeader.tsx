@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { Icon } from './Icon';
@@ -100,6 +101,7 @@ const useStyles = () =>
       gap: SPACING.sm,
     },
     title: {
+      textAlign: TEXT_ALIGN_START,
       flex: 1,
       fontSize: FONT_SIZE.h3,
       fontWeight: FONT_WEIGHT.semibold,

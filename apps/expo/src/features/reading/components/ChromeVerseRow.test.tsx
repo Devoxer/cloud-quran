@@ -28,6 +28,7 @@ jest.mock('expo-crypto', () => ({ randomUUID: () => 'uuid-under-test' }));
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import i18n from '@/i18n';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 import { useAudioPlayerStore } from '@/stores/audioPlayerStore';
 import { ChromeVerseRow } from './ChromeVerseRow';
 
@@ -83,6 +84,9 @@ afterEach(async () => {
   await act(async () => {
     await i18n.changeLanguage('en');
   });
+  // The numeral system is a DEVICE preference — it outlives a test the way MMKV outlives a
+  // launch, so it is reset here beside the language.
+  setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
 });
 
 describe('state 1 — an ayah is selected', () => {
@@ -169,11 +173,17 @@ describe('state 2 — audio is loaded and nothing is selected', () => {
     expect(screen.queryByTestId('chrome-verse-row')).toBeNull();
   });
 
-  it('names the LOADED voice and the ayah in Arabic under Arabic (story 8-1 follow-up)', async () => {
+  it('names the LOADED voice and the ayah in Arabic, with Arabic-Indic chosen', async () => {
     // ⚠️ BOTH HALVES OF ONE STRING WERE LATIN under Arabic chrome: the surah name and the ayah
     // number. `Al-Kahf · 23` inside an Arabic interface, over Arabic recitation, with the voice
     // named `Mishary Rashid Al-Afasy` beside it. Literals, not `surahDisplayName(...)` run back.
+    //
+    // ⚠️ THE NAME AND THE NUMBER NOW COME FROM TWO DIFFERENT PREFERENCES: the surah and reciter
+    // names follow the UI LANGUAGE, the ayah number follows the NUMERAL SETTING (`lib/numerals.ts`
+    // — it defaults to Western in every language). Both are set here because the line asserts
+    // both halves.
     await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     act(() => {
       store().setTrack(18, 'alafasy', true);
       store().setPlaybackState('playing');

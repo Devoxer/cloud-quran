@@ -79,8 +79,10 @@ jest.mock('@/lib/sync', () => ({
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { getPageForVerse } from 'quran-data';
+import { StyleSheet } from 'react-native';
 import Surahs from '@/app/surahs';
 import i18n from '@/i18n';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 
 /**
  * ⚠️ THE EXIT IS DEFERRED ONE MACROTASK, SO A PRESS ALONE NAVIGATES NOTHING IN A TEST.
@@ -168,6 +170,9 @@ describe('the Surahs segment', () => {
       await act(async () => {
         await i18n.changeLanguage('en');
       });
+      // The numeral system is a DEVICE preference — it outlives a test the way MMKV outlives a
+      // launch, so it is reset here beside the language.
+      setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
     });
 
     it('leads with the Arabic name, glosses with the romanization, and drops the trailing copy', async () => {
@@ -178,12 +183,23 @@ describe('the Surahs segment', () => {
       // ONE `الفاتحة` in the row — the trailing slot is gone rather than repeating the title.
       expect(row.getAllByText('الفاتحة')).toHaveLength(1);
       // The subtitle's name slot is the ROMANIZATION, not the English meaning.
-      expect(row.getByText('Al-Fatihah · ٧ آية · مكية')).toBeTruthy();
+      expect(row.getByText('Al-Fatihah · 7 آية · مكية')).toBeTruthy();
       expect(screen.queryByText(/The Opening/)).toBeNull();
     });
 
-    it('numbers every row in Arabic-Indic digits', async () => {
+    it('keeps Latin digits on the DEFAULT — the numerals are a SETTING, not the language', async () => {
+      // ⚠️ THE ANTI-REGRESSION CASE (`lib/numerals.ts` state 2). From 2026-09-13 to 2026-09-14 the
+      // digits followed the UI language; they now follow a device preference that defaults to
+      // Western in every language. Re-coupling them passes the case below and reds this one.
       await i18n.changeLanguage('ar');
+      render(<Surahs />);
+      expect(within(screen.getByTestId('surah-row-114-container')).getByText('114')).toBeTruthy();
+      expect(screen.queryByText('١١٤')).toBeNull();
+    });
+
+    it('numbers every row in Arabic-Indic digits when the reader has chosen them', async () => {
+      await i18n.changeLanguage('ar');
+      setNumeralSystem('arabic-indic');
       render(<Surahs />);
       // Literals: surah 114 is `١١٤`, and no row may still carry the Latin `114`.
       expect(within(screen.getByTestId('surah-row-114-container')).getByText('١١٤')).toBeTruthy();
@@ -192,6 +208,7 @@ describe('the Surahs segment', () => {
 
     it('numbers a juz’ boundary row — title, start pair and derived page — in Arabic-Indic', async () => {
       await i18n.changeLanguage('ar');
+      setNumeralSystem('arabic-indic');
       render(<Surahs />);
       fireEvent.press(screen.getByTestId('index-segment-1'));
       // Juz' 3 starts at 2:253 on page 42 — the same row the English case above pins, so the pair
@@ -378,5 +395,33 @@ describe('the per-surah download control (story 7-5)', () => {
 
     expect(screen.getByTestId('surah-row-1')).toBeTruthy();
     expect(screen.queryByTestId('surah-download-1')).toBeNull();
+  });
+});
+
+/**
+ * ⚠️ THE OWNER'S SCREENSHOT, AS A CASE (2026-09-14). In the Arabic build this screen's header
+ * title `القرآن` sat at the FAR LEFT while the rows beside it had mirrored correctly. The cause is
+ * an iOS-only hole in React Native's text layer — an unset `textAlign` never reaches
+ * `I18nManager.forceRTL` — and it is observable only where a `Text` STRETCHES, which is why this
+ * header shows it and the mushaf's (whose title is `flex: 0` beside its chevron) does not.
+ * `components/ui/text-start-alignment.test.tsx` carries the mechanism and the other surfaces.
+ */
+describe('the screen’s own stretched texts align to the start edge', () => {
+  it('the header title, which is the `flex: 1` one the owner screenshotted', () => {
+    render(<Surahs />);
+    const title = StyleSheet.flatten(screen.getByTestId('chrome-title').props.style);
+    expect(title.flex).toBe(1); // anti-vacuity: this is the STRETCHED case, not a hugging one
+    expect(title.textAlign).toBe('left');
+  });
+
+  it('a row’s title and subtitle, through the shared `ListRow`', () => {
+    render(<Surahs />);
+    const row = within(screen.getByTestId('surah-row-1-container'));
+    expect(StyleSheet.flatten(row.getByTestId('surah-row-1-title').props.style).textAlign).toBe(
+      'left'
+    );
+    expect(StyleSheet.flatten(row.getByTestId('surah-row-1-subtitle').props.style).textAlign).toBe(
+      'left'
+    );
   });
 });

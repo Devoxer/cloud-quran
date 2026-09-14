@@ -9,10 +9,14 @@
 import { render, screen } from '@testing-library/react-native';
 import { getHizbForPage, getJuzForPage, SURAH_METADATA } from 'quran-data';
 import i18n from '@/i18n';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 import { MushafPageHeader } from './MushafPageHeader';
 
 afterEach(async () => {
   await i18n.changeLanguage('en');
+  // The numeral system is a DEVICE preference — it outlives a test the way MMKV outlives a
+  // launch, so it is reset here beside the language.
+  setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
 });
 
 describe('MushafPageHeader', () => {
@@ -46,14 +50,23 @@ describe('MushafPageHeader', () => {
     expect(screen.queryByText(meta.nameTransliteration)).toBeNull();
   });
 
-  it('draws the Juz’/Hizb numbers in Arabic-Indic digits under Arabic', async () => {
+  it('draws the Juz’/Hizb numbers in Arabic-Indic when the READER has chosen them', async () => {
     // Story 8-1 shipped `الجزء 1 · الحزب 1` — Latin digits under a facsimile whose own ayah markers
     // the QPC font draws as `٦ ٧ ٨`. The expected string is a LITERAL, not `getJuzForPage(40)` run
     // back through the formatter: page 40 is Juz' 2 / Hizb 4, so neither a hardcoded `١` nor a
     // swapped pair can pass, and the case cannot restate whatever the code happens to compute.
     await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     render(<MushafPageHeader pageNumber={40} surahNumber={2} />);
     expect(screen.getByText('الجزء ٢ · الحزب ٤')).toBeTruthy();
+  });
+
+  it('keeps Latin digits under Arabic on the DEFAULT — the numerals are a setting', async () => {
+    // ⚠️ The pair to the case above, and the only one that reds if the digits are ever re-coupled
+    // to the UI language (`lib/numerals.ts` state 2). The COPY is Arabic either way.
+    await i18n.changeLanguage('ar');
+    render(<MushafPageHeader pageNumber={40} surahNumber={2} />);
+    expect(screen.getByText('الجزء 2 · الحزب 4')).toBeTruthy();
   });
 
   it('renders nothing for a surah number outside the book', () => {

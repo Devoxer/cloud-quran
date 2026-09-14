@@ -47,6 +47,7 @@ import {
   MUSHAF_WEB_MAX_WIDTH,
 } from '@/constants/mushaf';
 import i18n from '@/i18n';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 import { MushafPage } from './MushafPage';
 
 /** What the component computes for a native run at the default window — width is the binding
@@ -596,6 +597,9 @@ describe('the page’s own numbers and its spoken label', () => {
     await act(async () => {
       await i18n.changeLanguage('en');
     });
+    // The numeral system is a DEVICE preference — it outlives a test the way MMKV outlives a
+    // launch, so it is reset here beside the language.
+    setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
   });
 
   it('English: the page number is Western and the label names the transliteration', async () => {
@@ -605,8 +609,20 @@ describe('the page’s own numbers and its spoken label', () => {
     expect(screen.getByText('40')).toBeTruthy();
   });
 
-  it('Arabic: the page number is Arabic-Indic', async () => {
+  it('Arabic COPY on the DEFAULT numerals: the page number stays Latin', async () => {
+    // ⚠️ The anti-regression case for `lib/numerals.ts` state 2. Between 2026-09-13 and
+    // 2026-09-14 the digits followed the UI LANGUAGE; they now follow a setting that defaults to
+    // Western in every language, and re-coupling them reds exactly here.
     await i18n.changeLanguage('ar');
+    render(<MushafPage pageNumber={40} />);
+    await screen.findByTestId('mushaf-page-40');
+    expect(screen.getByText('40')).toBeTruthy();
+    expect(screen.queryByText('٤٠')).toBeNull();
+  });
+
+  it('Arabic-Indic chosen: the page number is Arabic-Indic', async () => {
+    await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     render(<MushafPage pageNumber={40} />);
     await screen.findByTestId('mushaf-page-40');
     // A LITERAL expectation, not `formatQuranNumber(40)` — that would restate the code under test.
@@ -614,8 +630,9 @@ describe('the page’s own numbers and its spoken label', () => {
     expect(screen.queryByText('40')).toBeNull();
   });
 
-  it('Arabic: the spoken label carries NO Latin character at all', async () => {
+  it('Arabic + Arabic-Indic: the spoken label carries NO Latin character at all', async () => {
     await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     render(<MushafPage pageNumber={40} />);
     const page = await screen.findByTestId('mushaf-page-40');
     expect(page.props.accessibilityLabel).toBe('صفحة ٤٠، سورة البقرة');
@@ -624,10 +641,11 @@ describe('the page’s own numbers and its spoken label', () => {
     expect(page.props.accessibilityLabel).not.toMatch(/[A-Za-z0-9]/);
   });
 
-  it('Arabic: the loading and error labels are Latin-free too', async () => {
+  it('Arabic + Arabic-Indic: the loading and error labels are Latin-free too', async () => {
     // The two states the page spends its first frames in — both interpolate the page number, and
     // both were Latin-digit under Arabic. `mockGetPageLayout` is left unresolved for loading.
     await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     mockGetPageLayout.mockImplementation(() => new Promise(() => {}));
     render(<MushafPage pageNumber={40} />);
     const loading = await screen.findByTestId('mushaf-page-loading-40');

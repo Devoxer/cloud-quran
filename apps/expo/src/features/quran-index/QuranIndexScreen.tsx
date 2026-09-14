@@ -65,7 +65,7 @@ import {
   SurahDownloadButton,
   useDownloadReciterId,
 } from '@/features/audio';
-import { formatQuranNumber } from '@/lib/format';
+import { useQuranNumerals } from '@/lib/format';
 import { surahDisplayName, surahIndexNames } from '@/lib/surahName';
 import { usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -83,6 +83,12 @@ export interface QuranIndexScreenProps {
 
 export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
   const { t } = useTranslation('navigation');
+  // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that DRAWS
+  // a structure number subscribes to it — a module-level read would keep the digits it first
+  // rendered until something else happened to re-render this component. It is a DEPENDENCY of
+  // `renderRow` for the same reason the styles are: 114 memoized rows do not re-render on their
+  // own, and the formatter's identity moves exactly when the preference does (`lib/format.ts`).
+  const formatQuranNumber = useQuranNumerals();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { saved, reportVerse } = usePosition(mode);
@@ -275,7 +281,16 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
         />
       );
     },
-    [segment, currentSurah, onSelectSurah, onSelectBoundary, reciterId, styles, t]
+    [
+      segment,
+      currentSurah,
+      onSelectSurah,
+      onSelectBoundary,
+      reciterId,
+      styles,
+      t,
+      formatQuranNumber,
+    ]
   );
 
   const rows: IndexRow[] =

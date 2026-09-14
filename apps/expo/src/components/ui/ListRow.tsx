@@ -23,6 +23,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, type StyleProp, Text, View, type ViewStyle } from 'react-native';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 export interface ListRowProps {
@@ -152,6 +153,7 @@ const useStyles = () =>
       flex: 1,
     },
     title: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.h3,
       fontWeight: FONT_WEIGHT.semibold,
       lineHeight: FONT_SIZE.h3 * LINE_HEIGHT.heading3,
@@ -162,6 +164,7 @@ const useStyles = () =>
       fontWeight: FONT_WEIGHT.regular,
     },
     subtitle: {
+      textAlign: TEXT_ALIGN_START,
       marginTop: 2,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.regular,

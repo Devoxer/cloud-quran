@@ -38,6 +38,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { memo } from 'react';
 import { ARABIC_LINE_HEIGHT, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import i18n from '@/i18n';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 import { VerseRow, type VerseRowProps } from './VerseRow';
 
 /** ARABIC SMALL HIGH ROUNDED ZERO — the mark the KFGQPC face draws at full letter size. */
@@ -154,6 +155,9 @@ describe('the ayah reference is a circular badge, sized off the reader', () => {
     await act(async () => {
       await i18n.changeLanguage('en');
     });
+    // The numeral system is a DEVICE preference — it outlives a test the way MMKV outlives a
+    // launch, so it is reset here beside the language.
+    setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
   });
 
   /**
@@ -173,14 +177,37 @@ describe('the ayah reference is a circular badge, sized off the reader', () => {
     expect(screen.queryByText('2:16')).toBeNull();
   });
 
-  it('draws the numeral in Arabic-Indic under Arabic (story 8-1 follow-up)', async () => {
+  it('draws the numeral in Arabic-Indic when the reader has chosen them', async () => {
     // ⚠️ THE BADGE SITS BESIDE THE QURAN, and in the mushaf the book's own ayah markers are drawn
     // by the QPC font as `٦ ٧ ٨`. A Latin `16` in the reading surface's badge next to that is
     // what made story 8-1's "digits stay Western" decision read as a defect on the device.
     await i18n.changeLanguage('ar');
+    setNumeralSystem('arabic-indic');
     renderRow({ verse: 16 });
     expect(screen.getByText('١٦')).toBeTruthy();
     expect(screen.queryByText('16')).toBeNull();
+  });
+
+  it('draws it in Latin under Arabic on the DEFAULT — the setting decides, not the language', async () => {
+    // The anti-regression pair: re-coupling the digits to `isArabicUi()` (`lib/numerals.ts` state
+    // 2) passes the case above and reds this one.
+    await i18n.changeLanguage('ar');
+    renderRow({ verse: 16 });
+    expect(screen.getByText('16')).toBeTruthy();
+    expect(screen.queryByText('١٦')).toBeNull();
+  });
+
+  it('follows the preference LIVE, with no remount — the row subscribes to it', async () => {
+    // ⚠️ THE REASON `useQuranNumerals` EXISTS. `formatQuranNumber` reads the preference per call,
+    // which is not enough: this row sits inside a memoized list in a tab that is still mounted
+    // while the reader is in Settings. A module-level read leaves the old digits on screen until
+    // something else happens to re-render it.
+    renderRow({ verse: 16 });
+    expect(screen.getByText('16')).toBeTruthy();
+    await act(async () => {
+      setNumeralSystem('arabic-indic');
+    });
+    expect(screen.getByText('١٦')).toBeTruthy();
   });
 
   it('is a circle at the measured geometry — 28pt verse ⇒ 26pt ring, 14.3pt numeral', () => {

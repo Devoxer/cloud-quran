@@ -33,6 +33,7 @@ import {
 } from 'react-native';
 import { RADII } from '@/constants/radii';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { Icon } from './Icon';
@@ -281,12 +282,14 @@ const useStyles = () =>
       flex: 1,
     },
     label: {
+      textAlign: TEXT_ALIGN_START,
       fontSize: FONT_SIZE.h3,
       fontWeight: FONT_WEIGHT.semibold,
       lineHeight: FONT_SIZE.h3 * LINE_HEIGHT.heading3,
       color: t.colors.text.primary,
     },
     description: {
+      textAlign: TEXT_ALIGN_START,
       marginTop: 2,
       fontSize: FONT_SIZE.bodySmall,
       fontWeight: FONT_WEIGHT.regular,
