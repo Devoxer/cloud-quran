@@ -23,7 +23,18 @@
     "premiumCaps": "PREMIUM"
   },
   "search": {
-    "booksPlaceholder": "Buscar libros..."
+    "booksPlaceholder": "Buscar libros...",
+    "placeholder": "Buscar en el Corán",
+    "restingTitle": "Encuentra una aleya",
+    "restingBody": "Escribe palabras de una aleya en árabe o de la traducción al inglés.",
+    "emptyTitle": "Sin resultados",
+    "emptyBody": "Ninguna aleya contiene esas palabras. Prueba con menos palabras u otra grafía.",
+    "errorTitle": "La búsqueda no está disponible",
+    "errorBody": "No se pudo leer el texto del Corán en este dispositivo.",
+    "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
+    "sideArabic": "Árabe",
+    "sideTranslation": "Traducción",
+    "rowA11y": "{{name}}, aleya {{verse}}. Abre esta aleya."
   },
   "notFound": {
     "title": "¡Ups!",

@@ -23,7 +23,18 @@
     "premiumCaps": "PREMIUM"
   },
   "search": {
-    "booksPlaceholder": "Rechercher des livres..."
+    "booksPlaceholder": "Rechercher des livres...",
+    "placeholder": "Rechercher dans le Coran",
+    "restingTitle": "Trouver un verset",
+    "restingBody": "Saisissez des mots d'un verset en arabe ou de la traduction anglaise.",
+    "emptyTitle": "Aucun résultat",
+    "emptyBody": "Aucun verset ne contient ces mots. Essayez moins de mots ou une autre orthographe.",
+    "errorTitle": "La recherche est indisponible",
+    "errorBody": "Le texte du Coran n'a pas pu être lu sur cet appareil.",
+    "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
+    "sideArabic": "Arabe",
+    "sideTranslation": "Traduction",
+    "rowA11y": "{{name}}, verset {{verse}}. Ouvre ce verset."
   },
   "notFound": {
     "title": "Oups !",

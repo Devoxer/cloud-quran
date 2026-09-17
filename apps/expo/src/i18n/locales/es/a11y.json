@@ -40,5 +40,6 @@
   "retryPlayback": "Reintentar reproducción",
   "durationSummary": "Resumen de {{duration}}",
   "durationSummaryLocked": "Resumen de {{duration}}, contenido premium",
-  "selectOption": "Toca para seleccionar esta opción"
+  "selectOption": "Toca para seleccionar esta opción",
+  "openSearch": "Buscar en el Corán"
 }

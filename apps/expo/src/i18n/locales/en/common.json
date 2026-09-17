@@ -23,7 +23,18 @@
     "premiumCaps": "PREMIUM"
   },
   "search": {
-    "booksPlaceholder": "Search books..."
+    "booksPlaceholder": "Search books...",
+    "placeholder": "Search the Quran",
+    "restingTitle": "Find an ayah",
+    "restingBody": "Type words from an ayah in Arabic, or from the English translation.",
+    "emptyTitle": "No matches",
+    "emptyBody": "No ayah contains those words. Try fewer words, or a different spelling.",
+    "errorTitle": "Search is unavailable",
+    "errorBody": "The Quran text could not be read on this device.",
+    "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
+    "sideArabic": "Arabic",
+    "sideTranslation": "Translation",
+    "rowA11y": "{{name}}, ayah {{verse}}. Opens this ayah."
   },
   "notFound": {
     "title": "Oops!",

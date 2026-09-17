@@ -23,7 +23,18 @@
     "premiumCaps": "مميّز"
   },
   "search": {
-    "booksPlaceholder": "ابحث في الكتب..."
+    "booksPlaceholder": "ابحث في الكتب...",
+    "placeholder": "ابحث في القرآن",
+    "restingTitle": "ابحث عن آية",
+    "restingBody": "اكتب كلمات من الآية بالعربية أو من الترجمة الإنجليزية.",
+    "emptyTitle": "لا نتائج",
+    "emptyBody": "لا توجد آية تحتوي هذه الكلمات. جرّب كلمات أقل أو إملاءً آخر.",
+    "errorTitle": "البحث غير متاح",
+    "errorBody": "تعذّرت قراءة نص القرآن على هذا الجهاز.",
+    "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
+    "sideArabic": "العربية",
+    "sideTranslation": "الترجمة",
+    "rowA11y": "{{name}}، الآية {{verse}}. يفتح هذه الآية."
   },
   "notFound": {
     "title": "عذرًا!",

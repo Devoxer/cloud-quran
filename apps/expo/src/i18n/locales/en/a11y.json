@@ -39,5 +39,6 @@
   "retryPlayback": "Retry playback",
   "durationSummary": "{{duration}} summary",
   "durationSummaryLocked": "{{duration}} summary, premium content",
-  "selectOption": "Tap to select this option"
+  "selectOption": "Tap to select this option",
+  "openSearch": "Search the Quran"
 }

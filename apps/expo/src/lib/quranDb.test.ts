@@ -86,6 +86,7 @@ jest.mock('expo-sqlite', () => ({
 
 import {
   __resetQuranDbForTests,
+  getAllVersesForSearch,
   getSurahMetadata,
   getSurahVerses,
   getVersesForPositions,
@@ -329,5 +330,68 @@ describe('opening', () => {
     // Anti-vacuity: the module sends nothing else through the exec door — no DDL, no migration,
     // no `PRAGMA journal_mode`. One statement is the entire write-capable surface.
     expect(mockExeced).toHaveLength(1);
+  });
+});
+
+describe('the whole corpus — the search reader (story 6-7)', () => {
+  it('answers every verse in the book, in mushaf order, in ONE query', () => {
+    // The order is load-bearing: `search.ts` does no sorting at all, so "results come back in
+    // mushaf order" is a property of THIS `ORDER BY` and of nothing else.
+    return getAllVersesForSearch().then((rows) => {
+      expect(rows).toHaveLength(TOTAL_VERSES);
+      expect(rows[0]).toMatchObject({ surah: 1, verse: 1 });
+      expect(rows[rows.length - 1]).toMatchObject({ surah: SURAH_COUNT, verse: 6 });
+      const ordered = [...rows].sort((a, b) => a.surah - b.surah || a.verse - b.verse);
+      expect(rows.map((r) => `${r.surah}:${r.verse}`)).toEqual(
+        ordered.map((r) => `${r.surah}:${r.verse}`)
+      );
+    });
+  });
+
+  it('carries BOTH text columns and the translation on every row', () => {
+    // ⚠️ THE ANTI-VACUITY CASE, AND IT IS THE ONE THAT MATTERS HERE. A `LEFT JOIN` that matched
+    // nothing — a typo in the language literal, a renamed column — returns 6,236 perfectly
+    // well-formed rows with `translation: null` on every one, and a search that silently stops
+    // answering English queries. Counting the nulls is what says the join actually joined.
+    return getAllVersesForSearch().then((rows) => {
+      expect(rows.filter((r) => r.translation === null)).toHaveLength(0);
+      expect(rows.filter((r) => r.textSimple.length === 0)).toHaveLength(0);
+      expect(rows.filter((r) => r.textUthmani.length === 0)).toHaveLength(0);
+    });
+  });
+
+  it('reads the real 1:1, both orthographies and the English', () => {
+    // ⚠️ LITERAL EXPECTED VALUES, CODEPOINT BY CODEPOINT — the shipped row, not a restatement of
+    // the mapper. Written as escapes because the distinction this case exists to pin is invisible
+    // in rendered text: the two columns differ ONLY in U+0671 (alef wasla) versus U+0627 (plain
+    // alif), and they carry the SAME harakat. `simple_text` is simplified ORTHOGRAPHY, not
+    // stripped diacritics — which is why neither column is searchable as shipped and why
+    // `features/search` has to fold both.
+    return getAllVersesForSearch().then((rows) => {
+      expect(rows[0]).toEqual({
+        surah: 1,
+        verse: 1,
+        textUthmani:
+          '\u0628\u0650\u0633\u0652\u0645\u0650 ' +
+          '\u0671\u0644\u0644\u0651\u064E\u0647\u0650 ' +
+          '\u0671\u0644\u0631\u0651\u064E\u062D\u0652\u0645\u064E\u0670\u0646\u0650 ' +
+          '\u0671\u0644\u0631\u0651\u064E\u062D\u0650\u064A\u0645\u0650',
+        textSimple:
+          '\u0628\u0650\u0633\u0652\u0645\u0650 ' +
+          '\u0627\u0644\u0644\u0651\u064E\u0647\u0650 ' +
+          '\u0627\u0644\u0631\u0651\u064E\u062D\u0652\u0645\u064E\u0670\u0646\u0650 ' +
+          '\u0627\u0644\u0631\u0651\u064E\u062D\u0650\u064A\u0645\u0650',
+        translation: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
+      });
+      // The whole difference between the two columns of this verse, stated as an equation.
+      expect(rows[0]?.textUthmani.replace(/\u0671/g, '\u0627')).toBe(rows[0]?.textSimple);
+    });
+  });
+
+  it('shares the one connection — the corpus read does not open a second one', async () => {
+    await getSurahVerses(1);
+    await getAllVersesForSearch();
+    expect(mockImports).toHaveBeenCalledTimes(1);
+    expect(mockExeced).toEqual(['PRAGMA query_only = ON;']);
   });
 });

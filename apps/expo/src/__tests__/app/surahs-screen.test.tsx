@@ -15,6 +15,7 @@
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
+const mockPush = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>(() => true);
 const mockParams = { current: {} as Record<string, string> };
 
@@ -23,7 +24,7 @@ jest.mock('expo-router', () => ({
     back: mockBack,
     replace: mockReplace,
     navigate: mockNavigate,
-    push: jest.fn(),
+    push: mockPush,
     canGoBack: () => mockCanGoBack(),
   }),
   useLocalSearchParams: () => mockParams.current,
@@ -365,6 +366,30 @@ describe('the mode param', () => {
     render(<Surahs />);
     select('surah-row-5');
     expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ mode: 'reading' });
+  });
+});
+
+describe('the search entry (story 6-7)', () => {
+  it('pushes /search carrying the opener mode, and writes nothing on the way', () => {
+    mockParams.current = { mode: 'mushaf' };
+    render(<Surahs />);
+    fireEvent.press(screen.getByTestId('index-search'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/search', params: { mode: 'mushaf' } });
+    // ⚠️ PUSH, NOT REPLACE: cancelling search has to return the reader to the index, and a
+    // selection inside it unwinds both pushed routes at once (`SearchScreen`'s `dismissAll`).
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    // Opening search is navigation, never a position write.
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+  });
+
+  it('is a header ACTION, not a native header slot — the reserved-word rule', () => {
+    // `lint:header-controls` is the gate; this is the rendered half of it. The control sits in
+    // `AppHeader`'s own `trailing` slot, which is a plain RN view, so there is no native stack
+    // header for an Apple-silicon-Mac click to fall through.
+    render(<Surahs />);
+    expect(screen.getByTestId('index-search')).toBeTruthy();
+    expect(screen.getByTestId('app-header')).toBeTruthy();
   });
 });
 

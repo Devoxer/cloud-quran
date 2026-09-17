@@ -344,6 +344,7 @@ describe('content direction is not UI direction', () => {
     'features/reading/components/VerseRow.tsx',
     'features/reading/mushaf/MushafPage.tsx',
     'features/bookmarks/BookmarkRow.tsx',
+    'features/search/components/SearchResultRow.tsx',
     'app/(tabs)/(profile)/appearance.tsx',
   ];
 
@@ -389,6 +390,7 @@ describe('start-edge text alignment', () => {
   const CONTENT_ALLOWED = [
     'features/reading/components/VerseRow.tsx',
     'features/bookmarks/BookmarkRow.tsx',
+    'features/search/components/SearchResultRow.tsx',
     'app/(tabs)/(profile)/appearance.tsx',
   ];
 
@@ -400,7 +402,7 @@ describe('start-edge text alignment', () => {
    * tree is on Quran content, which is right-to-left for reasons that have nothing to do with the
    * interface.
    */
-  it('no UI surface sets `textAlign: right` — only the four content ones may', () => {
+  it('no UI surface sets `textAlign: right` — only the content ones may', () => {
     const offenders = sourceFiles(SRC)
       .filter((file) => /textAlign:\s*'right'/.test(stripComments(readFileSync(file, 'utf8'))))
       .map((file) => relative(SRC, file));

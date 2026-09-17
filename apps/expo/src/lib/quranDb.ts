@@ -259,6 +259,61 @@ export async function getSurahMetadata(surah: number): Promise<Surah | null> {
 }
 
 /**
+ * The translation the search corpus reads.
+ *
+ * ⚠️ HARDCODED, AND HONESTLY SO: the `translations` table has a `language` column and exactly ONE
+ * value in it — `'en'`, 6,236 rows, one per verse (`scripts/prepare-data.ts:208`). Threading the
+ * UI language through would be a parameter whose only legal argument is this string, and the
+ * first day a second translation ships it has to be a reader PREFERENCE anyway, not the interface
+ * language. Named rather than inlined so that story has one place to look.
+ */
+const SEARCH_TRANSLATION_LANGUAGE = 'en';
+
+/** A verse plus its translation — the search corpus's row. Never rendered as-is. */
+export interface SearchableVerse extends Verse {
+  /** The bundled translation, or `null` when the join found none for this verse. */
+  translation: string | null;
+}
+
+/** The joined row, exactly as SQLite answers it. Never leaves this module. */
+interface SearchRow extends VerseRow {
+  translation: string | null;
+}
+
+/**
+ * Every verse in the book with its translation — the whole corpus, in ONE query (story 6-7).
+ *
+ * ⚠️ THIS IS THE READER THAT MAKES A SEARCH POSSIBLE WITHOUT TOUCHING THE SCHEMA, AND THAT IS THE
+ * point of it. FTS5 is not available here twice over: the connection runs `PRAGMA query_only = ON`
+ * (see `openQuranDb`), so no virtual table can be created at runtime at all — and building one at
+ * pipeline time instead walks into `forceOverwrite: false` (this file's header), where the copy
+ * already on a reader's disk wins and a rebuilt database never reaches anybody who has opened the
+ * app before. That defect is green on a fresh simulator and broken for every existing install. So
+ * the corpus is normalised in memory by `features/search`, and this story ships to existing
+ * installs on day one.
+ *
+ * ⚠️ IT IS A FULL TABLE SCAN AND IT IS PAID EXACTLY ONCE. 6,236 rows, ~1.4 MB of text, ~680 KB
+ * per Arabic column; `useSearchCorpus` memoises the result in module scope and nothing calls this
+ * until the reader opens search. Do NOT move it to boot — an unopened search must cost nothing.
+ *
+ * ⚠️ `LEFT JOIN`, NOT `JOIN`. The translation is a decoration on a row whose Arabic is the point;
+ * an inner join would silently drop a verse from the searchable Quran because its English was
+ * missing. `null` is what a caller gets, and `features/search` treats that as "no translation to
+ * match against", never as "no verse".
+ */
+export async function getAllVersesForSearch(): Promise<SearchableVerse[]> {
+  const db = await openQuranDb();
+  const rows = await db.getAllAsync<SearchRow>(
+    'SELECT v.surah_number, v.verse_number, v.uthmani_text, v.simple_text, t.text AS translation ' +
+      'FROM verses v LEFT JOIN translations t ON t.surah_number = v.surah_number ' +
+      'AND t.verse_number = v.verse_number AND t.language = ? ' +
+      'ORDER BY v.surah_number, v.verse_number',
+    SEARCH_TRANSLATION_LANGUAGE
+  );
+  return rows.map((row) => ({ ...toVerse(row), translation: row.translation }));
+}
+
+/**
  * Drop the cached handle. **Tests only** — there is no runtime reason to close the database, and
  * closing it mid-session would turn the next verse read into a reopen.
  */

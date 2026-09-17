@@ -35,6 +35,13 @@
  * The row keeps the flex, the control sits beside it, and the highlight moves to the wrapper so
  * it still spans the whole row.
  *
+ * ⚠️ THE SEARCH ENTRY LIVES IN THIS SCREEN'S HEADER (story 6-7), and that is why search needed no
+ * chrome change of its own: the index is already one tap from both reading surfaces via the
+ * chrome title, so `/search` hangs off a surface the reader can already reach rather than costing
+ * a fifth tab (`TABS[0]` ordering is load-bearing) or a second control on the reading chrome. It
+ * PUSHES, carrying `mode`, so cancelling search returns here — while a SELECTION inside it
+ * unwinds both pushed routes at once (`SearchScreen`'s `dismissAll`, not `back`).
+ *
  * The screen is NOT immersive: `AppHeader` occupies layout (the settings-shell pattern), with the
  * default history-conditional back. On a deep link with no history the back control is ABSENT and
  * a selection `replace`s toward the opener mode's home — never a dead end.
@@ -54,7 +61,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppHeader, ListRow, SegmentedControl, Text } from '@/components/ui';
+import { AppHeader, HeaderActionButton, ListRow, SegmentedControl, Text } from '@/components/ui';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
@@ -67,6 +74,7 @@ import {
 } from '@/features/audio';
 import { useQuranNumerals } from '@/lib/format';
 import { surahDisplayName, surahIndexNames } from '@/lib/surahName';
+import { useTheme } from '@/lib/theme';
 import { usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -82,7 +90,9 @@ export interface QuranIndexScreenProps {
 }
 
 export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
-  const { t } = useTranslation('navigation');
+  // Two namespaces: the screen's own copy is `navigation` (the default, so every key below is
+  // unprefixed), and the search control's spoken label lives in `a11y` like every other one.
+  const { t } = useTranslation(['navigation', 'a11y']);
   // The numeral system is a live device preference (`lib/numerals.ts`), so the surface that DRAWS
   // a structure number subscribes to it — a module-level read would keep the digits it first
   // rendered until something else happened to re-render this component. It is a DEPENDENCY of
@@ -90,6 +100,7 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
   // own, and the formatter's identity moves exactly when the preference does (`lib/format.ts`).
   const formatQuranNumber = useQuranNumerals();
   const router = useRouter();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { saved, reportVerse } = usePosition(mode);
   const [segment, setSegment] = useState<Segment>('surahs');
@@ -184,6 +195,20 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
         router.replace(mode === 'mushaf' ? HOME_HREF : READ_HREF);
       }
     }, 0);
+  }, [router, mode]);
+
+  /**
+   * Story 6-7's entry to search. It PUSHES rather than replacing, so cancelling search returns
+   * the reader here — and a selection inside it unwinds both pushed routes at once
+   * (`SearchScreen`'s `dismissAll`). The mode travels so the write lands in the right surface's
+   * position and so a deep-linked search knows which home to fall back to.
+   *
+   * Guarded by the same one-shot as a row press: this screen is already leaving during the
+   * deferred pop, and pushing a route onto a screen mid-exit is a stack the reader cannot read.
+   */
+  const openSearch = useCallback(() => {
+    if (exiting.current) return;
+    router.push({ pathname: '/search', params: { mode } });
   }, [router, mode]);
 
   const onSelectSurah = useCallback(
@@ -301,7 +326,18 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
       {/* The percentages on this screen's rows are the only live progress in the app, so this is
           the only screen that keeps itself lit — and only while a queue is actually moving. */}
       {reciterId === null ? null : <DownloadKeepAwake reciterId={reciterId} />}
-      <AppHeader title={t('titles.index')} />
+      <AppHeader
+        title={t('titles.index')}
+        trailing={
+          <HeaderActionButton
+            name="search"
+            onPress={openSearch}
+            color={colors.accent.primary}
+            accessibilityLabel={t('a11y:openSearch')}
+            testID="index-search"
+          />
+        }
+      />
       <View style={styles.segments}>
         <SegmentedControl
           values={[t('index.segments.surahs'), t('index.segments.juz'), t('index.segments.hizb')]}

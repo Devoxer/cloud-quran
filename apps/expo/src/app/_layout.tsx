@@ -323,6 +323,20 @@ function RootLayoutNav() {
             presentation: Platform.OS === 'web' ? 'transparentModal' : 'card',
           }}
         />
+        {/* story 6-7: Quran search — a pushed ROOT route pushed FROM the index, so the stack can
+            be two deep here. Same shape as `surahs` above and for the SAME measured web reason:
+            a default card push detaches the covered screen with `display: none` on web, and a
+            display-none scroller's offset reads 0 and swallows writes, so the write→dismiss→
+            focus-resync arc that lands the reader on their verse would not survive it. A
+            selection unwinds both pushed routes with `dismissAll()` (`SearchScreen`'s docblock).
+            Native keeps the default card push — the platform preserves covered content. */}
+        <Stack.Screen
+          name="search"
+          options={{
+            headerShown: false,
+            presentation: Platform.OS === 'web' ? 'transparentModal' : 'card',
+          }}
+        />
         {/* +not-found auto-registers into this Stack; without this registration it would draw
             the ONE native stack header left in the app. Its content carries its own title and
             the "go home" link (`HOME_HREF`). */}
