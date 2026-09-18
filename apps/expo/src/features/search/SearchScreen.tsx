@@ -7,14 +7,19 @@
  * carried in route params would be a SECOND position channel beside the saved one, which is the
  * decoupling `usePosition` exists to prevent.
  *
- * ⚠️ THE EXIT IS `dismissAll`, NOT `back`, AND THAT IS THE ONE PLACE THIS DIVERGES FROM THE INDEX.
+ * ⚠️ THE EXIT POPS, IT NEVER NAVIGATES — AND THAT IS A MEASURED WEB FIX (2026-09-18).
  * Search is pushed FROM the index, so the stack is `(tabs)` → `surahs` → `search` and a single
  * `router.back()` would leave the reader looking at the surah list with their verse loaded behind
- * it — the story's acceptance criterion says the surface underneath lands on the verse and the
- * search surface is GONE. `dismissAll()` is `POP_TO_TOP` on the root stack, whose first route is
- * `(tabs)`, so it unwinds both pushed routes in one commit however many of them there are. A
- * CANCEL is different and stays `back()` (`AppHeader`'s own chevron): a reader who changes their
- * mind wants the screen they came from, not the top of the stack.
+ * it — the acceptance criterion says the surface underneath lands on the verse and the search
+ * surface is GONE. This shipped as `dismissAll()`, which is right for that case and WRONG for a
+ * deep-linked `/search`: there the tabs are already mounted beneath the modal, so anything that
+ * NAVIGATES to a tab route re-enters a mounted tree and re-renders until React gives up with
+ * "Maximum update depth exceeded", dropping the whole app into the router ErrorBoundary.
+ * Measured in WebKit, deterministic, and bisected three ways — `dismissAll()` crashes,
+ * `replace(HOME_HREF)` crashes, `back()` does not, and the same flow entered from the index does
+ * not crash at all. So the exit pops one route at a time until nothing pushed remains, which
+ * reaches the reading surface in BOTH cases. A CANCEL is different and stays a single `back()`:
+ * a reader who changes their mind wants the screen they came from, not the top of the stack.
  *
  * ⚠️ THE POP IS DEFERRED ONE MACROTASK, AND IT IS A MEASURED FIX INHERITED FROM 6-3 RATHER THAN
  * HYGIENE. The surfaces' focus resync reads `savedRef.current`, a ref assigned during RENDER,
@@ -48,6 +53,10 @@ import { useThemedStyles } from '@/lib/useThemedStyles';
 import { SearchResultRow } from './components/SearchResultRow';
 import { useSearchCorpus } from './hooks/useSearchCorpus';
 import { isSearchable, type SearchResult, searchVerses } from './lib/search';
+
+/** How many pushed routes this screen will unwind before giving up. `(tabs)` → `surahs` → `search`
+ *  is two; the bound only exists so a stale `canGoBack()` cannot spin the loop. */
+const MAX_POPS = 5;
 
 export interface SearchScreenProps {
   /** The surface the reader came from — decides the write's mode and the no-history exit. */
@@ -111,11 +120,28 @@ export function SearchScreen({ mode }: SearchScreenProps) {
       // The write FIRST — the surface's focus resync is what turns it into a jump.
       reportVerse(surah, verse);
       dismissTimer.current = setTimeout(() => {
-        if (router.canDismiss()) {
-          router.dismissAll();
-        } else {
-          // A deep-linked `/search` has nothing to unwind; go to the opener mode's home rather
-          // than dead-ending on a screen with no back control (the index's rule).
+        // ⚠️ POP, NEVER NAVIGATE — AND ALL THREE SPELLINGS WERE MEASURED IN WEBKIT 2026-09-18.
+        // On a DEEP-LINKED `/search` the tabs are already mounted beneath the modal, so anything
+        // that NAVIGATES to a tab route re-enters a mounted tree and re-renders until React gives
+        // up with "Maximum update depth exceeded", dropping the whole app into the router
+        // ErrorBoundary. `dismissAll()` crashes. `replace(HOME_HREF)` crashes. `back()` — which
+        // pops the modal and REVEALS what is already there — does not.
+        //
+        // So: pop one route at a time until nothing pushed is left. That reaches the reading
+        // surface from the index too (`(tabs)` → `surahs` → `search` is two pops), which is what
+        // `dismissAll()` was doing and is what the acceptance criterion asks for — the search
+        // surface GONE, not merely one screen back. The bound is belt-and-braces: `canGoBack()`
+        // going stale would otherwise spin here.
+        let popped = 0;
+        while (popped < MAX_POPS && router.canGoBack()) {
+          router.back();
+          popped += 1;
+        }
+        // Popped NOTHING — a deep link with no stack beneath it at all. Only then navigate, and
+        // only because the alternative is dead-ending on a screen with no back control. When the
+        // loop did pop, we are already where we belong and a `replace` here would re-enter the
+        // mounted tab tree, which is the crash this whole comment is about.
+        if (popped === 0) {
           router.replace(mode === 'mushaf' ? HOME_HREF : READ_HREF);
         }
       }, 0);
