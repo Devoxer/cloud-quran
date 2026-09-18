@@ -69,6 +69,39 @@ const DROPPED_MARKS = /[\u0640\u064B-\u065F\u06D6-\u06ED]/g;
 /** Rule 5 — `آ أ إ ٱ`, every alif a keyboard or a mushaf can produce. */
 const ALIF_FORMS = /[\u0622\u0623\u0625\u0671]/g;
 
+/**
+ * Rule 5a — the HAMZA CARRIERS, the other half of rule 5.
+ *
+ * ⚠️ WITHOUT THIS, THE FOLD IS ONLY HALF DONE AND THE HALF THAT IS MISSING IS THE ONE READERS
+ * TYPE. Rule 5 folds the alif carriers (`آ أ إ ٱ`), so `أولئك` already loses its opening hamza —
+ * but `ؤ` and `ئ` survive, and those are exactly the letters an ordinary typist omits: `مومنون`
+ * for `مؤمنون`, `مسولون` for `مسؤولون`. The carrier is a spelling convention about where the
+ * hamza SITS, not a distinct consonant, so it folds onto the letter underneath it: `ؤ` → `و`,
+ * `ئ` → `ي`. The bare hamza `ء` has no carrier to fall back to and is simply dropped, which is
+ * symmetric: `شيء` and `شي` become one query on both sides.
+ *
+ * This does NOT rescue an inserted alif (`اولايك` for `أولئك`) — that needs the alif-deleting
+ * trick `searchForms` measured and rejected for merging `قال` with `قل`. Do not claim it does.
+ */
+const HAMZA_ON_WAW = /\u0624/g;
+const HAMZA_ON_YEH = /\u0626/g;
+const BARE_HAMZA = /\u0621/g;
+
+/**
+ * Rule 5b — the PERSIAN/URDU letters an Arabic-adjacent keyboard emits.
+ *
+ * ⚠️ THESE ARE NOT EXOTIC — they are what a Farsi, Urdu or Pashto layout produces for the letters
+ * a reader thinks of as `ي` and `ك`, and those layouts are common wherever this app will be read.
+ * They matter here because they fall OUTSIDE rule 9's `U+0621–U+064A` keep-range: left unfolded
+ * they are not letters to the separator rule, so it turns them into SPACES and shatters the query
+ * into fragments that match nothing. The failure is indistinguishable from "no such ayah", which
+ * is why it has to be fixed here rather than in the keep-range.
+ *
+ * Folded BEFORE rule 9 runs, so the results land inside the kept range.
+ */
+const FARSI_YEH = /\u06CC/g;
+const KEHEH = /\u06A9/g;
+
 /** Rule 6 — ARABIC LETTER ALEF MAKSURA. */
 const ALIF_MAQSURA = /\u0649/g;
 
@@ -112,6 +145,11 @@ export function normalizeForSearch(text: string, daggerAlif: '' | typeof PLAIN_A
     .replace(DROPPED_MARKS, '')
     .replace(DAGGER_ALIF, daggerAlif)
     .replace(ALIF_FORMS, PLAIN_ALIF)
+    .replace(HAMZA_ON_WAW, '\u0648')
+    .replace(HAMZA_ON_YEH, '\u064A')
+    .replace(BARE_HAMZA, '')
+    .replace(FARSI_YEH, '\u064A')
+    .replace(KEHEH, '\u0643')
     .replace(ALIF_MAQSURA, '\u064A')
     .replace(TEH_MARBUTA, '\u0647')
     .toLowerCase()

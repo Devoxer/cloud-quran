@@ -82,7 +82,11 @@ export function windowAround(
   if (range === null) {
     return { words: words.slice(0, max), offset: 0, clippedStart: false, clippedEnd: true };
   }
-  const span = range.end - range.start;
+  // ⚠️ CLAMPED. A pasted phrase can span MORE words than the whole budget, and an unclamped
+  // `(max - span)` then goes negative — `range.start` moves FORWARD, the window opens inside the
+  // match, and the first matched words are silently cut off the front. Clamping makes the
+  // over-long case degrade to "start at the match" instead of "start past it".
+  const span = Math.min(range.end - range.start, max);
   // Clamped into the line, so a match near either edge spends its whole budget on the side that
   // still has words rather than running off the end and drawing a short line.
   const start = Math.max(
@@ -114,7 +118,14 @@ function SearchResultRowInner({ entry, side, query, onPress, testID }: SearchRes
   // subscribes to it rather than reading it once at module scope (`lib/format.ts`).
   const formatQuranNumber = useQuranNumerals();
   const styles = useThemedStyles((theme) => ({
-    row: {
+    // ⚠️ THE WRAPPER CARRIES NO PADDING, AND THAT IS THE POINT. Padding on the outer `View`
+    // with an unpadded `Pressable` inside it makes the whole padded band DEAD to taps — the
+    // reader aims at the row, hits the gap, and nothing happens. `ListRow` puts it inside the
+    // pressable for the same reason. The wrapper exists only to carry the row's testID.
+    row: {},
+    // Padding AND the line gap both live here: these three `Text` lines are this element's
+    // children, so a `gap` on the wrapper (which has exactly one child) would separate nothing.
+    pressable: {
       paddingVertical: SPACING.md,
       paddingHorizontal: SPACING.lg,
       gap: SPACING.xs,
@@ -171,6 +182,11 @@ function SearchResultRowInner({ entry, side, query, onPress, testID }: SearchRes
       ? null
       : windowAround(translationWords, translationRange, WINDOW_WORDS.translation);
 
+  // One value, read by the meta line AND the a11y label — two spellings of "which side matched"
+  // is how they drift apart.
+  const sideLabel =
+    side === 'arabic' ? t('common:search.sideArabic') : t('common:search.sideTranslation');
+
   const renderWindow = (win: TextWindow, range: { start: number; end: number } | null) => (
     <>
       {win.clippedStart ? '… ' : ''}
@@ -194,11 +210,19 @@ function SearchResultRowInner({ entry, side, query, onPress, testID }: SearchRes
   return (
     <View style={styles.row} testID={testID}>
       <Pressable
+        style={styles.pressable}
         onPress={() => onPress(entry.surah, entry.verse)}
         accessibilityRole="button"
+        // ⚠️ THE LABEL CARRIES THE MATCHED TEXT, because the text IS the row. A label of
+        // "Al-Baqarah, ayah 255" is the same announcement for every result in the list, so a
+        // screen-reader user hears a column of references and cannot tell which one they wanted
+        // — the one thing a search result has to answer. The window is already centred on the
+        // match, so the drawn words are exactly the right thing to read out.
         accessibilityLabel={t('common:search.rowA11y', {
           name,
           verse: formatQuranNumber(entry.verse),
+          side: sideLabel,
+          text: (translationWindow ?? arabicWindow).words.join(' '),
         })}
         testID={testID ? `${testID}-open` : undefined}
       >
@@ -207,10 +231,7 @@ function SearchResultRowInner({ entry, side, query, onPress, testID }: SearchRes
             name,
             surah: formatQuranNumber(entry.surah),
             verse: formatQuranNumber(entry.verse),
-            side:
-              side === 'arabic'
-                ? t('common:search.sideArabic')
-                : t('common:search.sideTranslation'),
+            side: sideLabel,
           })}
         </Text>
         {/* ⚠️ The face and the size sit on the PARENT, not only on each word: the ' ' separators

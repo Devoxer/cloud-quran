@@ -23,17 +23,20 @@ const VERSE_1_3 =
 /** The bare query a reader types for the first of those two words. */
 const AL_RAHMAN = '\u0627\u0644\u0631\u062d\u0645\u0646';
 
+/** The row's default subject, hoisted so a case can vary ONE field of it. */
+const ENTRY = {
+  surah: 1,
+  verse: 3,
+  textUthmani: VERSE_1_3,
+  translation: 'The Entirely Merciful, the Especially Merciful,',
+  arabicMatch: 'unused by the row',
+  translationMatch: 'unused by the row',
+};
+
 function renderRow(props: Partial<SearchResultRowProps> = {}) {
   return render(
     <SearchResultRow
-      entry={{
-        surah: 1,
-        verse: 3,
-        textUthmani: VERSE_1_3,
-        translation: 'The Entirely Merciful, the Especially Merciful,',
-        arabicMatch: 'unused by the row',
-        translationMatch: 'unused by the row',
-      }}
+      entry={ENTRY}
       side="arabic"
       query={AL_RAHMAN}
       onPress={() => {}}
@@ -190,5 +193,41 @@ describe('the press', () => {
     renderRow({ onPress });
     fireEvent.press(screen.getByTestId('row-open'));
     expect(onPress).toHaveBeenCalledWith(1, 3);
+  });
+});
+
+describe('the display strip and the touch target', () => {
+  /**
+   * ⚠️ THIS CASE EXISTS BECAUSE ITS ABSENCE WAS DEMONSTRATED. During 6-7's review, replacing
+   * `splitWords(stripDisplayMarks(entry.textUthmani))` with `splitWords(entry.textUthmani)` left
+   * all 2,840 tests green — every fixture in this file and in `search-screen.test.tsx` was built
+   * from verses that carry no U+06DF, so the strip was unobserved. 2,240 of the 6,236 verses in
+   * the book carry one, and the KFGQPC face draws it as a solid disc mid-word.
+   *
+   * Transplanted from `features/bookmarks/BookmarkRow.test.tsx`, which pins the same defect on
+   * the same asset — the two previews must never disagree about a verse.
+   */
+  it('strips U+06DF for display — the measured KFGQPC defect VerseRow and BookmarkRow both pin', () => {
+    // 2:5 `ulaa'ika`, the word BookmarkRow uses, with the rounded zero in place.
+    const raw = '\u0623\u064f\u0648\u06df\u0644\u064e\u0670\u0653\u0626\u0650\u0643\u064e';
+    const stripped = raw.replaceAll('\u06df', '');
+    // A query that matches nothing, so the word is drawn as one unemphasised span.
+    renderRow({ entry: { ...ENTRY, textUthmani: raw }, query: 'zzzz' });
+    expect(screen.getByText(stripped)).toBeTruthy();
+    expect(screen.queryByText(raw)).toBeNull();
+  });
+
+  it('puts the row padding INSIDE the pressable, so the padded band is not dead to taps', () => {
+    // ⚠️ Padding on the wrapper with an unpadded `Pressable` inside it makes the whole band
+    // around the text unresponsive — the reader aims at the row, hits the gap, nothing happens.
+    // `ListRow` puts it inside for the same reason. A style assertion, because the band's
+    // deadness is a hit-test fact no render test in this repo can observe.
+    renderRow();
+    const wrapper = flatten(screen.getByTestId('row').props.style);
+    const pressable = flatten(screen.getByTestId('row-open').props.style);
+    expect(wrapper.paddingVertical).toBeUndefined();
+    expect(wrapper.paddingHorizontal).toBeUndefined();
+    expect(pressable.paddingVertical).toBeGreaterThan(0);
+    expect(pressable.paddingHorizontal).toBeGreaterThan(0);
   });
 });

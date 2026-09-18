@@ -292,7 +292,7 @@ interface SearchRow extends VerseRow {
  * the corpus is normalised in memory by `features/search`, and this story ships to existing
  * installs on day one.
  *
- * ⚠️ IT IS A FULL TABLE SCAN AND IT IS PAID EXACTLY ONCE. 6,236 rows, ~1.4 MB of text, ~680 KB
+ * ⚠️ IT IS A FULL TABLE SCAN AND IT IS PAID EXACTLY ONCE. 6,236 rows, ~2.2 M characters of source text (704 K Uthmani + 679 K simple + 855 K translation), ~680 KB
  * per Arabic column; `useSearchCorpus` memoises the result in module scope and nothing calls this
  * until the reader opens search. Do NOT move it to boot — an unopened search must cost nothing.
  *

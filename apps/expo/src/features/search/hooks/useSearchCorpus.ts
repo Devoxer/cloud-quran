@@ -34,9 +34,24 @@ let cached: readonly SearchVerse[] | null = null;
 /** The in-flight load, so two mounts inside one launch share one read and one normalisation. */
 let inFlight: Promise<readonly SearchVerse[]> | null = null;
 
-/** Read every verse and fold it into the corpus `buildCorpus` defines. */
+/**
+ * Read every verse and fold it into the corpus `buildCorpus` defines.
+ *
+ * ⚠️ THE YIELD BETWEEN THE READ AND THE FOLD IS LOAD-BEARING, NOT TIDINESS. `buildCorpus` folds
+ * 6,236 rows through the whole rule table synchronously, and the awaited read resolves in a
+ * microtask — so without a macrotask boundary the fold runs in the SAME frame the read finished
+ * in, before React has painted the `LoadingView` the screen just switched to. The reader sees a
+ * frozen previous frame instead of a spinner, on a screen whose field has just auto-focused a
+ * keyboard. One `setTimeout(0)` lets the loading state reach the glass first.
+ *
+ * Deliberately NOT chunked into slices. The fold happens once per JS context, the corpus is
+ * memoised above, and a slicing loop would need its own cancellation and partial-state handling
+ * to save a one-time cost the reader meets behind a spinner they can now actually see.
+ */
 async function loadCorpus(): Promise<readonly SearchVerse[]> {
-  return buildCorpus(await getAllVersesForSearch());
+  const rows = await getAllVersesForSearch();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return buildCorpus(rows);
 }
 
 export interface SearchCorpus {

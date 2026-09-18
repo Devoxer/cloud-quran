@@ -34,7 +34,13 @@
     "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
     "sideArabic": "العربية",
     "sideTranslation": "الترجمة",
-    "rowA11y": "{{name}}، الآية {{verse}}. يفتح هذه الآية."
+    "rowA11y": "{{name}}، آية {{verse}}، {{side}}. {{text}}. يفتح هذه الآية.",
+    "resultsA11y_zero": "{{count}} نتيجة",
+    "resultsA11y_one": "{{count}} نتيجة",
+    "resultsA11y_two": "{{count}} نتيجتان",
+    "resultsA11y_few": "{{count}} نتائج",
+    "resultsA11y_many": "{{count}} نتيجة",
+    "resultsA11y_other": "{{count}} نتيجة"
   },
   "notFound": {
     "title": "عذرًا!",

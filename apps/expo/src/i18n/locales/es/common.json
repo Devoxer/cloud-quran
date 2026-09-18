@@ -34,7 +34,10 @@
     "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
     "sideArabic": "Árabe",
     "sideTranslation": "Traducción",
-    "rowA11y": "{{name}}, aleya {{verse}}. Abre esta aleya."
+    "rowA11y": "{{name}}, aleya {{verse}}, {{side}}. {{text}}. Abre esta aleya.",
+    "resultsA11y_one": "{{count}} resultado",
+    "resultsA11y_many": "{{count}} resultados",
+    "resultsA11y_other": "{{count}} resultados"
   },
   "notFound": {
     "title": "¡Ups!",

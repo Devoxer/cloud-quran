@@ -36,7 +36,9 @@ describe('normalizeForSearch', () => {
     // U+0653 MADDAH ABOVE — 5,376 occurrences, and OUTSIDE the U+064B–U+0652 the story's task
     // list names. A range that stopped at U+0652 leaves this word unreachable. The mushaf writes
     // `aamana` as hamza + alif + maddah, so the mark sits in the middle of the word.
-    expect(normalizeForSearch('\u0621\u0627\u0653\u0645\u0646')).toBe('\u0621\u0627\u0645\u0646');
+    // The bare hamza that opens this word is gone by rule 5a, not by this one — what this case
+    // pins is that the MADDAH in the middle is stripped, which it is either way.
+    expect(normalizeForSearch('\u0621\u0627\u0653\u0645\u0646')).toBe('\u0627\u0645\u0646');
   });
 
   it('rule 3 — strips the waqf signs, which are recitation notation beside the text', () => {
@@ -47,8 +49,10 @@ describe('normalizeForSearch', () => {
     // U+06DF — the mark `stripDisplayMarks` removes for a FONT reason — is inside this range too,
     // and 2,240 verses carry one. `ulaika`: hamza-on-alif, waw, U+06DF, lam, dagger alif, ya-
     // hamza, kaf.
+    // The trailing ya-hamza folds to a plain ya under rule 5a; U+06DF vanishing is this case's
+    // subject and is unaffected by that.
     expect(normalizeForSearch('\u0623\u0648\u06df\u0644\u0670\u0626\u0643')).toBe(
-      '\u0627\u0648\u0644\u0626\u0643'
+      '\u0627\u0648\u0644\u064a\u0643'
     );
   });
 
@@ -69,6 +73,35 @@ describe('normalizeForSearch', () => {
     expect(normalizeForSearch('\u0625\u0628\u0631\u0627\u0647\u064a\u0645')).toBe(
       '\u0627\u0628\u0631\u0627\u0647\u064a\u0645'
     );
+  });
+
+  it('rule 5a — the hamza carriers fold onto the letter under them', () => {
+    // ⚠️ THE HALF OF RULE 5 READERS ACTUALLY TYPE. `مؤمنون` is written `مومنون` by anyone not
+    // reaching for the hamza key, and before this rule that query found nothing while `أولئك`
+    // (an ALIF carrier, rule 5) already worked — a fold that helped exactly the letters people
+    // get right and abandoned the ones they get wrong.
+    // waw-hamza -> waw: `مؤمنون` and `مومنون` are one query.
+    expect(normalizeForSearch('\u0645\u0624\u0645\u0646\u0648\u0646')).toBe(
+      normalizeForSearch('\u0645\u0648\u0645\u0646\u0648\u0646')
+    );
+    // ya-hamza -> ya.
+    expect(normalizeForSearch('\u0626')).toBe('\u064a');
+    // Bare hamza has no carrier to fall back to and is dropped — which is what makes the mushaf's
+    // `ءامن` and the modern `آمن` the same string.
+    expect(normalizeForSearch('\u0621\u0627\u0645\u0646')).toBe(
+      normalizeForSearch('\u0622\u0645\u0646')
+    );
+  });
+
+  it('rule 5b — the Persian/Urdu letters an Arabic-adjacent keyboard emits', () => {
+    // ⚠️ THESE WOULD OTHERWISE BE SHREDDED, NOT MERELY UNFOLDED. They fall outside rule 9's
+    // keep-range, so before this rule the separator turned them into SPACES — splitting the query
+    // into fragments that match nothing, with the same "no results" face as a real miss.
+    // U+06CC farsi yeh -> U+064A, U+06A9 keheh -> U+0643.
+    expect(normalizeForSearch('\u06cc')).toBe('\u064a');
+    expect(normalizeForSearch('\u06a9')).toBe('\u0643');
+    // And the whole word survives as ONE token rather than two.
+    expect(normalizeForSearch('\u06a9\u062a\u0627\u0628').split(' ')).toHaveLength(1);
   });
 
   it('rule 6 — alif maqsura folds to ya', () => {

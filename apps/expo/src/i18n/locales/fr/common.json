@@ -34,7 +34,10 @@
     "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
     "sideArabic": "Arabe",
     "sideTranslation": "Traduction",
-    "rowA11y": "{{name}}, verset {{verse}}. Ouvre ce verset."
+    "rowA11y": "{{name}}, verset {{verse}}, {{side}}. {{text}}. Ouvre ce verset.",
+    "resultsA11y_one": "{{count}} résultat",
+    "resultsA11y_many": "{{count}} résultats",
+    "resultsA11y_other": "{{count}} résultats"
   },
   "notFound": {
     "title": "Oups !",

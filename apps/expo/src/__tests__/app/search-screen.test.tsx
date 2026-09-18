@@ -115,14 +115,42 @@ const VERSES = [
 /** Mount and flush the corpus load's microtask, under the suite's fake timers. */
 async function renderScreen() {
   render(<Search />);
+  // ⚠️ THE TIMER RUN IS REQUIRED, NOT BELT-AND-BRACES. `loadCorpus` yields a MACROTASK between
+  // the database read and the fold, so the `LoadingView` can actually paint before the JS thread
+  // disappears into 6,236 rows of normalisation. Under fake timers a microtask flush alone
+  // leaves the corpus permanently loading, and every state below reads as "still loading".
+  await settleCorpus();
+}
+
+/**
+ * Let a corpus load finish — the FIRST one or a retry's.
+ *
+ * ⚠️ ORDER MATTERS: `loadCorpus` yields a MACROTASK between the database read and the fold, so
+ * the `LoadingView` can paint before the JS thread disappears into 6,236 rows of normalisation.
+ * The yield is SCHEDULED only once the awaited read resolves, so a timer run before that
+ * microtask flush finds nothing pending and the corpus stays loading forever. Flush, run, flush.
+ */
+async function settleCorpus() {
+  await act(async () => {});
+  await act(async () => {
+    jest.runOnlyPendingTimers();
+  });
   await act(async () => {});
 }
 
-/** Type into the field and let the memoised scan settle. */
+/**
+ * Type into the field and let the scan settle.
+ *
+ * ⚠️ TWO `act`s, BECAUSE THE SCAN RUNS ON A DEFERRED VALUE. `useDeferredValue` schedules the
+ * rescan at a lower priority than the keystroke, so the first flush paints the new field value
+ * against the OLD result list — which is the whole point on a device and an off-by-one render in
+ * a test. The second flush is where the results catch up.
+ */
 function type(query: string) {
   act(() => {
     fireEvent.changeText(screen.getByTestId('search-field-input'), query);
   });
+  act(() => {});
 }
 
 /** Press, then run the deferred navigation macrotask (the 6-3 deferral, see the header). */
@@ -179,7 +207,7 @@ describe('the four body states', () => {
     // The retry actually re-reads — a failed load is not cached (`useSearchCorpus`).
     mockGetAllVersesForSearch.mockResolvedValue(VERSES);
     fireEvent.press(screen.getByTestId('error-view-action'));
-    await act(async () => {});
+    await settleCorpus();
     expect(mockGetAllVersesForSearch).toHaveBeenCalledTimes(2);
     expect(screen.queryByTestId('search-error')).toBeNull();
     expect(screen.getByTestId('search-resting')).toBeTruthy();

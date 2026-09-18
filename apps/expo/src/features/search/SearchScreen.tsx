@@ -35,9 +35,10 @@
 
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { AccessibilityInfo, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader, EmptyState, ErrorView, LoadingView, SearchBar } from '@/components/ui';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
@@ -59,6 +60,7 @@ export function SearchScreen({ mode }: SearchScreenProps) {
   const { reportVerse } = usePosition(mode);
   const { verses, loading, error, reload } = useSearchCorpus();
   const [query, setQuery] = useState('');
+  const insets = useSafeAreaInsets();
 
   const styles = useThemedStyles((theme) => ({
     screen: {
@@ -73,17 +75,34 @@ export function SearchScreen({ mode }: SearchScreenProps) {
     },
   }));
 
-  // ⚠️ THE SCAN IS MEMOISED ON THE QUERY, NOT RUN IN RENDER. Every keystroke re-renders this
-  // screen; without the memo a re-render for any other reason (the keyboard, a theme change)
-  // would walk all 6,236 rows again for a query that did not move.
-  const results = useMemo<SearchResult[]>(() => searchVerses(verses, query), [verses, query]);
-  const searching = isSearchable(query);
+  // ⚠️ THE SCAN RUNS ON A DEFERRED QUERY, AND THE MEMO ALONE WAS NOT ENOUGH. The memo stops a
+  // re-render for an unrelated reason from rescanning, but it still scans SYNCHRONOUSLY on every
+  // keystroke — 6,236 joined strings on the same JS thread that services the `TextInput`, on a
+  // screen whose field auto-focuses. `useDeferredValue` lets the keystroke paint first and the
+  // scan run at lower priority, so holding backspace cannot stall the field. The emphasis reads
+  // the same deferred value, or a row would highlight a query the list no longer matches.
+  const deferredQuery = useDeferredValue(query);
+  const results = useMemo<SearchResult[]>(
+    () => searchVerses(verses, deferredQuery),
+    [verses, deferredQuery]
+  );
+  const searching = isSearchable(deferredQuery);
 
   // One exit in flight at a time. The dismiss is deferred a macrotask (see the docblock), so
   // there is a real window in which a second row can be pressed — and a second press in it would
   // write a second position, landing the reader on whichever row was second rather than the one
   // they meant. The guard is checked before the WRITE, not only before the navigation.
   const exiting = useRef(false);
+  // ⚠️ AND THE TIMER IS CANCELLED ON UNMOUNT. The dismiss is deferred a macrotask, so a hardware
+  // back (or a cancel) inside that window would otherwise fire `dismissAll()` AFTER the reader
+  // has already left — unwinding the stack out from under whatever they went to instead.
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (dismissTimer.current !== null) clearTimeout(dismissTimer.current);
+    },
+    []
+  );
 
   const openResult = useCallback(
     (surah: number, verse: number) => {
@@ -91,7 +110,7 @@ export function SearchScreen({ mode }: SearchScreenProps) {
       exiting.current = true;
       // The write FIRST — the surface's focus resync is what turns it into a jump.
       reportVerse(surah, verse);
-      setTimeout(() => {
+      dismissTimer.current = setTimeout(() => {
         if (router.canDismiss()) {
           router.dismissAll();
         } else {
@@ -104,17 +123,40 @@ export function SearchScreen({ mode }: SearchScreenProps) {
     [reportVerse, router, mode]
   );
 
+  // ⚠️ CANCEL IS WIRED HERE RATHER THAN LEFT TO THE HEADER CHEVRON, because that chevron is
+  // `canGoBack()`-conditional: a deep-linked `/search` has no history, draws no chevron, and
+  // without this the reader is stranded on the search screen with no exit at all while
+  // `openResult` handles the same case perfectly well one function above.
+  const cancel = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(mode === 'mushaf' ? HOME_HREF : READ_HREF);
+    }
+  }, [router, mode]);
+
+  // ⚠️ A RESULT COUNT IS ANNOUNCED, because nothing else tells a screen-reader user that the
+  // list under the field changed — the rows are off-focus, so a query that found five ayat and
+  // one that found none are the same silence.
+  const resultCount = results.length;
+  useEffect(() => {
+    if (!searching || loading || error !== null) return;
+    AccessibilityInfo.announceForAccessibility(
+      t('common:search.resultsA11y', { count: resultCount })
+    );
+  }, [resultCount, searching, loading, error, t]);
+
   const renderItem = useCallback(
     ({ item }: { item: SearchResult }) => (
       <SearchResultRow
         entry={item.entry}
         side={item.side}
-        query={query}
+        query={deferredQuery}
         onPress={openResult}
         testID={`search-result-${item.entry.surah}:${item.entry.verse}`}
       />
     ),
-    [openResult, query]
+    [openResult, deferredQuery]
   );
 
   const body = () => {
@@ -163,7 +205,12 @@ export function SearchScreen({ mode }: SearchScreenProps) {
         // ⚠️ WITHOUT THIS THE FIRST TAP ON A RESULT ONLY DISMISSES THE KEYBOARD. The field
         // auto-focuses, so the keyboard is up for every result list this screen ever draws.
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ ...screenContentStyle('main'), paddingBottom: SPACING.xl }}
+        // The inset, not a flat pad — the index's rule (`QuranIndexScreen`). Without it the last
+        // result sits under the home indicator and cannot be read or tapped.
+        contentContainerStyle={{
+          ...screenContentStyle('main'),
+          paddingBottom: insets.bottom + SPACING.xl,
+        }}
         testID="search-results"
       />
     );
@@ -176,6 +223,7 @@ export function SearchScreen({ mode }: SearchScreenProps) {
         value={query}
         onChangeText={setQuery}
         placeholder={t('common:search.placeholder')}
+        onCancel={cancel}
         style={styles.field}
         autoFocus
         testID="search-field"

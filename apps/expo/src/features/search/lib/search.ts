@@ -5,7 +5,9 @@
  * morphology is templatic: `رحم` is the root living inside `ٱلرَّحْمَٰن`, `رَحْمَة` and `يَرْحَم`.
  * A token index matches whole tokens and misses all three; a substring scan over normalised text
  * finds 201 verses. At 6,236 rows the scan is not worth optimising — measured at ~4 ms per query
- * in Node over the real corpus, and the whole corpus is ~2 MB of strings.
+ * in Node over the real corpus. ⚠️ THAT NUMBER IS NODE, NOT A DEVICE, and is quoted as such: the
+ * screen defers the query through `useDeferredValue` rather than trusting it. The source the fold
+ * runs over is ~2.2 M characters of source text (704 K Uthmani + 679 K simple + 855 K translation).
  *
  * ⚠️ THE ORDER IS THE BOOK'S OWN, AND THERE IS NO RANKING. The story's frozen boundaries forbid
  * "any ranking the reader cannot explain", and the only ranking a reader of the Quran can explain

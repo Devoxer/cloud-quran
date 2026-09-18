@@ -34,7 +34,9 @@
     "rowMeta": "{{name}} {{surah}}:{{verse}} · {{side}}",
     "sideArabic": "Arabic",
     "sideTranslation": "Translation",
-    "rowA11y": "{{name}}, ayah {{verse}}. Opens this ayah."
+    "rowA11y": "{{name}}, ayah {{verse}}, {{side}}. {{text}}. Opens this ayah.",
+    "resultsA11y_one": "{{count}} result",
+    "resultsA11y_other": "{{count}} results"
   },
   "notFound": {
     "title": "Oops!",

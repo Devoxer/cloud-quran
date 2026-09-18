@@ -82,22 +82,62 @@ describe('no native chrome renders anywhere', () => {
     expect(root).toMatch(/name="\+not-found"/);
   });
 
-  it('the surahs index is a WEB-CONDITIONAL presentation — a measured data-loss fix', () => {
-    // ⚠️ THIS TERNARY LOOKS LIKE A STYLE CHOICE AND IS NOT. Measured in WebKit 2026-08-28: with a
-    // default card push, popping back from the index left the mushaf pager `display: none` with
-    // its scroller reporting offset 0 — so the focus resync's `scrollToIndex` stranded, and the
-    // transient page-604 viewability could WRITE 112:1 over the reader's real saved position.
-    // Demonstrated during review that collapsing it to plain `'card'` left 310 app/route tests
-    // green, so nothing stopped a later "simplification" from restoring silent position loss.
+  /**
+   * Every root-pushed route, by name. ⚠️ THE LIST IS THE TEST: a route added here without an
+   * entry is the mutation this case exists for, and story 6-7's `/search` was exactly that —
+   * deleting its whole `<Stack.Screen>` block, and separately collapsing its ternary to `'card'`,
+   * each left lint and all 2,840 tests green while `surahs` sat pinned one line above.
+   */
+  const ROOT_PUSHED_ROUTES = ['surahs', 'search'];
+
+  it.each(ROOT_PUSHED_ROUTES)('the %s route is registered on the root Stack at all', (route) => {
+    // Registration is not cosmetic: an unregistered route still SERVES, but draws the one
+    // native stack header left in the app — the thing `lint:header-controls` cannot see,
+    // because the header is installed by the navigator rather than written in our source.
+    const rootLayout = code(APP_DIR, '_layout.tsx');
+    expect(rootLayout).toMatch(new RegExp(`name="${route}"`));
+  });
+
+  it.each(
+    ROOT_PUSHED_ROUTES
+  )('the %s route is a WEB-CONDITIONAL presentation — a measured data-loss fix', (route) => {
+    // ⚠️ THIS TERNARY LOOKS LIKE A STYLE CHOICE AND IS NOT. Measured in WebKit 2026-08-28:
+    // with a default card push, popping back from the index left the mushaf pager
+    // `display: none` with its scroller reporting offset 0 — so the focus resync's
+    // `scrollToIndex` stranded, and the transient page-604 viewability could WRITE 112:1 over
+    // the reader's real saved position. Demonstrated during review that collapsing it to plain
+    // `'card'` left 310 app/route tests green during 6-3, and again 2,840 during 6-7 — so
+    // nothing stopped a later "simplification" from restoring silent position loss.
+    //
+    // BOTH routes carry it because both are write-then-return surfaces over a tab screen that
+    // must survive being covered: the index writes the pair and pops, and `/search` writes the
+    // pair and `dismissAll()`s through TWO of these screens at once.
     //
     // A source scan, like its neighbours here: `root-layout-boot.test.tsx` stubs `Stack.Screen`
     // as `() => null`, so no rendered test in this repo can observe a screen's options at all.
     // Weaker than a render, and named as such — but it does catch the exact mutation above.
     const rootLayout = code(APP_DIR, '_layout.tsx');
-    expect(rootLayout).toMatch(/name="surahs"/);
-    expect(rootLayout).toMatch(
-      /presentation:\s*Platform\.OS === 'web' \? 'transparentModal' : 'card'/
+    // The name and the ternary must be in the SAME `<Stack.Screen>` block: matching them
+    // independently over the whole file passes when one route is registered plainly and a
+    // different one happens to carry a ternary somewhere below it.
+    const block = new RegExp(
+      `name="${route}"[^>]*?presentation:\\s*Platform\\.OS === 'web' \\? 'transparentModal' : 'card'`,
+      's'
     );
+    expect(rootLayout).toMatch(block);
+  });
+
+  it('knows about every root-pushed route there is — the list cannot go stale', () => {
+    // ⚠️ ANTI-VACUITY, AND THE REASON THE TWO CASES ABOVE ARE `it.each` OVER A LIST RATHER THAN
+    // TWO HAND-WRITTEN CASES. A pinned list only pins what is on it; the failure mode is a THIRD
+    // root route landing later with no entry, which is precisely how `/search` slipped past the
+    // `surahs` case. So the list is checked against the filesystem: every non-group route file
+    // beside `(tabs)` is a root-pushed route and must be named above.
+    const actual = readdirSync(APP_DIR, { withFileTypes: true })
+      .filter((e) => e.isFile() && /\.tsx$/.test(e.name))
+      .map((e) => e.name.replace(/\.tsx$/, ''))
+      .filter((n) => n !== '_layout' && !n.startsWith('+'));
+    expect(actual.sort()).toEqual([...ROOT_PUSHED_ROUTES].sort());
   });
 
   it('the tab navigator paints nothing of its own', () => {
