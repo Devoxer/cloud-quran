@@ -54,7 +54,8 @@
     "signIn": "Sign In",
     "yourData": "Your Data",
     "recitation": "Recitation",
-    "appearance": "Appearance"
+    "appearance": "Appearance",
+    "content": "Content"
   },
   "signOutDialog": {
     "title": "Sign Out",
@@ -131,7 +132,8 @@
     "appearance": "Appearance",
     "readingTheme": "Reading theme",
     "fontSize": "Quran text size",
-    "recitation": "Recitation"
+    "recitation": "Recitation",
+    "content": "Content packs"
   },
   "language": {
     "switchFailedMessage": "Your language is unchanged. Check your connection and try again.",
@@ -203,5 +205,33 @@
       "message": "Deletes your account, its synced data and your sign-in methods. This can't be undone.",
       "confirm": "Delete account"
     }
+  },
+  "content": {
+    "webUnsupported": "Content packs are available in the mobile app.",
+    "offline": "Showing installed packs only — the catalogue could not be reached.",
+    "retryCatalogue": "Try again",
+    "empty": "No packs are on offer yet.",
+    "facts": "{{language}} · {{size}}",
+    "install": "Install",
+    "installing": "Installing… {{percent}}%",
+    "update": "Update to the newer version",
+    "remove": "Remove",
+    "retry": "Try again",
+    "failure": {
+      "offline": "No connection. Nothing was installed.",
+      "digest": "The download did not match its checksum. Nothing was installed.",
+      "rows": "The download was incomplete. Nothing was installed.",
+      "stalled": "The download stopped responding. Nothing was installed.",
+      "failed": "The pack could not be installed.",
+      "tooLarge": "This pack is too large for this device to verify."
+    },
+    "a11y": {
+      "installPack": "Install {{name}}",
+      "removePack": "Remove {{name}}",
+      "cancelPack": "Cancel the installation of {{name}}"
+    },
+    "storage_one": "{{count}} pack installed · {{size}}",
+    "storage_other": "{{count}} packs installed · {{size}}",
+    "diskUnavailable": "Could not read what is installed on this device."
   }
 }

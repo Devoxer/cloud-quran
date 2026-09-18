@@ -54,7 +54,8 @@
     "signIn": "Se connecter",
     "yourData": "Vos données",
     "recitation": "Récitation",
-    "appearance": "Apparence"
+    "appearance": "Apparence",
+    "content": "Contenu"
   },
   "signOutDialog": {
     "title": "Se déconnecter",
@@ -131,7 +132,8 @@
     "appearance": "Apparence",
     "readingTheme": "Thème de lecture",
     "fontSize": "Taille du texte coranique",
-    "recitation": "Récitation"
+    "recitation": "Récitation",
+    "content": "Modules de contenu"
   },
   "language": {
     "switchFailedMessage": "Votre langue n’a pas changé. Vérifiez votre connexion et réessayez.",
@@ -203,5 +205,34 @@
       "message": "Supprime votre compte, ses données synchronisées et vos moyens de connexion. C'est irréversible.",
       "confirm": "Supprimer le compte"
     }
+  },
+  "content": {
+    "webUnsupported": "Les modules de contenu sont disponibles dans l’app mobile.",
+    "offline": "Seuls les modules installés sont affichés : le catalogue est injoignable.",
+    "retryCatalogue": "Réessayer",
+    "empty": "Aucun module proposé pour l’instant.",
+    "facts": "{{language}} · {{size}}",
+    "install": "Installer",
+    "installing": "Installation… {{percent}} %",
+    "update": "Mettre à jour vers la version plus récente",
+    "remove": "Supprimer",
+    "retry": "Réessayer",
+    "failure": {
+      "offline": "Aucune connexion. Rien n’a été installé.",
+      "digest": "Le fichier ne correspond pas à son empreinte. Rien n’a été installé.",
+      "rows": "Le téléchargement est incomplet. Rien n’a été installé.",
+      "stalled": "Le téléchargement ne répond plus. Rien n’a été installé.",
+      "failed": "Le module n’a pas pu être installé.",
+      "tooLarge": "Ce module est trop volumineux pour être vérifié sur cet appareil."
+    },
+    "a11y": {
+      "installPack": "Installer {{name}}",
+      "removePack": "Supprimer {{name}}",
+      "cancelPack": "Annuler l’installation de {{name}}"
+    },
+    "storage_one": "{{count}} module installé · {{size}}",
+    "storage_many": "{{count}} de modules installés · {{size}}",
+    "storage_other": "{{count}} modules installés · {{size}}",
+    "diskUnavailable": "Impossible de lire ce qui est installé sur cet appareil."
   }
 }

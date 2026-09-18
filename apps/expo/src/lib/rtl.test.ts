@@ -392,6 +392,11 @@ describe('start-edge text alignment', () => {
     'features/bookmarks/BookmarkRow.tsx',
     'features/search/components/SearchResultRow.tsx',
     'app/(tabs)/(profile)/appearance.tsx',
+    // ⚠️ story 8-2: the content screen draws a content PACK's own text — the preview ayah and the
+    // attribution line the grant requires — and picks the direction from the PACK's language, not
+    // the interface's. Today's one pack is French and ranges left; the tafsir packs next are
+    // Arabic. Content direction is not UI direction, which is the whole point of this list.
+    'app/(tabs)/(profile)/content.tsx',
   ];
 
   /**

@@ -211,6 +211,17 @@ export default function AccountScreen() {
           accessibilityLabel={t('profile:a11y.language')}
           testID="language-row"
         />
+        {/* story 8-2: below Language, above Privacy. Content packs are a thing a reader
+            manages occasionally — more often than Privacy or Your Data, less often than the
+            voice or the look. */}
+        <SettingsRow
+          icon="library-outline"
+          label={t('profile:rows.content')}
+          trailing="chevron"
+          onPress={() => router.push('/content')}
+          accessibilityLabel={t('profile:a11y.content')}
+          testID="content-row"
+        />
         <SettingsRow
           icon="lock-closed-outline"
           label={t('profile:rows.privacy')}

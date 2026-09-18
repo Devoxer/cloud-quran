@@ -43,6 +43,7 @@ const TITLE_KEYS = {
   appearance: 'titles.appearance',
   recitation: 'titles.recitation',
   language: 'titles.language',
+  content: 'titles.content',
   'reciter-downloads': 'titles.reciterDownloads',
 } as const;
 type TitleKey = (typeof TITLE_KEYS)[keyof typeof TITLE_KEYS];

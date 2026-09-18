@@ -54,7 +54,8 @@
     "signIn": "تسجيل الدخول",
     "yourData": "بياناتك",
     "recitation": "التلاوة",
-    "appearance": "المظهر"
+    "appearance": "المظهر",
+    "content": "المحتوى"
   },
   "signOutDialog": {
     "title": "تسجيل الخروج",
@@ -131,7 +132,8 @@
     "appearance": "المظهر",
     "readingTheme": "سمة القراءة",
     "fontSize": "حجم نص القرآن",
-    "recitation": "التلاوة"
+    "recitation": "التلاوة",
+    "content": "حزم المحتوى"
   },
   "language": {
     "switchFailedMessage": "لم تتغير لغتك. تحقق من اتصالك وأعد المحاولة.",
@@ -203,5 +205,37 @@
       "message": "يحذف حسابك وبياناته المتزامنة وطرق دخولك. لا يمكن التراجع.",
       "confirm": "حذف الحساب"
     }
+  },
+  "content": {
+    "webUnsupported": "حزم المحتوى متاحة في تطبيق الهاتف.",
+    "offline": "تُعرض الحزم المثبّتة فقط — تعذّر الوصول إلى الفهرس.",
+    "retryCatalogue": "أعد المحاولة",
+    "empty": "لا توجد حزم متاحة بعد.",
+    "facts": "{{language}} · {{size}}",
+    "install": "تثبيت",
+    "installing": "جارٍ التثبيت… {{percent}}٪",
+    "update": "التحديث إلى الإصدار الأحدث",
+    "remove": "إزالة",
+    "retry": "أعد المحاولة",
+    "failure": {
+      "offline": "لا يوجد اتصال. لم يُثبَّت شيء.",
+      "digest": "لا تطابق البيانات المنزَّلة بصمتها. لم يُثبَّت شيء.",
+      "rows": "التنزيل غير مكتمل. لم يُثبَّت شيء.",
+      "stalled": "توقّف التنزيل عن الاستجابة. لم يُثبَّت شيء.",
+      "failed": "تعذّر تثبيت الحزمة.",
+      "tooLarge": "هذه الحزمة أكبر من أن يتحقّق منها هذا الجهاز."
+    },
+    "a11y": {
+      "installPack": "تثبيت {{name}}",
+      "removePack": "إزالة {{name}}",
+      "cancelPack": "إلغاء تثبيت {{name}}"
+    },
+    "storage_zero": "{{count}} حزمة مثبّتة · {{size}}",
+    "storage_one": "{{count}} حزمة مثبّتة · {{size}}",
+    "storage_two": "{{count}} حزمتان مثبّتتان · {{size}}",
+    "storage_few": "{{count}} حزم مثبّتة · {{size}}",
+    "storage_many": "{{count}} حزمة مثبّتة · {{size}}",
+    "storage_other": "{{count}} حزمة مثبّتة · {{size}}",
+    "diskUnavailable": "تعذّرت قراءة ما هو مثبّت على هذا الجهاز."
   }
 }

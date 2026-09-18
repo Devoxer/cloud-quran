@@ -1,0 +1,21 @@
+{
+  "catalogueVersion": 1,
+  "packs": [
+    {
+      "id": "translation-fr-rashid",
+      "packVersion": 1,
+      "type": "translation",
+      "language": "fr",
+      "languageName": "Français",
+      "title": "Le Noble Coran — Rachid Maach",
+      "source": "QuranEnc",
+      "sourceVersion": "1.0.3",
+      "licenceId": "quranenc-republication",
+      "attribution": "Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).",
+      "url": "https://cdn.nobleachievements.com/packs/translation-fr-rashid-v1.db",
+      "bytes": 1425408,
+      "rows": 6236,
+      "digest": "9fe4b74cd27b71160814862c454daff64eb85c8dc6e36347150c5a1cbccbc9d2"
+    }
+  ]
+}

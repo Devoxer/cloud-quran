@@ -54,7 +54,8 @@
     "signIn": "Iniciar sesión",
     "yourData": "Tus datos",
     "recitation": "Recitación",
-    "appearance": "Apariencia"
+    "appearance": "Apariencia",
+    "content": "Contenido"
   },
   "signOutDialog": {
     "title": "Cerrar sesión",
@@ -131,7 +132,8 @@
     "appearance": "Apariencia",
     "readingTheme": "Tema de lectura",
     "fontSize": "Tamaño del texto coránico",
-    "recitation": "Recitación"
+    "recitation": "Recitación",
+    "content": "Paquetes de contenido"
   },
   "language": {
     "switchFailedMessage": "Tu idioma no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
@@ -203,5 +205,34 @@
       "message": "Elimina tu cuenta, sus datos sincronizados y tus métodos de acceso. No se puede deshacer.",
       "confirm": "Borrar cuenta"
     }
+  },
+  "content": {
+    "webUnsupported": "Los paquetes de contenido están disponibles en la app móvil.",
+    "offline": "Solo se muestran los paquetes instalados: no se pudo acceder al catálogo.",
+    "retryCatalogue": "Reintentar",
+    "empty": "Todavía no hay paquetes disponibles.",
+    "facts": "{{language}} · {{size}}",
+    "install": "Instalar",
+    "installing": "Instalando… {{percent}} %",
+    "update": "Actualizar a la versión más reciente",
+    "remove": "Quitar",
+    "retry": "Reintentar",
+    "failure": {
+      "offline": "Sin conexión. No se instaló nada.",
+      "digest": "La descarga no coincide con su suma de verificación. No se instaló nada.",
+      "rows": "La descarga está incompleta. No se instaló nada.",
+      "stalled": "La descarga dejó de responder. No se instaló nada.",
+      "failed": "No se pudo instalar el paquete.",
+      "tooLarge": "Este paquete es demasiado grande para que este dispositivo lo verifique."
+    },
+    "a11y": {
+      "installPack": "Instalar {{name}}",
+      "removePack": "Quitar {{name}}",
+      "cancelPack": "Cancelar la instalación de {{name}}"
+    },
+    "storage_one": "{{count}} paquete instalado · {{size}}",
+    "storage_many": "{{count}} de paquetes instalados · {{size}}",
+    "storage_other": "{{count}} paquetes instalados · {{size}}",
+    "diskUnavailable": "No se pudo leer lo que hay instalado en este dispositivo."
   }
 }

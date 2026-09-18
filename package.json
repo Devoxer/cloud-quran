@@ -25,7 +25,7 @@
     "lint:native-patches": "node scripts/lint-native-patches.mjs",
     "lint:header-controls": "node scripts/lint-header-controls.mjs",
     "lint:mushaf-glyphs": "node scripts/lint-mushaf-glyphs.mjs",
-    "test:gates": "pnpm test:gate-lib && pnpm test:verify-gate && pnpm test:layers && pnpm test:style && pnpm test:i18n && pnpm test:native-patches && pnpm test:header-controls && pnpm test:mushaf-glyphs",
+    "test:gates": "pnpm test:gate-lib && pnpm test:verify-gate && pnpm test:licences && pnpm test:layers && pnpm test:style && pnpm test:i18n && pnpm test:native-patches && pnpm test:header-controls && pnpm test:mushaf-glyphs",
     "test:gate-lib": "node --test scripts/__tests__/gate-lib.test.mjs",
     "test:layers": "node --test scripts/__tests__/lint-layers.test.mjs",
     "test:style": "node --test scripts/__tests__/lint-style.test.mjs",
@@ -40,10 +40,12 @@
     "secrets:push:expo": "sh scripts/secrets.sh push:expo",
     "secrets:push:local": "sh scripts/secrets.sh push:local",
     "prepare-data": "node scripts/prepare-data.ts",
-    "verify": "node scripts/verify-quran.ts && node scripts/verify-artifacts.ts",
+    "verify": "node scripts/verify-quran.ts && node scripts/verify-artifacts.ts && node scripts/verify-licences.ts",
     "prepare-audio": "node scripts/prepare-audio.ts",
+    "prepare-packs": "node scripts/prepare-packs.ts",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
-    "test:verify-gate": "node --test scripts/__tests__/verify-quran.test.mjs"
+    "test:verify-gate": "node --test scripts/__tests__/verify-quran.test.mjs",
+    "test:licences": "node --test scripts/__tests__/verify-licences.test.mjs"
   },
   "_comment_perms": "story 5-2 retired the FIFTH lint gate and the sixth gate self-test. `lint:perms` (scripts/lint-instant-perms.mjs) and `perms:verify` (scripts/perms-verify.sh) existed because authorization rules were pushed to a vendor and could drift from the committed file, invisibly to every other check. The vendor is gone and authorization becomes code in the worker, deployed atomically with the app that depends on it (sprint-change-proposal-2026-08-20), so the whole drift class disappears rather than moving. Do not resurrect these scripts for D1 \u2014 there is nothing to compare against.",
   "type": "module",

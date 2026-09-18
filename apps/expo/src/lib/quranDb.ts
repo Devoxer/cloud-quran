@@ -73,8 +73,14 @@
  * time against the repo's copy, not against the device's.
  */
 
-import { importDatabaseFromAssetAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import {
+  defaultDatabaseDirectory,
+  importDatabaseFromAssetAsync,
+  openDatabaseAsync,
+  type SQLiteDatabase,
+} from 'expo-sqlite';
 import type { Surah, Verse } from 'quran-data';
+import { packFileName } from '@/constants/packs';
 
 /**
  * The name the bundled database is copied to inside the SQLite directory.
@@ -313,6 +319,233 @@ export async function getAllVersesForSearch(): Promise<SearchableVerse[]> {
   return rows.map((row) => ({ ...toVerse(row), translation: row.translation }));
 }
 
+// ─── Content packs (story 8-2) ───────────────────────────────────────────────────────────────
+//
+// ⚠️ PACK HANDLES LIVE HERE BECAUSE `lint:layers` RULE 8 SAYS THEY MUST. `expo-sqlite` may be
+// imported, and a connection opened, in exactly ONE module — this one. A pack is not the Quran
+// text, but it is opened by the same driver, and a second door onto that driver is a second door
+// onto `quran.db`: nothing about `openDatabaseAsync('quran.db')` written in a feature would fail
+// to typecheck, lint or render, and `pnpm verify` hashes the REPO's copy rather than the device's.
+//
+// Everything below is `*Async` for the header's reason (web truncates every `*Sync` result to
+// `length & 0xFF`) and read-only for the same two reasons the Quran handle is: `PRAGMA query_only`
+// on the connection, and no handle and no `exec` door leaving this file.
+
+/**
+ * The directory `expo-sqlite` opens databases by NAME from — `{document}/SQLite` on both native
+ * platforms, as a `file://` uri the `expo-file-system` `Directory`/`File` classes accept.
+ *
+ * ⚠️ IT IS READ FROM `expo-sqlite`, NEVER SPELLED OUT. The pack installer has to put a file
+ * exactly where the opener will look for it, and a hand-written `{document}/SQLite` would be a
+ * second definition of the same path that the first upstream change splits silently. `null` on
+ * web, where the constant does not exist and packs are unsupported anyway.
+ *
+ * ⚠️ A FUNCTION RATHER THAN A MODULE-SCOPE CONST, AND THAT IS NOT A STYLE CHOICE. As a const it
+ * read a NATIVE constant at module-evaluation time — on the boot path, for a value only the
+ * content screen ever wants — and it was therefore unobservable from a test, which is how the
+ * pack read path ended up with no coverage at all. (Story 8-2 review, V2.)
+ */
+export function sqliteDirectoryUri(): string | null {
+  const raw: unknown = defaultDatabaseDirectory;
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  return raw.startsWith('file://') ? raw : `file://${raw}`;
+}
+
+/** A pack row exactly as the `entries` table stores it. Never leaves this module. */
+interface PackEntryRow {
+  surah_number: number;
+  verse_number: number;
+  text: string;
+  footnotes: string | null;
+}
+
+/** One pack row, in the app's shape. The `footnotes` column is part of the edition, never dropped. */
+export interface PackEntry {
+  surah: number;
+  verse: number;
+  text: string;
+  footnotes: string | null;
+}
+
+function toPackEntry(row: PackEntryRow): PackEntry {
+  return {
+    surah: row.surah_number,
+    verse: row.verse_number,
+    text: row.text,
+    footnotes: row.footnotes,
+  };
+}
+
+/** A pack asked for before it was opened. A STATE the caller degrades on, not a crash. */
+export class PackNotOpenError extends Error {
+  readonly packId: string;
+  constructor(packId: string) {
+    super(`Pack ${packId} is not open`);
+    this.name = 'PackNotOpenError';
+    this.packId = packId;
+  }
+}
+
+/** Open pack handles, by pack id. One per id: a pack has exactly one installed version. */
+const packHandles = new Map<string, { version: number; db: SQLiteDatabase }>();
+/**
+ * In-flight opens, so concurrent callers share one connection (the Quran handle's discipline).
+ *
+ * ⚠️ KEYED BY `id@version`, NEVER BY id ALONE. Keyed by id, a concurrent `openPack(id, 1)` and
+ * `openPack(id, 2)` share ONE pending open — and the second caller then files v1's handle under
+ * `{version: 2}`, so every later read goes to the wrong edition while the map says otherwise.
+ * That is the believable-wrong-value family this repo keeps paying for; the version is part of
+ * the identity of the thing being opened, so it is part of the key. (Story 8-2 review, C3.)
+ */
+const packOpening = new Map<string, Promise<SQLiteDatabase>>();
+
+/**
+ * Opens this handle-map generation. Bumped by `closePack` and by the test reset.
+ *
+ * ⚠️ IT IS WHAT STOPS A DELETE LOSING A RACE WITH A HYDRATION. `closePack` can land while an
+ * `openPack` is parked on its `await`; without a generation the resumed open registers a handle
+ * onto a file the delete is about to remove, and the reader is told the pack is gone while a live
+ * connection keeps answering from it. A resumed open whose generation has moved closes what it
+ * opened and records nothing. (Story 8-2 review, C3.)
+ */
+let packGeneration = 0;
+
+const openKey = (id: string, version: number): string => `${id}@${version}`;
+
+/** Open one file by name, read-only, closing a half-open rather than dropping it. */
+async function openReadOnly(fileName: string): Promise<SQLiteDatabase> {
+  const opened = await openDatabaseAsync(fileName);
+  try {
+    await opened.execAsync('PRAGMA query_only = ON;');
+  } catch (error) {
+    // Best-effort, and for `openQuranDb`'s reason: the caller is being handed the REAL failure
+    // and a close that also fails must not replace it with a less useful one.
+    await opened.closeAsync().catch(() => {});
+    throw error;
+  }
+  return opened;
+}
+
+/**
+ * Open an installed pack. Idempotent; a different version of the same id replaces the handle.
+ *
+ * ⚠️ THE FAILED OPEN IS NOT CACHED, exactly as `openQuranDb` does not cache one: the content
+ * screen's retry has to re-attempt rather than replay a stored failure forever.
+ */
+export async function openPack(id: string, version: number): Promise<void> {
+  const existing = packHandles.get(id);
+  if (existing) {
+    if (existing.version === version) return;
+    await closePack(id);
+  }
+  const key = openKey(id, version);
+  let pending = packOpening.get(key);
+  if (!pending) {
+    pending = openReadOnly(packFileName(id, version)).catch((error: unknown) => {
+      packOpening.delete(key);
+      throw error;
+    });
+    packOpening.set(key, pending);
+  }
+  const startedAt = packGeneration;
+  const db = await pending;
+  packOpening.delete(key);
+  // See `packGeneration`: a close or a delete landed while this open was parked, so the file this
+  // handle points at is being removed. Close what we opened and register nothing.
+  if (packGeneration !== startedAt) {
+    await db.closeAsync().catch(() => {});
+    return;
+  }
+  packHandles.set(id, { version, db });
+}
+
+/** Whether this pack has a live, readable handle right now. */
+export function isPackReadable(id: string): boolean {
+  return packHandles.has(id);
+}
+
+/**
+ * Close a pack's handle and forget it.
+ *
+ * ⚠️ IT IS AWAITED BEFORE THE FILE IS DELETED OR REPLACED. Deleting a database SQLite still holds
+ * open is how a removal becomes a phantom: the bytes go, the handle answers from its own page
+ * cache, and the reader is told the pack is gone while it keeps rendering.
+ *
+ * ⚠️ IT ALSO DROPS ANY PENDING OPEN FOR THIS PACK. Clearing `packHandles` alone left the in-flight
+ * promise in `packOpening`, so the next `openPack` awaited a connection onto the file this close
+ * precedes the deletion of — and reused it forever. (Story 8-2 review, C3.)
+ */
+export async function closePack(id: string): Promise<void> {
+  const entry = packHandles.get(id);
+  packHandles.delete(id);
+  packGeneration++;
+  for (const key of [...packOpening.keys()]) {
+    if (key.startsWith(`${id}@`)) packOpening.delete(key);
+  }
+  // A close that fails has already dropped the reference; there is nothing the caller can do
+  // about it and the install/delete it precedes must still proceed.
+  if (entry) await entry.db.closeAsync().catch(() => {});
+}
+
+/**
+ * How many rows a pack FILE holds — the install-time truncation check, run on the `.part` file
+ * before it is renamed into place.
+ *
+ * ⚠️ THIS IS THE HALF A DIGEST CANNOT DO. A short-but-well-formed build hashes to a perfectly
+ * stable value and would agree with a baseline minted from it forever; the population is the only
+ * thing that can say the pack is not all there. `verify-artifacts.ts:201-210` encodes the same
+ * lesson for the bundled artifacts — a pack needs its own copy because it is verified on the
+ * DEVICE, at install time.
+ *
+ * The handle is opened and closed here and never cached: this file is about to be renamed, and a
+ * cached handle would be pointing at a path that no longer exists.
+ */
+export async function countPackRows(fileName: string): Promise<number> {
+  const db = await openReadOnly(fileName);
+  try {
+    const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM entries');
+    return row?.count ?? 0;
+  } finally {
+    await db.closeAsync().catch(() => {});
+  }
+}
+
+/**
+ * A pack's own description of itself — `id`, `title`, `source`, `sourceVersion`, `attribution`
+ * and the rest, as `scripts/prepare-packs.ts` wrote them into `pack_meta`.
+ *
+ * ⚠️ IT IS WHAT MAKES AN INSTALLED PACK SELF-DESCRIBING OFFLINE. The catalogue is a NETWORK
+ * document, and the frozen matrix says an installed pack must still list and still read with no
+ * network at all. Caching the catalogue row in MMKV would be a second copy of the same facts that
+ * can go stale against the file; the file carrying its own title cannot. It is also what the
+ * QuranEnc grant needs: the attribution and the stated version travel WITH the bytes.
+ */
+export async function getPackMeta(id: string): Promise<Record<string, string>> {
+  const entry = packHandles.get(id);
+  if (!entry) throw new PackNotOpenError(id);
+  const rows = await entry.db.getAllAsync<{ key: string; value: string }>(
+    'SELECT key, value FROM pack_meta'
+  );
+  return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+}
+
+/**
+ * Every row of one surah from an installed pack, in order — the typed read (story 8-2).
+ *
+ * Rejects with `PackNotOpenError` when the pack is not open, which is a STATE the caller renders
+ * ("not installed"), never an error surface. An out-of-range surah answers `[]`, the same answer
+ * `getSurahVerses` gives for the same reason.
+ */
+export async function getPackSurah(id: string, surah: number): Promise<PackEntry[]> {
+  const entry = packHandles.get(id);
+  if (!entry) throw new PackNotOpenError(id);
+  const rows = await entry.db.getAllAsync<PackEntryRow>(
+    'SELECT surah_number, verse_number, text, footnotes FROM entries WHERE surah_number = ? ORDER BY verse_number',
+    surah
+  );
+  return rows.map(toPackEntry);
+}
+
 /**
  * Drop the cached handle. **Tests only** — there is no runtime reason to close the database, and
  * closing it mid-session would turn the next verse read into a reopen.
@@ -320,4 +553,7 @@ export async function getAllVersesForSearch(): Promise<SearchableVerse[]> {
 export function __resetQuranDbForTests(): void {
   handle = null;
   opening = null;
+  packHandles.clear();
+  packOpening.clear();
+  packGeneration++;
 }
