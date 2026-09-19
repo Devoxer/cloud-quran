@@ -161,6 +161,7 @@
     },
     "sourcesUnavailable": "تعذّرت قراءة ما هو مثبَّت على هذا الجهاز.",
     "sourceWithKey": "{{title}} ({{key}})",
-    "release": "تحرير"
+    "release": "تحرير",
+    "rowLabel": "{{name}} · {{verse}}"
   }
 }

@@ -157,6 +157,7 @@
     },
     "sourcesUnavailable": "Could not read what is installed on this device.",
     "sourceWithKey": "{{title}} ({{key}})",
-    "release": "Release"
+    "release": "Release",
+    "rowLabel": "{{name}} · {{verse}}"
   }
 }

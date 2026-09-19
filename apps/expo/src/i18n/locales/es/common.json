@@ -158,6 +158,7 @@
     },
     "sourcesUnavailable": "No se pudo leer lo que hay instalado en este dispositivo.",
     "sourceWithKey": "{{title}} ({{key}})",
-    "release": "Liberar"
+    "release": "Liberar",
+    "rowLabel": "{{name}} · {{verse}}"
   }
 }

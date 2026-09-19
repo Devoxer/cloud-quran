@@ -33,7 +33,7 @@ import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
 import { type PackRow, usePacks } from '@/features/packs';
 import { formatBytes, useQuranNumerals } from '@/lib/format';
-import { isRTLContentLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
+import { contentTextAlign, isRTLContentLanguage } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 export default function ContentScreen() {
@@ -317,12 +317,26 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
     },
     // Direction is the CONTENT's, not the interface's — see the header.
+    /**
+     * ⚠️ `'auto'`, NOT `TEXT_ALIGN_START` — MEASURED IN ARABIC ON AN EMULATOR, 2026-09-19.
+     * `TEXT_ALIGN_START` is `'left'`, and under a forced-RTL layout React Native resolves that to
+     * the INTERFACE's start edge — the right. So with the app in Arabic the French translation
+     * rendered flush RIGHT and ragged LEFT: every line ending at the same edge, each one starting
+     * somewhere different, which is how a Latin paragraph is never set. It is the same mistake
+     * `isRTLContentLanguage` fixed one field over — a CONTENT value taking the interface's answer
+     * — and it is invisible in an English build, where the two answers coincide.
+     *
+     * `'auto'` aligns by the text's OWN resolved direction on all three platforms: natural
+     * alignment against the `writingDirection` above on iOS, first-strong-character direction on
+     * Android, and `start` in an unmirrored document on web. The `rtl` pair below keeps its
+     * explicit `'right'`, which is the rule `lib/rtl.ts` states for Quran content.
+     */
     contentLtr: {
       writingDirection: 'ltr' as const,
-      textAlign: TEXT_ALIGN_START,
+      textAlign: contentTextAlign(false),
     },
     contentRtl: {
       writingDirection: 'rtl' as const,
-      textAlign: 'right' as const,
+      textAlign: contentTextAlign(true),
     },
   }));

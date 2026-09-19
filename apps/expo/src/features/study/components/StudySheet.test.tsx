@@ -588,3 +588,51 @@ describe('the web hotkeys', () => {
     expect(screen.getByText('Saheeh International')).toBeTruthy();
   });
 });
+
+/**
+ * NAMING THE SURAH WHEN THE RANGE CROSSES ONE (owner, on an iPhone, 2026-09-19).
+ *
+ * ⚠️ MUSHAF PAGE 221 IS THE OWNER'S SCREENSHOT: `10:107 → 11:5`. Yunus ends, Hud begins, and the
+ * sheet drew a bare "1" for Hud 11:1 beneath a chrome that reads يونس — an ayah number with no
+ * way to tell which of two surahs it belonged to. Roughly a sixth of the 604 pages turn a surah
+ * over, so this is not an edge case; surah and ayah scope never do, which is why the name appears
+ * only where it answers a question.
+ */
+describe('a range that crosses a surah', () => {
+  /** 10:107 → 11:5, the page's real span — the literal, not `resolveScope`'s answer. */
+  const PAGE_221 = [
+    { surah: 10, verse: 107, textUthmani: 'وَإِن يَمْسَسْكَ', textSimple: 'a' },
+    { surah: 10, verse: 109, textUthmani: 'وَٱتَّبِعْ مَا يُوحَىٰ', textSimple: 'b' },
+    { surah: 11, verse: 1, textUthmani: 'الٓر ۚ كِتَٰبٌ', textSimple: 'c' },
+  ];
+
+  it('names the surah on every row', async () => {
+    mockGetVersesForPositions.mockResolvedValue(PAGE_221);
+    mockGetPackRange.mockResolvedValue([]);
+    await open({ surah: 11, verse: 1 });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-scope-1'));
+    });
+    await waitFor(() => expect(screen.getByTestId('study-entry-11-1')).toBeTruthy(), SETTLE);
+
+    // MUTATION: go back to the bare ayah number and BOTH of these read "1" and "107".
+    expect(within(screen.getByTestId('study-entry-11-1')).getByText('Hud · 1')).toBeTruthy();
+    expect(within(screen.getByTestId('study-entry-10-107')).getByText('Yunus · 107')).toBeTruthy();
+  });
+
+  it('stays QUIET at ayah scope, where there is nothing to disambiguate', async () => {
+    // The common case must not grow a surah name on every row for a range of one.
+    await open({ surah: 1, verse: 1 });
+    expect(within(screen.getByTestId('study-entry-1-1')).getByText('1')).toBeTruthy();
+  });
+
+  it('…and at surah scope, which by construction cannot cross one', async () => {
+    await open({ surah: 1, verse: 1 });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-scope-2'));
+    });
+    await waitFor(() => expect(screen.getByTestId('study-entry-1-1')).toBeTruthy(), SETTLE);
+    expect(within(screen.getByTestId('study-entry-1-1')).getByText('1')).toBeTruthy();
+  });
+});

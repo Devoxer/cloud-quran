@@ -58,10 +58,24 @@ import {
   useSleepTimer,
 } from '@/stores/audioPlayerStore';
 
-/** The bookmark glyph, matching `VerseRow`'s control so one action looks like one action. */
-const BOOKMARK_ICON_SIZE = 20;
-const RECITER_ICON_SIZE = 18;
-const CONTROL_HIT_SLOP = 10;
+/**
+ * ⚠️ ONE GLYPH SIZE FOR THE WHOLE ROW, AND IT USED TO BE TWO (owner, on an iPhone, 2026-09-19).
+ * `BOOKMARK_ICON_SIZE = 20` (bookmark, and story 8-3's study control) sat beside
+ * `RECITER_ICON_SIZE = 18` (the overflow and the headset) in the SAME four-control row, so the
+ * glyphs stepped up and down across it. The two numbers were never a decision — 20 came from
+ * `VerseRow`'s bookmark, 18 from the reciter chip — and nothing named the difference, which is why
+ * it survived two stories. 20 matches `VerseRow`'s control, so one action still looks like one
+ * action across the two surfaces.
+ */
+const ROW_ICON_SIZE = 20;
+
+/**
+ * ⚠️ 12, NOT 10: `20 + 12 * 2 = 44`, THE HIG MINIMUM. At 10 these were 40pt targets in a bar that
+ * now carries four of them side by side, and the third one (study) made the row tight enough to
+ * notice on a phone. `HeaderActionButton` reaches the same 44 from a 32pt box plus a slop of 6;
+ * `VerseRow`'s in-row bookmark already used 12 over the same 20pt glyph.
+ */
+const CONTROL_HIT_SLOP = 12;
 
 /**
  * Which of the row's three faces is drawn — exported because `ReadingChrome` has to ask the SAME
@@ -278,7 +292,7 @@ export function ChromeVerseRow({
     >
       <Icon
         name={sleep.active ? 'moon-outline' : 'ellipsis-horizontal'}
-        size={RECITER_ICON_SIZE}
+        size={ROW_ICON_SIZE}
         color={sleep.active ? colors.accent.primary : colors.text.secondary}
         accessibilityElementsHidden
         testID="chrome-playback-options-icon"
@@ -339,7 +353,7 @@ export function ChromeVerseRow({
         >
           <Icon
             name="book-outline"
-            size={BOOKMARK_ICON_SIZE}
+            size={ROW_ICON_SIZE}
             color={colors.text.secondary}
             accessibilityElementsHidden
             testID="chrome-verse-study-icon"
@@ -371,7 +385,7 @@ export function ChromeVerseRow({
         >
           <Icon
             name={bookmarkId ? 'bookmark' : 'bookmark-outline'}
-            size={BOOKMARK_ICON_SIZE}
+            size={ROW_ICON_SIZE}
             color={bookmarkId ? colors.accent.primary : colors.text.secondary}
             accessibilityElementsHidden
             testID="chrome-verse-bookmark-icon"
@@ -412,9 +426,15 @@ export function ChromeVerseRow({
         style={styles.reciter}
         testID="chrome-reciter"
       >
+        {/* ⚠️ `headset-outline`, NOT `headset`. It was the one SOLID glyph in a row of outlines
+            (`book-outline`, `bookmark-outline`, `moon-outline`), which is the second half of the
+            owner's "the icons are not uniform". The `ellipsis` is deliberately left alone: three
+            dots have no outline form, in Ionicons or anywhere else, and circling it would add a
+            ring none of its neighbours has. `bookmark` filled stays filled — that is a STATE, not
+            a weight. */}
         <Icon
-          name="headset"
-          size={RECITER_ICON_SIZE}
+          name="headset-outline"
+          size={ROW_ICON_SIZE}
           color={colors.text.secondary}
           accessibilityElementsHidden
         />

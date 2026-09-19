@@ -24,6 +24,7 @@ import {
   RECONCILED_KEY,
   RTL_LANGUAGES,
   resolveDirection,
+  TEXT_ALIGN_END,
   TEXT_ALIGN_START,
 } from './rtl';
 
@@ -397,14 +398,6 @@ describe('start-edge text alignment', () => {
     'features/bookmarks/BookmarkRow.tsx',
     'features/search/components/SearchResultRow.tsx',
     'app/(tabs)/(profile)/appearance.tsx',
-    // ⚠️ story 8-2: the content screen draws a content PACK's own text — the preview ayah and the
-    // attribution line the grant requires — and picks the direction from the PACK's language, not
-    // the interface's. Today's one pack is French and ranges left; the tafsir packs next are
-    // Arabic. Content direction is not UI direction, which is the whole point of this list.
-    'app/(tabs)/(profile)/content.tsx',
-    // ⚠️ story 8-3: the same argument one surface further in. The study sheet's Arabic is Quran
-    // text; its content line takes the direction of whichever pack the reader chose.
-    'features/study/components/StudySheet.tsx',
   ];
 
   /**
@@ -420,6 +413,194 @@ describe('start-edge text alignment', () => {
       .filter((file) => /textAlign:\s*'right'/.test(stripComments(readFileSync(file, 'utf8'))))
       .map((file) => relative(SRC, file));
     expect(offenders.sort()).toEqual(CONTENT_ALLOWED.sort());
+  });
+
+  /**
+   * ⚠️ AND THE NEWER CONTENT SITES USE NEITHER LITERAL — they call `contentTextAlign`, which picks
+   * between them at runtime (story 8-3, after the owner found a French paragraph set ragged-left
+   * in the Arabic build). They are therefore CORRECTLY absent from `CONTENT_ALLOWED` above; this
+   * case is what stops that absence reading as "nobody thought about them".
+   */
+  it('the pack-content surfaces choose their edge at RUNTIME, not with a literal', () => {
+    for (const file of [
+      'features/study/components/StudySheet.tsx',
+      'app/(tabs)/(profile)/content.tsx',
+    ]) {
+      const code = stripComments(readFileSync(join(SRC, file), 'utf8'));
+      expect(code).toMatch(/textAlign:\s*contentTextAlign\(false\)/);
+      expect(code).toMatch(/textAlign:\s*contentTextAlign\(true\)/);
+      expect(code).not.toMatch(/textAlign:\s*'(right|auto)'/);
+    }
+  });
+
+  /**
+   * ⚠️ AND THE OTHER WAY IT ROTS: a hand-written `textAlign: 'left'` beside the constant. It
+   * behaves identically today, which is the problem — the reason the word `left` means START
+   * lives in `TEXT_ALIGN_START`'s docblock and nowhere else, so a literal copy is the version a
+   * later reader "corrects" to `'right'`.
+   */
+  it('every start alignment goes through TEXT_ALIGN_START, never a bare literal', () => {
+    expect(TEXT_ALIGN_START).toBe('left');
+    const offenders = sourceFiles(SRC)
+      .filter((file) => relative(SRC, file) !== 'lib/rtl.ts')
+      .filter((file) => /textAlign:\s*'left'/.test(stripComments(readFileSync(file, 'utf8'))))
+      .map((file) => relative(SRC, file));
+    expect(offenders).toEqual([]);
+  });
+
+  /** Anti-vacuity: the walk really reaches the tree, so an empty result means something. */
+  it('the scan sees the whole source tree', () => {
+    const files = sourceFiles(SRC).map((f) => relative(SRC, f));
+    expect(files.length).toBeGreaterThan(200);
+    expect(files).toContain('components/ui/ListRow.tsx');
+    expect(files).toContain('features/reading/components/VerseRow.tsx');
+  });
+});
+
+/**
+ * CONTENT DIRECTION IS DECIDED BY THE PACK'S OWN LANGUAGE, NOT BY THE INTERFACE'S (story 8-3
+ * review, S6).
+ *
+ * ⚠️ THE MUTATION THIS EXISTS TO REDDEN IS A ONE-WORD ONE, AND IT SHIPPED. Both content draw sites
+ * called `isRTLLanguage` — the set of INTERFACE locales, which is `['ar']` — on a value that is a
+ * CONTENT language. It was correct for exactly as long as Arabic was the only right-to-left thing
+ * in the catalogue. Story 8-4 ships Urdu, Persian and Pashto, and `rtl.test.ts`'s other scans
+ * cannot see this: a call to the wrong list has no `I18nManager` and no `isRTL` in it.
+ */
+describe('content direction', () => {
+  it('covers the scripts epic 8 is heading for, not just the interface locales', () => {
+    // A LITERAL list of what story 8-4 will publish, not a re-read of the constant under test.
+    for (const code of ['ar', 'fa', 'ur', 'ps', 'sd', 'ckb', 'ug', 'he']) {
+      expect(isRTLContentLanguage(code)).toBe(true);
+    }
+    // …and the UI list is NOT the answer for any of them but Arabic, which is the whole defect.
+    expect(RTL_LANGUAGES).toEqual(['ar']);
+    for (const code of ['fa', 'ur', 'ps']) expect(isRTLLanguage(code)).toBe(false);
+  });
+
+  it('reads the PRIMARY subtag and an explicit script subtag, so a regional tag still resolves', () => {
+    expect(isRTLContentLanguage('ur-PK')).toBe(true);
+    expect(isRTLContentLanguage('fa_IR')).toBe(true);
+    // Punjabi is Gurmukhi (LTR) unless it names the Arabic script — the script wins.
+    expect(isRTLContentLanguage('pa')).toBe(false);
+    expect(isRTLContentLanguage('pa-Arab-PK')).toBe(true);
+  });
+
+  it('answers false for left-to-right content and for nothing at all', () => {
+    for (const code of ['fr', 'en', 'id', 'tr', 'sw', '', null, undefined]) {
+      expect(isRTLContentLanguage(code)).toBe(false);
+    }
+  });
+});
+
+/**
+ * `contentTextAlign` — the four combinations, from the emulator (story 8-3, owner-found).
+ *
+ * ⚠️ THE MUTATION IS "JUST USE `TEXT_ALIGN_START`", WHICH IS WHAT SHIPPED. It follows the
+ * INTERFACE, so in the Arabic build a French translation came out flush right and ragged left —
+ * a Latin paragraph set the way no Latin paragraph is ever set. `'auto'` is the same bug wearing
+ * a better name: on Android it resolves against the view's layout direction, not the text's.
+ */
+describe('contentTextAlign', () => {
+  /**
+   * A FRESH module per case: `isRTL()` memoises the process direction on first read (it has to —
+   * the framework captures `isRTL` once at module evaluation), so a test that merely rewrote the
+   * stored language would be asking a question the module had already answered.
+   */
+  function alignFor(language: string, contentIsRTL: boolean): string {
+    languageStorage.set(LANGUAGE_KEY, language);
+    let answer = '';
+    jest.isolateModules(() => {
+      const rtl = require('./rtl') as typeof import('./rtl');
+      answer = rtl.contentTextAlign(contentIsRTL);
+    });
+    return answer;
+  }
+
+  it('aligns to START when the content and the interface agree', () => {
+    expect(alignFor('en', false)).toBe(TEXT_ALIGN_START);
+    expect(alignFor('ar', true)).toBe(TEXT_ALIGN_START);
+  });
+
+  it('…and to END when they differ — which is the whole defect', () => {
+    // A French translation in the Arabic build: END resolves to physical LEFT, measured on device.
+    expect(alignFor('ar', false)).toBe(TEXT_ALIGN_END);
+    // The mirror case, correct since 8-1: Quran text under an English interface.
+    expect(alignFor('en', true)).toBe(TEXT_ALIGN_END);
+  });
+
+  it('the two literals are not the same value — anti-vacuity', () => {
+    expect(TEXT_ALIGN_START).not.toBe(TEXT_ALIGN_END);
+  });
+});
+
+/**
+ * START-EDGE TEXT ALIGNMENT — the source half of the 2026-09-14 fix. The RENDERED half lives in
+ * `components/ui/text-start-alignment.test.tsx`; what only a scan can see is the two ways the fix
+ * gets undone later, neither of which any render assertion would catch.
+ */
+describe('start-edge text alignment', () => {
+  /** Every shipped source file, tests excluded — the same walk the content scan above implies. */
+  function sourceFiles(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') sourceFiles(full, out);
+      } else if (/\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name)) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The surfaces that draw QURAN CONTENT and right-align it. They set `textAlign: 'right'`
+   * themselves and must KEEP it whatever the interface language does — content direction is not
+   * UI direction, which is the contract the describe above pins from the other side.
+   *
+   * ⚠️ `MushafPage` is a CONTENT file and is deliberately NOT here: a mushaf line is
+   * `writingDirection: 'rtl'` + `textAlign: 'center'`, because the facsimile justifies its lines
+   * across the column rather than ranging them. It is listed in that describe's `CONTENT_FILES`,
+   * where the assertion is about `writingDirection`, which it does set.
+   */
+  const CONTENT_ALLOWED = [
+    'features/reading/components/VerseRow.tsx',
+    'features/bookmarks/BookmarkRow.tsx',
+    'features/search/components/SearchResultRow.tsx',
+    'app/(tabs)/(profile)/appearance.tsx',
+  ];
+
+  /**
+   * ⚠️ THE WRONG FIX, WHICH LOOKS LIKE THE RIGHT ONE. "The Arabic UI is left-aligned, so align it
+   * right" reds nothing: RN SWAPS `left`↔`right` for `textAlign` under an RTL layout direction on
+   * both platforms, so `'right'` is the END edge under Arabic and the END edge under English —
+   * correct nowhere, and invisible to an LTR test renderer. The only legitimate `'right'` in this
+   * tree is on Quran content, which is right-to-left for reasons that have nothing to do with the
+   * interface.
+   */
+  it('no UI surface sets `textAlign: right` — only the content ones may', () => {
+    const offenders = sourceFiles(SRC)
+      .filter((file) => /textAlign:\s*'right'/.test(stripComments(readFileSync(file, 'utf8'))))
+      .map((file) => relative(SRC, file));
+    expect(offenders.sort()).toEqual(CONTENT_ALLOWED.sort());
+  });
+
+  /**
+   * ⚠️ AND THE NEWER CONTENT SITES USE NEITHER LITERAL — they call `contentTextAlign`, which picks
+   * between them at runtime (story 8-3, after the owner found a French paragraph set ragged-left
+   * in the Arabic build). They are therefore CORRECTLY absent from `CONTENT_ALLOWED` above; this
+   * case is what stops that absence reading as "nobody thought about them".
+   */
+  it('the pack-content surfaces choose their edge at RUNTIME, not with a literal', () => {
+    for (const file of [
+      'features/study/components/StudySheet.tsx',
+      'app/(tabs)/(profile)/content.tsx',
+    ]) {
+      const code = stripComments(readFileSync(join(SRC, file), 'utf8'));
+      expect(code).toMatch(/textAlign:\s*contentTextAlign\(false\)/);
+      expect(code).toMatch(/textAlign:\s*contentTextAlign\(true\)/);
+      expect(code).not.toMatch(/textAlign:\s*'(right|auto)'/);
+    }
   });
 
   /**

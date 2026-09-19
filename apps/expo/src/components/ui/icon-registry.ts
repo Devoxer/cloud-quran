@@ -160,6 +160,8 @@ export const ICON_REGISTRY = {
   'volume-high-outline': { sf: 'speaker.wave.3', ion: 'volume-high-outline' },
   'volume-low': { sf: 'speaker.wave.1.fill', ion: 'volume-low' },
   headset: { sf: 'headphones', ion: 'headset' },
+  // story 8-3: the chrome row is an OUTLINE family, and the solid headset was its one exception.
+  'headset-outline': { sf: 'headphones', ion: 'headset-outline' },
   'speedometer-outline': { sf: 'speedometer', ion: 'speedometer-outline' },
   'moon-outline': { sf: 'moon', ion: 'moon-outline' },
 

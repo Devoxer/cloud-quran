@@ -158,6 +158,7 @@
     },
     "sourcesUnavailable": "Impossible de lire ce qui est installé sur cet appareil.",
     "sourceWithKey": "{{title}} ({{key}})",
-    "release": "Libérer"
+    "release": "Libérer",
+    "rowLabel": "{{name}} · {{verse}}"
   }
 }

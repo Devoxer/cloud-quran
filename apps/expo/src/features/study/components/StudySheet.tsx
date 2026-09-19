@@ -43,6 +43,7 @@
  */
 
 import { FlashList } from '@shopify/flash-list';
+import { SURAH_METADATA } from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
@@ -55,7 +56,8 @@ import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { formatBytes, useQuranNumerals } from '@/lib/format';
-import { isRTLContentLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
+import { contentTextAlign, isRTLContentLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
+import { surahDisplayName } from '@/lib/surahName';
 import type { VersePair } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { type StudyRow, useStudyContent } from '../hooks/useStudyContent';
@@ -121,6 +123,24 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
 
   const range = useMemo(() => resolveScope(scope, verse), [scope, verse]);
   const { state, retry } = useStudyContent(range, sourceId);
+
+  /**
+   * ⚠️ A BARE AYAH NUMBER IS AMBIGUOUS THE MOMENT THE RANGE CROSSES A SURAH (owner, on an iPhone,
+   * 2026-09-19). Mushaf page 221 is `10:107 → 11:5`: Yunus ends and Hud begins, so the sheet drew
+   * "1" for Hud 11:1 under a chrome that says يونس, with nothing anywhere saying which surah that
+   * "1" belonged to. Page scope crosses a surah on ~110 of the 604 pages; surah scope never does,
+   * and neither does ayah scope — so the SURAH IS SHOWN ONLY WHEN IT IS IN QUESTION, and the
+   * common case stays as quiet as it was.
+   */
+  const crossesSurahs = range.from.surah !== range.to.surah;
+  const rowLabel = (row: StudyRow): string => {
+    const verseNumber = formatQuranNumber(row.verse);
+    if (!crossesSurahs) return verseNumber;
+    const name =
+      surahDisplayName(SURAH_METADATA[row.surah - 1]) ??
+      t('common:bookmarks.surahFallback', { number: formatQuranNumber(row.surah) });
+    return t('common:study.rowLabel', { name, verse: verseNumber });
+  };
 
   const chooseSource = useCallback(
     (id: string) => setChosen((current) => ({ ...current, [type]: id })),
@@ -300,7 +320,7 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
                 <StudyEntry
                   row={item}
                   contentLanguage={source?.language ?? null}
-                  verseLabel={formatQuranNumber(item.verse)}
+                  verseLabel={rowLabel(item)}
                   /* ⚠️ SILENT WHEN THERE IS NO SOURCE AT ALL (story 8-3 review, S1). Surah scope
                      on Al-Baqarah drew 286 copies of "Nothing for this ayah" beneath a panel that
                      had already said, once, that no source is installed. A per-row absence is
@@ -613,12 +633,26 @@ const useStyles = () =>
       textAlign: TEXT_ALIGN_START,
     },
     /** Direction is the CONTENT's, not the interface's — the repo-wide content-site rule. */
+    /**
+     * ⚠️ `'auto'`, NOT `TEXT_ALIGN_START` — MEASURED IN ARABIC ON AN EMULATOR, 2026-09-19.
+     * `TEXT_ALIGN_START` is `'left'`, and under a forced-RTL layout React Native resolves that to
+     * the INTERFACE's start edge — the right. So with the app in Arabic the French translation
+     * rendered flush RIGHT and ragged LEFT: every line ending at the same edge, each one starting
+     * somewhere different, which is how a Latin paragraph is never set. It is the same mistake
+     * `isRTLContentLanguage` fixed one field over — a CONTENT value taking the interface's answer
+     * — and it is invisible in an English build, where the two answers coincide.
+     *
+     * `'auto'` aligns by the text's OWN resolved direction on all three platforms: natural
+     * alignment against the `writingDirection` above on iOS, first-strong-character direction on
+     * Android, and `start` in an unmirrored document on web. The `rtl` pair below keeps its
+     * explicit `'right'`, which is the rule `lib/rtl.ts` states for Quran content.
+     */
     ltr: {
       writingDirection: 'ltr' as const,
-      textAlign: TEXT_ALIGN_START,
+      textAlign: contentTextAlign(false),
     },
     rtl: {
       writingDirection: 'rtl' as const,
-      textAlign: 'right' as const,
+      textAlign: contentTextAlign(true),
     },
   }));

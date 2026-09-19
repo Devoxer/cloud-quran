@@ -130,6 +130,14 @@ import { createAppMMKV } from './mmkv';
 export const TEXT_ALIGN_START = 'left' as const;
 
 /**
+ * The opposite edge. Named rather than inlined for `TEXT_ALIGN_START`'s reason — the word `right`
+ * means END here, not "the right of the screen", and a later reader "correcting" it to a physical
+ * intent is the failure that constant exists to prevent. Its ONE caller is
+ * {@link contentTextAlign}; UI copy never wants this.
+ */
+export const TEXT_ALIGN_END = 'right' as const;
+
+/**
  * The UI languages written right to left. A set rather than a per-language flag on the bundle:
  * direction is a property of the SCRIPT, and the only thing that reads it is this module.
  */
@@ -176,6 +184,36 @@ export const RTL_CONTENT_LANGUAGES: readonly string[] = [
 
 /** Script subtags that decide direction on their own, whatever the language in front of them. */
 const RTL_SCRIPTS = ['arab', 'aran', 'hebr', 'syrc', 'thaa'];
+
+/**
+ * The `textAlign` that puts a CONTENT block on ITS OWN start edge, whatever the interface is doing.
+ *
+ * ⚠️ NEITHER LITERAL MEANS "PHYSICAL" — MEASURED IN ARABIC ON AN EMULATOR, 2026-09-19, AFTER THE
+ * OWNER FOUND A FRENCH PARAGRAPH SET RAGGED-LEFT. React Native resolves `textAlign` LOGICALLY
+ * under a forced-RTL layout (`TEXT_ALIGN_START`'s docblock above), so the value that lands a
+ * left-to-right paragraph on the left is NOT the same value in an Arabic build as in an English
+ * one. All four combinations, measured, with an explicit `writingDirection` on the same style:
+ *
+ * | interface | content | correct literal | renders |
+ * |---|---|---|---|
+ * | en | ltr (French) | `TEXT_ALIGN_START` | flush left  ✔ |
+ * | en | rtl (Quran)  | `'right'`          | flush right ✔ |
+ * | ar | ltr (French) | `'right'`          | flush left  ✔ |
+ * | ar | rtl (Quran)  | `TEXT_ALIGN_START` | flush right ✔ |
+ *
+ * The rule the table states: **start when the two directions agree, end when they differ.** The
+ * two wrong answers are the ones that look most obviously right — `TEXT_ALIGN_START` "because it
+ * is the start", which follows the INTERFACE (this was the bug: French flush right, ragged left,
+ * in the Arabic build), and `'auto'`, which resolves against the view's layout direction on
+ * Android and does exactly the same thing (measured, same session).
+ *
+ * ⚠️ IT IS INVISIBLE IN AN ENGLISH BUILD, where the two directions agree for the interface's own
+ * copy and the old value happened to coincide. Story 8-1 shipped the Arabic interface; 8-2 and
+ * 8-3 shipped the first content a reader sees in a language that is not the interface's.
+ */
+export function contentTextAlign(contentIsRTL: boolean): 'left' | 'right' {
+  return contentIsRTL === isRTL() ? TEXT_ALIGN_START : TEXT_ALIGN_END;
+}
 
 /**
  * Whether a CONTENT language is written right to left — the one question a draw site should ask
