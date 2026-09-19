@@ -32,7 +32,7 @@ import { PACKS_SUPPORTED } from '@/constants/packs';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
 import { type PackRow, usePacks } from '@/features/packs';
-import { formatBytes, useQuranNumerals } from '@/lib/format';
+import { formatBytes, isolate, useQuranNumerals } from '@/lib/format';
 import { contentTextAlign, isRTLContentLanguage } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -84,9 +84,18 @@ export default function ContentScreen() {
         <SettingsGroup testID="content-storage">
           <SettingsRow
             icon="folder-outline"
+            /**
+             * ⚠️ `count` STAYS A NUMBER AND `number` IS WHAT IS DRAWN (story 8-3 review, D5b).
+             * i18next selects the plural from `count`, so formatting it would hand the selector a
+             * string and collapse six Arabic categories to one — but leaving it as the DISPLAYED
+             * value bypassed the reader's numeral preference, which the percent five rows down
+             * has respected since 8-2. Two interpolations, one for the grammar and one for the
+             * glyphs.
+             */
             label={t('profile:content.storage', {
               count: installedCount,
-              size: formatBytes(installedBytes),
+              number: formatQuranNumber(installedCount),
+              size: isolate(formatBytes(installedBytes)),
             })}
             testID="content-storage-total"
           />
@@ -133,12 +142,18 @@ export default function ContentScreen() {
           : styles.contentLtr;
         return (
           <View key={row.id} testID={`content-pack-${row.id}`}>
-            <SettingsGroup label={row.title}>
+            {/* ⚠️ THE TITLE IS THE PACK'S OWN TEXT TOO (story 8-3 review, D5c). The preview and the
+                attribution below already take the pack's direction; the group header was the one
+                element still taking the interface's, which is invisible with one French pack and
+                wrong the day story 8-4 ships Urdu and Persian. */}
+            <SettingsGroup label={row.title} labelStyle={contentStyle}>
               <SettingsRow
                 icon="document-text-outline"
+                /* A language's own endonym and a figure-plus-unit, either side of a neutral
+                   separator — `lib/format.ts` § isolate for why both are wrapped. */
                 label={t('profile:content.facts', {
-                  language: row.languageName,
-                  size: formatBytes(row.bytes),
+                  language: isolate(row.languageName),
+                  size: isolate(formatBytes(row.bytes)),
                 })}
                 testID={`content-pack-${row.id}-facts`}
               />

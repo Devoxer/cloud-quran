@@ -55,7 +55,7 @@ import { PACKS_SESSION_ONLY } from '@/constants/packs';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
-import { formatBytes, useQuranNumerals } from '@/lib/format';
+import { formatBytes, isolate, useQuranNumerals } from '@/lib/format';
 import { contentTextAlign, isRTLContentLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
 import type { VersePair } from '@/lib/usePosition';
@@ -139,7 +139,9 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
     const name =
       surahDisplayName(SURAH_METADATA[row.surah - 1]) ??
       t('common:bookmarks.surahFallback', { number: formatQuranNumber(row.surah) });
-    return t('common:study.rowLabel', { name, verse: verseNumber });
+    // The surah name is CONTENT beside a number — isolated so the separator cannot reorder
+    // around it once the catalogue carries a right-to-left title (`lib/format.ts` § isolate).
+    return t('common:study.rowLabel', { name: isolate(name), verse: verseNumber });
   };
 
   const chooseSource = useCallback(
@@ -219,7 +221,12 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.chipScroll}
+          /* ⚠️ THE ROW BLEEDS PAST THE BODY'S PADDING ON BOTH EDGES. Without it the chips scroll
+             inside a column that is already inset, so the last one is cut a whole `SPACING.md`
+             before the sheet's edge and the row looks narrower than the sheet it lives in. The
+             negative margin gives the scroller the full width; `chipRow`'s padding puts the
+             chips back where the other controls sit. */
+          style={[styles.chipScroll, styles.chipBleed]}
           contentContainerStyle={styles.chipRow}
           testID="study-types"
         >
@@ -239,7 +246,7 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.chipScroll}
+            style={[styles.chipScroll, styles.chipBleed]}
             contentContainerStyle={styles.chipRow}
             testID="study-sources"
           >
@@ -253,10 +260,14 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
                 label={
                   hotkeys && index < SOURCE_HOTKEYS
                     ? t('common:study.sourceWithKey', {
-                        title: entry.title,
+                        // The pack's own title, in the pack's own language, beside a digit.
+                        title: isolate(entry.title),
                         key: formatQuranNumber(index + 1),
                       })
-                    : entry.title
+                    : // Isolated in BOTH branches: it is the same pack title in the same UI
+                      // copy, and a wrapper that appears only when a hotkey hint does would be
+                      // a bidi fix that switches off on native.
+                      isolate(entry.title)
                 }
                 isSelected={entry.id === sourceId}
                 onPress={() => chooseSource(entry.id)}
@@ -511,8 +522,8 @@ function NoSourcePanel({
                       percent: percentOf(Math.round(offer.progress * 100)),
                     })
                   : t('common:study.install', {
-                      title: offer.title,
-                      size: formatBytes(offer.bytes),
+                      title: isolate(offer.title),
+                      size: isolate(formatBytes(offer.bytes)),
                     })}
               </Text>
             </Pressable>
@@ -550,11 +561,27 @@ const useStyles = () =>
       flexGrow: 0,
       flexShrink: 0,
     },
+    /** See the `study-types` row: the scroller takes the full sheet width, `chipRow` re-insets. */
+    chipBleed: {
+      marginHorizontal: -SPACING.md,
+    },
+    /**
+     * ⚠️ THE HORIZONTAL PADDING IS THE SCROLL INSET, AND ITS ABSENCE CLIPPED A CHIP FLUSH AGAINST
+     * THE EDGE (owner, 1.5× system font scale, 2026-09-19). With the row exactly as wide as the
+     * sheet, the overflowing chip was sliced by the container's own boundary with no gap before
+     * it — which reads as a broken layout rather than as "there is more, scroll". An inset makes
+     * the cut land inside the padding, so a partly-visible chip looks partly visible.
+     *
+     * ⚠️ IT IS ON THE **CONTENT CONTAINER**, NOT THE `ScrollView`. Padding on the scroller itself
+     * shrinks the viewport and clips the same way one inset further in; on the content container
+     * it becomes scrollable space, which is what a content inset is.
+     */
     chipRow: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: SPACING.xs,
       paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.md,
     },
     /** The list's box: everything above it is fixed height, so the remainder is the reading area. */
     content: {

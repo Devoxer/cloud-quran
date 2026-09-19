@@ -230,9 +230,9 @@
       "removePack": "Supprimer {{name}}",
       "cancelPack": "Annuler l’installation de {{name}}"
     },
-    "storage_one": "{{count}} module installé · {{size}}",
-    "storage_many": "{{count}} de modules installés · {{size}}",
-    "storage_other": "{{count}} modules installés · {{size}}",
+    "storage_one": "{{number}} module installé · {{size}}",
+    "storage_many": "{{number}} de modules installés · {{size}}",
+    "storage_other": "{{number}} modules installés · {{size}}",
     "diskUnavailable": "Impossible de lire ce qui est installé sur cet appareil."
   }
 }

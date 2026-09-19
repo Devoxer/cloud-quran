@@ -40,6 +40,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import ContentScreen from '@/app/(tabs)/(profile)/content';
+import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from '@/lib/numerals';
 
 const OFFERED = {
   id: 'translation-fr-rashid',
@@ -132,7 +133,7 @@ describe('an installed pack', () => {
     mockPacks.installedBytes = 1_425_408;
     render(<ContentScreen />);
 
-    expect(screen.getByText('1 pack installed · 1.4 MB')).toBeTruthy();
+    expect(screen.getByText('1 pack installed · \u20681.4 MB\u2069')).toBeTruthy();
   });
 
   it('pluralises the count rather than printing one string for every number', () => {
@@ -140,7 +141,27 @@ describe('an installed pack', () => {
     mockPacks.installedBytes = 2_000_000;
     render(<ContentScreen />);
 
-    expect(screen.getByText('2 packs installed · 1.9 MB')).toBeTruthy();
+    expect(screen.getByText('2 packs installed · \u20681.9 MB\u2069')).toBeTruthy();
+  });
+
+  it('draws the COUNT in the reader’s numerals, like the percent five rows down', () => {
+    /**
+     * ⚠️ IT WAS PASSED RAW, BYPASSING THE PREFERENCE ITS OWN NEIGHBOUR RESPECTS (story 8-3 review,
+     * D5b). `count` has to stay a NUMBER — i18next selects the plural from it, and formatting it
+     * would collapse six Arabic categories to one — so the displayed figure is a second
+     * interpolation. MUTATION: drop `number` and interpolate `{{count}}` again; the plural still
+     * works and this reddens, which is the only way the two halves can be told apart.
+     */
+    setNumeralSystem('arabic-indic');
+    try {
+      mockPacks.rows = [installed];
+      mockPacks.installedBytes = 1_425_408;
+      render(<ContentScreen />);
+      // ١ — Arabic-Indic, and the plural category still selected from the numeric 1.
+      expect(screen.getByText('١ pack installed · \u20681.4 MB\u2069')).toBeTruthy();
+    } finally {
+      setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
+    }
   });
 });
 

@@ -349,3 +349,33 @@ export function formatQuranNumber(value: number | string): string {
 export function useQuranNumerals(): (value: number | string) => string {
   return quranNumeralsFor(useNumeralSystem());
 }
+
+/**
+ * Wrap a value in a bidi ISOLATE so the copy around it cannot reorder through it.
+ *
+ * ⚠️ IT IS FOR SUBSTITUTIONS WHOSE DIRECTION IS NOT THE SENTENCE'S — a content pack's title, a
+ * language's endonym, a surah name, a reciter's name, a figure with a unit. The Unicode
+ * bidirectional algorithm resolves a neutral character (the `·` separator, a parenthesis, a full
+ * stop) against whichever runs SURROUND it, so an unisolated Latin title dropped into Arabic copy
+ * drags the separator to the wrong side of itself and the sentence reads in the wrong order.
+ *
+ * ⚠️ IT IS CORRECT TODAY WITHOUT THIS AND WILL NOT BE, WHICH IS WHY IT LANDS NOW (story 8-3
+ * review, D5d). Every `"{{a}} · {{b}}"` site in this app currently interpolates values whose
+ * direction happens to match the copy around them — an Arabic surah name in Arabic copy, a French
+ * title in English copy. Story 8-4 ships Urdu, Persian, Pashto and Sorani translations, at which
+ * point the same templates carry a right-to-left title inside English copy and a left-to-right
+ * one inside Arabic copy, and the separator lands on the wrong side of the name. A defect that
+ * arrives with a data change and touches no code is the kind nothing in this repo would catch.
+ *
+ * `U+2068 FIRST STRONG ISOLATE` opens — it takes its direction from the value's own first strong
+ * character rather than being told, which is the whole point when the value is arbitrary content —
+ * and `U+2069 POP DIRECTIONAL ISOLATE` closes. Both are zero-width and are ignored by screen
+ * readers, so an a11y label neither needs this nor is harmed by it; visual labels are the subject.
+ *
+ * ⚠️ DO NOT APPLY IT TO A WHOLE TRANSLATED SENTENCE. Isolating the sentence tells the algorithm
+ * the sentence is one run, which is the opposite of the fix — the isolate goes around the VALUE
+ * being interpolated, inside the sentence.
+ */
+export function isolate(value: string | number): string {
+  return `⁨${value}⁩`;
+}

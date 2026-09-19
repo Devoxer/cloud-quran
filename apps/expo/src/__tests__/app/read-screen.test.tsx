@@ -1503,7 +1503,7 @@ describe('the selection cannot outlive what it points at (story 7-8 review)', ()
     render(<Read />);
     await screen.findByText('أية 1:7');
     await selectVerse(3);
-    expect(rowLabel()).toBe('Al-Fatihah · 3');
+    expect(rowLabel()).toBe('\u2068Al-Fatihah\u2069 · 3');
 
     fireEvent.press(screen.getByTestId('next-surah-button'));
     await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(2));
@@ -1514,7 +1514,7 @@ describe('the selection cannot outlive what it points at (story 7-8 review)', ()
     render(<Read />);
     await screen.findByText('أية 1:7');
     await selectVerse(3);
-    expect(rowLabel()).toBe('Al-Fatihah · 3');
+    expect(rowLabel()).toBe('\u2068Al-Fatihah\u2069 · 3');
 
     // The mushaf moved the saved pair while this tab was blurred; `rerender` is the re-render a
     // mounted position hook would do (see the file header's resync note).
@@ -1532,7 +1532,7 @@ describe('the selection cannot outlive what it points at (story 7-8 review)', ()
     render(<Read />);
     await screen.findByText('أية 1:7');
     await selectVerse(3);
-    expect(rowLabel()).toBe('Al-Fatihah · 3');
+    expect(rowLabel()).toBe('\u2068Al-Fatihah\u2069 · 3');
 
     blur();
     expect(rowLabel()).toBeNull();

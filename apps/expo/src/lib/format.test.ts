@@ -20,6 +20,7 @@ import {
   formatLongDate,
   formatQuranNumber,
   formatRelativeTime,
+  isolate,
 } from './format';
 import { DEFAULT_NUMERAL_SYSTEM, setNumeralSystem } from './numerals';
 
@@ -370,5 +371,37 @@ describe('format', () => {
       expect(formatLongDate(new Date(2026, 11, 25))).not.toMatch(/[٠-٩]/);
       expect(formatRelativeTime(Date.now() - 3 * 24 * 3600 * 1000)).not.toMatch(/[٠-٩]/);
     });
+  });
+});
+
+/**
+ * `isolate` — the bidi wrapper (story 8-3 review, D5d).
+ *
+ * ⚠️ EVERY EXPECTATION IS A LITERAL STRING WITH THE CODEPOINTS WRITTEN OUT, never a call to the
+ * helper under test. `expect(isolate(x)).toBe(isolate(x))` is the shape this repo has been bitten
+ * by twice, and here it would be worse than useless: the whole function is two characters, so a
+ * test that produced them the same way would hold with the body emptied.
+ */
+describe('isolate', () => {
+  it('wraps a value in FIRST STRONG ISOLATE … POP DIRECTIONAL ISOLATE', () => {
+    // U+2068 and U+2069, spelled out rather than produced.
+    expect(isolate('Français')).toBe('⁨Français⁩');
+    expect(isolate('اردو')).toBe('⁨اردو⁩');
+    expect(isolate(12)).toBe('⁨12⁩');
+  });
+
+  it('adds exactly two characters and changes nothing else', () => {
+    const value = 'Le Noble Coran — Rachid Maach';
+    const wrapped = isolate(value);
+    expect(wrapped).toHaveLength(value.length + 2);
+    expect(wrapped.slice(1, -1)).toBe(value);
+  });
+
+  it('is FIRST STRONG, not a direction we chose for the value', () => {
+    // ⚠️ `U+2066`/`U+2067` (LRI/RLI) would TELL the algorithm which way the value runs, which is
+    // exactly what a caller interpolating arbitrary pack content cannot know. MUTATION: swap in
+    // either and this reddens.
+    expect(isolate('x').charCodeAt(0)).toBe(0x2068);
+    expect(isolate('x').charCodeAt(2)).toBe(0x2069);
   });
 });

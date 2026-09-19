@@ -42,7 +42,7 @@ import { HeaderActionButton, Icon } from '@/components/ui';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { RECITERS, reciterNameOf, resolveReciterId, useVerseSeek } from '@/features/audio';
-import { useQuranNumerals } from '@/lib/format';
+import { isolate, useQuranNumerals } from '@/lib/format';
 import { formatSleepRemaining } from '@/lib/formatTime';
 import { surahDisplayName } from '@/lib/surahName';
 import { addBookmark, removeBookmark, useBookmarks } from '@/lib/sync';
@@ -252,9 +252,12 @@ export function ChromeVerseRow({
     const name =
       surahDisplayName(SURAH_METADATA[surah - 1]) ??
       t('common:bookmarks.surahFallback', { number: formatQuranNumber(surah) });
+    // ⚠️ THE NAME IS ISOLATED, THE BARE-NAME CASE IS NOT. A whole label that is only the name has
+    // nothing to reorder against; inside the `"{{name}} · {{verse}}"` template it does — see
+    // `lib/format.ts` § isolate.
     return verse === null
       ? name
-      : t('player:nowPlayingVerse', { name, verse: formatQuranNumber(verse) });
+      : t('player:nowPlayingVerse', { name: isolate(name), verse: formatQuranNumber(verse) });
   };
 
   /**
@@ -266,11 +269,18 @@ export function ChromeVerseRow({
    * countdown sits beside it; unarmed it is the plain overflow. Either way one press opens the
    * sheet that owns it.
    *
-   * ⚠️ AND IT IS NOT MINI-PLAYER-ONLY, WHICH IS WHERE IT STARTED (story 7-4 review, P6). The row
-   * swaps to the VERSE face the moment a reader selects an ayah — so an armed sleep timer became
-   * invisible and, worse, uncancellable, because this is the only door onto the sheet that can
-   * turn it off. Selecting a verse is not a reason to lose the timer you set. The verse face's
-   * own controls are scoped to the ayah; this one is scoped to the recitation and outlives them.
+   * ⚠️ IN THE VERSE FACE IT DRAWS **ONLY WHILE A TIMER IS ARMED** (owner call 2026-09-19). Story
+   * 7-4's review put it in both faces unconditionally, and the argument for that — an armed sleep
+   * timer must not become invisible and uncancellable the moment a reader selects an ayah, since
+   * this is the only door onto the sheet that can turn it off — is a real argument about the
+   * ARMED case and only that one. Idle, it was an audio control sitting in a row about TEXT, next
+   * to two controls scoped to the ayah, and the sheet it opens is reachable from the mini player
+   * and from Settings → Recitation. So the timer still cannot be lost, and the verse face stops
+   * carrying a fourth control that has nothing to do with the verse.
+   *
+   * ⚠️ THE MINI PLAYER KEEPS IT UNCONDITIONALLY. That face IS the recitation, so speed and the
+   * sleep timer belong to it whether or not one is running — this is the discoverable door, and
+   * removing it there would leave the sheet reachable only from Settings.
    */
   const playbackOptionsControl = (
     <Pressable
@@ -359,9 +369,10 @@ export function ChromeVerseRow({
             testID="chrome-verse-study-icon"
           />
         </Pressable>
-        {/* See its definition above: the recitation's control, in the ayah's face, because an
-            armed sleep timer must not vanish when the reader selects a verse. */}
-        {playbackOptionsControl}
+        {/* See its definition above: in THIS face only while a timer is armed — an armed timer
+            must not vanish when the reader selects a verse, and an idle one has no business in a
+            row about text. `sleep.active` is the whole condition. */}
+        {sleep.active ? playbackOptionsControl : null}
         {/* The same glyph pair and the same colours as `VerseRow`'s control — one action, one
             look. The indicator flips on the SAME interaction because `addBookmark` applies the
             local cache synchronously. */}

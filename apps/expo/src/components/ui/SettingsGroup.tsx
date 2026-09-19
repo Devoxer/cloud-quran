@@ -18,7 +18,7 @@
  */
 
 import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { type StyleProp, Text, type TextStyle, View } from 'react-native';
 import { SPACING } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
@@ -28,20 +28,38 @@ import { Card } from './Card';
 export interface SettingsGroupProps {
   /** Optional uppercase caps header rendered above the card. */
   label?: string;
+  /**
+   * Direction/alignment override for the label (story 8-3 review, D5c).
+   *
+   * ⚠️ IT EXISTS FOR ONE CASE: A LABEL THAT IS **CONTENT**, NOT UI COPY. The content screen's
+   * group header is a content pack's own TITLE, so it belongs to the pack's language rather than
+   * to the interface's — the same rule `contentTextAlign` states for the preview and the
+   * attribution drawn beside it. Without this the title was the one element in the group still
+   * taking the interface's direction, which is invisible today (one French pack) and wrong the
+   * moment story 8-4 ships Urdu and Persian. Merged AFTER the caption treatment, so the uppercase
+   * and letter-spacing that make a section header a section header stay owned here.
+   */
+  labelStyle?: StyleProp<TextStyle>;
   /** Optional explanatory line rendered below the card. */
   footnote?: string;
   children: ReactNode;
   testID?: string;
 }
 
-export function SettingsGroup({ label, footnote, children, testID }: SettingsGroupProps) {
+export function SettingsGroup({
+  label,
+  labelStyle,
+  footnote,
+  children,
+  testID,
+}: SettingsGroupProps) {
   const styles = useStyles();
 
   const rows = Children.toArray(children).filter(isValidElement);
 
   return (
     <View testID={testID}>
-      {label != null && <Text style={styles.label}>{label}</Text>}
+      {label != null && <Text style={[styles.label, labelStyle]}>{label}</Text>}
       <Card padded={false}>
         {rows.map((child, index) =>
           cloneElement(child as ReactElement<{ showDivider?: boolean }>, { showDivider: index > 0 })

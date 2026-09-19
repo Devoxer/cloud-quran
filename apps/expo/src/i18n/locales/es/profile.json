@@ -230,9 +230,9 @@
       "removePack": "Quitar {{name}}",
       "cancelPack": "Cancelar la instalación de {{name}}"
     },
-    "storage_one": "{{count}} paquete instalado · {{size}}",
-    "storage_many": "{{count}} de paquetes instalados · {{size}}",
-    "storage_other": "{{count}} paquetes instalados · {{size}}",
+    "storage_one": "{{number}} paquete instalado · {{size}}",
+    "storage_many": "{{number}} de paquetes instalados · {{size}}",
+    "storage_other": "{{number}} paquetes instalados · {{size}}",
     "diskUnavailable": "No se pudo leer lo que hay instalado en este dispositivo."
   }
 }

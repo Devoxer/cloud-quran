@@ -777,7 +777,7 @@ describe('the selection (story 7-8)', () => {
     render(<Harness capture={(r) => (reveal = r)} />);
     press({ surah: 2, verse: 255 });
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
-    expect(rowLabel()).toBe('Al-Baqarah · 255');
+    expect(rowLabel()).toBe('\u2068Al-Baqarah\u2069 · 255');
   });
 
   it('an EMPTY press reveals the bars with nothing selected', () => {
@@ -794,7 +794,7 @@ describe('the selection (story 7-8)', () => {
     press({ surah: 2, verse: 255 });
     press({ surah: 2, verse: 256 });
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
-    expect(rowLabel()).toBe('Al-Baqarah · 256');
+    expect(rowLabel()).toBe('\u2068Al-Baqarah\u2069 · 256');
   });
 
   it('…and RE-ARMS the dwell, so moving the selection does not inherit the old countdown', () => {
@@ -809,7 +809,7 @@ describe('the selection (story 7-8)', () => {
     // …and now past where the FIRST dwell would have fired. A fresh one is counting.
     act(() => jest.advanceTimersByTime(DURATIONS.standard + 2));
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
-    expect(rowLabel()).toBe('Al-Baqarah · 256');
+    expect(rowLabel()).toBe('\u2068Al-Baqarah\u2069 · 256');
   });
 
   it('the DWELL takes the selection with the bars', () => {
@@ -832,7 +832,7 @@ describe('the selection (story 7-8)', () => {
     act(() => jest.advanceTimersByTime(CHROME_DWELL_MS - DURATIONS.standard - 1));
     act(() => reveal.revealFor({ surah: 2, verse: 255 }));
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
-    expect(rowLabel()).toBe('Al-Baqarah · 255');
+    expect(rowLabel()).toBe('\u2068Al-Baqarah\u2069 · 255');
     // …and it re-armed, so the ORIGINAL countdown no longer decides.
     act(() => jest.advanceTimersByTime(DURATIONS.standard + 2));
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
@@ -848,7 +848,7 @@ describe('the selection (story 7-8)', () => {
     act(() => reveal.keepAlive());
     act(() => jest.advanceTimersByTime(DURATIONS.standard + 2));
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
-    expect(rowLabel()).toBe('Al-Baqarah · 255');
+    expect(rowLabel()).toBe('\u2068Al-Baqarah\u2069 · 255');
   });
 
   it('a HELD dwell does not fire at all, and releasing it starts a FULL fresh one', () => {
@@ -859,7 +859,7 @@ describe('the selection (story 7-8)', () => {
     act(() => reveal.holdDwell(true));
     act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 4));
     expect(touchesOf('reading-chrome-header')).toBe('box-none');
-    expect(rowLabel()).toBe('Al-Baqarah · 255');
+    expect(rowLabel()).toBe('\u2068Al-Baqarah\u2069 · 255');
 
     act(() => reveal.holdDwell(false));
     // A FULL dwell, not the remainder of a spent one.

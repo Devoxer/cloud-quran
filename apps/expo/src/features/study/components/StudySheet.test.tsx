@@ -576,7 +576,8 @@ describe('the web hotkeys', () => {
       packRow({ id: 'translation-en-saheeh', title: 'Saheeh International', language: 'en' }),
     ];
     await open();
-    expect(screen.getByText('Saheeh International (2)')).toBeTruthy();
+    // The pack's own title, isolated inside UI copy — see the surah-crossing case above.
+    expect(screen.getByText('\u2068Saheeh International\u2069 (2)')).toBeTruthy();
   });
 
   it('…and are absent from the labels on native, which has no keyboard', async () => {
@@ -585,7 +586,7 @@ describe('the web hotkeys', () => {
       packRow({ id: 'translation-en-saheeh', title: 'Saheeh International', language: 'en' }),
     ];
     await open();
-    expect(screen.getByText('Saheeh International')).toBeTruthy();
+    expect(screen.getByText('\u2068Saheeh International\u2069')).toBeTruthy();
   });
 });
 
@@ -617,8 +618,14 @@ describe('a range that crosses a surah', () => {
     await waitFor(() => expect(screen.getByTestId('study-entry-11-1')).toBeTruthy(), SETTLE);
 
     // MUTATION: go back to the bare ayah number and BOTH of these read "1" and "107".
-    expect(within(screen.getByTestId('study-entry-11-1')).getByText('Hud · 1')).toBeTruthy();
-    expect(within(screen.getByTestId('study-entry-10-107')).getByText('Yunus · 107')).toBeTruthy();
+    // ⚠️ THE NAME IS BIDI-ISOLATED (review D5d) — `U+2068` … `U+2069`, written out rather than
+    // produced by `isolate()`, so dropping the wrapper reddens this instead of agreeing with it.
+    expect(
+      within(screen.getByTestId('study-entry-11-1')).getByText('\u2068Hud\u2069 · 1')
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('study-entry-10-107')).getByText('\u2068Yunus\u2069 · 107')
+    ).toBeTruthy();
   });
 
   it('stays QUIET at ayah scope, where there is nothing to disambiguate', async () => {
@@ -634,5 +641,49 @@ describe('a range that crosses a surah', () => {
     });
     await waitFor(() => expect(screen.getByTestId('study-entry-1-1')).toBeTruthy(), SETTLE);
     expect(within(screen.getByTestId('study-entry-1-1')).getByText('1')).toBeTruthy();
+  });
+});
+
+/**
+ * THE CHIP ROWS ARE INSET, NOT CLIPPED FLUSH (owner, 1.5× system font scale, 2026-09-19).
+ *
+ * ⚠️ RNTL HAS NO LAYOUT ENGINE, so "the chip is fully visible" is not a fact any renderer here can
+ * see — the device is what proved it. What CAN be pinned is the MECHANISM, and it is two halves
+ * that only work together: the scroller bleeds past the sheet's own horizontal padding so it owns
+ * the full width, and its content container puts that padding back so the chips line up with the
+ * controls above. Drop either and the row is narrower than the sheet it sits in, with the
+ * overflowing chip sliced by a boundary that has no gap before it.
+ */
+describe('the chip rows', () => {
+  /** Flattened style of one element, as an object. */
+  function styleOf(testID: string, prop: 'style' | 'contentContainerStyle') {
+    const raw = screen.getByTestId(testID).props[prop];
+    const flat = (Array.isArray(raw) ? raw.flat(3) : [raw]).filter(Boolean);
+    return Object.assign({}, ...flat.map((s: unknown) => (typeof s === 'object' ? s : {})));
+  }
+
+  it('bleed and inset are equal and opposite on BOTH rows', async () => {
+    mockPacks.rows = [
+      packRow(),
+      packRow({ id: 'translation-en-saheeh', title: 'Saheeh International', language: 'en' }),
+    ];
+    await open();
+
+    for (const id of ['study-types', 'study-sources']) {
+      const bleed = styleOf(id, 'style').marginHorizontal;
+      const inset = styleOf(id, 'contentContainerStyle').paddingHorizontal;
+      expect(typeof bleed).toBe('number');
+      expect(bleed).toBeLessThan(0);
+      // MUTATION: change either number. A bleed deeper than the inset puts the chips outside the
+      // sheet's text column; a shallower one leaves the row narrower than the sheet.
+      expect(inset).toBe(-bleed);
+    }
+  });
+
+  it('…and the row still does not grow vertically', async () => {
+    // The other half of this row's history: a horizontal `ScrollView` in a column fills the column
+    // unless told not to, which put two empty bands where the Arabic belongs.
+    await open();
+    expect(styleOf('study-types', 'style').flexGrow).toBe(0);
   });
 });

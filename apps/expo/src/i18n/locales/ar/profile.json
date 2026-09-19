@@ -230,12 +230,12 @@
       "removePack": "إزالة {{name}}",
       "cancelPack": "إلغاء تثبيت {{name}}"
     },
-    "storage_zero": "{{count}} حزمة مثبّتة · {{size}}",
-    "storage_one": "{{count}} حزمة مثبّتة · {{size}}",
-    "storage_two": "{{count}} حزمتان مثبّتتان · {{size}}",
-    "storage_few": "{{count}} حزم مثبّتة · {{size}}",
-    "storage_many": "{{count}} حزمة مثبّتة · {{size}}",
-    "storage_other": "{{count}} حزمة مثبّتة · {{size}}",
+    "storage_zero": "{{number}} حزمة مثبّتة · {{size}}",
+    "storage_one": "{{number}} حزمة مثبّتة · {{size}}",
+    "storage_two": "{{number}} حزمتان مثبّتتان · {{size}}",
+    "storage_few": "{{number}} حزم مثبّتة · {{size}}",
+    "storage_many": "{{number}} حزمة مثبّتة · {{size}}",
+    "storage_other": "{{number}} حزمة مثبّتة · {{size}}",
     "diskUnavailable": "تعذّرت قراءة ما هو مثبّت على هذا الجهاز."
   }
 }

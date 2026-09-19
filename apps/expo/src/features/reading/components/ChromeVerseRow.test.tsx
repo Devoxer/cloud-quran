@@ -96,7 +96,12 @@ describe('state 1 — an ayah is selected', () => {
   it('draws the verse actions and names the ayah', () => {
     renderRow({ surah: 2, verse: 255 });
     expect(screen.getByTestId('chrome-verse-row')).toBeTruthy();
-    expect(screen.getByTestId('chrome-verse-label').props.children).toBe('Al-Baqarah · 255');
+    // ⚠️ THE SURAH NAME IS BIDI-ISOLATED (story 8-3 review, D5d) — `U+2068` … `U+2069` around the
+    // name so the `·` cannot reorder around it once the catalogue carries a right-to-left title.
+    // Written out as a literal: a test that called `isolate()` would hold with the wrapper gone.
+    expect(screen.getByTestId('chrome-verse-label').props.children).toBe(
+      '\u2068Al-Baqarah\u2069 · 255'
+    );
     // The mini player is the OTHER state; both at once would be the two-bar clutter the single
     // row exists to avoid.
     expect(screen.queryByTestId('chrome-mini-player')).toBeNull();
@@ -171,7 +176,9 @@ describe('state 2 — audio is loaded and nothing is selected', () => {
     });
     renderRow(null);
     expect(screen.getByTestId('chrome-mini-player')).toBeTruthy();
-    expect(screen.getByTestId('chrome-now-playing').props.children).toBe('Al-Kahf · 23');
+    expect(screen.getByTestId('chrome-now-playing').props.children).toBe(
+      '\u2068Al-Kahf\u2069 · 23'
+    );
     expect(screen.getByTestId('chrome-reciter')).toBeTruthy();
     expect(screen.queryByTestId('chrome-verse-row')).toBeNull();
   });
@@ -193,7 +200,7 @@ describe('state 2 — audio is loaded and nothing is selected', () => {
       store().setActiveVerse(23);
     });
     renderRow(null);
-    expect(screen.getByTestId('chrome-now-playing').props.children).toBe('الكهف · ٢٣');
+    expect(screen.getByTestId('chrome-now-playing').props.children).toBe('\u2068الكهف\u2069 · ٢٣');
     expect(
       within(screen.getByTestId('chrome-reciter')).getByText('مشاري راشد العفاسي')
     ).toBeTruthy();
@@ -481,12 +488,15 @@ describe('the playback-options control', () => {
     return (frame.props as { children: { props: { name?: unknown } } }).children.props.name;
   };
 
-  it('appears in BOTH faces, so selecting an ayah cannot strand an armed timer', () => {
+  it('appears in the player face always, and in the verse face only while ARMED', () => {
     /**
-     * ⚠️ IT USED TO BE MINI-PLAYER-ONLY (story 7-4 review, P6). The row swaps to the verse face
-     * the moment a reader selects an ayah — so an armed sleep timer went invisible AND
-     * uncancellable, because this control is the only door onto the sheet that turns it off.
-     * MUTATION: render it only in the player face; the second half reddens.
+     * ⚠️ THIS CASE IS STORY 7-4's, NARROWED BY AN OWNER CALL ON 2026-09-19 (8-3 review, D4). 7-4's
+     * review made it unconditional in both faces to stop an armed timer becoming invisible and
+     * uncancellable when a reader selects an ayah — this control is the only door onto the sheet
+     * that turns it off. That argument is about the ARMED case and only that one: idle, it was an
+     * audio control in a row about TEXT, opening a sheet already reachable from the mini player
+     * and from Settings → Recitation. The timer still cannot be stranded; see the block below for
+     * both halves.
      */
     loadTrack();
     renderRow(null);
@@ -495,6 +505,11 @@ describe('the playback-options control', () => {
 
     renderRow({ surah: 18, verse: 10 });
     expect(screen.getByTestId('chrome-verse-row')).toBeTruthy();
+    expect(screen.queryByTestId('chrome-playback-options')).toBeNull();
+    screen.unmount();
+
+    act(() => store().setSleepTimer(30 * 60_000));
+    renderRow({ surah: 18, verse: 10 });
     expect(screen.getByTestId('chrome-playback-options')).toBeTruthy();
   });
 
@@ -567,5 +582,104 @@ describe('the playback-options control', () => {
     );
     expect(screen.getByTestId('chrome-playback-options').props.tabIndex).toBe(-1);
     expect(screen.getByTestId('chrome-playback-options').props.focusable).toBe(false);
+  });
+});
+
+/**
+ * Read a prop off one of the row's icons.
+ *
+ * ⚠️ `includeHiddenElements`, AND THE PROP LIVES ON THE CHILD. Every icon here is deliberately
+ * a11y-hidden (the `Pressable` around it carries the label), and `Icon` renders a frame `View`
+ * carrying the testID with the glyph itself as its child — the same shape `glyph()` above reads.
+ */
+function iconProp(testID: string, prop: 'name' | 'size'): unknown {
+  const frame = screen.getByTestId(testID, { includeHiddenElements: true });
+  return (frame.props as { children: { props: Record<string, unknown> } }).children.props[prop];
+}
+
+/**
+ * THE PLAYBACK "…" IN THE AYAH FACE — ARMED ONLY (owner call 2026-09-19, story 8-3 review D4).
+ *
+ * ⚠️ BOTH HALVES ARE THE CASE. Story 7-4's review put it in this face unconditionally, and its
+ * argument holds for the ARMED state only: an armed sleep timer must not become invisible and
+ * uncancellable the moment a reader selects an ayah, because this is the only door onto the sheet
+ * that turns it off. Idle, it was an audio control in a row about TEXT, beside two controls scoped
+ * to the ayah, opening a sheet already reachable from the mini player and from Settings.
+ */
+describe('the overflow control in the verse face', () => {
+  afterEach(() => act(() => store().clearSleepTimer()));
+
+  it('is ABSENT while no timer is armed', () => {
+    renderRow({ surah: 2, verse: 255 });
+    expect(screen.getByTestId('chrome-verse-row')).toBeTruthy();
+    expect(screen.queryByTestId('chrome-playback-options')).toBeNull();
+    // …and the controls that ARE about the ayah are untouched.
+    expect(screen.getByTestId('chrome-verse-play')).toBeTruthy();
+    expect(screen.getByTestId('chrome-verse-study')).toBeTruthy();
+    expect(screen.getByTestId('chrome-verse-bookmark')).toBeTruthy();
+  });
+
+  it('is PRESENT the moment one is, and still opens the sheet that can cancel it', () => {
+    act(() => store().setSleepTimer(30 * 60_000));
+    renderRow({ surah: 2, verse: 255 });
+
+    const control = screen.getByTestId('chrome-playback-options');
+    expect(control).toBeTruthy();
+    // The moon, not the ellipsis — armed is what it is saying.
+    expect(iconProp('chrome-playback-options-icon', 'name')).toBe('moon');
+    fireEvent.press(control);
+    expect(mockOpenPlaybackOptions).toHaveBeenCalledTimes(1);
+    // It still owes `keepAlive`, like every other control in the bar.
+    expect(mockInteract).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps it UNCONDITIONALLY in the mini player, which IS the recitation', () => {
+    // Removing it there would leave the speed and the sleep timer reachable only from Settings.
+    act(() => {
+      store().setTrack(18, 'alafasy', true);
+      store().setPlaybackState('playing');
+    });
+    renderRow(null);
+    expect(screen.getByTestId('chrome-mini-player')).toBeTruthy();
+    expect(screen.getByTestId('chrome-playback-options')).toBeTruthy();
+  });
+});
+
+/**
+ * THE ROW'S GLYPHS ARE ONE SIZE AND ONE FAMILY (owner, on an iPhone, 2026-09-19).
+ */
+describe('icon uniformity', () => {
+  afterEach(() => act(() => store().clearSleepTimer()));
+
+  it('draws every glyph in the verse face at the SAME size', () => {
+    act(() => store().setSleepTimer(30 * 60_000));
+    renderRow({ surah: 2, verse: 255 });
+    // ⚠️ A LITERAL 20, not `ROW_ICON_SIZE`. The defect was two constants — 20 beside 18 — so a
+    // test that read the constant would have agreed with either of them.
+    for (const id of [
+      'chrome-verse-study-icon',
+      'chrome-verse-bookmark-icon',
+      'chrome-playback-options-icon',
+    ]) {
+      expect(iconProp(id, 'size')).toBe(20);
+    }
+  });
+
+  it('…and in the mini player, where the headset used to be the one SOLID glyph', () => {
+    act(() => {
+      store().setTrack(18, 'alafasy', true);
+      store().setPlaybackState('playing');
+    });
+    renderRow(null);
+    expect(iconProp('chrome-playback-options-icon', 'size')).toBe(20);
+  });
+
+  it('gives every row control a 44pt target — a 20pt glyph plus 12 of slop', () => {
+    // ⚠️ LITERALS. At the old slop of 10 these were 40pt targets, under the HIG minimum, in a bar
+    // that now carries three of them side by side.
+    renderRow({ surah: 2, verse: 255 });
+    for (const id of ['chrome-verse-study', 'chrome-verse-bookmark']) {
+      expect(screen.getByTestId(id).props.hitSlop).toBe(12);
+    }
   });
 });

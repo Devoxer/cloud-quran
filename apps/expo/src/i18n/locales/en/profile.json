@@ -230,8 +230,8 @@
       "removePack": "Remove {{name}}",
       "cancelPack": "Cancel the installation of {{name}}"
     },
-    "storage_one": "{{count}} pack installed · {{size}}",
-    "storage_other": "{{count}} packs installed · {{size}}",
+    "storage_one": "{{number}} pack installed · {{size}}",
+    "storage_other": "{{number}} packs installed · {{size}}",
     "diskUnavailable": "Could not read what is installed on this device."
   }
 }
