@@ -207,7 +207,7 @@
     }
   },
   "content": {
-    "webUnsupported": "Content packs are available in the mobile app.",
+    "webUnsupported": "On the web, open a source from the study sheet: select an ayah while reading.",
     "offline": "Showing installed packs only — the catalogue could not be reached.",
     "retryCatalogue": "Try again",
     "empty": "No packs are on offer yet.",

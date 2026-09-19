@@ -59,6 +59,36 @@ jest.mock('@/lib/sync', () => ({
   usePreferences: () => ({ data: null }),
 }));
 
+/**
+ * ⚠️ THE STUDY SHEET IS STUBBED HERE, DELIBERATELY, AND THE SPLIT IS THE SAME ONE `ChromeVerseRow`
+ * GETS. What this file owns is the WIRING — the chrome mounts the sheet outside both bars, holds
+ * the dwell while it is open, and closes it when the selection dies. What the sheet DOES is
+ * `features/study/components/StudySheet.test.tsx`'s subject, and mounting the real one would drag
+ * the pack shelf and the bundled Quran database into a suite about two animated bars.
+ */
+jest.mock('@/features/study', () => {
+  const { Pressable, Text, View } = require('react-native');
+  return {
+    StudySheet: ({
+      open,
+      onClose,
+      verse,
+    }: {
+      open: boolean;
+      onClose: () => void;
+      verse: { surah: number; verse: number } | null;
+    }) =>
+      open && verse ? (
+        <View testID="study-sheet">
+          <Text testID="study-sheet-verse">{`${verse.surah}:${verse.verse}`}</Text>
+          <Pressable testID="study-sheet-close" onPress={onClose}>
+            <Text>close</Text>
+          </Pressable>
+        </View>
+      ) : null,
+  };
+});
+
 import { DURATIONS } from '@/constants/animation';
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { ReciterSheet } from '@/features/audio';
@@ -170,6 +200,10 @@ describe('one driver', () => {
     // …and the controls that sheet hosts, which are a component of their own (they also mount on
     // the settings surface). A driver added there would animate inside the chrome all the same.
     read(join(__dirname, '..', '..', 'audio', 'components', 'PlaybackOptions.tsx'));
+    // …and the THIRD sheet the chrome mounts (story 8-3). It lives in `features/study`, which the
+    // walk over `features/reading` cannot see — the same blind spot 6-6 closed for the two bars
+    // and 7-8 closed for `ReciterSheet`.
+    read(join(__dirname, '..', '..', 'study', 'components', 'StudySheet.tsx'));
     return out.join('\n');
   }
 
@@ -194,6 +228,7 @@ describe('one driver', () => {
     expect(all).toMatch(/export function ReciterSheet/);
     expect(all).toMatch(/export function PlaybackOptionsSheet/);
     expect(all).toMatch(/export function PlaybackOptions/);
+    expect(all).toMatch(/export function StudySheet/);
   });
 
   it('both animated styles come off that one value', () => {
@@ -1043,6 +1078,104 @@ describe('the playback-options sheet (story 7-4)', () => {
       expect(touchesOf('reading-chrome-header')).toBe('box-none');
 
       fireEvent.press(screen.getByTestId('playback-options-close'));
+      act(() => jest.advanceTimersByTime(CHROME_DWELL_MS + DURATIONS.standard + 100));
+      expect(touchesOf('reading-chrome-header')).toBe('none');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+/**
+ * ⚠️ THE STUDY SHEET — THE THIRD SHEET MOUNTED HERE, AND THE FIRST ONE A READER STAYS IN FOR
+ * MINUTES (story 8-3).
+ *
+ * The same placement and dwell claims the other two pin, plus one they do not have: the sheet is
+ * scoped to a SELECTED AYAH, so it has to die with that selection. `clearSelection` fires on a
+ * surah change, a settled mushaf page, a focus resync and on blur — none of which touch `visible`
+ * — and a sheet left open over an ayah that scrolled away is 6-4's wrong-surah defect one
+ * indirection out, with `holdDwell(true)` still suspending the dwell for a sheet nobody can see.
+ */
+describe('the study sheet (story 8-3)', () => {
+  /** Reveal the chrome with a REAL selection, which is the only state that draws the control. */
+  async function revealForVerse(pair = { surah: 2, verse: 255 }) {
+    let live: ChromeReveal | undefined;
+    render(<Harness capture={(r) => (live = r)} />);
+    act(() => live?.revealFor(pair));
+    await waitFor(() => expect(touchesOf('reading-chrome-header')).toBe('box-none'));
+    return () => live;
+  }
+
+  it('opens on the selected ayah’s study control, carrying THAT pair', async () => {
+    await revealForVerse();
+    expect(screen.queryByTestId('study-sheet')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('chrome-verse-study'));
+    expect(screen.getByTestId('study-sheet')).toBeTruthy();
+    // ⚠️ THE SELECTION'S OWN PAIR, NEVER A SCREEN'S "current surah" — 6-4's recorded defect. The
+    // sheet reads `selectedVerse` from the same `useChromeReveal` the row does.
+    expect(screen.getByTestId('study-sheet-verse').props.children).toBe('2:255');
+
+    fireEvent.press(screen.getByTestId('study-sheet-close'));
+    expect(screen.queryByTestId('study-sheet')).toBeNull();
+  });
+
+  it('renders OUTSIDE both animated bars, which is the whole placement argument', async () => {
+    // ⚠️ INSIDE THE FOOTER IT INHERITS THE REVEAL'S OPACITY AND `pointerEvents`. This sheet is the
+    // worst case for that: a reader works through a page of tafsir, not a 39-row list.
+    // MUTATION: move the element inside the footer; this reddens while the case above stays green.
+    await revealForVerse();
+    fireEvent.press(screen.getByTestId('chrome-verse-study'));
+    expect(screen.getByTestId('study-sheet', ANY)).toBeTruthy();
+    expect(
+      within(screen.getByTestId('reading-chrome-footer', ANY)).queryByTestId('study-sheet')
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId('reading-chrome-header', ANY)).queryByTestId('study-sheet')
+    ).toBeNull();
+  });
+
+  it('holds the dwell while it is open, and releases it on close', () => {
+    // The frozen matrix's row: "sheet open 10s → chrome held, sheet not faded away".
+    // MUTATION: drop the `holdDwell` calls; every case above stays green and this reddens.
+    jest.useFakeTimers();
+    try {
+      let live: ChromeReveal | undefined;
+      render(<Harness capture={(r) => (live = r)} />);
+      act(() => live?.revealFor({ surah: 2, verse: 255 }));
+      act(() => jest.advanceTimersByTime(DURATIONS.standard));
+      expect(touchesOf('reading-chrome-header')).toBe('box-none');
+
+      fireEvent.press(screen.getByTestId('chrome-verse-study'));
+      act(() => jest.advanceTimersByTime(CHROME_DWELL_MS * 2));
+      expect(touchesOf('reading-chrome-header')).toBe('box-none');
+      expect(screen.getByTestId('study-sheet')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('study-sheet-close'));
+      act(() => jest.advanceTimersByTime(CHROME_DWELL_MS + DURATIONS.standard + 100));
+      expect(touchesOf('reading-chrome-header')).toBe('none');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('closes — and releases the dwell — when the SELECTION dies under it', () => {
+    // ⚠️ THE CASE THE OTHER TWO SHEETS DO NOT HAVE. `clearSelection` leaves `visible` alone, so
+    // without the effect in `ReadingChrome` the sheet would go on showing an ayah that has
+    // scrolled away AND keep the dwell suspended for the rest of the session.
+    jest.useFakeTimers();
+    try {
+      let live: ChromeReveal | undefined;
+      render(<Harness capture={(r) => (live = r)} />);
+      act(() => live?.revealFor({ surah: 2, verse: 255 }));
+      act(() => jest.advanceTimersByTime(DURATIONS.standard));
+      fireEvent.press(screen.getByTestId('chrome-verse-study'));
+      expect(screen.getByTestId('study-sheet')).toBeTruthy();
+
+      act(() => live?.clearSelection());
+      expect(screen.queryByTestId('study-sheet')).toBeNull();
+
+      // …and the dwell is running again, rather than suspended by a hold nobody released.
       act(() => jest.advanceTimersByTime(CHROME_DWELL_MS + DURATIONS.standard + 100));
       expect(touchesOf('reading-chrome-header')).toBe('none');
     } finally {

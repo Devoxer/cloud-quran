@@ -133,3 +133,58 @@ describe('fetching', () => {
     await expect(fetchCatalogue()).resolves.toBeNull();
   });
 });
+
+/**
+ * ⚠️ THE FRESHNESS REQUEST IS SHAPED PER PLATFORM, AND ON WEB THE WRONG SHAPE MAKES THE CATALOGUE
+ * PERMANENTLY UNREACHABLE (story 8-3, measured in WebKit 2026-09-19).
+ *
+ * `cache-control` is not a CORS-safelisted REQUEST header, so sending it turns this cross-origin
+ * GET into a PREFLIGHTED one — and R2 answers the `OPTIONS` without a matching
+ * `Access-Control-Allow-Headers`, so the fetch rejects with `TypeError: Load failed` before a byte
+ * of the catalogue arrives. Under 8-2 web never fetched the catalogue at all, so the header was
+ * harmless; 8-3 made web a content platform and the shelf then reported "the catalogue could not
+ * be reached" on every press, with a perfectly good connection. The pack FILE was reachable
+ * throughout, which is what makes this so easy to misread as an outage.
+ *
+ * ⚠️ AND THE FIX IS NOT "DROP THE HEADER EVERYWHERE": React Native's fetch ignores the `cache`
+ * OPTION, so native would silently lose its freshness guarantee — the one document in this system
+ * whose content changes under a stable key. Each platform gets the spelling it actually honours.
+ */
+describe('asking for a fresh copy', () => {
+  /** The init object `fetchCatalogue` handed to `fetch`, whatever platform it thought it was on. */
+  // biome-ignore lint/style/noCommonJs: a module re-evaluated per platform cannot be a static import
+  async function initFor(platform: string): Promise<Record<string, unknown>> {
+    jest.resetModules();
+    jest.doMock('react-native', () => ({ Platform: { OS: platform } }));
+    let init: Record<string, unknown> = {};
+    global.fetch = jest.fn((_url: string, options: Record<string, unknown>) => {
+      init = options;
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ catalogueVersion: 1, packs: [] }),
+      });
+    }) as unknown as typeof fetch;
+    // `require`, not a dynamic `import`: Jest's CJS runtime has no ESM loader here, and the point
+    // of `resetModules` is to re-evaluate this module against the mocked platform.
+    const module = require('./catalogue') as typeof import('./catalogue');
+    await module.fetchCatalogue();
+    return init;
+  }
+
+  afterEach(() => {
+    jest.dontMock('react-native');
+    jest.resetModules();
+  });
+
+  it('sends NO `cache-control` header on web — that header is what triggers the preflight', async () => {
+    const init = await initFor('web');
+    expect(init.headers).toBeUndefined();
+    expect(init.cache).toBe('no-store');
+  });
+
+  it('…and still sends the header on native, where the `cache` option is ignored', async () => {
+    const init = await initFor('android');
+    expect(init.headers).toEqual({ 'cache-control': 'no-cache' });
+    expect(init.cache).toBeUndefined();
+  });
+});

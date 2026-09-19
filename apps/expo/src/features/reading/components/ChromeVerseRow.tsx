@@ -98,6 +98,15 @@ export interface ChromeVerseRowProps {
   /** Open the speed / sleep-timer sheet (story 7-4). Owned by `ReadingChrome` for the same reason. */
   onOpenPlaybackOptions: () => void;
   /**
+   * Open the STUDY sheet for the selected ayah (story 8-3). Owned by `ReadingChrome` for the
+   * third time and the same reason: a sheet inside this footer would inherit the reveal's opacity
+   * and the dwell would fade it away. This row only asks.
+   *
+   * ⚠️ IT NEEDS NO ARGUMENT. The sheet reads `selectedVerse` from the same `useChromeReveal` this
+   * row does, so there is no second copy of the pair to get wrong — and nothing here may write it.
+   */
+  onOpenStudy: () => void;
+  /**
    * Re-arm the chrome's dwell — `useChromeReveal`'s `keepAlive`. ⚠️ EVERY CONTROL HERE CALLS IT.
    * Without it the bars could vanish in the instant after the reader pressed play or bookmark,
    * because only `revealFor` bumped the token; that was the story's own open question.
@@ -110,6 +119,7 @@ export function ChromeVerseRow({
   interactive,
   onOpenReciters,
   onOpenPlaybackOptions,
+  onOpenStudy,
   onInteract,
 }: ChromeVerseRowProps) {
   const { t } = useTranslation();
@@ -174,6 +184,11 @@ export function ChromeVerseRow({
     onInteract();
     onOpenPlaybackOptions();
   }, [onInteract, onOpenPlaybackOptions]);
+
+  const openStudy = useCallback(() => {
+    onInteract();
+    onOpenStudy();
+  }, [onInteract, onOpenStudy]);
 
   /**
    * The mini player's transport: pause what is playing, resume what is paused, retry what failed.
@@ -300,6 +315,36 @@ export function ChromeVerseRow({
         <Text style={styles.label} numberOfLines={1} testID="chrome-verse-label">
           {label}
         </Text>
+        {/* ⚠️ THE STUDY SHEET'S ONE ENTRY POINT (story 8-3). It joins play-from-here and the
+            bookmark because all three are scoped to the SELECTED AYAH and nothing else; there is
+            no long-press, no context menu and no second tap target on the verse number, all of
+            which appear in older planning material and are gone. */}
+        <Pressable
+          onPress={openStudy}
+          hitSlop={CONTROL_HIT_SLOP}
+          accessibilityRole="button"
+          /* ⚠️ IT NAMES THE SURAH AS WELL AS THE AYAH (story 8-3 review, S9). Every other
+             announcement in this row does — the label beside it reads "Al-Baqarah · 255" — and a
+             bare "Study 255" is exactly the fragment `Chip`'s `accessibilityLabel` exists for.
+             `verseLabel` is the row's own formatter, so the two cannot drift. */
+          accessibilityLabel={t('common:study.a11y.openForVerse', {
+            name: verseLabel(selected.surah, null),
+            verse: formatQuranNumber(selected.verse),
+          })}
+          focusable={interactive}
+          // See the bookmark control: `focusable` alone is inert in the DOM tab order.
+          tabIndex={interactive ? 0 : -1}
+          style={styles.control}
+          testID="chrome-verse-study"
+        >
+          <Icon
+            name="book-outline"
+            size={BOOKMARK_ICON_SIZE}
+            color={colors.text.secondary}
+            accessibilityElementsHidden
+            testID="chrome-verse-study-icon"
+          />
+        </Pressable>
         {/* See its definition above: the recitation's control, in the ayah's face, because an
             armed sleep timer must not vanish when the reader selects a verse. */}
         {playbackOptionsControl}

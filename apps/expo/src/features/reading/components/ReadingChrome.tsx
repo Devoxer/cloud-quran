@@ -48,7 +48,7 @@
  */
 
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -57,6 +57,7 @@ import { AppHeader, AppTabBar, HeaderActionButton, InlineError } from '@/compone
 import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { SPACING } from '@/constants/spacing';
 import { PlaybackOptionsSheet, ReciterSheet } from '@/features/audio';
+import { StudySheet } from '@/features/study';
 import { useTheme } from '@/lib/theme';
 import { usePlaybackStatus } from '@/stores/audioPlayerStore';
 import type { ChromeReveal } from '../hooks/useChromeReveal';
@@ -137,6 +138,35 @@ export function ReadingChrome({
     setPlaybackOptionsOpen(false);
     holdDwell(false);
   }, [holdDwell]);
+
+  /**
+   * ⚠️ THE THIRD SHEET (story 8-3), with the same two rules and for the same two reasons: mounted
+   * outside both bars, and holding the dwell while it is open. A reader reading a tafsir is USING
+   * the chrome for as long as it takes to read a page of Arabic — by far the longest any of the
+   * three sheets stays open — so a five-second dwell fading it away is the reciter list's defect
+   * with the worst ending of the three.
+   */
+  const [studyOpen, setStudyOpen] = useState(false);
+  const openStudy = useCallback(() => {
+    setStudyOpen(true);
+    holdDwell(true);
+  }, [holdDwell]);
+  const closeStudy = useCallback(() => {
+    setStudyOpen(false);
+    holdDwell(false);
+  }, [holdDwell]);
+
+  /**
+   * ⚠️ THE SELECTION DYING TAKES THE SHEET WITH IT, AND THE HOLD HAS TO BE RELEASED WITH IT.
+   * `clearSelection` fires on a surah change, a settled mushaf page, a focus resync and on blur —
+   * none of which touch `visible`, so without this the sheet would be looking at an ayah that has
+   * scrolled away (6-4's wrong-surah defect, one indirection out) and, worse, `holdDwell(true)`
+   * would still be suspending the dwell for a sheet nobody can see. The sheet itself never writes
+   * the selection; this reads it.
+   */
+  useEffect(() => {
+    if (studyOpen && selectedVerse === null) closeStudy();
+  }, [studyOpen, selectedVerse, closeStudy]);
 
   /**
    * ⚠️ THE HEADER TRANSPORT YIELDS TO THE ROW'S (story 7-8's review). With a track loaded and
@@ -275,6 +305,7 @@ export function ReadingChrome({
           interactive={interactive}
           onOpenReciters={openReciters}
           onOpenPlaybackOptions={openPlaybackOptions}
+          onOpenStudy={openStudy}
           onInteract={keepAlive}
         />
         <AppTabBar interactive={reveal.interactive} />
@@ -283,6 +314,7 @@ export function ReadingChrome({
       {/* Outside both bars, deliberately — see `recitersOpen` above. */}
       <ReciterSheet open={recitersOpen} onClose={closeReciters} />
       <PlaybackOptionsSheet open={playbackOptionsOpen} onClose={closePlaybackOptions} />
+      <StudySheet open={studyOpen} onClose={closeStudy} verse={selectedVerse} />
     </>
   );
 }

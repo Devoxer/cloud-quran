@@ -207,7 +207,7 @@
     }
   },
   "content": {
-    "webUnsupported": "Los paquetes de contenido están disponibles en la app móvil.",
+    "webUnsupported": "En la web, abre una fuente desde el panel de estudio: elige una aleya al leer.",
     "offline": "Solo se muestran los paquetes instalados: no se pudo acceder al catálogo.",
     "retryCatalogue": "Reintentar",
     "empty": "Todavía no hay paquetes disponibles.",

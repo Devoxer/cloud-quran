@@ -75,6 +75,7 @@
 
 import {
   defaultDatabaseDirectory,
+  deserializeDatabaseAsync,
   importDatabaseFromAssetAsync,
   openDatabaseAsync,
   type SQLiteDatabase,
@@ -544,6 +545,122 @@ export async function getPackSurah(id: string, surah: number): Promise<PackEntry
     surah
   );
   return rows.map(toPackEntry);
+}
+
+/**
+ * Every row of a pack between two `(surah, verse)` ends, inclusive and in order — the study
+ * sheet's range read (story 8-3).
+ *
+ * ⚠️ ROW-VALUE COMPARISON, NOT `surah BETWEEN … AND verse BETWEEN …`. A study scope of a mushaf
+ * PAGE crosses surahs (page 106 ends in Al-Ma'idah; page 604 holds three whole surahs), and the
+ * two-column form matches the cross product — every ayah 1–5 of every surah in between. The row
+ * value `(surah_number, verse_number) >= (?, ?)` orders the pair lexicographically, which is
+ * exactly how `features/study/lib/scope.ts` defines a range. `getVersesForPositions` already
+ * relies on SQLite row values for the same reason.
+ *
+ * Rejects with `PackNotOpenError` when the pack is not open, which is a STATE the caller renders
+ * ("no source installed"), never an error surface. A range outside the book answers `[]`.
+ */
+export async function getPackRange(
+  id: string,
+  from: { surah: number; verse: number },
+  to: { surah: number; verse: number }
+): Promise<PackEntry[]> {
+  const entry = packHandles.get(id);
+  if (!entry) throw new PackNotOpenError(id);
+  const rows = await entry.db.getAllAsync<PackEntryRow>(
+    'SELECT surah_number, verse_number, text, footnotes FROM entries ' +
+      'WHERE (surah_number, verse_number) >= (?, ?) AND (surah_number, verse_number) <= (?, ?) ' +
+      'ORDER BY surah_number, verse_number',
+    from.surah,
+    from.verse,
+    to.surah,
+    to.verse
+  );
+  return rows.map(toPackEntry);
+}
+
+/**
+ * Open a pack from BYTES already in memory — the web content path (story 8-3).
+ *
+ * ⚠️ IT IS HERE AND NOT IN `features/packs` BECAUSE `deserializeDatabaseAsync` IS A DOOR ONTO A
+ * SQLITE CONNECTION, and `lint:layers` rule 8 names all four of them (`openDatabaseSync`,
+ * `openDatabaseAsync`, `deserializeDatabaseAsync`, `SQLiteProvider`). The web module fetches and
+ * verifies the bytes; this module is the only place they become a database, so the connection
+ * still runs `PRAGMA query_only = ON`, still exports no handle, and is still read through the same
+ * `getPackMeta` / `getPackSurah` / `getPackRange` surface a native install uses.
+ *
+ * ⚠️ WEB HOLDS A PACK IN MEMORY BECAUSE IT HAS NOWHERE TO PUT ONE. `expo-file-system` has no
+ * directory model there and `openDatabaseAsync`'s `directory` argument is explicitly unsupported
+ * (`SQLiteDatabase.d.ts:346`) — so the browser's HTTP cache does what the document directory does
+ * on native, exactly as `lib/mushafFonts.ts` already handles fonts on web. The pack lives for the
+ * session and is re-fetched on reload. PERSISTING it (OPFS, Cache API) is deliberately out of
+ * scope and is an owner call.
+ *
+ * ── ⚠️ THE ROW COUNT IS CHECKED HERE, BEFORE THE SWAP, AND THAT IS 8-2's C1 IN A NEW PLACE ─────
+ *
+ * The first cut closed the pack already open under this id and THEN opened and verified the new
+ * bytes, so a short or corrupt v2 destroyed a working v1 on its way to failing: the session map
+ * still recorded v1, `isPackReadable` answered false, and every read threw `PackNotOpenError` for
+ * a source the reader had been using a second earlier — with no control anywhere on web to clear
+ * it. `installPack` learned this exact lesson in story 8-2 (review C1) and answers it the same
+ * way: the new edition is opened and verified BESIDE the old one, the registry entry is swapped
+ * only on success, and the superseded handle is closed last.
+ *
+ * ⚠️ WHICH IS WHY THE EXPECTED ROW COUNT IS AN ARGUMENT RATHER THAN A SEPARATE `countRows` CALL.
+ * A caller that opened first and counted afterwards would be holding the new handle in the
+ * registry while deciding whether to keep it — the same window, one indirection out. The count is
+ * the truncation check a digest structurally cannot do (`countPackRows` is its file-path twin),
+ * so it belongs inside the only step that can still refuse.
+ */
+export type PackOpenResult =
+  | { ok: true }
+  /** Well-formed and SHORT — the case a digest agrees with forever. The old handle is untouched. */
+  | { ok: false; reason: 'rows'; rows: number };
+
+export async function openPackFromBytes(
+  id: string,
+  version: number,
+  bytes: Uint8Array,
+  expectedRows: number
+): Promise<PackOpenResult> {
+  const existing = packHandles.get(id);
+  // Already open at this version: the bytes can only be the same verified build.
+  if (existing?.version === version) return { ok: true };
+
+  const startedAt = packGeneration;
+  const opened = await deserializeDatabaseAsync(bytes);
+  let rows: number;
+  try {
+    // See the header: the closest thing to a read-only open flag that exists here, and it runs
+    // before a single row is read.
+    await opened.execAsync('PRAGMA query_only = ON;');
+    const row = await opened.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM entries'
+    );
+    rows = row?.count ?? 0;
+  } catch (error) {
+    // Best-effort close, `openQuranDb`'s reason: the caller is being handed the REAL failure.
+    await opened.closeAsync().catch(() => {});
+    throw error;
+  }
+  if (rows !== expectedRows) {
+    await opened.closeAsync().catch(() => {});
+    return { ok: false, reason: 'rows', rows };
+  }
+  // See `packGeneration`: a release landed while this open was parked on its await, so nothing
+  // should be registered against it. Close what we opened and record nothing — the caller asks
+  // `isPackReadable` rather than assuming, exactly as `usePacks`' hydration does.
+  if (packGeneration !== startedAt) {
+    await opened.closeAsync().catch(() => {});
+    return { ok: true };
+  }
+  // ⚠️ THE SWAP, THEN THE CLOSE. `closePack` is deliberately NOT used: it bumps the generation,
+  // which would invalidate the open this very line is completing.
+  const superseded = packHandles.get(id);
+  packHandles.set(id, { version, db: opened });
+  if (superseded) await superseded.db.closeAsync().catch(() => {});
+  return { ok: true };
 }
 
 /**

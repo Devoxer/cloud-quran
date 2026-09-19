@@ -30,25 +30,22 @@ import { DatabaseSync } from 'node:sqlite';
 const mockDir = mkdtempSync(join(tmpdir(), 'cq-packs-'));
 /** Statements each handle was sent — how the read-only PRAGMA is observed. */
 const mockExeced: string[] = [];
-/** How many handles are open right now. A close that never happens shows up here. */
-const mockOpen = { count: 0 };
+/** How many handles are open right now, plus a counter for the scratch files the web opener writes. */
+const mockOpen = { count: 0, deserialized: 0 };
 /** Live driver handles, closed after each test. */
 const mockHandles: DatabaseSync[] = [];
 
-jest.mock('expo-sqlite', () => ({
-  // ⚠️ A GETTER, NOT A VALUE. Jest hoists this factory above the `const mockDir` below it, so a
-  // plain property would capture `undefined` at require time — which is exactly how
-  // `sqliteDirectoryUri()` answered `null` and the whole directory contract went unchecked.
-  get defaultDatabaseDirectory() {
-    return mockDir;
-  },
-  importDatabaseFromAssetAsync: jest.fn(async () => {}),
-  openDatabaseAsync: async (name: string) => {
-    // biome-ignore lint/style/noCommonJs: a Jest factory cannot reference a hoisted import.
-    const { DatabaseSync: Driver } = require('node:sqlite');
-    // biome-ignore lint/style/noCommonJs: same.
-    const { join: joinPath } = require('node:path');
-    const db = new Driver(joinPath(mockDir, name));
+jest.mock('expo-sqlite', () => {
+  // biome-ignore lint/style/noCommonJs: a Jest factory cannot reference a hoisted import.
+  const { DatabaseSync: Driver } = require('node:sqlite');
+  // biome-ignore lint/style/noCommonJs: same.
+  const { join: joinPath } = require('node:path');
+  // biome-ignore lint/style/noCommonJs: same.
+  const { writeFileSync } = require('node:fs');
+
+  /** The real driver behind the async surface `lib/quranDb.ts` is allowed to use. */
+  const wrap = (path: string) => {
+    const db = new Driver(path);
     mockHandles.push(db);
     mockOpen.count++;
     let closed = false;
@@ -67,8 +64,33 @@ jest.mock('expo-sqlite', () => ({
         db.close();
       },
     };
-  },
-}));
+  };
+
+  return {
+    // ⚠️ A GETTER, NOT A VALUE. Jest hoists this factory above the `const mockDir` below it, so a
+    // plain property would capture `undefined` at require time — which is exactly how
+    // `sqliteDirectoryUri()` answered `null` and the whole directory contract went unchecked.
+    get defaultDatabaseDirectory() {
+      return mockDir;
+    },
+    importDatabaseFromAssetAsync: jest.fn(async () => {}),
+    openDatabaseAsync: async (name: string) => wrap(joinPath(mockDir, name)),
+    /**
+     * ⚠️ THE WEB OPENER, MODELLED RATHER THAN MOCKED AWAY (story 8-3 review, V2). `webPack.test.ts`
+     * replaces `openPackFromBytes` wholesale, so nothing executed the `PRAGMA query_only = ON` it
+     * runs, the `COUNT(*)` it verifies with, or the supersede ordering — delete the pragma and the
+     * web pack connection ships WRITABLE, a second ungated write door onto SQLite in the one place
+     * rule 8 exists to keep read-only, with the whole suite green. `node:sqlite` has no
+     * deserializer, so the bytes go to a scratch file and are opened from there: the SQL, the
+     * pragma and the row shapes are all still the real ones, which is the only thing this proves.
+     */
+    deserializeDatabaseAsync: async (bytes: Uint8Array) => {
+      const path = joinPath(mockDir, `deserialized-${mockOpen.deserialized++}.db`);
+      writeFileSync(path, bytes);
+      return wrap(path);
+    },
+  };
+});
 
 import { packFileName, packPartFileName } from '@/constants/packs';
 import {
@@ -76,9 +98,11 @@ import {
   closePack,
   countPackRows,
   getPackMeta,
+  getPackRange,
   getPackSurah,
   isPackReadable,
   openPack,
+  openPackFromBytes,
   PackNotOpenError,
   sqliteDirectoryUri,
 } from './quranDb';
@@ -304,5 +328,148 @@ describe('closing a pack', () => {
     expect(isPackReadable(PACK_ID)).toBe(false);
     expect(mockOpen.count).toBe(0);
     await expect(getPackSurah(PACK_ID, 1)).rejects.toBeInstanceOf(PackNotOpenError);
+  });
+});
+
+/**
+ * THE RANGE READ, AGAINST REAL SQL (story 8-3 review, V1).
+ *
+ * ⚠️ BOTH STUDY SUITES MOCK `getPackRange` AND ASSERT ONLY ITS ARGUMENTS, so its predicate was
+ * executed by nothing. Rewrite it to the two-column `BETWEEN` form its own docblock warns against
+ * and page 106 — 4:176 → 5:2, the page that turns An-Nisa over into Al-Ma'idah — matches the CROSS
+ * PRODUCT instead: every ayah numbered 176…2 in both surahs, which is nothing. The sheet then
+ * draws "Nothing for this ayah" under every line of every page that turns a surah over, which is a
+ * statement about the installed PACK and is false. Shipped green on 3,012 tests.
+ */
+describe('reading a RANGE from a pack', () => {
+  const ACROSS = [
+    { surah: 1, verse: 1 },
+    { surah: 1, verse: 2 },
+    { surah: 1, verse: 3 },
+    { surah: 2, verse: 1 },
+    { surah: 2, verse: 2 },
+    { surah: 2, verse: 3 },
+  ];
+
+  beforeEach(() => buildFixturePack(packFileName(PACK_ID, 1), ACROSS));
+
+  it('spans a SURAH BOUNDARY — the case the two-column form cannot express', async () => {
+    await openPack(PACK_ID, 1);
+    const rows = await getPackRange(PACK_ID, { surah: 1, verse: 2 }, { surah: 2, verse: 2 });
+    // MUTATION: `surah_number BETWEEN ? AND ? AND verse_number BETWEEN ? AND ?` answers
+    // [1:2, 2:2] here and [] for a real mushaf page. The literal list is what separates them.
+    expect(rows.map((row) => `${row.surah}:${row.verse}`)).toEqual(['1:2', '1:3', '2:1', '2:2']);
+  });
+
+  it('is INCLUSIVE at both ends, and ordered by the book', async () => {
+    await openPack(PACK_ID, 1);
+    const rows = await getPackRange(PACK_ID, { surah: 1, verse: 1 }, { surah: 2, verse: 3 });
+    expect(rows.map((row) => `${row.surah}:${row.verse}`)).toEqual([
+      '1:1',
+      '1:2',
+      '1:3',
+      '2:1',
+      '2:2',
+      '2:3',
+    ]);
+    expect(rows[0].text).toBe(FIRST_AYAH);
+    expect(rows[0].footnotes).toBe('[1] Une note.');
+  });
+
+  it('reads a single ayah as a range of one', async () => {
+    await openPack(PACK_ID, 1);
+    const rows = await getPackRange(PACK_ID, { surah: 2, verse: 2 }, { surah: 2, verse: 2 });
+    expect(rows).toEqual([{ surah: 2, verse: 2, text: '2:2', footnotes: null }]);
+  });
+
+  it('answers [] for a range this edition has nothing in — not an error', async () => {
+    await openPack(PACK_ID, 1);
+    expect(await getPackRange(PACK_ID, { surah: 9, verse: 1 }, { surah: 9, verse: 9 })).toEqual([]);
+  });
+
+  it('rejects with PackNotOpenError when the pack is not open — a STATE, not a crash', async () => {
+    await expect(
+      getPackRange(PACK_ID, { surah: 1, verse: 1 }, { surah: 1, verse: 1 })
+    ).rejects.toBeInstanceOf(PackNotOpenError);
+  });
+});
+
+/**
+ * THE WEB OPEN, AGAINST A REAL CONNECTION (story 8-3 review, V1/V2 + C1).
+ *
+ * Three things nothing executed: the read-only pragma on a deserialized handle, the row count that
+ * refuses a truncated edition, and — the one that matters most — the ORDER in which a superseding
+ * open touches the handle already registered under that id.
+ */
+describe('opening a pack from bytes', () => {
+  /** The fixture file's bytes, which is what a web fetch would have in hand. */
+  const bytesOf = (fileName: string) => new Uint8Array(readFileSync(join(mockDir, fileName)));
+
+  it('opens READ-ONLY, and SQLite itself refuses a write on that handle', async () => {
+    // MUTATION: delete the `PRAGMA query_only = ON`. Everything else in this file stays green and
+    // the web pack connection ships writable — a second ungated write door onto SQLite.
+    const result = await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 4);
+    expect(result).toEqual({ ok: true });
+    expect(isPackReadable(PACK_ID)).toBe(true);
+    expect(mockExeced).toContain('PRAGMA query_only = ON;');
+    // The pragma is not decoration: the driver enforces it, whatever the module's surface allows.
+    const opened = mockHandles[mockHandles.length - 1];
+    expect(() => opened.exec("UPDATE entries SET text = 'tampered'")).toThrow();
+  });
+
+  it('reads back through the SAME surface a native install uses', async () => {
+    await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 4);
+    expect((await getPackMeta(PACK_ID)).attribution).toBe(ATTRIBUTION);
+    expect((await getPackSurah(PACK_ID, 1))[0].text).toBe(FIRST_AYAH);
+  });
+
+  it('REFUSES a short edition, and opens nothing', async () => {
+    // The truncation check a digest structurally cannot do. `ALL_ROWS` is four; claim five.
+    const result = await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 5);
+    expect(result).toEqual({ ok: false, reason: 'rows', rows: 4 });
+    expect(isPackReadable(PACK_ID)).toBe(false);
+    expect(mockOpen.count).toBe(0);
+  });
+
+  it('⚠️ LEAVES A WORKING EDITION WORKING WHEN ITS REPLACEMENT IS REFUSED', async () => {
+    // ⚠️ THIS IS STORY 8-2's REVIEW C1, ONE STORY LATER (8-3 review, C1). The first cut closed the
+    // handle already open under this id and THEN opened and verified the new bytes — so a short v2
+    // destroyed a working v1 on its way to failing, the session map still said v1 was held, and
+    // every read threw `PackNotOpenError` for a source the reader had been using a second earlier,
+    // with no control anywhere on web to clear it. MUTATION: move the close back above the open.
+    await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 4);
+    buildFixturePack(packFileName(PACK_ID, 2), [{ surah: 1, verse: 1 }]);
+
+    const result = await openPackFromBytes(PACK_ID, 2, bytesOf(packFileName(PACK_ID, 2)), 4);
+    expect(result).toEqual({ ok: false, reason: 'rows', rows: 1 });
+
+    // v1 is still open and still answering — that is the whole case.
+    expect(isPackReadable(PACK_ID)).toBe(true);
+    expect((await getPackSurah(PACK_ID, 1)).map((row) => row.verse)).toEqual([1, 2, 3]);
+  });
+
+  it('supersedes on SUCCESS, and closes the edition it replaced', async () => {
+    await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 4);
+    expect(mockOpen.count).toBe(1);
+    buildFixturePack(packFileName(PACK_ID, 2), [
+      { surah: 1, verse: 1 },
+      { surah: 1, verse: 2 },
+    ]);
+
+    expect(await openPackFromBytes(PACK_ID, 2, bytesOf(packFileName(PACK_ID, 2)), 2)).toEqual({
+      ok: true,
+    });
+    expect((await getPackSurah(PACK_ID, 1)).map((row) => row.verse)).toEqual([1, 2]);
+    // One handle, not two: the superseded connection is closed after the swap, never leaked.
+    expect(mockOpen.count).toBe(1);
+  });
+
+  it('is a no-op at the SAME version — the bytes can only be the same verified build', async () => {
+    await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 4);
+    const before = mockOpen.deserialized;
+    expect(await openPackFromBytes(PACK_ID, 1, bytesOf(packFileName(PACK_ID, 1)), 4)).toEqual({
+      ok: true,
+    });
+    expect(mockOpen.deserialized).toBe(before);
   });
 });

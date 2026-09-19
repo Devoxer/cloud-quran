@@ -124,5 +124,40 @@
     "surahFallback": "Sourate {{number}}",
     "emptyTitle": "Aucun signet pour l’instant",
     "emptyBody": "En mode lecture, touchez l’icône de signet sur un verset pour l’enregistrer ici."
+  },
+  "study": {
+    "title": "Étude",
+    "scopes": {
+      "ayah": "Verset",
+      "page": "Page",
+      "surah": "Sourate"
+    },
+    "types": {
+      "meanings": "Significations",
+      "tafsir": "Tafsir",
+      "translation": "Traduction",
+      "irab": "I'rab",
+      "asbab": "Asbab al-nuzul"
+    },
+    "noSource": "Aucune source de {{type}} n’est installée.",
+    "getContent": "Voir ce qui est disponible",
+    "catalogueOffline": "Le catalogue est injoignable.",
+    "noOffers": "Rien n’est encore proposé pour cela.",
+    "install": "Obtenir {{title}} · {{size}}",
+    "installing": "Téléchargement… {{percent}} %",
+    "retry": "Réessayer",
+    "errorTitle": "Cette source n’a pas pu être lue.",
+    "noEntries": "Cette source n’a rien pour cette plage.",
+    "noEntryForVerse": "Rien pour ce verset.",
+    "sessionOnly": "Sur le web, une source est gardée pour cette session seulement.",
+    "a11y": {
+      "openForVerse": "Étudier {{name}} {{verse}}",
+      "source": "Source : {{title}}",
+      "install": "Obtenir {{title}}",
+      "release": "Libérer {{title}} de cette session"
+    },
+    "sourcesUnavailable": "Impossible de lire ce qui est installé sur cet appareil.",
+    "sourceWithKey": "{{title}} ({{key}})",
+    "release": "Libérer"
   }
 }

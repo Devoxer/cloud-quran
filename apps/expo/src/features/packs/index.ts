@@ -15,7 +15,9 @@
 
 export {
   type CatalogueState,
+  type DiskState,
   type PackRow,
+  type UsePacksOptions,
   type UsePacksResult,
   usePacks,
 } from './hooks/usePacks';

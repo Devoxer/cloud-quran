@@ -124,5 +124,40 @@
     "surahFallback": "Sura {{number}}",
     "emptyTitle": "Aún no hay marcadores",
     "emptyBody": "En modo lectura, toca el icono de marcador en cualquier versículo para guardarlo aquí."
+  },
+  "study": {
+    "title": "Estudio",
+    "scopes": {
+      "ayah": "Aleya",
+      "page": "Página",
+      "surah": "Sura"
+    },
+    "types": {
+      "meanings": "Significados",
+      "tafsir": "Tafsir",
+      "translation": "Traducción",
+      "irab": "I'rab",
+      "asbab": "Asbab al-nuzul"
+    },
+    "noSource": "Aún no hay ninguna fuente de {{type}} instalada.",
+    "getContent": "Ver lo disponible",
+    "catalogueOffline": "No se pudo acceder al catálogo.",
+    "noOffers": "Todavía no hay nada disponible para esto.",
+    "install": "Obtener {{title}} · {{size}}",
+    "installing": "Descargando… {{percent}}%",
+    "retry": "Reintentar",
+    "errorTitle": "No se pudo leer esta fuente.",
+    "noEntries": "Esta fuente no tiene nada para este rango.",
+    "noEntryForVerse": "Nada para esta aleya.",
+    "sessionOnly": "En la web la fuente se guarda solo para esta sesión.",
+    "a11y": {
+      "openForVerse": "Estudiar {{name}} {{verse}}",
+      "source": "Fuente: {{title}}",
+      "install": "Obtener {{title}}",
+      "release": "Liberar {{title}} de esta sesión"
+    },
+    "sourcesUnavailable": "No se pudo leer lo que hay instalado en este dispositivo.",
+    "sourceWithKey": "{{title}} ({{key}})",
+    "release": "Liberar"
   }
 }

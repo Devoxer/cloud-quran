@@ -33,14 +33,19 @@ import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE } from '@/constants/typography';
 import { type PackRow, usePacks } from '@/features/packs';
 import { formatBytes, useQuranNumerals } from '@/lib/format';
-import { isRTLLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
+import { isRTLContentLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
 export default function ContentScreen() {
   const { t } = useTranslation();
   const styles = useStyles();
   const formatQuranNumber = useQuranNumerals();
-  const { rows, catalogue, disk, installedBytes, install, cancel, remove, refresh } = usePacks();
+  // ⚠️ `deferCatalogue` ON WEB, BECAUSE THIS SCREEN DOES NOT RENDER A SHELF THERE. Story 8-3 made
+  // `usePacks` platform-uniform, so without this the web build would fetch the catalogue to draw
+  // a single sentence. Native is unchanged and fetches eagerly.
+  const { rows, catalogue, disk, installedBytes, install, cancel, remove, refresh } = usePacks({
+    deferCatalogue: !PACKS_SUPPORTED,
+  });
 
   if (!PACKS_SUPPORTED) {
     return (
@@ -123,7 +128,9 @@ export default function ContentScreen() {
       ) : null}
 
       {rows.map((row) => {
-        const contentStyle = isRTLLanguage(row.language) ? styles.contentRtl : styles.contentLtr;
+        const contentStyle = isRTLContentLanguage(row.language)
+          ? styles.contentRtl
+          : styles.contentLtr;
         return (
           <View key={row.id} testID={`content-pack-${row.id}`}>
             <SettingsGroup label={row.title}>

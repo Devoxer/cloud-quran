@@ -18,11 +18,22 @@
  * phone's link and make the stall watchdog meaningless; the frozen scope says one foreground
  * install is enough here.
  *
+ * ⚠️ IT IS PLATFORM-UNIFORM AS OF STORY 8-3, AND IT WAS NOT BEFORE. Under 8-2 every path here
+ * returned `unavailable` on web because there is nowhere to put a downloaded database. That is a
+ * fact about the FILESYSTEM: `lib/webPack.ts` fetches a pack into memory, verifies it with the
+ * same digest AND row count, and `lib/quranDb.ts` opens it from the bytes — so this hook now asks
+ * "what can this device read" rather than "what is on this disk", and every surface above it
+ * stops branching on the platform. The two differences that remain are named where they happen:
+ * a held pack is already open (no `openPack` by file name), and a web hold cannot be cancelled
+ * mid-fetch (`cancelPackInstall` has nothing to abort, so the row clears and the pack lands held
+ * — which is true, if not what the press asked for; the content screen, its only caller, does not
+ * render on web at all).
+ *
  * `lint:layers`: a feature hook — it may reach `@/lib`, `@/stores`, `@/constants` and its own
  * feature's `lib/`, and it must not import a route.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PACKS_SUPPORTED } from '@/constants/packs';
 import { captureException } from '@/lib/errors';
@@ -46,9 +57,36 @@ import {
   installedPackBytes as readInstalledPackBytes,
   sweepStalePackParts,
 } from '../lib/packStore';
+import {
+  anyHoldRunning,
+  forgetHeldPack,
+  heldPackBytes,
+  holdPack,
+  listHeldPacks,
+} from '../lib/webPack';
 
-/** Whether the catalogue could be read. `unavailable` is a STATE, never an error surface. */
-export type CatalogueState = 'loading' | 'ready' | 'unavailable';
+/**
+ * Whether the catalogue could be read. `unavailable` is a STATE, never an error surface.
+ *
+ * ⚠️ `idle` MEANS NOBODY HAS ASKED YET, WHICH IS NOT `loading` AND NOT `unavailable` (story 8-3).
+ * The study sheet's frozen constraint is that opening it touches no network on any platform, so
+ * it mounts this hook with `deferCatalogue` and the shelf stays local until the reader presses
+ * the download offer. A surface that rendered `idle` as `loading` would spin forever; one that
+ * rendered it as `unavailable` would tell a reader with a perfectly good connection they are
+ * offline.
+ */
+export type CatalogueState = 'idle' | 'loading' | 'ready' | 'unavailable';
+
+/** How this consumer wants the catalogue fetched. */
+export interface UsePacksOptions {
+  /**
+   * Do not fetch the catalogue on mount — wait for `refresh()`. Default `false`.
+   *
+   * The content SCREEN is a shelf and fetches eagerly; the STUDY SHEET must not, because "reads
+   * are local, opening the sheet touches no network" is a frozen constraint of story 8-3.
+   */
+  deferCatalogue?: boolean;
+}
 
 /**
  * Whether the DISK could be read. The `null`-is-not-`[]` rule, carried to the surface.
@@ -127,10 +165,12 @@ export interface UsePacksResult {
   refresh: () => void;
 }
 
-export function usePacks(): UsePacksResult {
+export function usePacks({ deferCatalogue = false }: UsePacksOptions = {}): UsePacksResult {
   const entries = usePackStore((state) => state.entries);
   const [catalogue, setCatalogue] = useState<CataloguePack[] | null>(null);
-  const [catalogueState, setCatalogueState] = useState<CatalogueState>('loading');
+  const [catalogueState, setCatalogueState] = useState<CatalogueState>(
+    deferCatalogue ? 'idle' : 'loading'
+  );
   /** `null` means the listing FAILED. `{}` means it succeeded and found nothing. */
   const [local, setLocal] = useState<Record<string, LocalPackFacts> | null>(null);
   const [diskState, setDiskState] = useState<DiskState>('loading');
@@ -144,14 +184,16 @@ export function usePacks(): UsePacksResult {
     };
   }, []);
 
-  // ── Disk: hydrate the mirror, then let every installed pack describe itself ──
+  // ── Local: hydrate the mirror, then let every pack we HAVE describe itself ──
+  //
+  // ⚠️ "WHAT WE HAVE" IS THE DIRECTORY ON NATIVE AND THE SESSION MAP ON WEB (story 8-3). The two
+  // are the same question — which packs can this device read right now — and answering it in one
+  // effect is what keeps every surface above it platform-blind. A held web pack is ALREADY OPEN
+  // (`holdPack` opened it from the bytes it verified), which is why the `openPack` call below is
+  // native-only: `openPack` opens by FILE NAME, and there is no file.
   useEffect(() => {
-    if (!PACKS_SUPPORTED) {
-      setDiskState('unavailable');
-      return;
-    }
-    sweepStalePackParts();
-    const installed = listInstalledPacks();
+    if (PACKS_SUPPORTED) sweepStalePackParts();
+    const installed = PACKS_SUPPORTED ? listInstalledPacks() : listHeldPacks();
     // `null` is "could not list", which is not "nothing installed". Leave the mirror alone AND
     // say so — a row built from absent facts would claim the pack is not installed.
     if (installed === null) {
@@ -166,7 +208,7 @@ export function usePacks(): UsePacksResult {
       const facts: Record<string, LocalPackFacts> = {};
       for (const pack of installed) {
         try {
-          await openPack(pack.id, pack.version);
+          if (PACKS_SUPPORTED) await openPack(pack.id, pack.version);
           /**
            * ⚠️ ASK WHETHER THE HANDLE ACTUALLY REGISTERED, RATHER THAN ASSUMING IT DID. `openPack`
            * resolves without registering when a delete landed while it was parked on its await —
@@ -222,10 +264,10 @@ export function usePacks(): UsePacksResult {
 
   // ── Network: the catalogue, and nothing depends on it arriving ──
   useEffect(() => {
-    if (!PACKS_SUPPORTED) {
-      setCatalogueState('unavailable');
-      return;
-    }
+    // ⚠️ THE DEFERRAL IS THE FIRST RENDER'S ONLY — `revision > 0` means somebody called
+    // `refresh()`, which IS the ask. Keying it on the option alone would leave the study sheet's
+    // download offer permanently unable to load the shelf it is offering from.
+    if (deferCatalogue && revision === 0) return;
     const controller = new AbortController();
     setCatalogueState('loading');
     void fetchCatalogue(controller.signal).then((packs) => {
@@ -234,7 +276,7 @@ export function usePacks(): UsePacksResult {
       setCatalogueState(packs === null ? 'unavailable' : 'ready');
     });
     return () => controller.abort();
-  }, [revision]);
+  }, [revision, deferCatalogue]);
 
   const refresh = useCallback(() => setRevision((n) => n + 1), []);
 
@@ -244,20 +286,31 @@ export function usePacks(): UsePacksResult {
       // nothing checked it: two rows could both be transferring into the same directory, each
       // with its own stall watchdog, neither aware of the other. The disk module is the source of
       // truth for what is moving. (Story 8-2 review, S7.)
-      if (anyInstallRunning()) return;
+      if (PACKS_SUPPORTED ? anyInstallRunning() : anyHoldRunning()) return;
       setPackEntry(pack.id, { status: 'installing', version: pack.packVersion, progress: 0 });
-      void installPack(pack, {
-        onProgress: ({ fraction, bytesWritten }) => {
-          // The row is only interested while it is still the one installing; a late tick from a
-          // cancelled transfer must not resurrect a row the reader just dismissed.
-          if (getPackEntry(pack.id)?.status !== 'installing') return;
-          setPackEntry(pack.id, {
-            version: pack.packVersion,
-            progress: fraction,
-            bytes: bytesWritten,
-          });
-        },
-      })
+      /**
+       * ⚠️ WEB REPORTS NO PROGRESS, AND THAT IS HONEST RATHER THAN MISSING (story 8-3). `fetch`
+       * delivers no incremental events without draining `response.body` by hand, and a fabricated
+       * fraction on a bar is worse than a spinner — the row's copy reads "Installing… 0%" until
+       * the bytes land, which is the same shape a server that sends no `Content-Length` already
+       * produces on native.
+       */
+      void (
+        PACKS_SUPPORTED
+          ? installPack(pack, {
+              onProgress: ({ fraction, bytesWritten }) => {
+                // The row is only interested while it is still the one installing; a late tick from
+                // a cancelled transfer must not resurrect a row the reader just dismissed.
+                if (getPackEntry(pack.id)?.status !== 'installing') return;
+                setPackEntry(pack.id, {
+                  version: pack.packVersion,
+                  progress: fraction,
+                  bytes: bytesWritten,
+                });
+              },
+            })
+          : holdPack(pack)
+      )
         .then(async (result) => {
           if (!mounted.current) return;
           if (result.ok) {
@@ -311,8 +364,15 @@ export function usePacks(): UsePacksResult {
   const remove = useCallback(
     (id: string, version: number) => {
       void (async () => {
-        await closePack(id);
-        await deleteInstalledPack(id, version);
+        // ⚠️ `closePack` ONCE. The web branch used to call it and THEN `releaseHeldPack`, which
+        // closed the very same handle a second time — `deleteInstalledPack` already closes for the
+        // native branch, so the close belongs to whichever branch owns the teardown. `forgetHeldPack`
+        // now only forgets the session record. (Story 8-3 review, S8.)
+        if (PACKS_SUPPORTED) await deleteInstalledPack(id, version);
+        else {
+          await closePack(id);
+          forgetHeldPack(id);
+        }
         resetPackEntry(id);
         if (mounted.current) {
           setLocal((current) => {
@@ -323,12 +383,29 @@ export function usePacks(): UsePacksResult {
           });
           refresh();
         }
-      })();
+      })().catch((error: unknown) => {
+        /**
+         * ⚠️ EVERY PATH ENDS IN A ROW — `install`'s rule, which this one did not have. A rejected
+         * close or delete escaped as an unhandled promise and left the row exactly as it was, so
+         * the pack looked undeletable and pressing Remove again did nothing visible. The row is
+         * put into `error` so the reader is told, and can try again. (Story 8-3 review, S8.)
+         */
+        captureException(error, { packId: id });
+        if (!mounted.current) return;
+        setPackEntry(id, { status: 'error', version, progress: 0, error: 'failed' });
+      });
     },
     [refresh]
   );
 
-  const rows = buildRows(catalogue, local, entries);
+  /**
+   * ⚠️ MEMOISED, BECAUSE TWO `useMemo`s DOWNSTREAM DEPEND ON ITS IDENTITY. `useStudySources`
+   * derives `readable`/`offers` from this array and the study sheet's web keydown listener depends
+   * on `readable` — so an array rebuilt on every render made both memos decorative and
+   * re-registered a global `document` listener on each pass. `buildRows` is a pure join over these
+   * three values. (Story 8-3 review, S4.)
+   */
+  const rows = useMemo(() => buildRows(catalogue, local, entries), [catalogue, local, entries]);
   /**
    * ⚠️ THE DISK'S OWN ANSWER, NOT A SUM OVER THE FACTS THIS HOOK HAPPENS TO HOLD. The two agree
    * today; they stop agreeing the moment a pack is on disk that this hook could not open, and the
@@ -336,7 +413,8 @@ export function usePacks(): UsePacksResult {
    * `installedPackBytes` already sums only committed `{id}-v{n}.db` files — never a `.part`, never
    * the bundled Quran database. (Story 8-2 review, S7.)
    */
-  const installedBytes = diskState === 'ready' ? readInstalledPackBytes() : 0;
+  const installedBytes =
+    diskState !== 'ready' ? 0 : PACKS_SUPPORTED ? readInstalledPackBytes() : heldPackBytes();
 
   return {
     rows,

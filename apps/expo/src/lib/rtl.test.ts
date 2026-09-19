@@ -19,6 +19,7 @@ import {
   applyDirectionForLanguage,
   applyStoredDirection,
   isRTL,
+  isRTLContentLanguage,
   isRTLLanguage,
   RECONCILED_KEY,
   RTL_LANGUAGES,
@@ -346,6 +347,10 @@ describe('content direction is not UI direction', () => {
     'features/bookmarks/BookmarkRow.tsx',
     'features/search/components/SearchResultRow.tsx',
     'app/(tabs)/(profile)/appearance.tsx',
+    // ⚠️ story 8-3: the study sheet draws BOTH the Quran and a pack's own text in one row, and
+    // takes the second one's direction from the PACK's language — a French translation ranges
+    // left beside Arabic that ranges right, in the same list, on the same screen.
+    'features/study/components/StudySheet.tsx',
   ];
 
   it.each(CONTENT_FILES)('%s never derives its direction from the UI', (file) => {
@@ -397,6 +402,9 @@ describe('start-edge text alignment', () => {
     // the interface's. Today's one pack is French and ranges left; the tafsir packs next are
     // Arabic. Content direction is not UI direction, which is the whole point of this list.
     'app/(tabs)/(profile)/content.tsx',
+    // ⚠️ story 8-3: the same argument one surface further in. The study sheet's Arabic is Quran
+    // text; its content line takes the direction of whichever pack the reader chose.
+    'features/study/components/StudySheet.tsx',
   ];
 
   /**
@@ -435,5 +443,41 @@ describe('start-edge text alignment', () => {
     expect(files.length).toBeGreaterThan(200);
     expect(files).toContain('components/ui/ListRow.tsx');
     expect(files).toContain('features/reading/components/VerseRow.tsx');
+  });
+});
+
+/**
+ * CONTENT DIRECTION IS DECIDED BY THE PACK'S OWN LANGUAGE, NOT BY THE INTERFACE'S (story 8-3
+ * review, S6).
+ *
+ * ⚠️ THE MUTATION THIS EXISTS TO REDDEN IS A ONE-WORD ONE, AND IT SHIPPED. Both content draw sites
+ * called `isRTLLanguage` — the set of INTERFACE locales, which is `['ar']` — on a value that is a
+ * CONTENT language. It was correct for exactly as long as Arabic was the only right-to-left thing
+ * in the catalogue. Story 8-4 ships Urdu, Persian and Pashto, and `rtl.test.ts`'s other scans
+ * cannot see this: a call to the wrong list has no `I18nManager` and no `isRTL` in it.
+ */
+describe('content direction', () => {
+  it('covers the scripts epic 8 is heading for, not just the interface locales', () => {
+    // A LITERAL list of what story 8-4 will publish, not a re-read of the constant under test.
+    for (const code of ['ar', 'fa', 'ur', 'ps', 'sd', 'ckb', 'ug', 'he']) {
+      expect(isRTLContentLanguage(code)).toBe(true);
+    }
+    // …and the UI list is NOT the answer for any of them but Arabic, which is the whole defect.
+    expect(RTL_LANGUAGES).toEqual(['ar']);
+    for (const code of ['fa', 'ur', 'ps']) expect(isRTLLanguage(code)).toBe(false);
+  });
+
+  it('reads the PRIMARY subtag and an explicit script subtag, so a regional tag still resolves', () => {
+    expect(isRTLContentLanguage('ur-PK')).toBe(true);
+    expect(isRTLContentLanguage('fa_IR')).toBe(true);
+    // Punjabi is Gurmukhi (LTR) unless it names the Arabic script — the script wins.
+    expect(isRTLContentLanguage('pa')).toBe(false);
+    expect(isRTLContentLanguage('pa-Arab-PK')).toBe(true);
+  });
+
+  it('answers false for left-to-right content and for nothing at all', () => {
+    for (const code of ['fr', 'en', 'id', 'tr', 'sw', '', null, undefined]) {
+      expect(isRTLContentLanguage(code)).toBe(false);
+    }
   });
 });

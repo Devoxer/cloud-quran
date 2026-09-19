@@ -67,6 +67,7 @@ function renderRow(selected: { surah: number; verse: number } | null = null) {
       interactive
       onOpenReciters={mockOpenReciters}
       onOpenPlaybackOptions={mockOpenPlaybackOptions}
+      onOpenStudy={mockOpenStudy}
       onInteract={mockInteract}
     />
   );
@@ -74,6 +75,8 @@ function renderRow(selected: { surah: number; verse: number } | null = null) {
 
 const mockOpenReciters = jest.fn();
 const mockOpenPlaybackOptions = jest.fn();
+/** story 8-3: the study sheet's one entry point, opened from the SELECTED ayah's face. */
+const mockOpenStudy = jest.fn();
 /** `useChromeReveal`'s `keepAlive` — every control here owes it a call. */
 const mockInteract = jest.fn();
 
@@ -345,9 +348,13 @@ describe('the bookmark waits for the data it needs (story 7-8 review)', () => {
 });
 
 describe('every control re-arms the chrome’s dwell (story 7-8 review)', () => {
-  it.each(['chrome-verse-play', 'chrome-verse-bookmark'])('%s reports the interaction', (id) => {
-    // ⚠️ ONLY `revealFor` USED TO BUMP THE TOKEN, so the bars could vanish in the instant after a
-    // press. MUTATION: drop `onInteract()` from either handler.
+  it.each([
+    'chrome-verse-play',
+    'chrome-verse-bookmark',
+    'chrome-verse-study',
+  ])('%s reports the interaction', (id) => {
+    // ⚠️ ONLY `revealFor` USED TO BUMP THE TOKEN, so the bars could vanish in the instant after
+    // a press. MUTATION: drop `onInteract()` from any handler.
     renderRow({ surah: 2, verse: 255 });
     fireEvent.press(screen.getByTestId(id));
     expect(mockInteract).toHaveBeenCalledTimes(1);
@@ -379,6 +386,7 @@ describe('it goes inert with the rest of the bar', () => {
         interactive={interactive}
         onOpenReciters={mockOpenReciters}
         onOpenPlaybackOptions={mockOpenPlaybackOptions}
+        onOpenStudy={mockOpenStudy}
         onInteract={mockInteract}
       />
     );
@@ -393,6 +401,9 @@ describe('it goes inert with the rest of the bar', () => {
     expect(styleOf('chrome-verse-row').pointerEvents).toBe('none');
     expect(screen.getByTestId('chrome-verse-play').props.focusable).toBe(false);
     expect(screen.getByTestId('chrome-verse-bookmark').props.focusable).toBe(false);
+    // story 8-3: the study control is the third raw Pressable in this face and owes the same —
+    // it was outside every enumeration in this block when it landed (8-3 review, V5).
+    expect(screen.getByTestId('chrome-verse-study').props.focusable).toBe(false);
   });
 
   it('⚠️ sets `tabIndex` AS WELL AS `focusable` — on web the second one alone is INERT', () => {
@@ -403,6 +414,10 @@ describe('it goes inert with the rest of the bar', () => {
     // two raw Pressables were the exception. MUTATION: remove either `tabIndex`.
     renderAt(false, { surah: 2, verse: 255 });
     expect(screen.getByTestId('chrome-verse-bookmark').props.tabIndex).toBe(-1);
+    // ⚠️ AND THE STUDY CONTROL (story 8-3 review, V5). Without its `tabIndex` a dismissed,
+    // invisible chrome leaves it one Tab away and Enter opens a half-sheet over an ayah the
+    // reader cannot see — the same fourth-tree defect, on the newest control in the row.
+    expect(screen.getByTestId('chrome-verse-study').props.tabIndex).toBe(-1);
     screen.unmount();
 
     // …and the mini player's reciter control, which no case reached at all before this one.
@@ -546,6 +561,7 @@ describe('the playback-options control', () => {
         interactive={false}
         onOpenReciters={mockOpenReciters}
         onOpenPlaybackOptions={mockOpenPlaybackOptions}
+        onOpenStudy={mockOpenStudy}
         onInteract={mockInteract}
       />
     );

@@ -127,5 +127,40 @@
     "surahFallback": "سورة {{number}}",
     "emptyTitle": "لا توجد علامات بعد",
     "emptyBody": "في وضع القراءة، المس أيقونة العلامة على أي آية لحفظها هنا."
+  },
+  "study": {
+    "title": "دراسة",
+    "scopes": {
+      "ayah": "آية",
+      "page": "صفحة",
+      "surah": "سورة"
+    },
+    "types": {
+      "meanings": "المعاني",
+      "tafsir": "التفسير",
+      "translation": "الترجمة",
+      "irab": "الإعراب",
+      "asbab": "أسباب النزول"
+    },
+    "noSource": "لا يوجد مصدر {{type}} مثبَّت بعد.",
+    "getContent": "اطّلع على المتاح",
+    "catalogueOffline": "تعذّر الوصول إلى الفهرس.",
+    "noOffers": "لا يوجد ما يُعرض لهذا بعد.",
+    "install": "احصل على {{title}} · {{size}}",
+    "installing": "جارٍ التحميل… {{percent}}٪",
+    "retry": "أعد المحاولة",
+    "errorTitle": "تعذّرت قراءة هذا المصدر.",
+    "noEntries": "لا يوجد في هذا المصدر شيء لهذا النطاق.",
+    "noEntryForVerse": "لا شيء لهذه الآية.",
+    "sessionOnly": "على الويب يُحفظ المصدر لهذه الجلسة فقط.",
+    "a11y": {
+      "openForVerse": "دراسة {{name}} {{verse}}",
+      "source": "المصدر: {{title}}",
+      "install": "احصل على {{title}}",
+      "release": "تحرير {{title}} من هذه الجلسة"
+    },
+    "sourcesUnavailable": "تعذّرت قراءة ما هو مثبَّت على هذا الجهاز.",
+    "sourceWithKey": "{{title}} ({{key}})",
+    "release": "تحرير"
   }
 }

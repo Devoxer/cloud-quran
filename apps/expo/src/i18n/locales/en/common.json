@@ -123,5 +123,40 @@
     "surahFallback": "Surah {{number}}",
     "emptyTitle": "No bookmarks yet",
     "emptyBody": "In reading mode, tap the bookmark icon on any verse to save it here."
+  },
+  "study": {
+    "title": "Study",
+    "scopes": {
+      "ayah": "Ayah",
+      "page": "Page",
+      "surah": "Surah"
+    },
+    "types": {
+      "meanings": "Meanings",
+      "tafsir": "Tafsir",
+      "translation": "Translation",
+      "irab": "I'rab",
+      "asbab": "Asbab al-nuzul"
+    },
+    "noSource": "No {{type}} source is installed yet.",
+    "getContent": "See what is available",
+    "catalogueOffline": "The catalogue could not be reached.",
+    "noOffers": "Nothing is on offer for this yet.",
+    "install": "Get {{title}} · {{size}}",
+    "installing": "Getting it… {{percent}}%",
+    "retry": "Try again",
+    "errorTitle": "This source could not be read.",
+    "noEntries": "This source has nothing for this range.",
+    "noEntryForVerse": "Nothing for this ayah.",
+    "sessionOnly": "On the web a source is kept for this session only.",
+    "a11y": {
+      "openForVerse": "Study {{name}} {{verse}}",
+      "source": "Source: {{title}}",
+      "install": "Get {{title}}",
+      "release": "Release {{title}} from this session"
+    },
+    "sourcesUnavailable": "Could not read what is installed on this device.",
+    "sourceWithKey": "{{title}} ({{key}})",
+    "release": "Release"
   }
 }

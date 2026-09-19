@@ -270,13 +270,24 @@ describe('the pack’s own text', () => {
 });
 
 describe('on web', () => {
-  it('states that packs are unsupported rather than offering a dead control', () => {
+  it('offers no INSTALL control, and says where content comes from instead', () => {
+    // ⚠️ THE SENTENCE CHANGED IN STORY 8-3 AND THE CASE IS STILL THE SAME ONE. Web can now READ a
+    // pack (fetched into memory from the study sheet) but still cannot KEEP one, so this screen —
+    // which manages what is kept — still renders no control here. Telling a browser reader that
+    // content is only in the mobile app is what stopped being true.
     mockSupported.value = false;
     mockPacks.rows = [baseRow];
     render(<ContentScreen />);
 
     expect(screen.getByTestId('content-unsupported')).toBeTruthy();
     expect(screen.queryByTestId('content-pack-translation-fr-rashid-install')).toBeNull();
-    expect(screen.getByText('Content packs are available in the mobile app.')).toBeTruthy();
+    // ⚠️ AND IT SAYS HOW TO REACH THE SHEET (story 8-3 review, S10). "Open a source from the
+    // study sheet" is a dead end on its own: the sheet has exactly one entry point, and it is
+    // selecting an ayah while reading.
+    expect(
+      screen.getByText(
+        'On the web, open a source from the study sheet: select an ayah while reading.'
+      )
+    ).toBeTruthy();
   });
 });

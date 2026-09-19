@@ -16,6 +16,8 @@
  * `lint:layers` rule 2: a feature `lib/` — pure logic, no UI, no routes.
  */
 
+import { Platform } from 'react-native';
+
 import { PACK_CATALOGUE_URL, PACK_CDN_BASE } from '@/constants/packs';
 
 /** One offered pack, exactly as `scripts/prepare-packs.ts` writes it into `index.json`. */
@@ -159,10 +161,25 @@ export async function fetchCatalogue(signal?: AbortSignal): Promise<CataloguePac
   signal?.addEventListener('abort', forward);
   try {
     const response = await fetch(PACK_CATALOGUE_URL, {
-      // ⚠️ THE CATALOGUE IS THE ONE OBJECT WHOSE CONTENT CHANGES UNDER A STABLE KEY. Every pack
-      // key carries its version, so only this document can go stale in a cache in front of a
-      // newly published pack.
-      headers: { 'cache-control': 'no-cache' },
+      /**
+       * ⚠️ THE CATALOGUE IS THE ONE OBJECT WHOSE CONTENT CHANGES UNDER A STABLE KEY. Every pack
+       * key carries its version, so only this document can go stale in a cache in front of a
+       * newly published pack.
+       *
+       * ⚠️ AND THE FRESHNESS IS ASKED FOR DIFFERENTLY ON EACH PLATFORM, WHICH IS A CORS FACT AND
+       * NOT A STYLE ONE (story 8-3, measured in WebKit 2026-09-19). A `cache-control` REQUEST
+       * HEADER is not a CORS-safelisted header, so sending it turns this into a preflighted
+       * cross-origin request — and R2 answers the `OPTIONS` without the matching
+       * `Access-Control-Allow-Headers`, so the whole fetch rejects with `TypeError: Load failed`.
+       * The shelf then degraded to "the catalogue could not be reached" on web, permanently, with
+       * a perfectly good connection. `cache: 'no-store'` is the same intent expressed as a fetch
+       * OPTION, which is not a header and triggers no preflight; React Native's fetch ignores the
+       * option entirely, which is why native keeps the header. Measured both ways: the pack file
+       * itself is a simple GET and was reachable throughout.
+       */
+      ...(Platform.OS === 'web'
+        ? { cache: 'no-store' as const }
+        : { headers: { 'cache-control': 'no-cache' } }),
       signal: timeout.signal,
     });
     if (!response.ok) return null;

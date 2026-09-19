@@ -22,17 +22,30 @@ export const PACK_CDN_BASE = 'https://cdn.nobleachievements.com/packs';
 export const PACK_CATALOGUE_URL = `${PACK_CDN_BASE}/index.json`;
 
 /**
- * Whether this platform can install a pack at all — the ONE fact every surface branches on.
+ * Whether this platform can INSTALL a pack — that is, keep one on disk across launches.
  *
- * ⚠️ WEB HAS NO PACKS IN THIS STORY, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.
- * `expo-file-system`'s directory model has nowhere to put a downloaded database on web, and
- * `openDatabaseAsync`'s `directory` argument — the thing that would let us point at one — is
- * explicitly unsupported there (`SQLiteDatabase.d.ts:346`). `features/audio/lib/audioDownloads.ts`
- * answers the same question the same way with `DOWNLOADS_SUPPORTED`; this mirrors it exactly. The
- * content screen SAYS SO rather than offering a control that would take a reader's press and do
- * nothing. What web needs instead is an open question for 8-3/8-4.
+ * ⚠️ IT NO LONGER MEANS "WEB HAS NO CONTENT", AND STORY 8-3 IS WHERE THAT CHANGED. 8-2 set this
+ * false on web because `expo-file-system` has nowhere to put a downloaded database and
+ * `openDatabaseAsync`'s `directory` argument is explicitly unsupported there
+ * (`SQLiteDatabase.d.ts:346`) — both still true, and both facts about the FILESYSTEM rather than
+ * about reading. Measured 2026-09-19 in WebKit against the live CDN pack,
+ * `deserializeDatabaseAsync` opens a fetched pack in memory and answers 6,236 rows with correct
+ * text and footnotes. So web's model is fetch-and-hold (see `PACKS_SESSION_ONLY`), and the name
+ * this constant keeps is the narrow question it actually answers: can a pack be kept.
  */
 export const PACKS_SUPPORTED = Platform.OS !== 'web';
+
+/**
+ * Whether a pack this platform holds lives only for the SESSION — web, and nothing else.
+ *
+ * ⚠️ IT IS THE EXACT COMPLEMENT OF `PACKS_SUPPORTED` TODAY, AND IT IS STILL NOT THE SAME FACT.
+ * One asks "can this be kept on disk"; this one asks "will it survive a reload". A reader is owed
+ * different copy for each — a native install is a promise about being offline tomorrow, a web
+ * fetch is a promise about the next few minutes — and collapsing them into one boolean is how a
+ * surface ends up telling a browser reader their content is permanent. The browser's HTTP cache
+ * does what the document directory does on native, exactly as `lib/mushafFonts.ts` handles fonts.
+ */
+export const PACKS_SESSION_ONLY = Platform.OS === 'web';
 
 /**
  * The directory packs are installed into: `expo-sqlite`'s own default database directory, which is

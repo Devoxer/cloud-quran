@@ -326,3 +326,44 @@ describe('what the shelf shows', () => {
     expect(buildRows([], {}, {})).toEqual([]);
   });
 });
+
+/**
+ * `deferCatalogue` — the option enforcing story 8-3's frozen "opening the sheet touches no
+ * network" constraint (8-3 review, V3).
+ *
+ * ⚠️ IT WAS ASSERTED AT THE CALL SITE AND VERIFIED NOWHERE. `StudySheet.test.tsx` checks that the
+ * sheet PASSES `{ deferCatalogue: true }`; every case above calls `usePacks()` with no argument,
+ * so the branch that reads it ran in no test at all. Both mutations below shipped green:
+ *
+ *   1. ignore the option → the shelf fetches on mount, so opening the sheet hits the network on
+ *      every open, on every surface, for a reader who only wanted the pack they already have;
+ *   2. drop the `&& revision === 0` → `refresh()` can never re-enter the fetch, so the sheet's
+ *      "See what is available" becomes a control that does nothing for the rest of the session.
+ */
+describe('deferring the catalogue', () => {
+  it('does NOT fetch on mount, and reports `idle` rather than loading or offline', async () => {
+    const { result } = renderHook(() => usePacks({ deferCatalogue: true }));
+    await waitFor(() => expect(result.current.disk).toBe('ready'));
+
+    expect(mockFetchCatalogue).not.toHaveBeenCalled();
+    // ⚠️ `idle` IS A THIRD ANSWER. `loading` would spin forever and `unavailable` would tell a
+    // connected reader they are offline; the shelf simply has not been asked.
+    expect(result.current.catalogue).toBe('idle');
+  });
+
+  it('fetches once `refresh()` asks — the reader pressing the offer IS the ask', async () => {
+    const { result } = renderHook(() => usePacks({ deferCatalogue: true }));
+    await waitFor(() => expect(result.current.disk).toBe('ready'));
+
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.catalogue).toBe('ready'));
+    expect(mockFetchCatalogue).toHaveBeenCalledTimes(1);
+    expect(result.current.rows).toHaveLength(1);
+  });
+
+  it('is OFF by default — the content screen is a shelf and fetches eagerly', async () => {
+    const { result } = renderHook(() => usePacks());
+    await waitFor(() => expect(result.current.catalogue).toBe('ready'));
+    expect(mockFetchCatalogue).toHaveBeenCalledTimes(1);
+  });
+});

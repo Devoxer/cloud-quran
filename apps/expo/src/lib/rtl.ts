@@ -141,6 +141,54 @@ export function isRTLLanguage(code: string | undefined | null): boolean {
 }
 
 /**
+ * The CONTENT languages written right to left — every script a content pack may arrive in.
+ *
+ * ⚠️ IT IS A DIFFERENT LIST FROM {@link RTL_LANGUAGES} AND THAT SEPARATION IS THE POINT (story
+ * 8-3 review, S6). `RTL_LANGUAGES` is the set of INTERFACE locales this app ships, which is two;
+ * a content pack's language is not an interface language and never will be. Story 8-2's content
+ * screen and story 8-3's study sheet both drew a pack's own text with `isRTLLanguage`, so the one
+ * entry there — Arabic — was doing double duty. **Story 8-4 ships Urdu, Persian and Pashto**, all
+ * of which would have ranged LEFT with nothing to catch it: `rtl.test.ts` only scans content files
+ * for `I18nManager`/`isRTL` reads, and a correct-looking call to the wrong list passes that scan.
+ *
+ * Codes are BCP-47 PRIMARY subtags, matched case-insensitively against everything before the first
+ * separator, so `fa-IR`, `ur-PK` and `ckb-IQ` all resolve. Scripts, not countries: `pa` (Punjabi)
+ * is deliberately ABSENT because Gurmukhi is left-to-right and Shahmukhi is written `pa-Arab` —
+ * a tag with an explicit Arabic script subtag is matched below on the script instead.
+ */
+export const RTL_CONTENT_LANGUAGES: readonly string[] = [
+  'ar', // Arabic
+  'fa', // Persian / Farsi
+  'ur', // Urdu
+  'ps', // Pashto
+  'sd', // Sindhi
+  'ks', // Kashmiri
+  'ug', // Uyghur
+  'dv', // Divehi
+  'ckb', // Central Kurdish (Sorani)
+  'ku', // Kurdish, where written in the Arabic script
+  'he', // Hebrew
+  'yi', // Yiddish
+  'prs', // Dari
+  'bal', // Balochi
+  'arc', // Aramaic / Syriac
+];
+
+/** Script subtags that decide direction on their own, whatever the language in front of them. */
+const RTL_SCRIPTS = ['arab', 'aran', 'hebr', 'syrc', 'thaa'];
+
+/**
+ * Whether a CONTENT language is written right to left — the one question a draw site should ask
+ * about a pack's own text. Never about the interface: that is {@link resolveDirection}.
+ */
+export function isRTLContentLanguage(code: string | undefined | null): boolean {
+  if (code == null || code.length === 0) return false;
+  const parts = code.toLowerCase().split(/[-_]/);
+  if (parts.some((part) => RTL_SCRIPTS.includes(part))) return true;
+  return RTL_CONTENT_LANGUAGES.includes(parts[0]);
+}
+
+/**
  * The direction a language actually gets ON THIS PLATFORM — the floor, and the only function that
  * knows about web.
  *

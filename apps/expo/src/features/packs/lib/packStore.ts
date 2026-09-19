@@ -212,8 +212,13 @@ export function sweepStalePackParts(): void {
  *
  * `Uint8Array<ArrayBuffer>` rather than a bare `Uint8Array`: `expo-crypto`'s `BufferSource` cannot
  * accept a view onto a `SharedArrayBuffer`, and `File.bytes()` already answers the narrow form.
+ *
+ * ⚠️ EXPORTED FOR `webPack.ts`, WHICH VERIFIES THE SAME DIGEST OVER BYTES THAT NEVER TOUCH A DISK
+ * (story 8-3). A second copy of the hex encoding is a second place for the padding to be wrong,
+ * and a digest that is wrong in a plausible way is the exact failure class this repo keeps paying
+ * for. Intra-feature import, so `lint:layers` rule 4 is satisfied without a barrel entry.
  */
-async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+export async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const buffer = await digest(CryptoDigestAlgorithm.SHA256, bytes);
   return Array.from(new Uint8Array(buffer))
     .map((byte) => byte.toString(16).padStart(2, '0'))
@@ -418,11 +423,18 @@ export async function installPack(
 
 /**
  * Network conditions rather than defects — the same shapes `audioDownloads.ts` measured on a
- * Pixel 9 Pro over a throttled link: a slow link rejects with `SocketTimeoutException`, an absent
+ * Pixel 9 Pro over a throttled link.
+ *
+ * ⚠️ EXPORTED FOR `webPack.ts` (story 8-3 review, C4), which adds the BROWSER spellings on top
+ * rather than keeping a second list of the native ones. A duplicated pattern here is a duplicated
+ * place for "this is a network condition, not a bug" to drift — and getting that answer wrong in
+ * either direction tells a reader something false about their own connection.
+ *
+ * The shapes: a slow link rejects with `SocketTimeoutException`, an absent
  * one with `UnknownHostException`. Neither is a thing anybody can fix from a stack trace, and
  * neither should be reported to a reader as "something went wrong".
  */
-function isTransientNetworkFailure(error: unknown): boolean {
+export function isTransientNetworkFailure(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /SocketTimeout|UnknownHost|ConnectException|Network is unreachable|NSURLErrorDomain/i.test(
     message

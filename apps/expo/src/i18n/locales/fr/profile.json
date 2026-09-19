@@ -207,7 +207,7 @@
     }
   },
   "content": {
-    "webUnsupported": "Les modules de contenu sont disponibles dans l’app mobile.",
+    "webUnsupported": "Sur le web, ouvrez une source depuis le panneau d’étude : choisissez un verset en lisant.",
     "offline": "Seuls les modules installés sont affichés : le catalogue est injoignable.",
     "retryCatalogue": "Réessayer",
     "empty": "Aucun module proposé pour l’instant.",
