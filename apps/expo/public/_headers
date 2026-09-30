@@ -47,9 +47,13 @@
   # back; that was wrong, and the mistake is the kind that reads as a tightening while leaving a
   # directive open.)
   #
-  # media-src carries no audio CDN yet: the recitation bucket is provisioned in story 5-7, and
-  # wisdom-fruits' bucket was deliberately NOT inherited. Epic 7 adds the real origin.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self'; connect-src 'self' https://api.cloudquran.nobleachievements.com https://*.sentry.io; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+  # ⚠️ THE APP'S OWN CDN (`cdn.nobleachievements.com`) IS IN `connect-src`, `media-src` AND
+  # `font-src`, AND WAS MISSING UNTIL 2026-09-30 — the same invisible-outside-a-deployed-browser
+  # failure as the worker origin above. Epic 7's audio, the mushaf's CDN faces and story 8-2's
+  # content packs all worked from `localhost` and were refused on the deployed site ("The catalogue
+  # could not be reached"). One origin, three kinds of request: the pack catalogue and pack bytes
+  # are fetches, recitation is a media element, the mushaf faces are fonts.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://cdn.nobleachievements.com; media-src 'self' https://cdn.nobleachievements.com; connect-src 'self' https://api.cloudquran.nobleachievements.com https://cdn.nobleachievements.com https://*.sentry.io; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
 
 /assets/*
