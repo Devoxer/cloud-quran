@@ -127,6 +127,10 @@
       "murattal": "Recitación medida y sin adornos.",
       "mujawwad": "Recitación melódica y ornamentada.",
       "muallim": "Estilo de enseñanza: frases repetidas para aprender."
+    },
+    "narration": {
+      "title": "Traducciones narradas",
+      "gloss": "El significado leído en voz alta en otro idioma, aleya por aleya."
     }
   },
   "download": {

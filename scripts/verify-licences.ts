@@ -18,8 +18,13 @@
 //   2. The ledger exists and declares at least one licence entry.
 //   3. Every pack names a `licenceId` that the ledger declares.
 //   4. Every ledger entry carries all five required fields, each non-empty.
-//   5. Every pack carries the facts a reader and a grant need: a title, a source, a stated source
-//      version, an attribution line, a digest, a positive row count and a URL on our own CDN.
+//   5. Every pack carries the facts a reader and a grant need: a title, a language and its name, a
+//      source, the upstream key, a stated source version, an attribution line, a digest, a
+//      positive row count and a URL on our own CDN.
+//   6. Every pack's stated version is the version its ledger entry pins FOR THAT EDITION (story
+//      8-4) — not merely a version the ledger mentions somewhere.
+//   7. The bundled translation inside `quran.db` (story 8-4) states the version its own ledger
+//      entry pins, exactly as a pack does.
 //
 // ⚠️ IT FAILS CLOSED, like every other gate in this repo. A missing catalogue, a missing ledger,
 // an empty `packs` array or a ledger with no entries is a FAILURE, not a clean pass. "Nothing to
@@ -28,7 +33,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -40,6 +45,14 @@ const CATALOGUE_PATH =
 const LEDGER_PATH =
   process.env.CQ_VERIFY_PACK_LICENCES ??
   resolve(ROOT, 'packages/quran-data/data/packs/LICENCES.md');
+/**
+ * The record of which edition `quran.db`'s bundled translation was built from (story 8-4). A
+ * MODULE, read by dynamic import, for the same reason `verify-artifacts.ts` reads its digests that
+ * way: the app imports the same file to render the credit, so there is one copy of the fact.
+ */
+const BUNDLED_TRANSLATION_PATH =
+  process.env.CQ_VERIFY_BUNDLED_TRANSLATION ??
+  resolve(ROOT, 'packages/quran-data/src/bundled-translation.ts');
 
 /** Every field a ledger entry must carry, spelled as it appears in the file. */
 const REQUIRED_FIELDS = [
@@ -58,8 +71,10 @@ interface CataloguePack {
   packVersion?: unknown;
   type?: unknown;
   language?: unknown;
+  languageName?: unknown;
   title?: unknown;
   source?: unknown;
+  sourceKey?: unknown;
   sourceVersion?: unknown;
   licenceId?: unknown;
   attribution?: unknown;
@@ -147,12 +162,53 @@ export function parseLedger(markdown: string): LedgerEntry[] {
 }
 
 /**
+ * The per-edition pins a ledger entry declares: upstream key → pinned version.
+ *
+ * ⚠️ ONE PROSE BULLET CANNOT HONESTLY PIN SEVENTY-FIVE EDITIONS, AND THAT IS WHY THIS EXISTS
+ * (story 8-4). The gate used to ask whether a pack's `sourceVersion` appeared ANYWHERE in the
+ * entry's "Pinned version" text. With one shared QuranEnc entry listing 75 version strings, `1.0.3`
+ * from `french_rashid` satisfied a pack built from any other edition — the gate passed while
+ * pinning nothing. A pin is now a PAIR, written `` `{key}` v{version} ``, and a pack is checked
+ * against the pin for ITS key and no other.
+ *
+ * ⚠️ A KEY PINNED TWICE IS AMBIGUOUS, NOT "EITHER ONE". It is reported by
+ * {@link findLicenceViolations} rather than resolved here by picking one.
+ */
+export function pinnedEditions(entry: LedgerEntry): { pins: Map<string, string>; twice: string[] } {
+  const pins = new Map<string, string>();
+  const twice: string[] = [];
+  const text = entry.fields.get('Pinned version') ?? '';
+  // A key is QuranEnc's slug shape — lowercase words joined by `_` — so prose ("the pin is
+  // enforced", "prepare-packs.ts") can never be read as a pin by accident.
+  for (const match of text.matchAll(/`?([a-z0-9]+(?:_[a-z0-9]+)+)`?\s+v(\d+(?:\.\d+)+)\b/g)) {
+    const [, key, version] = match;
+    const existing = pins.get(key);
+    if (existing !== undefined && existing !== version) twice.push(key);
+    pins.set(key, version);
+  }
+  return { pins, twice };
+}
+
+/** What `quran.db`'s bundled translation says about itself. See `bundled-translation.ts`. */
+export interface BundledTranslation {
+  licenceId: string;
+  sourceKey: string;
+  sourceVersion: string;
+  attribution: string;
+}
+
+/**
  * Pure: every reason this catalogue + ledger pair should be refused. Empty means compliant.
  *
  * Exported so `scripts/__tests__/verify-licences.test.mjs` can assert the fail-closed cases
  * without a fixture tree, the way every lint gate in this repo is tested.
  */
-export function findLicenceViolations(catalogue: unknown, ledgerMarkdown: string): string[] {
+export function findLicenceViolations(
+  catalogue: unknown,
+  ledgerMarkdown: string,
+  /** `quran.db`'s bundled translation, when there is one to check. See {@link BundledTranslation}. */
+  bundled?: BundledTranslation | null
+): string[] {
   const violations: string[] = [];
 
   const entries = parseLedger(ledgerMarkdown);
@@ -168,8 +224,40 @@ export function findLicenceViolations(catalogue: unknown, ledgerMarkdown: string
         violations.push(`ledger entry "${entry.id}" is missing a non-empty "${field}" field.`);
       }
     }
+    for (const key of pinnedEditions(entry).twice) {
+      violations.push(
+        `ledger entry "${entry.id}" pins "${key}" twice, at different versions. A pin that could ` +
+          'be either version pins neither.'
+      );
+    }
   }
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
+
+  /**
+   * ⚠️ THE BUNDLED TRANSLATION IS HELD TO THE PACK RULE, BECAUSE IT IS THE SAME GRANT (story 8-4).
+   * It ships inside `quran.db` rather than from the CDN, which makes it MORE exposed, not less —
+   * it is in every build. Its stated version is checked against its own ledger pin exactly as a
+   * pack's is, so a rebuilt database from a newer upstream cannot quietly outrun the record.
+   */
+  if (bundled) {
+    const entry = byId.get(bundled.licenceId);
+    if (!entry) {
+      violations.push(
+        `the bundled translation names licence "${bundled.licenceId}", which the ledger does not ` +
+          "declare. The text ships in every build; its grant has to be recorded like any pack's."
+      );
+    } else if (pinnedEditions(entry).pins.get(bundled.sourceKey) !== bundled.sourceVersion) {
+      violations.push(
+        `the bundled translation was built from ${bundled.sourceKey} v${bundled.sourceVersion}, ` +
+          `which ledger entry "${bundled.licenceId}" does not pin for that edition.`
+      );
+    }
+    if (!bundled.attribution.includes(bundled.sourceVersion)) {
+      violations.push(
+        `the bundled translation's attribution does not state version "${bundled.sourceVersion}".`
+      );
+    }
+  }
 
   const packs = (catalogue as { packs?: unknown } | null)?.packs;
   if (!Array.isArray(packs) || packs.length === 0) {
@@ -189,8 +277,12 @@ export function findLicenceViolations(catalogue: unknown, ledgerMarkdown: string
       'id',
       'type',
       'language',
+      // ⚠️ CHECKED SINCE 8-4. Unchecked, a pack with no endonym rendered its BCP-47 code at a
+      // reader ("ur · 3.1 MB") — and with 56 languages the shelf GROUPS by this name.
+      'languageName',
       'title',
       'source',
+      'sourceKey',
       'sourceVersion',
       'licenceId',
       'attribution',
@@ -235,12 +327,17 @@ export function findLicenceViolations(catalogue: unknown, ledgerMarkdown: string
      * checked against it. (Story 8-2 review, C6.)
      */
     if (ledger && typeof raw.sourceVersion === 'string' && raw.sourceVersion.length > 0) {
-      const pinned = ledger.fields.get('Pinned version') ?? '';
-      if (!pinned.includes(raw.sourceVersion)) {
+      // ⚠️ THE PIN FOR *THIS* EDITION — see `pinnedEditions`. A substring match against the
+      // entry's prose let one edition's version satisfy another's pack.
+      const key = typeof raw.sourceKey === 'string' ? raw.sourceKey : '';
+      const pinned = pinnedEditions(ledger).pins.get(key);
+      if (pinned !== raw.sourceVersion) {
         violations.push(
-          `pack "${id}" publishes source version "${raw.sourceVersion}", which the ledger entry ` +
-            `"${raw.licenceId}" does not pin. The version STATED and the version PINNED have to ` +
-            'be the same string, or the grant condition is not met.'
+          `pack "${id}" publishes ${key || '<no key>'} v${raw.sourceVersion}, which the ledger ` +
+            `entry "${raw.licenceId}" does not pin for that edition (it pins ` +
+            `${pinned === undefined ? 'nothing for it' : `v${pinned}`}). The version STATED and ` +
+            'the version PINNED have to be the same string, per edition, or the grant condition ' +
+            'is not met.'
         );
       }
       if (typeof raw.attribution === 'string' && !raw.attribution.includes(raw.sourceVersion)) {
@@ -256,7 +353,7 @@ export function findLicenceViolations(catalogue: unknown, ledgerMarkdown: string
   return violations;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   console.log('=== Content Pack Licences ===\n');
 
   for (const [label, path] of [
@@ -279,7 +376,28 @@ function main(): void {
     process.exit(1);
   }
 
-  const violations = findLicenceViolations(catalogue, readFileSync(LEDGER_PATH, 'utf8'));
+  // ⚠️ "NONE" IS A DELIBERATE, SPELLED-OUT ANSWER, NEVER A MISSING FILE. The fixture suites that
+  // exercise the pack rules have no bundled database; they say so. A missing default module is a
+  // failure like a missing catalogue.
+  let bundled: BundledTranslation | null = null;
+  if (BUNDLED_TRANSLATION_PATH !== 'none') {
+    if (!existsSync(BUNDLED_TRANSLATION_PATH)) {
+      console.error(`❌ Missing bundled-translation record: ${BUNDLED_TRANSLATION_PATH}`);
+      process.exit(1);
+    }
+    bundled =
+      (
+        (await import(pathToFileURL(BUNDLED_TRANSLATION_PATH).href)) as {
+          BUNDLED_TRANSLATION?: BundledTranslation;
+        }
+      ).BUNDLED_TRANSLATION ?? null;
+    if (!bundled) {
+      console.error(`❌ BUNDLED_TRANSLATION is not exported from ${BUNDLED_TRANSLATION_PATH}`);
+      process.exit(1);
+    }
+  }
+
+  const violations = findLicenceViolations(catalogue, readFileSync(LEDGER_PATH, 'utf8'), bundled);
   if (violations.length > 0) {
     console.error('❌ Licence ledger FAILED\n');
     for (const violation of violations) console.error(`   ${violation}`);
@@ -289,11 +407,21 @@ function main(): void {
 
   const packs = (catalogue as { packs: CataloguePack[] }).packs;
   for (const pack of packs) {
-    console.log(`  ${String(pack.id).padEnd(26)} ${pack.licenceId}  (${pack.rows} rows)`);
+    console.log(`  ${String(pack.id).padEnd(34)} ${pack.licenceId}  (${pack.rows} rows)`);
+  }
+  if (bundled) {
+    console.log(
+      `  ${'(bundled in quran.db)'.padEnd(34)} ${bundled.licenceId}  (${bundled.sourceKey})`
+    );
   }
   console.log(`\n✅ Licence ledger PASSED — ${packs.length} offered pack(s) covered`);
 }
 
 // Only when RUN, never when imported: the pure helpers above are the unit under test and an
 // import that also executed `main()` would exit the test process.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error: unknown) => {
+    console.error('❌ Licence verification failed:', error);
+    process.exit(1);
+  });
+}

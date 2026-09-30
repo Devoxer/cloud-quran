@@ -1,5 +1,16 @@
 /**
- * The reciter catalogue — the 39 voices this app publishes (story 3-8; reshaped by story 7-2).
+ * The reciter catalogue — the 50 voices this app publishes: 39 reciters of the Arabic (story 3-8;
+ * reshaped by story 7-2) and 11 narrated translations (story 8-4).
+ *
+ * ⚠️ A NARRATION IS A VOICE, NOT A SECOND KIND OF PLAYBACK (story 8-4). QuranEnc publishes its
+ * narrated translations one MP3 per ayah; `scripts/prepare-audio.ts` measures each ayah and
+ * concatenates them into 114 surah tracks with a manifest built from the measurements — exactly
+ * what the `everyayah` path does for recitation. So a narration id is published under
+ * `AUDIO_CDN_BASE` in the same shape as a reciter's, `preferences.reciterId` carries it unchanged,
+ * and the engine, the lock screen, the sleep timer and offline downloads never ask which it is.
+ * What DOES differ is how the picker groups it, which is why the two are told apart by `kind` —
+ * a narration is not a fourth recitation STYLE, and adding one to `RECITER_STYLES` would put a
+ * French translation under a heading glossed "measured, unadorned recitation".
  *
  * ⚠️ THIS LIST IS A CLAIM ABOUT THE CDN, NOT A WISH LIST. Every id here must have
  * `{id}/manifest.json` and `{id}/001.mp3`…`114.mp3` published under `AUDIO_CDN_BASE`; naming a
@@ -35,17 +46,44 @@
 
 import { isArabicUi } from '@/lib/rtl';
 
-/** The three recitation styles, in the order the picker groups them. */
+/** The three recitation styles, in the order the picker groups them. Recitation only — see the header. */
 export const RECITER_STYLES = ['murattal', 'mujawwad', 'muallim'] as const;
 
 export type ReciterStyle = (typeof RECITER_STYLES)[number];
 
-export interface Reciter {
+/** The two kinds of voice, in the order the picker groups them. */
+export const VOICE_KINDS = ['recitation', 'narration'] as const;
+
+export type VoiceKind = (typeof VOICE_KINDS)[number];
+
+interface VoiceBase {
   id: string;
   nameArabic: string;
   nameEnglish: string;
+}
+
+/** A reciter of the Arabic Quran. */
+export interface RecitationVoice extends VoiceBase {
+  kind: 'recitation';
   style: ReciterStyle;
 }
+
+/**
+ * A narrated translation (story 8-4). Its two names are QuranEnc's own titles for the edition,
+ * in English and in Arabic, because the picker shows both on every row.
+ *
+ * ⚠️ IT IS NOT COUPLED TO AN INSTALLED TRANSLATION PACK. The voice stands alone: a reader can
+ * listen to the French narration with no French pack installed, and vice versa.
+ */
+export interface NarrationVoice extends VoiceBase {
+  kind: 'narration';
+  /** The narration's language code, as QuranEnc gives it. */
+  language: string;
+  /** That language's own name — what a search for "Français" or "فارسی" should find. */
+  languageName: string;
+}
+
+export type Reciter = RecitationVoice | NarrationVoice;
 
 /**
  * The voice a reader gets before they choose one.
@@ -64,210 +102,245 @@ export const RECITERS: Reciter[] = [
     id: 'abdulbasit',
     nameArabic: 'عبد الباسط عبد الصمد',
     nameEnglish: 'Abdul Basit Abdul Samad',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'sudais',
     nameArabic: 'عبد الرحمن السديس',
     nameEnglish: 'Abdul Rahman Al-Sudais',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'basfar',
     nameArabic: 'عبد الله بصفر',
     nameEnglish: 'Abdullah Basfar',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'matroud',
     nameArabic: 'عبد الله مطرود',
     nameEnglish: 'Abdullah Matroud',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'shatri',
     nameArabic: 'أبو بكر الشاطري',
     nameEnglish: 'Abu Bakr Al-Shatri',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'ajmi',
     nameArabic: 'أحمد العجمي',
     nameEnglish: 'Ahmed Al-Ajmi',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'neana',
     nameArabic: 'أحمد نعينع',
     nameEnglish: 'Ahmed Neana',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'alaqimy',
     nameArabic: 'أكرم العلاقمي',
     nameEnglish: 'Akram Al-Alaqimy',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'hudhaify',
     nameArabic: 'علي الحذيفي',
     nameEnglish: 'Ali Al-Hudhaify',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'suesy',
     nameArabic: 'علي حجاج السويسي',
     nameEnglish: 'Ali Hajjaj Al-Suesy',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'jaber',
     nameArabic: 'علي جابر',
     nameEnglish: 'Ali Jaber',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'sowaid',
     nameArabic: 'أيمن سويد',
     nameEnglish: 'Ayman Sowaid',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'alili',
     nameArabic: 'عزيز عليلي',
     nameEnglish: 'Aziz Alili',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'abbad',
     nameArabic: 'فارس عباد',
     nameEnglish: 'Fares Abbad',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'rifai',
     nameArabic: 'هاني الرفاعي',
     nameEnglish: 'Hani Ar-Rifai',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'akhdar',
     nameArabic: 'إبراهيم الأخضر',
     nameEnglish: 'Ibrahim Akhdar',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'mansoori',
     nameArabic: 'كريم منصوري',
     nameEnglish: 'Karim Mansoori',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'qahtanee',
     nameArabic: 'خالد القحطاني',
     nameEnglish: 'Khalid Al-Qahtanee',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'tunaiji',
     nameArabic: 'خليفة الطنيجي',
     nameEnglish: 'Khalifah Al-Tunaiji',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'banna',
     nameArabic: 'محمود علي البنا',
     nameEnglish: 'Mahmoud Ali Al-Banna',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'husary',
     nameArabic: 'محمود خليل الحصري',
     nameEnglish: 'Mahmoud Khalil Al-Husary',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'alafasy',
     nameArabic: 'مشاري راشد العفاسي',
     nameEnglish: 'Mishary Rashid Al-Afasy',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'minshawi',
     nameArabic: 'محمد صديق المنشاوي',
     nameEnglish: 'Mohamed Siddiq Al-Minshawi',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'tablawi',
     nameArabic: 'محمد الطبلاوي',
     nameEnglish: 'Mohammad Al-Tablawi',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'ayyoub',
     nameArabic: 'محمد أيوب',
     nameEnglish: 'Muhammad Ayyoub',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'jibreel',
     nameArabic: 'محمد جبريل',
     nameEnglish: 'Muhammad Jibreel',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'qasim',
     nameArabic: 'محسن القاسم',
     nameEnglish: 'Muhsin Al-Qasim',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'qatami',
     nameArabic: 'ناصر القطامي',
     nameEnglish: 'Nasser Al-Qatami',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'shuraym',
     nameArabic: 'سعود الشريم',
     nameEnglish: "Sa'ud Ash-Shuraym",
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'ghamidi',
     nameArabic: 'سعد الغامدي',
     nameEnglish: 'Saad Al-Ghamidi',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'sahl',
     nameArabic: 'سهل ياسين',
     nameEnglish: 'Sahl Yassin',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'bukhatir',
     nameArabic: 'صلاح بخاطر',
     nameEnglish: 'Salaah Bukhatir',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'budair',
     nameArabic: 'صالح البدير',
     nameEnglish: 'Salah Al-Budair',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'salamah',
     nameArabic: 'ياسر سلامة',
     nameEnglish: 'Yaser Salamah',
+    kind: 'recitation',
     style: 'murattal',
   },
   {
     id: 'dussary',
     nameArabic: 'ياسر الدوسري',
     nameEnglish: 'Yasser Ad-Dussary',
+    kind: 'recitation',
     style: 'murattal',
   },
   // Mujawwad (alphabetical by English name)
@@ -275,18 +348,21 @@ export const RECITERS: Reciter[] = [
     id: 'abdulbasit-mujawwad',
     nameArabic: 'عبد الباسط عبد الصمد',
     nameEnglish: 'Abdul Basit Abdul Samad',
+    kind: 'recitation',
     style: 'mujawwad',
   },
   {
     id: 'husary-mujawwad',
     nameArabic: 'محمود خليل الحصري',
     nameEnglish: 'Mahmoud Khalil Al-Husary',
+    kind: 'recitation',
     style: 'mujawwad',
   },
   {
     id: 'minshawi-mujawwad',
     nameArabic: 'محمد صديق المنشاوي',
     nameEnglish: 'Mohamed Siddiq Al-Minshawi',
+    kind: 'recitation',
     style: 'mujawwad',
   },
   // Muallim (alphabetical by English name)
@@ -294,7 +370,102 @@ export const RECITERS: Reciter[] = [
     id: 'husary-muallim',
     nameArabic: 'محمود خليل الحصري',
     nameEnglish: 'Mahmoud Khalil Al-Husary',
+    kind: 'recitation',
     style: 'muallim',
+  },
+  // Narrated translations (story 8-4) — alphabetical by English title. QuranEnc's own titles for
+  // the edition each voice narrates; the 11 editions whose per-ayah audio QuranEnc publishes whole.
+  {
+    id: 'narration-as-rafeeq',
+    nameArabic: 'الترجمة الآسامية - رفيق الإسلام حبيب الرحمن',
+    nameEnglish: 'Assamese Translation - Rafiqul Islam Habibur-Rahman',
+    kind: 'narration',
+    language: 'as',
+    languageName: 'অসমীয়া',
+  },
+  // ⚠️ No Azerbaijani narration: QuranEnc serves `azeri_musayev` only through 51:47, so the
+  // pipeline's completeness gate refuses it (2026-09-29). See `scripts/prepare-audio.ts`.
+  {
+    id: 'narration-zh-suliman',
+    nameArabic: 'الترجمة الصينية - محمد سليمان',
+    nameEnglish: 'Chinese Translation - Muhammad Suleiman',
+    kind: 'narration',
+    language: 'zh',
+    languageName: '中文',
+  },
+  {
+    id: 'narration-nl-center',
+    nameArabic: 'الترجمة الهولندية - مركز رواد الترجمة',
+    nameEnglish: 'Dutch Translation - Rowwad Translation Center',
+    kind: 'narration',
+    language: 'nl',
+    languageName: 'Nederlands',
+  },
+  // ⚠️ No English narration: `english_rwwad`'s 17:69 is missing upstream, so the pipeline's
+  // completeness gate refused it (2026-09-29). See `scripts/prepare-audio.ts`.
+  {
+    id: 'narration-tl-rwwad',
+    nameArabic: 'الترجمة الفلبينية (تجالوج) - مركز رواد الترجمة',
+    nameEnglish: 'Filipino Translation (Tagalog) - Rowwad Translation Center',
+    kind: 'narration',
+    language: 'tl',
+    languageName: 'Tagalog',
+  },
+  {
+    id: 'narration-fr-rashid',
+    nameArabic: 'الترجمة الفرنسية - رشيد معاش',
+    nameEnglish: 'French Translation - Rachid Maach',
+    kind: 'narration',
+    language: 'fr',
+    languageName: 'Français',
+  },
+  {
+    id: 'narration-fa-ih',
+    nameArabic: 'الترجمة الفارسية - مركز رواد الترجمة',
+    nameEnglish: 'Persian Translation - Rowwad Translation Center',
+    kind: 'narration',
+    language: 'fa',
+    languageName: 'فارسی',
+  },
+  {
+    id: 'narration-pt-nasr',
+    nameArabic: 'الترجمة البرتغالية - حلمي نصر',
+    nameEnglish: 'Portuguese Translation - Helmi Nasr',
+    kind: 'narration',
+    language: 'pt',
+    languageName: 'Português',
+  },
+  {
+    id: 'narration-si-mahir',
+    nameArabic: 'الترجمة السنهالية - مركز رواد الترجمة',
+    nameEnglish: 'Sinhalese Translation - Rowwad Translation Center',
+    kind: 'narration',
+    language: 'si',
+    languageName: 'සිංහල',
+  },
+  {
+    id: 'narration-so-yacob',
+    nameArabic: 'الترجمة الصومالية - عبدالله حسن يعقوب',
+    nameEnglish: 'Somali Translation - Abdullah Hasan Yaqoub',
+    kind: 'narration',
+    language: 'so',
+    languageName: 'Soomaali',
+  },
+  {
+    id: 'narration-ta-omar-brief',
+    nameArabic: 'الترجمة التاميلية - عمر شريف - نسخة مختصرة',
+    nameEnglish: 'Tamil Translation - Omar Sharif - Abridged Version',
+    kind: 'narration',
+    language: 'ta',
+    languageName: 'தமிழ்',
+  },
+  {
+    id: 'narration-vi-rwwad',
+    nameArabic: 'الترجمة الفيتنامية - مركز رواد الترجمة',
+    nameEnglish: 'Vietnamese Translation - Rowwad Translation Center',
+    kind: 'narration',
+    language: 'vi',
+    languageName: 'Tiếng Việt',
   },
 ];
 

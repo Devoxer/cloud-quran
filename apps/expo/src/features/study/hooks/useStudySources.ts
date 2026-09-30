@@ -24,10 +24,13 @@
  */
 
 import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
+  buildPackGroups,
   type CataloguePack,
   type CatalogueState,
   type DiskState,
+  type GroupablePack,
   type PackRow,
   usePacks,
 } from '@/features/packs';
@@ -36,26 +39,39 @@ import { PACK_TYPE_OF_STUDY_TYPE, type StudyType } from '../lib/types';
 /** One source the sheet can read right now. */
 export interface StudySource {
   id: string;
-  /** Needed to RELEASE it — `usePacks.remove` takes the pair, never the id alone. */
+  /** Needed to OPEN and to RELEASE it — both take the pair, never the id alone. */
   version: number;
   title: string;
-  /** BCP-47 of the CONTENT — what decides the text's direction, never the interface's. */
+  /** The CONTENT's language code — a grouping key, never the interface's language. */
   language: string;
   languageName: string;
+  languageNameEnglish: string;
+  /**
+   * The CONTENT's direction, from the pack's own data (story 8-4) — what decides how its text,
+   * footnotes and attribution are set. See `lib/rtl.ts` § `isRTLContent`.
+   */
+  direction: string;
   /** Required by the pack's grant, rendered WITH its text and never buried. */
   attribution: string;
   source: string;
   sourceVersion: string;
 }
 
-/** One source the reader could get. Carries its live transfer state so the row can say so. */
+/**
+ * One source the reader could get. Carries its live transfer STATUS so the row can say so; the
+ * moving percentage is read per key by the row itself (`@/stores/packStore` § `usePackProgress`),
+ * so a progress tick does not rebuild this list.
+ */
 export interface StudyOffer {
   id: string;
   title: string;
+  language: string;
+  languageName: string;
+  languageNameEnglish: string;
+  direction: string;
   bytes: number;
   pack: CataloguePack;
   status: PackRow['status'];
-  progress: number;
   /**
    * Why the last attempt failed, when one did (story 8-3 review, S5).
    *
@@ -68,9 +84,13 @@ export interface StudyOffer {
 }
 
 export interface StudySources {
-  /** Installed (native) or held (web) sources for this type, ordered as the shelf orders them. */
+  /**
+   * Installed (native) or held (web) sources for this type — GROUPED by language with the
+   * reader's own language first (story 8-4), titles collated within a group. The first is the
+   * sheet's default, so a reader with an edition in their own language opens on it.
+   */
   readable: StudySource[];
-  /** Sources on offer for this type that are not readable yet. Empty until the catalogue lands. */
+  /** Sources on offer for this type that are not readable yet, in the same order. Empty until the catalogue lands. */
   offers: StudyOffer[];
   catalogue: CatalogueState;
   /**
@@ -96,45 +116,65 @@ export interface StudySources {
   release: (source: StudySource) => void;
 }
 
+/** `list`, in `buildPackGroups`' order with no query: the reader's language first, then by name. */
+function grouped<T extends GroupablePack>(list: T[], readerLanguage: string): T[] {
+  return buildPackGroups(list, '', readerLanguage).flatMap((row) =>
+    row.kind === 'pack' ? [row.pack] : []
+  );
+}
+
 export function useStudySources(type: StudyType): StudySources {
+  const { i18n } = useTranslation();
   const { rows, catalogue, disk, install, remove, refresh } = usePacks({ deferCatalogue: true });
   const packType = PACK_TYPE_OF_STUDY_TYPE[type];
+  const readerLanguage = i18n.language;
 
   const readable = useMemo(
     () =>
-      rows
-        .filter((row) => row.type === packType && row.installedVersion !== null)
-        .map((row) => ({
-          id: row.id,
-          // The filter above proves it is installed; the fallback is the narrowing TypeScript
-          // cannot carry through `Array.prototype.filter`.
-          version: row.installedVersion ?? 0,
-          title: row.title,
-          language: row.language,
-          languageName: row.languageName,
-          attribution: row.attribution,
-          source: row.source,
-          sourceVersion: row.sourceVersion,
-        })),
-    [rows, packType]
+      grouped(
+        rows
+          .filter((row) => row.type === packType && row.installedVersion !== null)
+          .map((row) => ({
+            id: row.id,
+            // The filter above proves it is installed; the fallback is the narrowing TypeScript
+            // cannot carry through `Array.prototype.filter`.
+            version: row.installedVersion ?? 0,
+            title: row.title,
+            language: row.language,
+            languageName: row.languageName,
+            languageNameEnglish: row.languageNameEnglish,
+            direction: row.direction,
+            attribution: row.attribution,
+            source: row.source,
+            sourceVersion: row.sourceVersion,
+          })),
+        readerLanguage
+      ),
+    [rows, packType, readerLanguage]
   );
 
   const offers = useMemo(
     () =>
-      rows
-        .filter((row) => row.type === packType && row.installedVersion === null && row.offered)
-        .map((row) => ({
-          id: row.id,
-          title: row.title,
-          bytes: row.bytes,
-          // The filter above proves it; the non-null assertion is the narrowing TypeScript cannot
-          // carry through `Array.prototype.filter`.
-          pack: row.offered as CataloguePack,
-          status: row.status,
-          progress: row.progress,
-          failure: row.failure,
-        })),
-    [rows, packType]
+      grouped(
+        rows
+          .filter((row) => row.type === packType && row.installedVersion === null && row.offered)
+          .map((row) => ({
+            id: row.id,
+            title: row.title,
+            language: row.language,
+            languageName: row.languageName,
+            languageNameEnglish: row.languageNameEnglish,
+            direction: row.direction,
+            bytes: row.bytes,
+            // The filter above proves it; the non-null assertion is the narrowing TypeScript
+            // cannot carry through `Array.prototype.filter`.
+            pack: row.offered as CataloguePack,
+            status: row.status,
+            failure: row.failure,
+          })),
+        readerLanguage
+      ),
+    [rows, packType, readerLanguage]
   );
 
   const loadCatalogue = useCallback(() => refresh(), [refresh]);

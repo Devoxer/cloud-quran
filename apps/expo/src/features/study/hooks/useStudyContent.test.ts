@@ -17,9 +17,12 @@ const mockGetVersesForPositions = jest.fn();
 const mockGetPackRange = jest.fn();
 const mockCaptureException = jest.fn();
 
+const mockOpenPack = jest.fn<Promise<void>, unknown[]>(() => Promise.resolve());
+
 jest.mock('@/lib/quranDb', () => ({
   getVersesForPositions: (...args: unknown[]) => mockGetVersesForPositions(...args),
   getPackRange: (...args: unknown[]) => mockGetPackRange(...args),
+  openPack: (...args: unknown[]) => mockOpenPack(...args),
 }));
 jest.mock('@/lib/errors', () => ({
   captureException: (...args: unknown[]) => mockCaptureException(...args),
@@ -38,6 +41,9 @@ const QURAN = [
 
 const RANGE: VerseRange = { from: { surah: 1, verse: 1 }, to: { surah: 1, verse: 3 } };
 
+/** The source, as the pair the hook needs to OPEN it (story 8-4). */
+const FRENCH = { id: 'translation-fr-rashid', version: 2 };
+
 function deferred<T>() {
   let settle: (value: T) => void = () => {};
   const promise = new Promise<T>((resolve) => {
@@ -48,6 +54,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOpenPack.mockImplementation(() => Promise.resolve());
   mockGetVersesForPositions.mockResolvedValue(QURAN);
   mockGetPackRange.mockResolvedValue([]);
 });
@@ -59,7 +66,7 @@ describe('with a source', () => {
       { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
       { surah: 1, verse: 3, text: 'le Tout Miséricordieux', footnotes: null },
     ]);
-    const { result } = renderHook(() => useStudyContent(RANGE, 'translation-fr-rashid'));
+    const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('ready'));
 
     const state = result.current.state;
@@ -73,7 +80,7 @@ describe('with a source', () => {
   });
 
   it('reads the pack by RANGE, with both ends — never a per-ayah loop', async () => {
-    renderHook(() => useStudyContent(RANGE, 'translation-fr-rashid'));
+    renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(mockGetPackRange).toHaveBeenCalled());
     expect(mockGetPackRange).toHaveBeenCalledTimes(1);
     expect(mockGetPackRange).toHaveBeenCalledWith(
@@ -89,7 +96,7 @@ describe('with a source', () => {
     mockGetPackRange.mockResolvedValue([
       { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
     ]);
-    const { result } = renderHook(() => useStudyContent(RANGE, 'translation-fr-rashid'));
+    const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('ready'));
 
     const state = result.current.state;
@@ -97,6 +104,38 @@ describe('with a source', () => {
     expect(state.rows).toHaveLength(3);
     expect(state.rows[1].content).toBeNull();
     expect(state.rows[1].arabic).toBe('ٱلْحَمْدُ لِلَّهِ');
+  });
+});
+
+describe('opening the pack it reads (story 8-4)', () => {
+  it('opens the SOURCE, at its version, before the first read of it', async () => {
+    // ⚠️ THE SHELF NO LONGER OPENS PACKS. It only reads their metadata, so this read is where a
+    // pack becomes a handle — and without the open, `getPackRange` rejects `PackNotOpenError`.
+    const order: string[] = [];
+    mockOpenPack.mockImplementation(async () => {
+      order.push('open');
+    });
+    mockGetPackRange.mockImplementation(async () => {
+      order.push('read');
+      return [];
+    });
+    const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
+    await waitFor(() => expect(result.current.state.kind).toBe('ready'));
+    expect(mockOpenPack).toHaveBeenCalledWith('translation-fr-rashid', 2);
+    expect(order).toEqual(['open', 'read']);
+  });
+
+  it('turns a failed OPEN into the retryable error, not a thrown promise', async () => {
+    mockOpenPack.mockRejectedValueOnce(new Error('file is not a database'));
+    const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
+    await waitFor(() => expect(result.current.state.kind).toBe('error'));
+    expect(mockGetPackRange).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing when there is no source', async () => {
+    const { result } = renderHook(() => useStudyContent(RANGE, null));
+    await waitFor(() => expect(result.current.state.kind).toBe('empty'));
+    expect(mockOpenPack).not.toHaveBeenCalled();
   });
 });
 
@@ -116,7 +155,7 @@ describe('without a source', () => {
 describe('failure', () => {
   it('is a VALUE, and `error` is not `empty`', async () => {
     mockGetPackRange.mockRejectedValue(new Error('file removed under a live handle'));
-    const { result } = renderHook(() => useStudyContent(RANGE, 'translation-fr-rashid'));
+    const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('error'));
     expect(mockCaptureException).toHaveBeenCalled();
   });
@@ -126,7 +165,7 @@ describe('failure', () => {
     mockGetPackRange.mockResolvedValue([
       { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
     ]);
-    const { result } = renderHook(() => useStudyContent(RANGE, 'translation-fr-rashid'));
+    const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('error'));
 
     act(() => result.current.retry());
@@ -145,7 +184,7 @@ describe('a scope change mid-read', () => {
     mockGetPackRange.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
     const { result, rerender } = renderHook(
-      ({ range }: { range: VerseRange }) => useStudyContent(range, 'translation-fr-rashid'),
+      ({ range }: { range: VerseRange }) => useStudyContent(range, FRENCH),
       { initialProps: { range: RANGE } }
     );
 

@@ -16,6 +16,9 @@
  *   pack naming an unrecorded licence   → 1
  *   ledger entry missing a field        → 1
  *   pack with no digest / no row count  → 1
+ *   pack whose edition is pinned at a DIFFERENT version     → 1  (story 8-4: per edition)
+ *   pack whose version is pinned only for ANOTHER edition   → 1  (the substring hole)
+ *   bundled translation not pinned                          → 1
  *
  * Everything runs against FIXTURES in a temp dir via `CQ_VERIFY_PACK_CATALOGUE` /
  * `CQ_VERIFY_PACK_LICENCES`. The committed ledger is never written.
@@ -42,7 +45,9 @@ Prose the gate ignores.
 ### quranenc-republication
 
 - **Upstream:** QuranEnc — https://quranenc.com
-- **Pinned version:** french_rashid v1.0.3
+- **Pinned version:** one per edition:
+  - \`french_rashid\` v1.0.3
+  - \`urdu_junagarhi\` v1.1.3
 - **Grant:** Republication permitted under stated conditions.
 - **Conditions we meet, and how:**
   - No modification: the text is copied verbatim.
@@ -64,6 +69,7 @@ const GOOD_PACK = {
   languageName: 'Français',
   title: 'Le Noble Coran — Rachid Maach',
   source: 'QuranEnc',
+  sourceKey: 'french_rashid',
   sourceVersion: '1.0.3',
   licenceId: 'quranenc-republication',
   attribution: 'Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).',
@@ -73,19 +79,30 @@ const GOOD_PACK = {
   digest: '142dedef190bb94180bbbba6f78f86d70077396732d9df130bf27505a3b4b37c',
 };
 
-/** Write a fixture pair and run the gate over it. `null` for either path means "absent". */
-function run({ ledger = GOOD_LEDGER, catalogue = { packs: [GOOD_PACK] } } = {}) {
+/**
+ * Write a fixture pair and run the gate over it. `null` for either path means "absent".
+ *
+ * `bundled` is the `quran.db` translation record; `null` spells the gate's explicit "none" seam,
+ * which is what every pack-rule case uses — the committed record is never read by a fixture.
+ */
+function run({ ledger = GOOD_LEDGER, catalogue = { packs: [GOOD_PACK] }, bundled = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cq-licences-'));
   workdirs.push(dir);
   const ledgerPath = join(dir, 'LICENCES.md');
   const cataloguePath = join(dir, 'index.json');
   if (ledger !== null) writeFileSync(ledgerPath, ledger, 'utf8');
   if (catalogue !== null) writeFileSync(cataloguePath, JSON.stringify(catalogue, null, 2), 'utf8');
+  let bundledPath = 'none';
+  if (bundled !== null) {
+    bundledPath = join(dir, 'bundled-translation.mjs');
+    writeFileSync(bundledPath, `export const BUNDLED_TRANSLATION = ${JSON.stringify(bundled)};\n`);
+  }
   const result = spawnSync(process.execPath, [SCRIPT], {
     env: {
       ...process.env,
       CQ_VERIFY_PACK_CATALOGUE: cataloguePath,
       CQ_VERIFY_PACK_LICENCES: ledgerPath,
+      CQ_VERIFY_BUNDLED_TRANSLATION: bundledPath,
     },
     encoding: 'utf8',
   });
@@ -165,6 +182,96 @@ describe('verify-licences', () => {
     strictEqual(/does not pin/.test(out), true, out);
   });
 
+  it('refuses a pack whose edition has DRIFTED from its per-edition pin (story 8-4)', () => {
+    // The ledger pins french_rashid at 1.0.3; a catalogue stating 1.0.4 for it is a drift, even
+    // though "1.0.4"-shaped strings are everywhere in a 75-edition ledger.
+    const { code, out } = run({
+      catalogue: {
+        packs: [
+          {
+            ...GOOD_PACK,
+            sourceVersion: '1.0.4',
+            attribution: 'Le Noble Coran — Rachid Maach · QuranEnc.com · v1.0.4',
+          },
+        ],
+      },
+    });
+    strictEqual(code, 1);
+    strictEqual(/pins v1\.0\.3/.test(out), true, out);
+  });
+
+  it('refuses a version that is pinned only for ANOTHER edition — the substring hole', () => {
+    // ⚠️ The defect story 8-4 closes: 1.1.3 IS in the ledger (for urdu_junagarhi), and the old
+    // substring check let it satisfy the French pack. Per edition, it does not.
+    const { code, out } = run({
+      catalogue: {
+        packs: [
+          {
+            ...GOOD_PACK,
+            sourceVersion: '1.1.3',
+            attribution: 'Le Noble Coran — Rachid Maach · QuranEnc.com · v1.1.3',
+          },
+        ],
+      },
+    });
+    strictEqual(code, 1);
+    strictEqual(/does not pin|pins v1\.0\.3/.test(out), true, out);
+  });
+
+  it('refuses a pack that names no upstream key, since a pin is per KEY', () => {
+    const { sourceKey: _dropped, ...noKey } = GOOD_PACK;
+    const { code, out } = run({ catalogue: { packs: [noKey] } });
+    strictEqual(code, 1);
+    strictEqual(/has no sourceKey/.test(out), true, out);
+  });
+
+  it('refuses a ledger that pins one edition at two versions', () => {
+    const { code, out } = run({
+      ledger: GOOD_LEDGER.replace(
+        '  - `urdu_junagarhi` v1.1.3',
+        '  - `urdu_junagarhi` v1.1.3\n  - `french_rashid` v1.0.2'
+      ),
+    });
+    strictEqual(code, 1);
+    strictEqual(/pins "french_rashid" twice/.test(out), true, out);
+  });
+
+  it('holds the bundled translation to its own pin', () => {
+    const ledger = GOOD_LEDGER.replace(
+      '---\n\n## Sources',
+      `### quranenc-bundled-english
+
+- **Upstream:** QuranEnc english_rwwad.
+- **Pinned version:** \`english_rwwad\` v1.0.19
+- **Grant:** Republication permitted under stated conditions.
+- **Conditions we meet, and how:** verbatim, credited, versioned.
+- **Redistribution argument:** the grant permits it.
+
+---
+
+## Sources`
+    );
+    const bundled = {
+      licenceId: 'quranenc-bundled-english',
+      sourceKey: 'english_rwwad',
+      sourceVersion: '1.0.19',
+      attribution: 'English Translation - Rowwad Translation Center · QuranEnc.com · v1.0.19',
+    };
+    strictEqual(run({ ledger, bundled }).code, 0);
+    const drifted = run({
+      ledger,
+      bundled: { ...bundled, sourceVersion: '1.0.20', attribution: 'x · v1.0.20' },
+    });
+    strictEqual(drifted.code, 1);
+    strictEqual(
+      /bundled translation was built from english_rwwad v1\.0\.20/.test(drifted.out),
+      true
+    );
+    const unrecorded = run({ bundled });
+    strictEqual(unrecorded.code, 1);
+    strictEqual(/bundled translation names licence/.test(unrecorded.out), true, unrecorded.out);
+  });
+
   it('refuses an attribution that states a DIFFERENT version from the one shipping', () => {
     // The stale-after-a-bump case: the pin moved, the credit line did not.
     const { code, out } = run({
@@ -215,6 +322,7 @@ describe('verify-licences', () => {
         ...process.env,
         CQ_VERIFY_PACK_CATALOGUE: cataloguePath,
         CQ_VERIFY_PACK_LICENCES: ledgerPath,
+        CQ_VERIFY_BUNDLED_TRANSLATION: 'none',
       },
       encoding: 'utf8',
     });

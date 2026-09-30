@@ -22,4 +22,9 @@ export {
   usePacks,
 } from './hooks/usePacks';
 export { type CataloguePack } from './lib/catalogue';
+export {
+  buildPackGroups,
+  type GroupablePack,
+  type PackListRow,
+} from './lib/packGroups';
 export { type PackInstallFailure } from './lib/packStore';

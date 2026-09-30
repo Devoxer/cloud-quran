@@ -127,6 +127,10 @@
       "murattal": "Measured, unadorned recitation.",
       "mujawwad": "Ornamented, melodic recitation.",
       "muallim": "Teaching style — phrases repeated to learn by."
+    },
+    "narration": {
+      "title": "Narrated translations",
+      "gloss": "The meaning read aloud in another language, ayah by ayah."
     }
   },
   "download": {

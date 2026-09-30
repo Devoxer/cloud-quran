@@ -2,7 +2,8 @@
  * The reciter catalogue (story 7-2).
  *
  * ⚠️ EVERY EXPECTATION HERE IS A LITERAL, AND THAT IS THE ENTIRE POINT OF THE FILE. The catalogue
- * is a claim about what the CDN publishes: thirty-nine ids, each of which must have a manifest and 114
+ * is a claim about what the CDN publishes: fifty ids — 39 reciters and 11 narrated translations
+ * (story 8-4) — each of which must have a manifest and 114
  * MP3s under `AUDIO_CDN_BASE`. A test that derived its expectation from `RECITERS` — counting the
  * array, mapping its own styles, asking it for the default — would agree with the array whatever
  * the array said, including after a rename that silently points the app at a voice the pipeline
@@ -22,6 +23,7 @@ import {
   reciterDisplayName,
   reciterNameOf,
   resolveReciterId,
+  VOICE_KINDS,
 } from './reciters';
 
 /**
@@ -71,10 +73,22 @@ const PUBLISHED_IDS = [
   'husary-mujawwad',
   'minshawi-mujawwad',
   'husary-muallim',
+  // Narrated translations (story 8-4), alphabetical by English title.
+  'narration-as-rafeeq',
+  'narration-zh-suliman',
+  'narration-nl-center',
+  'narration-tl-rwwad',
+  'narration-fr-rashid',
+  'narration-fa-ih',
+  'narration-pt-nasr',
+  'narration-si-mahir',
+  'narration-so-yacob',
+  'narration-ta-omar-brief',
+  'narration-vi-rwwad',
 ];
 
 describe('the catalogue names exactly what the pipeline publishes', () => {
-  it('holds the thirty-nine published ids, in order', () => {
+  it('holds the fifty published ids, in order', () => {
     expect(RECITERS.map((reciter) => reciter.id)).toEqual(PUBLISHED_IDS);
   });
 
@@ -100,7 +114,7 @@ describe('the catalogue names exactly what the pipeline publishes', () => {
     );
     const fromPipeline = [...script.matchAll(/^\s{4}id: '([a-z0-9-]+)',$/gm)].map((m) => m[1]);
     // Anti-vacuity: a regex that matched nothing would make the next line pass against `[]`.
-    expect(fromPipeline).toHaveLength(39);
+    expect(fromPipeline).toHaveLength(50);
     expect([...fromPipeline].sort()).toEqual([...PUBLISHED_IDS].sort());
   });
 
@@ -109,27 +123,50 @@ describe('the catalogue names exactly what the pipeline publishes', () => {
     // ⚠️ ON `RECITERS`, NOT ON THE LITERAL LIST. Asserting `new Set(PUBLISHED_IDS).size` restated
     // the array this file wrote three lines up: no edit to the catalogue could ever redden it.
     // The array that can grow a duplicate is the shipped one.
-    expect(new Set(RECITERS.map((r) => r.id)).size).toBe(39);
+    expect(new Set(RECITERS.map((r) => r.id)).size).toBe(50);
   });
 
   it('offers exactly three styles, in the order the picker groups them', () => {
     expect(RECITER_STYLES).toEqual(['murattal', 'mujawwad', 'muallim']);
   });
 
-  it('gives every reciter a known style and both names', () => {
+  it('gives every voice a known kind and both names, and every reciter a known style', () => {
     const known = new Set<string>(['murattal', 'mujawwad', 'muallim']);
     for (const reciter of RECITERS) {
-      expect(known.has(reciter.style)).toBe(true);
+      expect(['recitation', 'narration']).toContain(reciter.kind);
+      if (reciter.kind === 'recitation') expect(known.has(reciter.style)).toBe(true);
       expect(reciter.nameEnglish.length).toBeGreaterThan(0);
       expect(reciter.nameArabic.length).toBeGreaterThan(0);
     }
   });
 
   it('carries the three styles in the counts the CDN publishes', () => {
-    const count = (style: ReciterStyle) => RECITERS.filter((r) => r.style === style).length;
+    const count = (style: ReciterStyle) =>
+      RECITERS.filter((r) => r.kind === 'recitation' && r.style === style).length;
     expect(count('murattal')).toBe(35);
     expect(count('mujawwad')).toBe(3);
     expect(count('muallim')).toBe(1);
+  });
+
+  it('tells a narration from a reciter by KIND, never by a fourth style (story 8-4)', () => {
+    // ⚠️ A narration under a recitation-style heading is the mistake this guards: the picker's
+    // style glosses describe how the ARABIC is recited, which a translation is not.
+    expect(VOICE_KINDS).toEqual(['recitation', 'narration']);
+    expect(RECITERS.filter((r) => r.kind === 'narration')).toHaveLength(11);
+    expect(RECITER_STYLES).not.toContain('narration');
+    const french = RECITERS.find((r) => r.id === 'narration-fr-rashid');
+    expect(french).toEqual({
+      id: 'narration-fr-rashid',
+      nameArabic: 'الترجمة الفرنسية - رشيد معاش',
+      nameEnglish: 'French Translation - Rachid Maach',
+      kind: 'narration',
+      language: 'fr',
+      languageName: 'Français',
+    });
+  });
+
+  it('resolves a stored narration id like any voice — the worker carries it unchanged', () => {
+    expect(resolveReciterId('narration-fa-ih')).toBe('narration-fa-ih');
   });
 
   /**

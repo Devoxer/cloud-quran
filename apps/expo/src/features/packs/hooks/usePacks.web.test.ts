@@ -57,7 +57,7 @@ jest.mock('../lib/catalogue', () => ({
 const mockClosePack = jest.fn<Promise<void>, unknown[]>(() => Promise.resolve());
 jest.mock('@/lib/quranDb', () => ({
   closePack: (...args: unknown[]) => mockClosePack(...args),
-  getPackMeta: jest.fn(() =>
+  describePack: jest.fn(() =>
     Promise.resolve({
       title: 'Le Noble Coran — Rachid Maach',
       language: 'fr',
@@ -68,8 +68,6 @@ jest.mock('@/lib/quranDb', () => ({
       attribution: 'Traduction française : Rachid Maach.',
     })
   ),
-  getPackSurah: jest.fn(() => Promise.resolve([{ surah: 1, verse: 1, text: 'Au nom d’Allah' }])),
-  isPackReadable: () => true,
   openPack: jest.fn(() => Promise.resolve()),
 }));
 
@@ -84,7 +82,8 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
  * hoisted, `require` is not; `packStore.web.test.ts` records the same line for the same reason.
  */
 const { usePackStore } = require('@/stores/packStore') as typeof import('@/stores/packStore');
-const { usePacks } = require('./usePacks') as typeof import('./usePacks');
+const { __resetDescribedPacksForTests, usePacks } =
+  require('./usePacks') as typeof import('./usePacks');
 
 const OFFERED = {
   id: 'translation-fr-rashid',
@@ -92,6 +91,8 @@ const OFFERED = {
   type: 'translation',
   language: 'fr',
   languageName: 'Français',
+  languageNameEnglish: 'French',
+  direction: 'ltr' as const,
   title: 'Le Noble Coran — Rachid Maach',
   source: 'QuranEnc',
   sourceVersion: '1.0.3',
@@ -107,6 +108,8 @@ const HELD = [{ id: 'translation-fr-rashid', version: 1, bytes: 1_425_408 }];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // A file's description is cached per process; each case starts from a shelf never described.
+  __resetDescribedPacksForTests();
   mockListHeld.mockReturnValue([]);
   mockFetchCatalogue.mockResolvedValue([OFFERED]);
   usePackStore.setState({ entries: {} });
@@ -126,15 +129,17 @@ describe('on web', () => {
     expect(result.current.installedBytes).toBe(1_425_408);
   });
 
-  it('a held pack is NOT re-opened by file name — it is already open', async () => {
+  it('a held pack is described, NOT re-opened by file name — it is already open', async () => {
     mockListHeld.mockReturnValue(HELD);
     const { result } = renderHook(() => usePacks());
     await waitFor(() => expect(result.current.disk).toBe('ready'));
     // ⚠️ `openPack` OPENS BY FILE NAME. On web there is no file; `holdPack` opened the connection
-    // from the bytes it verified, so calling it here would fail every hydration.
+    // from the bytes it verified, and `describePack` reads through that live handle.
     // biome-ignore lint/style/noCommonJs: see the module header — `import` is hoisted, `require` is not.
-    const quranDb = require('@/lib/quranDb') as { openPack: jest.Mock };
+    const quranDb = require('@/lib/quranDb') as { openPack: jest.Mock; describePack: jest.Mock };
     expect(quranDb.openPack).not.toHaveBeenCalled();
+    expect(quranDb.describePack).toHaveBeenCalledWith('translation-fr-rashid', 1);
+    expect(result.current.rows[0].title).toBe('Le Noble Coran — Rachid Maach');
   });
 
   it('INSTALL means hold-for-the-session, never a download to a directory', async () => {

@@ -1,5 +1,25 @@
-// Builds apps/expo/src/data/quran.db from the tracked Tanzil XML sources.
+// Builds apps/expo/src/data/quran.db from the tracked Tanzil Quran XML and QuranEnc's English.
 // Run: node scripts/prepare-data.ts   (pnpm prepare-data)
+//
+// ⚠️ THE ARABIC AND THE ENGLISH HAVE DIFFERENT SOURCES AND DIFFERENT RULES (story 8-4).
+//   • The Quran text (`verses`) comes from the COMMITTED Tanzil XML in packages/quran-data/data and
+//     is guarded ayah by ayah by `pnpm verify`. It does not change.
+//   • The bundled English (`translations`) comes from QuranEnc's `english_rwwad`, under the written
+//     republication grant recorded as `quranenc-bundled-english` in
+//     packages/quran-data/data/packs/LICENCES.md. It replaced Tanzil's `en.sahih`, whose status we
+//     could not document. The upstream version is PINNED in that ledger entry: a live version that
+//     is not the pin stops the build, because the grant requires the version to be STATED.
+//     `translation` and `footnotes` are copied verbatim, markers and all.
+//
+// ⚠️ A NEW quran.db DOES NOT REACH AN EXISTING INSTALL BY ITSELF. `importDatabaseFromAssetAsync`
+// copies the asset once per install and never again; `apps/expo/src/lib/quranDb.ts` versions the
+// DATABASE NAME for exactly that reason. A rebuild that changes the file's content must bump
+// `QURAN_DATABASE_NAME` there (and move the old name into the superseded list), or every reader
+// who already has the app keeps the old text forever while a fresh simulator looks correct.
+//
+// The owner's 2026-08-24 note about a one-byte SQLite version stamp difference (header offset 99)
+// still describes a rebuild on a different Node than the committed file's. `pnpm verify` compares
+// CONTENT, never the file's bytes, and is the authority on whether the text is intact.
 
 import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -7,32 +27,33 @@ import { DatabaseSync } from 'node:sqlite';
 import { XMLParser } from 'fast-xml-parser';
 
 import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata.ts';
+import {
+  assertPinned,
+  attributionOf,
+  fetchQuranEncEditions,
+  fetchUpstreamDatabase,
+  ledgerPins,
+  readUpstreamRows,
+} from './quranenc.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const DATA_DIR = resolve(ROOT, 'packages/quran-data/data');
-// ⚠️ DECIDED 2026-08-24 (owner): A REBUILD WILL DIRTY quran.db BY EXACTLY ONE BYTE. LEAVE IT.
-//
-// Offset 99 of the SQLite header is the writing library's version stamp. The committed file was
-// built by Bun's SQLite 3.51.0; Node 24 bundles 3.51.3, so the stamp differs by 3 and the file
-// hash changes. Nothing else does — `.dump` output is identical, and regenerating hashes.ts from
-// a Node-built database reproduces the committed baseline byte-for-byte, so `pnpm verify` cannot
-// see the difference at all.
-//
-// The owner chose to accept the permanent diff rather than re-commit the Quran database. So:
-//   • `git status` showing ONLY quran.db modified after `pnpm prepare-data` is EXPECTED.
-//   • Do NOT commit it to "clean up" — that is churn on a hash-verified artifact for one byte.
-//   • Do NOT go looking for a corruption. `pnpm verify` is the authority; if it passes, the text
-//     is intact. `git checkout -- apps/expo/src/data/quran.db` puts the file back.
-// If a rebuild ever changes MORE than that one byte, that IS worth investigating.
+const LEDGER_PATH = resolve(DATA_DIR, 'packs/LICENCES.md');
+/** Where the upstream English is downloaded to. Gitignored: the repo keeps the built db only. */
+const BUILD_DIR = resolve(ROOT, 'build/data');
+const BUNDLED_RECORD_PATH = resolve(ROOT, 'packages/quran-data/src/bundled-translation.ts');
+
+/** The edition the bundled English is built from, and the ledger entry that grants it. */
+const BUNDLED_KEY = 'english_rwwad';
+const BUNDLED_LICENCE_ID = 'quranenc-bundled-english';
 
 const DB_PATH = resolve(ROOT, 'apps/expo/src/data/quran.db');
 
-// Tanzil.net URLs
+// Tanzil.net URLs — used only when the committed XML is absent (it never is in a checkout).
 const URLS = {
   uthmani:
     'https://tanzil.net/pub/download/index.php?quranType=uthmani&outType=xml&marks=true&sajdah=true&agree=true',
   simple: 'https://tanzil.net/pub/download/index.php?quranType=simple&outType=xml&agree=true',
-  translation: 'https://tanzil.net/trans/?transID=en.sahih&type=xml',
 };
 
 interface TanzilAya {
@@ -78,6 +99,73 @@ function getAyas(sura: TanzilSura): TanzilAya[] {
   return Array.isArray(sura.aya) ? sura.aya : [sura.aya];
 }
 
+/**
+ * The bundled English, verbatim, keyed `surah:verse` — after refusing an unpinned upstream.
+ * Also answers what the credit line has to say, which `writeBundledRecord` commits.
+ */
+async function readBundledEnglish(): Promise<{
+  rows: Map<string, { text: string; footnotes: string | null }>;
+  version: string;
+  title: string;
+}> {
+  const pins = ledgerPins(readFileSync(LEDGER_PATH, 'utf-8'), BUNDLED_LICENCE_ID);
+  // The English title from the English list: this edition's language IS English.
+  const edition = (await fetchQuranEncEditions('en')).find((e) => e.key === BUNDLED_KEY);
+  if (!edition) {
+    throw new Error(`QuranEnc no longer offers ${BUNDLED_KEY}. The ledger names this edition.`);
+  }
+  assertPinned(edition, pins, BUNDLED_LICENCE_ID);
+  mkdirSync(BUILD_DIR, { recursive: true });
+  const path = resolve(BUILD_DIR, `upstream-${BUNDLED_KEY}.sqlite`);
+  await fetchUpstreamDatabase(BUNDLED_KEY, path);
+  const rows = new Map<string, { text: string; footnotes: string | null }>();
+  for (const row of readUpstreamRows(path)) {
+    // Verbatim, `''` included: QuranEnc writes an empty string for "no footnote" on 4,021 rows,
+    // and a row is copied, not tidied. Every reader treats `''` and NULL alike.
+    rows.set(`${row.sura}:${row.aya}`, { text: row.translation, footnotes: row.footnotes });
+  }
+  return { rows, version: edition.version, title: edition.title };
+}
+
+/** A single-quoted TypeScript string literal — the repo's Biome style, so the output lints clean. */
+const tsString = (value: string): string =>
+  `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+
+/**
+ * Commit what the bundled English was built from — the app renders its credit from this file, and
+ * `verify-licences.ts` checks its version against the ledger pin.
+ */
+function writeBundledRecord(version: string, title: string): void {
+  const content = `// Auto-generated by scripts/prepare-data.ts — DO NOT EDIT
+// What apps/expo/src/data/quran.db's bundled translation was built from (story 8-4). The app
+// renders \`attribution\` beside the text; \`pnpm verify\` checks \`sourceVersion\` against the
+// ledger's pin for \`sourceKey\` (packages/quran-data/data/packs/LICENCES.md, "${BUNDLED_LICENCE_ID}").
+
+export interface BundledTranslationRecord {
+  licenceId: string;
+  source: string;
+  sourceKey: string;
+  sourceVersion: string;
+  language: string;
+  direction: 'ltr' | 'rtl';
+  title: string;
+  attribution: string;
+}
+
+export const BUNDLED_TRANSLATION: BundledTranslationRecord = {
+  licenceId: '${BUNDLED_LICENCE_ID}',
+  source: 'QuranEnc',
+  sourceKey: '${BUNDLED_KEY}',
+  sourceVersion: '${version}',
+  language: 'en',
+  direction: 'ltr',
+  title: ${tsString(title)},
+  attribution: ${tsString(attributionOf(title, version))},
+};
+`;
+  writeFileSync(BUNDLED_RECORD_PATH, content, 'utf-8');
+}
+
 async function main() {
   console.log('=== Quran Data Pipeline ===\n');
 
@@ -85,28 +173,26 @@ async function main() {
   mkdirSync(DATA_DIR, { recursive: true });
   mkdirSync(resolve(ROOT, 'apps/expo/src/data'), { recursive: true });
 
-  // Step 1: Download XML data
-  console.log('Step 1: Downloading Tanzil XML data...');
+  // Step 1: Read the committed Quran XML, and fetch the pinned English
+  console.log('Step 1: Reading Tanzil XML and fetching QuranEnc english_rwwad...');
   const uthmaniXml = await downloadFile(URLS.uthmani, 'quran-uthmani.xml');
   const simpleXml = await downloadFile(URLS.simple, 'quran-simple.xml');
-  const translationXml = await downloadFile(URLS.translation, 'en.sahih.xml');
+  const english = await readBundledEnglish();
+  console.log(`  ${BUNDLED_KEY} v${english.version}: ${english.rows.size} rows`);
 
   // Step 2: Parse XML
   console.log('\nStep 2: Parsing XML data...');
   const uthmaniSuras = parseSuras(uthmaniXml);
   const simpleSuras = parseSuras(simpleXml);
-  const translationSuras = parseSuras(translationXml);
 
   console.log(`  Uthmani suras: ${uthmaniSuras.length}`);
   console.log(`  Simple suras: ${simpleSuras.length}`);
-  console.log(`  Translation suras: ${translationSuras.length}`);
 
-  if (
-    uthmaniSuras.length !== 114 ||
-    simpleSuras.length !== 114 ||
-    translationSuras.length !== 114
-  ) {
+  if (uthmaniSuras.length !== 114 || simpleSuras.length !== 114) {
     throw new Error('Expected 114 surahs in each XML file');
+  }
+  if (english.rows.size !== 6236) {
+    throw new Error(`Expected 6236 English rows from ${BUNDLED_KEY}, got ${english.rows.size}`);
   }
 
   // Step 3: Create SQLite database
@@ -144,6 +230,7 @@ async function main() {
       verse_number INTEGER NOT NULL,
       language TEXT NOT NULL,
       text TEXT NOT NULL,
+      footnotes TEXT,
       PRIMARY KEY (surah_number, verse_number, language)
     );
 
@@ -163,7 +250,7 @@ async function main() {
     'INSERT INTO verses (surah_number, verse_number, uthmani_text, simple_text) VALUES (?, ?, ?, ?)'
   );
   const insertTranslation = db.prepare(
-    'INSERT INTO translations (surah_number, verse_number, language, text) VALUES (?, ?, ?, ?)'
+    'INSERT INTO translations (surah_number, verse_number, language, text, footnotes) VALUES (?, ?, ?, ?, ?)'
   );
   const insertMetadata = db.prepare(
     'INSERT INTO surah_metadata (surah_number, name_arabic, name_english, name_transliteration, verse_count, revelation_type, revelation_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -175,21 +262,14 @@ async function main() {
     const surahNum = i + 1;
     const uthmaniSura = uthmaniSuras[i];
     const simpleSura = simpleSuras[i];
-    const translationSura = translationSuras[i];
 
     const uthmaniAyas = getAyas(uthmaniSura);
     const simpleAyas = getAyas(simpleSura);
-    const translationAyas = getAyas(translationSura);
 
     // Validate per-sura verse counts match across all three XML sources
     if (simpleAyas.length !== uthmaniAyas.length) {
       throw new Error(
         `Sura ${surahNum}: Simple has ${simpleAyas.length} ayas but Uthmani has ${uthmaniAyas.length}`
-      );
-    }
-    if (translationAyas.length !== uthmaniAyas.length) {
-      throw new Error(
-        `Sura ${surahNum}: Translation has ${translationAyas.length} ayas but Uthmani has ${uthmaniAyas.length}`
       );
     }
 
@@ -198,14 +278,16 @@ async function main() {
       const verseNum = Number(uthmaniAyas[j].index);
       const uthmaniText = uthmaniAyas[j].text;
       const simpleText = simpleAyas[j].text;
-      const translationText = translationAyas[j].text;
+      // Keyed by the Arabic's own (surah, verse), so a missing English row is a loud error below
+      // rather than a silent shift of every later translation by one ayah.
+      const translation = english.rows.get(`${surahNum}:${verseNum}`);
 
-      if (!uthmaniText || !simpleText || !translationText) {
+      if (!uthmaniText || !simpleText || !translation?.text) {
         throw new Error(`Empty text found at ${surahNum}:${verseNum}`);
       }
 
       insertVerse.run(surahNum, verseNum, uthmaniText, simpleText);
-      insertTranslation.run(surahNum, verseNum, 'en', translationText);
+      insertTranslation.run(surahNum, verseNum, 'en', translation.text, translation.footnotes);
     }
 
     // Insert surah metadata from single source of truth (SURAH_METADATA)
@@ -291,6 +373,9 @@ async function main() {
   console.log(`   Verses: ${verseCount.count} across ${surahCount.count} surahs`);
   console.log(`   Translations: ${translationCount.count}`);
   console.log(`   Metadata: ${metadataCount.count} surahs`);
+
+  writeBundledRecord(english.version, english.title);
+  console.log(`   Bundled translation record: ${BUNDLED_RECORD_PATH}`);
 }
 
 main().catch((err) => {

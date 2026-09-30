@@ -140,6 +140,8 @@ export const TEXT_ALIGN_END = 'right' as const;
 /**
  * The UI languages written right to left. A set rather than a per-language flag on the bundle:
  * direction is a property of the SCRIPT, and the only thing that reads it is this module.
+ *
+ * ⚠️ INTERFACE LOCALES ONLY. A content pack's direction is its own data — {@link isRTLContent}.
  */
 export const RTL_LANGUAGES: readonly string[] = ['ar'];
 
@@ -147,43 +149,6 @@ export const RTL_LANGUAGES: readonly string[] = ['ar'];
 export function isRTLLanguage(code: string | undefined | null): boolean {
   return code != null && RTL_LANGUAGES.includes(code);
 }
-
-/**
- * The CONTENT languages written right to left — every script a content pack may arrive in.
- *
- * ⚠️ IT IS A DIFFERENT LIST FROM {@link RTL_LANGUAGES} AND THAT SEPARATION IS THE POINT (story
- * 8-3 review, S6). `RTL_LANGUAGES` is the set of INTERFACE locales this app ships, which is two;
- * a content pack's language is not an interface language and never will be. Story 8-2's content
- * screen and story 8-3's study sheet both drew a pack's own text with `isRTLLanguage`, so the one
- * entry there — Arabic — was doing double duty. **Story 8-4 ships Urdu, Persian and Pashto**, all
- * of which would have ranged LEFT with nothing to catch it: `rtl.test.ts` only scans content files
- * for `I18nManager`/`isRTL` reads, and a correct-looking call to the wrong list passes that scan.
- *
- * Codes are BCP-47 PRIMARY subtags, matched case-insensitively against everything before the first
- * separator, so `fa-IR`, `ur-PK` and `ckb-IQ` all resolve. Scripts, not countries: `pa` (Punjabi)
- * is deliberately ABSENT because Gurmukhi is left-to-right and Shahmukhi is written `pa-Arab` —
- * a tag with an explicit Arabic script subtag is matched below on the script instead.
- */
-export const RTL_CONTENT_LANGUAGES: readonly string[] = [
-  'ar', // Arabic
-  'fa', // Persian / Farsi
-  'ur', // Urdu
-  'ps', // Pashto
-  'sd', // Sindhi
-  'ks', // Kashmiri
-  'ug', // Uyghur
-  'dv', // Divehi
-  'ckb', // Central Kurdish (Sorani)
-  'ku', // Kurdish, where written in the Arabic script
-  'he', // Hebrew
-  'yi', // Yiddish
-  'prs', // Dari
-  'bal', // Balochi
-  'arc', // Aramaic / Syriac
-];
-
-/** Script subtags that decide direction on their own, whatever the language in front of them. */
-const RTL_SCRIPTS = ['arab', 'aran', 'hebr', 'syrc', 'thaa'];
 
 /**
  * The `textAlign` that puts a CONTENT block on ITS OWN start edge, whatever the interface is doing.
@@ -216,14 +181,24 @@ export function contentTextAlign(contentIsRTL: boolean): 'left' | 'right' {
 }
 
 /**
- * Whether a CONTENT language is written right to left — the one question a draw site should ask
- * about a pack's own text. Never about the interface: that is {@link resolveDirection}.
+ * Whether a pack's CONTENT is written right to left — the one question a draw site should ask
+ * about a pack's own text, title, footnotes or attribution. Never about the interface: that is
+ * {@link resolveDirection}.
+ *
+ * ⚠️ IT READS THE PACK'S OWN `direction`, AND A LANGUAGE LIST IS NO LONGER THE AUTHORITY (story
+ * 8-4). Story 8-3 replaced a one-word defect — content drawn with the INTERFACE's RTL list — with
+ * a hand-written list of right-to-left CONTENT languages. That was defensible for one French
+ * pack; across QuranEnc's 56 languages it was a guaranteed miss, and it missed on day one: the
+ * list API marks N'Ko (`nqo`) right to left and the hand-written list did not have it. QuranEnc
+ * states each edition's direction, `scripts/prepare-packs.ts` carries it into the catalogue AND
+ * into every pack's `pack_meta` (so it survives offline), and this reads it.
+ *
+ * Anything but the literal `'rtl'` — missing, empty, a typo, a value from a future catalogue — is
+ * left to right: the I/O matrix's rule. A wrongly-ranged paragraph is legible and recoverable; a
+ * refused edition is neither.
  */
-export function isRTLContentLanguage(code: string | undefined | null): boolean {
-  if (code == null || code.length === 0) return false;
-  const parts = code.toLowerCase().split(/[-_]/);
-  if (parts.some((part) => RTL_SCRIPTS.includes(part))) return true;
-  return RTL_CONTENT_LANGUAGES.includes(parts[0]);
+export function isRTLContent(direction: string | null | undefined): boolean {
+  return direction === 'rtl';
 }
 
 /**

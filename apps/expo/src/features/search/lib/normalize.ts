@@ -109,14 +109,28 @@ const ALIF_MAQSURA = /\u0649/g;
 const TEH_MARBUTA = /\u0629/g;
 
 /**
+ * Rule 8 — an inline FOOTNOTE MARKER, `[1]`…`[2215]`, folded to a space (story 8-4).
+ *
+ * ⚠️ IT EXISTS BECAUSE THE BUNDLED ENGLISH CHANGED SOURCE. Since story 8-4 it is QuranEnc's
+ * `english_rwwad`, which marks its footnotes inline — `"All praise be to Allah[1], the Lord[2] of
+ * the worlds[3]"`, on 2,215 of the 6,236 rows — and the grant forbids removing them from the text.
+ * Rule 9 alone would keep the digits (they are part of the kept class), so a reader typing that
+ * sentence as they read it would be matching `allah 1 the lord 2` and would not find Al-Fatihah
+ * 1:2 at all (measured 2026-09-29). This touches the SEARCH form only; the text drawn is never
+ * altered. A bracketed NUMBER is a marker; bracketed words (`[O Prophet]`) are text, and rule 9
+ * handles those.
+ */
+const FOOTNOTE_MARKER = /\[\d+\]/g;
+
+/**
  * Rule 9 — every run of characters that is not a letter or a digit, folded to ONE space.
  *
- * ⚠️ WHAT THIS BUYS IS THE ENGLISH SIDE, AND IT IS NOT COSMETIC. The bundled translation is
- * Sahih International, which marks its editorial insertions with square brackets: 3,019 of the
- * 6,236 rows carry a `[` — `"[All] praise is [due] to Allah, Lord of the worlds"`. Without this
- * rule a reader typing that sentence as they read it matches nothing on nearly half the book.
- * 9,980 commas and 1,130 hyphens are the same problem one punctuation mark down: `Ever-Living`
- * and `Ever Living` must be one query, and they are, because BOTH sides pass through here.
+ * ⚠️ WHAT THIS BUYS IS THE ENGLISH SIDE, AND IT IS NOT COSMETIC. The bundled translation marks its
+ * editorial insertions with square brackets — 1,295 of `english_rwwad`'s 6,236 rows, e.g.
+ * `"[O Prophet]"`; Tanzil's Saheeh text it replaced carried 3,019. Without this rule a reader
+ * typing a sentence as they read it matches nothing wherever a bracket falls inside it.
+ * Commas and hyphens are the same problem one punctuation mark down: `Ever-Living` and
+ * `Ever Living` must be one query, and they are, because BOTH sides pass through here.
  *
  * ⚠️ IT IS AN EXPLICIT CHARACTER CLASS RATHER THAN `\p{L}`, AND THAT IS A RUNTIME CONSTRAINT.
  * Unicode property escapes are not something to rely on in Hermes; an unsupported `\p{…}` is a
@@ -152,6 +166,7 @@ export function normalizeForSearch(text: string, daggerAlif: '' | typeof PLAIN_A
     .replace(KEHEH, '\u0643')
     .replace(ALIF_MAQSURA, '\u064A')
     .replace(TEH_MARBUTA, '\u0647')
+    .replace(FOOTNOTE_MARKER, ' ')
     .toLowerCase()
     .replace(SEPARATOR, ' ')
     .replace(WHITESPACE, ' ')

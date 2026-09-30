@@ -56,6 +56,8 @@ const PACK: CataloguePack = {
   type: 'translation',
   language: 'fr',
   languageName: 'Français',
+  languageNameEnglish: 'French',
+  direction: 'ltr' as const,
   title: 'Le Noble Coran — Rachid Maach',
   source: 'QuranEnc',
   sourceVersion: '1.0.3',

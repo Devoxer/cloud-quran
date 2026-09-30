@@ -159,6 +159,9 @@
     "sourcesUnavailable": "Impossible de lire ce qui est installé sur cet appareil.",
     "sourceWithKey": "{{title}} ({{key}})",
     "release": "Libérer",
-    "rowLabel": "{{name}} · {{verse}}"
+    "rowLabel": "{{name}} · {{verse}}",
+    "findSource": "Trouver une source ({{number}})",
+    "searchSources": "Rechercher par langue ou par titre",
+    "noMatches": "Aucun résultat pour cette recherche."
   }
 }

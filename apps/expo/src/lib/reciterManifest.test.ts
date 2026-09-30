@@ -220,6 +220,36 @@ describe('isSurahTimed', () => {
     expect(isSurahTimed(manifest, 0)).toBe(false);
     expect(isSurahTimed(manifest, 200)).toBe(false);
   });
+
+  it('passes a narration voice on measured windows alone (story 8-4)', () => {
+    // Verbatim from `cdn.nobleachievements.com/audio/narration-fr-rashid/manifest.json`, as the
+    // pipeline published it on 2026-09-29: every window is one QuranEnc per-ayah file's measured
+    // length, laid end to end — no vendor timing file exists for a narration.
+    const narration = parseReciterManifest({
+      1: [
+        { verse_key: '1:1', timestamp_from: 0, timestamp_to: 4336 },
+        { verse_key: '1:2', timestamp_from: 4336, timestamp_to: 6452 },
+        { verse_key: '1:3', timestamp_from: 6452, timestamp_to: 9404 },
+        { verse_key: '1:4', timestamp_from: 9404, timestamp_to: 11624 },
+        { verse_key: '1:5', timestamp_from: 11624, timestamp_to: 15438 },
+        { verse_key: '1:6', timestamp_from: 15438, timestamp_to: 16770 },
+        { verse_key: '1:7', timestamp_from: 16770, timestamp_to: 22752 },
+      ],
+      114: [
+        { verse_key: '114:1', timestamp_from: 0, timestamp_to: 3605 },
+        { verse_key: '114:2', timestamp_from: 3605, timestamp_to: 5460 },
+        { verse_key: '114:3', timestamp_from: 5460, timestamp_to: 7001 },
+        { verse_key: '114:4', timestamp_from: 7001, timestamp_to: 10919 },
+        { verse_key: '114:5', timestamp_from: 10919, timestamp_to: 13845 },
+        { verse_key: '114:6', timestamp_from: 13845, timestamp_to: 17241 },
+      ],
+    });
+    expect(isSurahTimed(narration, 1)).toBe(true);
+    expect(isSurahTimed(narration, 114)).toBe(true);
+    expect(verseAtMs(narration, 1, 10_000)).toBe(4);
+    expect(offsetOfVerse(narration, 114, 6)).toBe(13845);
+    expect(lastVerseOf(narration, 114)).toBe(6);
+  });
 });
 
 /**

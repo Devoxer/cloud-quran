@@ -26,6 +26,8 @@ const mockPacks = {
 };
 
 jest.mock('@/features/packs', () => ({
+  // The REAL grouping — pure, and the grouping is part of what this screen promises.
+  buildPackGroups: jest.requireActual('@/features/packs/lib/packGroups').buildPackGroups,
   usePacks: () => mockPacks,
 }));
 
@@ -48,6 +50,8 @@ const OFFERED = {
   type: 'translation',
   language: 'fr',
   languageName: 'Français',
+  languageNameEnglish: 'French',
+  direction: 'ltr',
   title: 'Le Noble Coran — Rachid Maach',
   source: 'QuranEnc',
   sourceVersion: '1.0.3',
@@ -64,6 +68,8 @@ const baseRow = {
   title: 'Le Noble Coran — Rachid Maach',
   language: 'fr',
   languageName: 'Français',
+  languageNameEnglish: 'French',
+  direction: 'ltr',
   type: 'translation',
   source: 'QuranEnc',
   sourceVersion: '1.0.3',
@@ -72,8 +78,6 @@ const baseRow = {
   installedVersion: null as number | null,
   bytes: 1_425_408,
   status: 'available' as string,
-  progress: 0,
-  preview: null as string | null,
 };
 
 beforeEach(() => {
@@ -101,10 +105,9 @@ describe('an installed pack', () => {
     ...baseRow,
     installedVersion: 1,
     status: 'installed',
-    preview: 'Au nom d’Allah, le Tout Miséricordieux, le Très Miséricordieux[1].',
   };
 
-  it('renders the attribution the grant requires, and the pack’s own text', () => {
+  it('renders the attribution the grant requires', () => {
     mockPacks.rows = [installed];
     mockPacks.installedBytes = 1_425_408;
     render(<ContentScreen />);
@@ -112,9 +115,9 @@ describe('an installed pack', () => {
     expect(
       screen.getByText('Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).')
     ).toBeTruthy();
-    expect(
-      screen.getByText('Au nom d’Allah, le Tout Miséricordieux, le Très Miséricordieux[1].')
-    ).toBeTruthy();
+    // ⚠️ AND NO PREVIEW (story 8-4). A preview row was the reason every installed pack was OPENED
+    // on every mount; a pack is read in the study sheet now.
+    expect(screen.queryByTestId('content-pack-translation-fr-rashid-preview')).toBeNull();
   });
 
   it('draws a remove control carrying the INSTALLED version, not the offered one', () => {
@@ -255,38 +258,96 @@ describe('a failed install', () => {
 });
 
 describe('the pack’s own text', () => {
-  it('renders the preview and the attribution in the CONTENT’s direction', () => {
-    // ⚠️ Fine for French and wrong for the Arabic tafsir packs that are next — this repo sets
-    // content direction locally at every content site because web is deliberately not mirrored.
-    // (Story 8-2 review, S6.)
+  it('sets the title and attribution in the direction the PACK states — from its data alone', () => {
+    // ⚠️ STORY 8-4's RTL CASE, AND THE CODE IS CHOSEN SO NO LANGUAGE LIST COULD PASS IT. `nqo` (N'Ko)
+    // is marked right to left by QuranEnc's list API and was absent from the hand-written list
+    // 8-3 used; the ONLY thing that can make this row RTL is its `direction` field.
     mockPacks.rows = [
-      { ...baseRow, installedVersion: 1, status: 'installed', preview: 'Au nom d’Allah…' },
+      { ...baseRow, installedVersion: 1, status: 'installed' },
       {
         ...baseRow,
-        id: 'tafsir-ar-saadi',
-        title: 'تفسير السعدي',
-        language: 'ar',
-        languageName: 'العربية',
+        id: 'translation-nqo-dayyan',
+        title: 'ߡߊ߲߬ߘߋ߲߫ ߝߘߏ߬ߓߊ߬ߞߊ߲',
+        language: 'nqo',
+        languageName: 'ߒߞߏ',
+        languageNameEnglish: "N'Ko",
+        direction: 'rtl',
         installedVersion: 1,
         status: 'installed',
-        preview: 'بسم الله',
-        attribution: 'تفسير السعدي',
+        attribution: 'ߡߊ߲߬ߘߋ߲߫ ߝߘߏ߬ߓߊ߬ߞߊ߲ · QuranEnc.com · v1.0.5',
       },
     ];
     render(<ContentScreen />);
 
-    const french = screen.getByTestId('content-pack-translation-fr-rashid-preview');
-    const arabic = screen.getByTestId('content-pack-tafsir-ar-saadi-preview');
-
+    const french = screen.getByTestId('content-pack-translation-fr-rashid-attribution');
+    const nko = screen.getByTestId('content-pack-translation-nqo-dayyan-attribution');
     expect(StyleSheet.flatten(french.props.style)).toMatchObject({ writingDirection: 'ltr' });
-    expect(StyleSheet.flatten(arabic.props.style)).toMatchObject({
+    expect(StyleSheet.flatten(nko.props.style)).toMatchObject({
       writingDirection: 'rtl',
       textAlign: 'right',
     });
-    // The attribution is content too — an Arabic pack's credit is Arabic.
+  });
+
+  it('treats a pack with NO direction as left to right — the I/O matrix rule', () => {
+    mockPacks.rows = [{ ...baseRow, direction: '', installedVersion: 1, status: 'installed' }];
+    render(<ContentScreen />);
     expect(
-      StyleSheet.flatten(screen.getByTestId('content-pack-tafsir-ar-saadi-attribution').props.style)
-    ).toMatchObject({ writingDirection: 'rtl' });
+      StyleSheet.flatten(
+        screen.getByTestId('content-pack-translation-fr-rashid-attribution').props.style
+      )
+    ).toMatchObject({ writingDirection: 'ltr' });
+  });
+});
+
+describe('dozens of editions (story 8-4)', () => {
+  const edition = (id: string, language: string, languageName: string, title: string) => ({
+    ...baseRow,
+    id,
+    language,
+    languageName,
+    languageNameEnglish: '',
+    title,
+    offered: { ...OFFERED, id },
+  });
+
+  it('groups by language under the language’s own name, the reader’s language first', () => {
+    mockPacks.rows = [
+      edition('translation-ur-junagarhi', 'ur', 'اردو', 'اردو ترجمہ'),
+      edition('translation-de-rwwad', 'de', 'Deutsch', 'Die deutsche Übersetzung'),
+      edition('translation-en-rwwad', 'en', 'English', 'English Translation - Rowwad'),
+      edition('translation-en-saheeh', 'en', 'English', 'English Translation - Noor'),
+    ];
+    render(<ContentScreen />);
+    expect(screen.getByTestId('content-language-en').props.children).toBe('English');
+    expect(screen.getByTestId('content-language-de')).toBeTruthy();
+    expect(screen.getByTestId('content-language-ur').props.children).toBe('اردو');
+    // Both English editions are listed and told apart by title.
+    expect(screen.getByTestId('content-pack-translation-en-rwwad')).toBeTruthy();
+    expect(screen.getByTestId('content-pack-translation-en-saheeh')).toBeTruthy();
+  });
+
+  it('finds a language by search and drops the rest', () => {
+    mockPacks.rows = [
+      edition('translation-ur-junagarhi', 'ur', 'اردو', 'اردو ترجمہ'),
+      edition('translation-de-rwwad', 'de', 'Deutsch', 'Die deutsche Übersetzung'),
+    ];
+    render(<ContentScreen />);
+    fireEvent.changeText(screen.getByTestId('content-search-input'), 'deutsch');
+    expect(screen.getByTestId('content-pack-translation-de-rwwad')).toBeTruthy();
+    expect(screen.queryByTestId('content-pack-translation-ur-junagarhi')).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId('content-search-input'), 'zzzz');
+    expect(screen.getByTestId('content-no-matches')).toBeTruthy();
+  });
+});
+
+describe('the bundled English', () => {
+  it('is credited with its source and version, beside the packs', () => {
+    render(<ContentScreen />);
+    // A LITERAL: the grant's three facts — the publisher's title, QuranEnc, and the version.
+    expect(screen.getByTestId('content-bundled-attribution').props.children).toBe(
+      'English Translation - Rowwad Translation Center · QuranEnc.com · v1.0.19'
+    );
   });
 });
 

@@ -162,6 +162,9 @@
     "sourcesUnavailable": "تعذّرت قراءة ما هو مثبَّت على هذا الجهاز.",
     "sourceWithKey": "{{title}} ({{key}})",
     "release": "تحرير",
-    "rowLabel": "{{name}} · {{verse}}"
+    "rowLabel": "{{name}} · {{verse}}",
+    "findSource": "ابحث عن مصدر ({{number}})",
+    "searchSources": "ابحث باللغة أو العنوان",
+    "noMatches": "لا شيء يطابق هذا البحث."
   }
 }

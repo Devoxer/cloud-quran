@@ -8,11 +8,18 @@
  * `features/packs/lib/packStore.ts`'s `null`-is-not-`[]` rule, which exists because one transient
  * filesystem error otherwise reads as "you have nothing".
  *
- * ⚠️ AN INSTALLED PACK DESCRIBES ITSELF, SO THE SHELF WORKS OFFLINE. Each installed pack is
- * OPENED and its `pack_meta` read; the catalogue is only consulted for packs that are not
- * installed yet, and its absence degrades the screen to "installed only" rather than to an error.
- * Opening it is also the proof the frozen matrix asks for — a pack is readable the moment it is
- * installed, with no restart — which is why a one-line PREVIEW comes back with the metadata.
+ * ⚠️ AN INSTALLED PACK DESCRIBES ITSELF, SO THE SHELF WORKS OFFLINE. Each installed pack's
+ * `pack_meta` is read; the catalogue is only consulted for packs that are not installed yet, and
+ * its absence degrades the screen to "installed only" rather than to an error.
+ *
+ * ⚠️ BUT LISTING IS NOT OPENING, AND IT IS READ ONCE PER FILE (story 8-4). Story 8-2 OPENED every
+ * installed pack into a handle nothing closes, and read a preview row out of each, serially, on
+ * every mount of this hook — the content screen AND every study sheet. Right for one pack; wrong
+ * for a shelf of 75. The metadata is now read through `describePack` (a transient connection, or
+ * the live one if the pack is already open) and cached per `id@version` for the process, since a
+ * pack file never changes under a name — a new version is a new name. A pack is opened only when
+ * something reads its TEXT (`useStudyContent`), and the preview is gone: the study sheet is where
+ * a pack is read, and a pack's readability is proved there, by reading it.
  *
  * ⚠️ ONE INSTALL AT A TIME. Two concurrent transfers into the same directory buy nothing on a
  * phone's link and make the stall watchdog meaningless; the frozen scope says one foreground
@@ -38,13 +45,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PACKS_SUPPORTED } from '@/constants/packs';
 import { captureException } from '@/lib/errors';
 import { compareInAppLanguage } from '@/lib/format';
-import { closePack, getPackMeta, getPackSurah, isPackReadable, openPack } from '@/lib/quranDb';
+import { closePack, describePack } from '@/lib/quranDb';
 import {
   getPackEntry,
   hydratePackEntries,
+  type PackStatusSlice,
   resetPackEntry,
   setPackEntry,
-  usePackStore,
+  usePackStatuses,
 } from '@/stores/packStore';
 import { type CataloguePack, fetchCatalogue } from '../lib/catalogue';
 import {
@@ -104,10 +112,18 @@ export type DiskState = 'loading' | 'ready' | 'unavailable';
 export interface PackRow {
   id: string;
   title: string;
-  /** BCP-47 code of the CONTENT — what decides the preview's writing direction, never the UI's. */
+  /** The CONTENT's language code — a grouping key, never the interface's language. */
   language: string;
   /** The content language's own name — a French pack says "Français", not "French". */
   languageName: string;
+  /** The same language's English name, when the pack or catalogue carries one — a search alias. */
+  languageNameEnglish: string;
+  /**
+   * The CONTENT's direction, from the catalogue or the pack's own `pack_meta` (story 8-4) — what
+   * decides how its title, text, footnotes and attribution are set. `ltr` when neither says: see
+   * `lib/rtl.ts` § `isRTLContent`.
+   */
+  direction: string;
   type: string;
   source: string;
   /** The upstream edition's version. The grant requires it to be stated; so we state it. */
@@ -121,8 +137,6 @@ export interface PackRow {
   bytes: number;
   /** `unknown` is "the disk could not be listed" — not "not installed". See `DiskState`. */
   status: 'available' | 'installing' | 'installed' | 'updatable' | 'error' | 'unknown';
-  /** 0–1 while installing. */
-  progress: number;
   /**
    * Why the last attempt failed. Present only on `error`.
    *
@@ -133,8 +147,6 @@ export interface PackRow {
    * actually exist. (Story 8-2 review, S4.)
    */
   failure?: Exclude<PackInstallFailure, 'cancelled'>;
-  /** The pack's first ayah, read from the installed file — the proof it is readable. */
-  preview: string | null;
 }
 
 /** What an installed pack says about itself, read from its own `pack_meta`. */
@@ -144,11 +156,55 @@ interface LocalPackFacts {
   language: string;
   title: string;
   languageName: string;
+  languageNameEnglish: string;
+  direction: string;
   type: string;
   source: string;
   sourceVersion: string;
   attribution: string;
-  preview: string | null;
+}
+
+/**
+ * What each installed pack FILE said about itself, by `id@version`, for the life of the process.
+ *
+ * A file under a versioned name never changes — a new version is a new file — so its metadata is
+ * read at most once per process however many times the shelf mounts. A pack whose read FAILED is
+ * not cached, so the next arrival tries again.
+ */
+const described = new Map<string, Omit<LocalPackFacts, 'bytes'>>();
+
+/** Forget every cached description. **Tests only.** */
+export function __resetDescribedPacksForTests(): void {
+  described.clear();
+}
+
+/** The facts of one installed pack: from the cache, or read once from its own `pack_meta`. */
+async function factsOf(pack: {
+  id: string;
+  version: number;
+  bytes: number;
+}): Promise<LocalPackFacts> {
+  const key = `${pack.id}@${pack.version}`;
+  let facts = described.get(key);
+  if (!facts) {
+    const meta = await describePack(pack.id, pack.version);
+    facts = {
+      version: pack.version,
+      language: meta.language ?? '',
+      title: meta.title ?? pack.id,
+      languageName: meta.languageName ?? meta.language ?? '',
+      languageNameEnglish: meta.languageNameEnglish ?? '',
+      // Story 8-2's French pack predates the field; absent means the catalogue decides, and
+      // absent there too means `ltr` (`lib/rtl.ts` § `isRTLContent`).
+      direction: meta.direction ?? '',
+      type: meta.type ?? '',
+      source: meta.source ?? '',
+      sourceVersion: meta.sourceVersion ?? '',
+      attribution: meta.attribution ?? '',
+    };
+    described.set(key, facts);
+  }
+  return { ...facts, bytes: pack.bytes };
 }
 
 export interface UsePacksResult {
@@ -166,7 +222,9 @@ export interface UsePacksResult {
 }
 
 export function usePacks({ deferCatalogue = false }: UsePacksOptions = {}): UsePacksResult {
-  const entries = usePackStore((state) => state.entries);
+  // ⚠️ STATUSES, NOT `entries` — a progress tick must not rebuild the shelf (`@/stores/packStore`
+  // § `usePackStatuses`). The row that draws a percentage reads it per key.
+  const entries = usePackStatuses();
   const [catalogue, setCatalogue] = useState<CataloguePack[] | null>(null);
   const [catalogueState, setCatalogueState] = useState<CatalogueState>(
     deferCatalogue ? 'idle' : 'loading'
@@ -188,9 +246,9 @@ export function usePacks({ deferCatalogue = false }: UsePacksOptions = {}): UseP
   //
   // ⚠️ "WHAT WE HAVE" IS THE DIRECTORY ON NATIVE AND THE SESSION MAP ON WEB (story 8-3). The two
   // are the same question — which packs can this device read right now — and answering it in one
-  // effect is what keeps every surface above it platform-blind. A held web pack is ALREADY OPEN
-  // (`holdPack` opened it from the bytes it verified), which is why the `openPack` call below is
-  // native-only: `openPack` opens by FILE NAME, and there is no file.
+  // effect is what keeps every surface above it platform-blind. `describePack` reads a held web
+  // pack through its live handle (there is no file) and a native one through a transient
+  // connection, so nothing here branches on the platform past the listing itself.
   useEffect(() => {
     if (PACKS_SUPPORTED) sweepStalePackParts();
     const installed = PACKS_SUPPORTED ? listInstalledPacks() : listHeldPacks();
@@ -208,47 +266,26 @@ export function usePacks({ deferCatalogue = false }: UsePacksOptions = {}): UseP
       const facts: Record<string, LocalPackFacts> = {};
       for (const pack of installed) {
         try {
-          if (PACKS_SUPPORTED) await openPack(pack.id, pack.version);
-          /**
-           * ⚠️ ASK WHETHER THE HANDLE ACTUALLY REGISTERED, RATHER THAN ASSUMING IT DID. `openPack`
-           * resolves without registering when a delete landed while it was parked on its await —
-           * the generation guard that stops a live connection being opened onto a file that is
-           * being removed. Calling `getPackMeta` blind would then throw `PackNotOpenError` and
-           * this pack would be filed as broken when nothing is wrong with it; it is simply gone.
-           * (Story 8-2 review, C3 + S7.)
-           */
-          if (!isPackReadable(pack.id)) continue;
-          const meta = await getPackMeta(pack.id);
-          // One row of the pack's own content: the proof that it is readable, right now, with no
-          // restart — which is the frozen matrix's headline acceptance criterion.
-          const firstSurah = await getPackSurah(pack.id, 1);
-          facts[pack.id] = {
-            version: pack.version,
-            bytes: pack.bytes,
-            language: meta.language ?? '',
-            title: meta.title ?? pack.id,
-            languageName: meta.languageName ?? meta.language ?? '',
-            type: meta.type ?? '',
-            source: meta.source ?? '',
-            sourceVersion: meta.sourceVersion ?? '',
-            attribution: meta.attribution ?? '',
-            preview: firstSurah[0]?.text ?? null,
-          };
+          facts[pack.id] = await factsOf(pack);
         } catch (error) {
-          // An installed file that will not open is a broken pack, not a broken screen: it keeps
-          // its row (so the reader can delete it) and simply has nothing to preview.
+          // An installed file that will not describe itself is a broken pack, not a broken
+          // screen: it keeps its row (so the reader can delete it). A delete that lands while
+          // this read is parked is the same shape and is resolved by the listing that follows it.
           captureException(error, { packId: pack.id });
           facts[pack.id] = {
             version: pack.version,
             bytes: pack.bytes,
             language: '',
-            title: pack.id,
+            // Empty, not the id: the catalogue's title for the same edition is the better name,
+            // and `buildRows` falls back to the id only when there is no catalogue either.
+            title: '',
             languageName: '',
+            languageNameEnglish: '',
+            direction: '',
             type: '',
             source: '',
             sourceVersion: '',
             attribution: '',
-            preview: null,
           };
         }
       }
@@ -440,7 +477,7 @@ export function buildRows(
   catalogue: CataloguePack[] | null,
   /** `null` is "the disk could not be listed" — see `DiskState`. */
   local: Record<string, LocalPackFacts> | null,
-  entries: Record<string, { status: string; version: number; progress: number; error?: string }>
+  entries: Readonly<Record<string, PackStatusSlice>>
 ): PackRow[] {
   const byId = new Map<string, PackRow>();
   const diskUnknown = local === null;
@@ -449,9 +486,11 @@ export function buildRows(
     const [id, pack] = facts;
     byId.set(id, {
       id,
-      title: pack.title,
+      title: pack.title || id,
       language: pack.language,
       languageName: pack.languageName,
+      languageNameEnglish: pack.languageNameEnglish,
+      direction: pack.direction,
       type: pack.type,
       source: pack.source,
       sourceVersion: pack.sourceVersion,
@@ -460,8 +499,6 @@ export function buildRows(
       installedVersion: pack.version,
       bytes: pack.bytes,
       status: 'installed',
-      progress: 1,
-      preview: pack.preview,
     });
   }
 
@@ -470,10 +507,15 @@ export function buildRows(
     byId.set(offered.id, {
       id: offered.id,
       // The catalogue's title wins when the pack is not installed; an installed pack's own
-      // metadata wins when it is, because that is what the reader actually has.
-      title: existing?.title ?? offered.title,
+      // metadata wins when it is, because that is what the reader actually has — unless the file
+      // could not say, in which case the id placeholder yields to the catalogue's real name.
+      title: existing && existing.title !== offered.id ? existing.title : offered.title,
       language: existing?.language || offered.language,
       languageName: existing?.languageName || offered.languageName,
+      languageNameEnglish: existing?.languageNameEnglish || offered.languageNameEnglish,
+      // The file's own answer when it has one; an 8-2 pack that predates the field takes the
+      // catalogue's, which is the same edition's.
+      direction: existing?.direction || offered.direction,
       type: existing?.type || offered.type,
       source: existing?.source || offered.source,
       sourceVersion: existing?.sourceVersion || offered.sourceVersion,
@@ -491,8 +533,6 @@ export function buildRows(
           : existing.installedVersion !== null && existing.installedVersion < offered.packVersion
             ? 'updatable'
             : 'installed',
-      progress: existing?.progress ?? 0,
-      preview: existing?.preview ?? null,
     });
   }
 
@@ -502,18 +542,18 @@ export function buildRows(
     const row = byId.get(id);
     if (!row) continue;
     if (entry.status === 'installing') {
-      byId.set(id, { ...row, status: 'installing', progress: entry.progress });
+      byId.set(id, { ...row, status: 'installing' });
     } else if (entry.status === 'error') {
       byId.set(id, {
         ...row,
         status: 'error',
-        progress: 0,
         failure: entry.error as Exclude<PackInstallFailure, 'cancelled'> | undefined,
       });
     }
   }
 
   // Titles are copy, so they collate in the reader's language — through `lib/format.ts`, the one
-  // module `lint:i18n` allows a locale-sensitive comparator to live in.
+  // module `lint:i18n` allows a locale-sensitive comparator to live in. GROUPING by language is
+  // the screens' job (`lib/packGroups.ts`); this order is the order within a group.
   return [...byId.values()].sort((a, b) => compareInAppLanguage(a.title, b.title));
 }

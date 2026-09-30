@@ -118,12 +118,20 @@ describe('normalizeForSearch', () => {
     expect(normalizeForSearch('The Ever-Living')).toBe('the ever living');
   });
 
-  it('rule 9 — punctuation becomes a space, which is what the bracketed translation needs', () => {
-    // The shipped translation of 1:2, verbatim. 3,019 of the 6,236 rows carry brackets like these,
-    // and a reader types the sentence without them.
-    expect(normalizeForSearch('[All] praise is [due] to Allah, Lord of the worlds -')).toBe(
-      'all praise is due to allah lord of the worlds'
+  it('rule 8 (story 8-4) — an inline footnote marker is dropped from the SEARCH form', () => {
+    // The shipped translation of 1:2 (`english_rwwad`), verbatim: its markers are part of the
+    // published text and are never removed from it — only from what a query is compared against.
+    expect(normalizeForSearch('All praise be to Allah[1], the Lord[2] of the worlds[3],')).toBe(
+      'all praise be to allah the lord of the worlds'
     );
+  });
+
+  it('rule 9 — punctuation becomes a space, which is what the bracketed translation needs', () => {
+    // 1,295 of the bundled English's rows carry an editorial insertion in brackets, and a reader
+    // types the sentence without them. Bracketed WORDS survive; only the brackets fold.
+    expect(
+      normalizeForSearch('those who believe in what has been sent down to you [O Prophet] -')
+    ).toBe('those who believe in what has been sent down to you o prophet');
   });
 
   it('rule 10 — whitespace collapses and trims', () => {

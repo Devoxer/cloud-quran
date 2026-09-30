@@ -31,6 +31,21 @@ export interface CataloguePack {
   language: string;
   /** The language's own name, for a reader who does not read the interface language. */
   languageName: string;
+  /**
+   * The same language's name in English — a SEARCH alias (story 8-4). A reader looking for the
+   * Urdu edition types "urdu", not اردو. `''` when a catalogue does not carry it.
+   */
+  languageNameEnglish: string;
+  /**
+   * The CONTENT's writing direction, straight from QuranEnc's list API (story 8-4).
+   *
+   * ⚠️ IT IS DATA, NOT A LOOKUP. A hardcoded RTL-language list was defensible for one French pack
+   * and is a guaranteed bug across 56 languages: the API's own RTL set includes N'Ko (`nqo`),
+   * which no list in this repo had. A missing or unrecognised value is `ltr`, the I/O matrix's
+   * rule — never a refusal of the entry, since a wrongly-ranged paragraph is recoverable and a
+   * missing edition is not.
+   */
+  direction: 'ltr' | 'rtl';
   title: string;
   source: string;
   /** The upstream edition's version. QuranEnc's grant requires it to be stated. */
@@ -119,6 +134,9 @@ export function parseCataloguePack(raw: unknown): CataloguePack | null {
     type: entry.type,
     language: entry.language,
     languageName: entry.languageName,
+    languageNameEnglish:
+      typeof entry.languageNameEnglish === 'string' ? entry.languageNameEnglish : '',
+    direction: entry.direction === 'rtl' ? 'rtl' : 'ltr',
     title: entry.title,
     source: entry.source,
     sourceVersion: entry.sourceVersion,
@@ -140,14 +158,23 @@ export function parseCatalogue(body: unknown): CataloguePack[] | null {
   if (version !== SUPPORTED_CATALOGUE_VERSION) return null;
   const packs = (body as { packs?: unknown }).packs;
   if (!Array.isArray(packs)) return null;
-  const parsed: CataloguePack[] = [];
+  /**
+   * ⚠️ DEDUPED BY ID (story 8-4). An id is a pack's identity on the device — its file name, its
+   * store key, its React key — so two entries under one id would draw two rows that install into
+   * the same file and share one progress bar. Where a catalogue repeats an id, the HIGHER
+   * `packVersion` is the offer (that is what an update looks like mid-publish); a tie keeps the
+   * first, and the order of first appearance is kept either way.
+   */
+  const byId = new Map<string, CataloguePack>();
   for (const raw of packs) {
     const pack = parseCataloguePack(raw);
     // One malformed entry is dropped; its siblings are kept. A catalogue is a shelf, not a
     // transaction — refusing the whole document would take every offer down with one typo.
-    if (pack) parsed.push(pack);
+    if (!pack) continue;
+    const seen = byId.get(pack.id);
+    if (!seen || pack.packVersion > seen.packVersion) byId.set(pack.id, pack);
   }
-  return parsed;
+  return [...byId.values()];
 }
 
 /**

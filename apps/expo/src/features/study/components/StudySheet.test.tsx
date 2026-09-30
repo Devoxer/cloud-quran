@@ -39,9 +39,11 @@ jest.mock('@/constants/packs', () => ({
 
 const mockGetVersesForPositions = jest.fn();
 const mockGetPackRange = jest.fn();
+const mockOpenPack = jest.fn<Promise<void>, unknown[]>(() => Promise.resolve());
 jest.mock('@/lib/quranDb', () => ({
   getVersesForPositions: (...args: unknown[]) => mockGetVersesForPositions(...args),
   getPackRange: (...args: unknown[]) => mockGetPackRange(...args),
+  openPack: (...args: unknown[]) => mockOpenPack(...args),
 }));
 jest.mock('@/lib/errors', () => ({ captureException: jest.fn() }));
 
@@ -60,6 +62,8 @@ const mockPacks = {
   refresh: mockRefresh,
 };
 jest.mock('@/features/packs', () => ({
+  // The REAL grouping — it is a pure function, and the order it produces is what is under test.
+  buildPackGroups: jest.requireActual('@/features/packs/lib/packGroups').buildPackGroups,
   usePacks: (options?: unknown) => {
     mockUsePacksOptions.push(options);
     return mockPacks;
@@ -76,6 +80,8 @@ function packRow(over: Record<string, unknown> = {}) {
     title: 'Le Noble Coran — Rachid Maach',
     language: 'fr',
     languageName: 'Français',
+    languageNameEnglish: 'French',
+    direction: 'ltr',
     type: 'translation',
     source: 'QuranEnc',
     sourceVersion: '1.0.3',
@@ -84,8 +90,6 @@ function packRow(over: Record<string, unknown> = {}) {
     installedVersion: 1,
     bytes: 1_425_408,
     status: 'installed',
-    progress: 1,
-    preview: null,
     ...over,
   };
 }
@@ -339,16 +343,105 @@ describe('several sources for one type', () => {
       ])
     );
     await open();
-    expect(screen.getByTestId('study-content-1-1').props.children).toBe('Au nom d’Allah');
+    // ⚠️ THE READER'S OWN LANGUAGE FIRST (story 8-4): the interface is English, so the English
+    // edition is the default even though the French one was installed first.
+    expect(screen.getByTestId('study-content-1-1').props.children).toBe('In the name of Allah');
 
     await act(async () => {
-      fireEvent.press(screen.getByTestId('study-source-translation-en-saheeh'));
+      fireEvent.press(screen.getByTestId('study-source-translation-fr-rashid'));
     });
     await waitFor(
-      () =>
-        expect(screen.getByTestId('study-content-1-1').props.children).toBe('In the name of Allah'),
+      () => expect(screen.getByTestId('study-content-1-1').props.children).toBe('Au nom d’Allah'),
       SETTLE
     );
+  });
+
+  it('lists TWO editions of one language, told apart by title, both selectable', async () => {
+    mockPacks.rows = [
+      packRow({
+        id: 'translation-en-rwwad',
+        title: 'English Translation - Rowwad Translation Center',
+        language: 'en',
+        languageName: 'English',
+      }),
+      packRow({
+        id: 'translation-en-saheeh',
+        title: 'English Translation - Noor International Center',
+        language: 'en',
+        languageName: 'English',
+      }),
+    ];
+    await open();
+    mockGetPackRange.mockClear();
+    const row = within(screen.getByTestId('study-sources'));
+    expect(row.getByTestId('study-source-translation-en-rwwad')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(row.getByTestId('study-source-translation-en-saheeh'));
+    });
+    await waitFor(() => expect(mockGetPackRange).toHaveBeenCalled(), SETTLE);
+    expect(mockGetPackRange.mock.calls[0][0]).toBe('translation-en-saheeh');
+    expect(mockOpenPack).toHaveBeenCalledWith('translation-en-saheeh', 1);
+  });
+
+  it('opens a searchable, language-grouped list once there are more than a row can hold', async () => {
+    const edition = (code: string, name: string) =>
+      packRow({
+        id: `translation-${code}-x`,
+        title: `${name} edition`,
+        language: code,
+        languageName: name,
+      });
+    mockPacks.rows = [
+      edition('ur', 'اردو'),
+      edition('de', 'Deutsch'),
+      edition('sw', 'Kiswahili'),
+      edition('fa', 'فارسی'),
+      edition('tr', 'Türkçe'),
+      edition('id', 'Bahasa Indonesia'),
+      edition('en', 'English'),
+    ];
+    await open();
+    fireEvent.press(screen.getByTestId('study-source-find'));
+    const finder = within(screen.getByTestId('study-source-finder'));
+    expect(finder.getByTestId('study-language-en')).toBeTruthy();
+    fireEvent.changeText(finder.getByTestId('study-source-search-input'), 'kiswahili');
+    expect(finder.getByTestId('study-source-option-translation-sw-x')).toBeTruthy();
+    expect(finder.queryByTestId('study-source-option-translation-ur-x')).toBeNull();
+
+    mockGetPackRange.mockClear();
+    await act(async () => {
+      fireEvent.press(finder.getByTestId('study-source-option-translation-sw-x'));
+    });
+    await waitFor(() => expect(mockGetPackRange).toHaveBeenCalled(), SETTLE);
+    expect(mockGetPackRange.mock.calls[0][0]).toBe('translation-sw-x');
+    // Choosing closes it.
+    expect(screen.queryByTestId('study-source-finder')).toBeNull();
+  });
+
+  it('sets an RTL source’s text, footnotes and attribution RTL under an LTR interface', async () => {
+    // ⚠️ STORY 8-4's MATRIX ROW, FROM CATALOGUE DATA ALONE: the pack says `rtl`; nothing looks its
+    // language up. The interface is English.
+    mockPacks.rows = [
+      packRow({
+        id: 'translation-ur-junagarhi',
+        title: 'اردو ترجمہ - محمد جوناگڑھی',
+        language: 'ur',
+        languageName: 'اردو',
+        direction: 'rtl',
+        attribution: 'اردو ترجمہ - محمد جوناگڑھی · QuranEnc.com · v1.1.3',
+      }),
+    ];
+    mockGetPackRange.mockResolvedValue([
+      { surah: 1, verse: 1, text: 'شروع کرتا ہوں اللہ تعالیٰ کے نام سے', footnotes: 'حاشیہ' },
+    ]);
+    await open();
+    const flat = (testID: string) => {
+      const raw = screen.getByTestId(testID).props.style;
+      return Object.assign({}, ...(Array.isArray(raw) ? raw.flat(3) : [raw]).filter(Boolean));
+    };
+    for (const id of ['study-content-1-1', 'study-footnotes-1-1', 'study-attribution']) {
+      expect(flat(id)).toMatchObject({ writingDirection: 'rtl', textAlign: 'right' });
+    }
   });
 
   it('draws NO picker when there is only one source to pick', async () => {
@@ -399,7 +492,8 @@ describe('web', () => {
 
     await act(async () => press('2'));
     await waitFor(() => expect(mockGetPackRange).toHaveBeenCalled(), SETTLE);
-    expect(mockGetPackRange.mock.calls[0][0]).toBe('translation-en-saheeh');
+    // The keys follow the chips' order — the reader's own language (English) is `1`.
+    expect(mockGetPackRange.mock.calls[0][0]).toBe('translation-fr-rashid');
   });
 
   it('registers NO key listener on a native platform', async () => {
@@ -576,8 +670,10 @@ describe('the web hotkeys', () => {
       packRow({ id: 'translation-en-saheeh', title: 'Saheeh International', language: 'en' }),
     ];
     await open();
-    // The pack's own title, isolated inside UI copy — see the surah-crossing case above.
-    expect(screen.getByText('\u2068Saheeh International\u2069 (2)')).toBeTruthy();
+    // The pack's own title, isolated inside UI copy — see the surah-crossing case above. The
+    // English edition is `1`: the reader's own language comes first (story 8-4).
+    expect(screen.getByText('\u2068Saheeh International\u2069 (1)')).toBeTruthy();
+    expect(screen.getByText('\u2068Le Noble Coran — Rachid Maach\u2069 (2)')).toBeTruthy();
   });
 
   it('…and are absent from the labels on native, which has no keyboard', async () => {

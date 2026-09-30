@@ -144,35 +144,28 @@ describe('the I/O matrix', () => {
     expect(keysOf(searchVerses(corpus, 'the ever living'))).toEqual(keysOf(results));
   });
 
-  it('Translation — reaches through the editorial brackets half the rows carry', () => {
-    // Pasted from the app's own translation, brackets and all — rule 9 folds them to spaces on
-    // BOTH sides, so this finds the eight verses whose English reads `[All] praise is [due] to
-    // Allah`. 3,019 of the 6,236 rows carry brackets; without the rule this query answers none.
-    const bracketed = searchVerses(corpus, '[All] praise is [due] to Allah');
-    expect(keysOf(bracketed)).toEqual([
+  it('Translation — reaches through the inline footnote markers the English carries', () => {
+    // ⚠️ STORY 8-4 RE-SOURCED THE BUNDLED ENGLISH TO QURANENC's `english_rwwad`, which writes its
+    // footnote references INLINE — Al-Fatihah 1:2 is `All praise be to Allah[1], the Lord[2] of
+    // the worlds[3],` — and the grant forbids removing them from the text. Without rule 8 this,
+    // the sentence as a reader says it, missed 1:2 and answered the other five alone.
+    expect(keysOf(searchVerses(corpus, 'All praise be to Allah, the Lord of the worlds'))).toEqual([
       '1:2',
-      '6:1',
-      '18:1',
-      '27:93',
-      '31:25',
-      '34:1',
-      '35:1',
+      '6:45',
+      '10:10',
+      '37:182',
+      '39:75',
       '40:65',
     ]);
-    // And typed as a reader would say it, without the editorial `[All]`, it is a SHORTER phrase
-    // and therefore a wider one — 27:15's `Praise [is due] to Allah` joins the set. The brackets
-    // become spaces; they do not become nothing, so the words on either side stay separate.
-    expect(keysOf(searchVerses(corpus, 'praise is due to Allah'))).toEqual([
-      '1:2',
-      '6:1',
-      '18:1',
-      '27:15',
-      '27:93',
-      '31:25',
-      '34:1',
-      '35:1',
-      '40:65',
-    ]);
+  });
+
+  it('Translation — reaches through the editorial brackets, typed with or without them', () => {
+    // 1,295 rows carry a bracketed insertion. Rule 9 folds the brackets to spaces on BOTH sides,
+    // so the phrase pasted from the app and the phrase as a reader says it are one query.
+    const bracketed = searchVerses(corpus, '[O Prophet]');
+    expect(bracketed).toHaveLength(185);
+    expect(keysOf(bracketed).slice(0, 3)).toEqual(['2:4', '2:97', '2:119']);
+    expect(keysOf(searchVerses(corpus, 'O Prophet'))).toEqual(keysOf(bracketed));
   });
 
   it('Mixed / no match — an empty result set, and no throw', () => {

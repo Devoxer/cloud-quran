@@ -49,13 +49,17 @@ export {
 } from './components/SurahDownloadButton';
 export {
   DEFAULT_RECITER_ID,
+  type NarrationVoice,
   RECITER_STYLES,
   RECITERS,
+  type RecitationVoice,
   type Reciter,
   type ReciterStyle,
   reciterDisplayName,
   reciterNameOf,
   resolveReciterId,
+  VOICE_KINDS,
+  type VoiceKind,
 } from './data/reciters';
 export { useDownloadReciterId } from './hooks/useDownloadReciterId';
 // ── story 7-7: where a COLD press starts — the saved listening position, read back at last ──

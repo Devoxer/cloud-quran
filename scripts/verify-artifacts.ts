@@ -89,21 +89,31 @@ function computeDigests(): Record<string, Digest> {
 
   // Translations — ordered by the full key, language included, so a second language cannot
   // reorder the digest.
+  //
+  // ⚠️ THE FOOTNOTE COLUMN IS PART OF THE DIGEST (story 8-4). The bundled English is QuranEnc's
+  // `english_rwwad`, whose grant forbids modification — and dropping or altering a footnote is a
+  // modification the text column alone would never show. The footnote rides a SEPARATE field of
+  // the line, after a tab no translation contains, so moving a footnote into the text (or the
+  // reverse) cannot produce the same serialization.
   const translations = db
     .prepare(
-      'SELECT surah_number, verse_number, language, text FROM translations ORDER BY language, surah_number, verse_number'
+      'SELECT surah_number, verse_number, language, text, footnotes FROM translations ORDER BY language, surah_number, verse_number'
     )
     .all() as unknown as {
     surah_number: number;
     verse_number: number;
     language: string;
     text: string;
+    footnotes: string | null;
   }[];
   out.translations = {
     rows: translations.length,
     digest: sha(
       translations
-        .map((r) => `${r.language}:${r.surah_number}:${r.verse_number}:${r.text}`)
+        .map(
+          (r) =>
+            `${r.language}:${r.surah_number}:${r.verse_number}:${r.text}\t${r.footnotes ?? '\u0000'}`
+        )
         .join('\n')
     ),
   };

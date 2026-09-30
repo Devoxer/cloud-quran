@@ -233,6 +233,13 @@
     "storage_one": "{{number}} paquete instalado · {{size}}",
     "storage_many": "{{number}} de paquetes instalados · {{size}}",
     "storage_other": "{{number}} paquetes instalados · {{size}}",
-    "diskUnavailable": "No se pudo leer lo que hay instalado en este dispositivo."
+    "diskUnavailable": "No se pudo leer lo que hay instalado en este dispositivo.",
+    "searchPlaceholder": "Buscar por idioma o título",
+    "noMatchesTitle": "No se encontraron paquetes",
+    "noMatchesBody": "Prueba el nombre de un idioma en inglés o en ese idioma.",
+    "bundled": {
+      "label": "Incluido en la app",
+      "description": "Lo usa la búsqueda. Siempre disponible, incluso sin conexión."
+    }
   }
 }

@@ -97,6 +97,7 @@ import {
   __resetQuranDbForTests,
   closePack,
   countPackRows,
+  describePack,
   getPackMeta,
   getPackRange,
   getPackSurah,
@@ -148,6 +149,7 @@ function buildFixturePack(fileName: string, rows: { surah: number; verse: number
     ['type', 'translation'],
     ['language', 'fr'],
     ['languageName', 'Français'],
+    ['direction', 'ltr'],
     ['title', 'Le Noble Coran — Rachid Maach'],
     ['source', 'QuranEnc'],
     ['sourceVersion', '1.0.3'],
@@ -299,6 +301,49 @@ describe('reading a pack', () => {
   it('reports a pack that is not open as a STATE, not a crash', async () => {
     await expect(getPackSurah(PACK_ID, 1)).rejects.toBeInstanceOf(PackNotOpenError);
     await expect(getPackMeta(PACK_ID)).rejects.toBeInstanceOf(PackNotOpenError);
+  });
+});
+
+/**
+ * DESCRIBING A PACK WITHOUT OPENING IT (story 8-4).
+ *
+ * ⚠️ THE SHELF USED TO OPEN EVERY INSTALLED PACK INTO A HANDLE NOTHING CLOSES, to read a title. With
+ * 75 editions on offer that is a connection per edition for the life of the process. The count of
+ * open handles is the assertion: a `describePack` that registered, or leaked, its connection is
+ * the regression, and it reads the same values either way.
+ */
+describe('describing a pack', () => {
+  it('reads the metadata and leaves NOTHING open or registered', async () => {
+    const meta = await describePack(PACK_ID, 1);
+    expect(meta.title).toBe('Le Noble Coran — Rachid Maach');
+    expect(meta.direction).toBe('ltr');
+    expect(isPackReadable(PACK_ID)).toBe(false);
+    expect(mockOpen.count).toBe(0);
+    // Read-only even for the moment it is open.
+    expect(mockExeced).toContain('PRAGMA query_only = ON;');
+  });
+
+  it('reads through the LIVE handle when the pack is already open at that version', async () => {
+    await openPack(PACK_ID, 1);
+    const before = mockOpen.count;
+    expect((await describePack(PACK_ID, 1)).attribution).toBe(ATTRIBUTION);
+    expect(mockOpen.count).toBe(before);
+    expect(isPackReadable(PACK_ID)).toBe(true);
+  });
+
+  it('rejects for a file that is not there, rather than inventing a description', async () => {
+    await expect(describePack('translation-xx-missing', 1)).rejects.toThrow();
+    expect(mockOpen.count).toBe(0);
+  });
+
+  it('is fed a `direction` by the pipeline — asserted against its source', () => {
+    // ⚠️ OFFLINE, `pack_meta` IS THE ONLY DESCRIPTION. An Urdu pack whose file did not carry its
+    // direction would range left the moment the catalogue was unreachable.
+    const script = readFileSync(
+      resolve(__dirname, '..', '..', '..', '..', 'scripts', 'prepare-packs.ts'),
+      'utf8'
+    );
+    expect(script).toContain("['direction', spec.direction],");
   });
 });
 

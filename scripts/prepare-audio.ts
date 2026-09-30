@@ -4,10 +4,18 @@
  * Phase 1: Download audio files
  *   - qdc/qdc-padded/legacy: Download per-surah MP3s from QuranicAudio CDN
  *   - everyayah: Download per-verse MP3s from EveryAyah.com, probe durations, concat per-surah
+ *   - quranenc: Download per-ayah narrated translations from d.quranenc.com (story 8-4), same shape
  * Phase 2: Build timing manifests
  *   - qdc/qdc-padded/legacy: Fetch verse timing from QuranCDN API
- *   - everyayah: Generate manifest from probed durations (no API needed)
+ *   - everyayah/quranenc: Generate manifest from probed durations (no API needed)
  * Phase 3: Upload all files to Cloudflare R2 via wrangler
+ *
+ * ⚠️ A NARRATION IS A RECITER, AND THAT IS WHY IT NEEDS NO SECOND ENGINE (story 8-4). QuranEnc
+ * publishes narrated translations as one MP3 PER AYAH — the ayah delimiter is the file boundary.
+ * So each ayah's duration can be measured exactly, the files concatenated into 114 surah tracks,
+ * and the manifest built from the measurements: precisely what the `everyayah` path already does
+ * for recitation. On the device a narration voice is 114 surah MP3s plus a 6,236-window manifest
+ * under `audio/{id}/` — indistinguishable from a reciter, played by the same engine.
  *
  * Usage:
  *   node scripts/prepare-audio.ts                          # Run full pipeline
@@ -27,6 +35,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SURAH_METADATA } from '../packages/quran-data/src/surah-metadata.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -38,9 +47,25 @@ interface ReciterConfig {
   id: string;
   slug: string;
   qurancdnId: number | null; // null = no timing data available from QuranCDN
-  downloadFormat: 'qdc' | 'qdc-padded' | 'legacy' | 'everyayah';
+  downloadFormat: 'qdc' | 'qdc-padded' | 'legacy' | 'everyayah' | 'quranenc';
   everyAyahFolder?: string; // Required when downloadFormat === 'everyayah'
+  quranEncKey?: string; // Required when downloadFormat === 'quranenc'
 }
+
+/** Per-ayah narration files: `{base}/{key}/{SSS}{VVV}.mp3` (measured 2026-09-20). */
+const QURANENC_AUDIO_BASE = 'https://d.quranenc.com/data/audio';
+/**
+ * How many narration files are fetched at once. ⚠️ BOUNDED, NOT 6,236 AT ONCE — QuranEnc is a
+ * dawah project serving its own files, and the pipeline is a guest on it. Four keeps a voice to a
+ * few minutes on a home connection without ever holding more than four requests open.
+ */
+const QURANENC_CONCURRENCY = 4;
+/**
+ * How far a concatenated surah may drift from the sum of its measured ayat before it is refused.
+ * The highlight is placed by those sums; a surah whose real length disagrees by more than this
+ * would light the wrong ayah by its end.
+ */
+const QURANENC_MAX_DRIFT_MS = 1000;
 
 const EVERYAYAH_BASE = 'https://everyayah.com/data';
 const EVERYAYAH_DELAY_MS = 150; // Throttle: respect EveryAyah (community sadaqah project)
@@ -346,6 +371,102 @@ const RECITERS: ReciterConfig[] = [
     downloadFormat: 'everyayah',
     everyAyahFolder: 'aziz_alili_128kbps',
   },
+  /**
+   * Narrated translations (story 8-4) — the 13 QuranEnc editions whose per-ayah audio answers 200
+   * (measured 2026-09-20; the other 62 answer 301 to a 404 page). Each is published ONLY when all
+   * 6,236 source files fetch and decode — see `processQuranEncNarration`.
+   */
+  /**
+   * ⚠️ `narration-en-rwwad` (`english_rwwad`) IS NOT PUBLISHED, AND RE-ADDING IT WILL NOT WORK YET
+   * (measured 2026-09-29). The completeness gate refused it: `017069.mp3` — Al-Isra 17:69 — answers
+   * 301 to QuranEnc's 404 page, while 17:68 and 17:70 answer 200. 6,235 of 6,236 is a narration
+   * with a hole in it, and the frozen rule is that such an edition is not a voice. It comes back
+   * when QuranEnc serves that ayah; re-probe with `curl -sI` before re-adding it here and in
+   * `apps/expo/src/features/audio/data/reciters.ts`.
+   */
+  {
+    id: 'narration-fr-rashid',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'french_rashid',
+  },
+  {
+    id: 'narration-pt-nasr',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'portuguese_nasr',
+  },
+  {
+    id: 'narration-nl-center',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'dutch_center',
+  },
+  /**
+   * ⚠️ `narration-az-musayev` (`azeri_musayev`) IS NOT PUBLISHED either (measured 2026-09-29).
+   * QuranEnc serves it through 51:47 and nothing after: 51:48 to 114:6 — 1,514 ayat — answer 301
+   * to the 404 page. The edition is not finished upstream, so it is not a voice. Re-probe the last
+   * ayah (`114006.mp3`) with `curl -sI` before re-adding it here and in `reciters.ts`.
+   */
+  {
+    id: 'narration-tl-rwwad',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'tagalog_rwwad',
+  },
+  {
+    id: 'narration-zh-suliman',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'chinese_suliman',
+  },
+  {
+    id: 'narration-vi-rwwad',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'vietnamese_rwwad',
+  },
+  {
+    id: 'narration-fa-ih',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'persian_ih',
+  },
+  {
+    id: 'narration-as-rafeeq',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'assamese_rafeeq',
+  },
+  {
+    id: 'narration-ta-omar-brief',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'tamil_omar_brief',
+  },
+  {
+    id: 'narration-si-mahir',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'sinhalese_mahir',
+  },
+  {
+    id: 'narration-so-yacob',
+    slug: '',
+    qurancdnId: null,
+    downloadFormat: 'quranenc',
+    quranEncKey: 'somali_yacob',
+  },
 ];
 
 const QDC_BASE = 'https://download.quranicaudio.com/qdc';
@@ -365,6 +486,9 @@ const reciterFilter =
   (process.argv.includes('--reciter') ? process.argv[process.argv.indexOf('--reciter') + 1] : null);
 
 const targetReciters = reciterFilter ? RECITERS.filter((r) => r.id === reciterFilter) : RECITERS;
+
+/** Voices refused this run — never uploaded, and the run exits non-zero. See phase 2. */
+const refused = new Map<string, string>();
 
 function padSurah(n: number): string {
   return String(n).padStart(3, '0');
@@ -433,12 +557,21 @@ async function downloadFile(url: string, destPath: string, retries = 3): Promise
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+        const error = new Error(`HTTP ${response.status} ${response.statusText}`);
+        // A 4xx is an answer, not a hiccup: retrying it only repeats the request. QuranEnc's
+        // missing ayat answer 301 → 404, and retrying each of `azeri_musayev`'s 1,514 missing files
+        // turned a four-minute run into an hour of requests against a host we are a guest on.
+        if (response.status >= 400 && response.status < 500)
+          throw Object.assign(error, { final: true });
+        throw error;
       }
       const buffer = await response.arrayBuffer();
       writeFileSync(destPath, Buffer.from(buffer));
       return;
     } catch (err) {
+      if ((err as { final?: boolean }).final) {
+        throw new Error(`Failed to download ${url}: ${(err as Error).message}`);
+      }
       if (attempt === retries) {
         throw new Error(`Failed to download ${url} after ${retries} attempts: ${err}`);
       }
@@ -537,6 +670,42 @@ async function probeVerseDuration(filePath: string): Promise<number> {
 }
 
 /**
+ * The length of a file's AUDIO PACKETS, in ms — what a stream-copy concat actually contributes.
+ *
+ * ⚠️ NOT `format=duration`, AND THE DIFFERENCE IS 9.7 SECONDS BY THE END OF AL-BAQARAH (measured on
+ * `french_rashid`, 2026-09-29). `format=duration` honours each file's LAME gapless tag and trims
+ * the encoder delay and padding — ~14.5ms of silence per file. `ffmpeg -f concat -c copy` copies
+ * whole frames, so every one of those milliseconds IS in the surah track: 286 ayat measured by
+ * format duration summed to 4,249,269ms, the concatenated track was 4,258,978ms, and a manifest
+ * built from the smaller numbers would light each ayah progressively EARLY. The packet sum of ten
+ * files matched their concatenation to within a millisecond, so the manifest is built from it.
+ */
+async function probePacketDuration(filePath: string): Promise<number> {
+  const { stdout, exitCode } = await run(
+    [
+      'ffprobe',
+      '-v',
+      'error',
+      '-select_streams',
+      'a:0',
+      '-show_entries',
+      'packet=duration_time',
+      '-of',
+      'csv=p=0',
+      filePath,
+    ],
+    { timeoutMs: 60_000 }
+  );
+  if (exitCode !== 0) throw new Error(`ffprobe could not read packets of ${filePath}`);
+  const seconds = stdout
+    .split('\n')
+    .map((line) => Number.parseFloat(line))
+    .filter((value) => Number.isFinite(value))
+    .reduce((sum, value) => sum + value, 0);
+  return Math.round(seconds * 1000);
+}
+
+/**
  * Which of a surah's verse files are unusable — the ONE answer to "may this surah be published?".
  *
  * ⚠️ IT IS A HELPER BECAUSE THERE ARE THREE GATES, AND FIXING ONE FIXED NOTHING. The defect that
@@ -619,7 +788,14 @@ function generateManifestFromDurations(
 async function concatSurah(
   reciter: ReciterConfig,
   surahNumber: number,
-  verseCount: number
+  verseCount: number,
+  /**
+   * `-map 0:a`: keep only the audio stream (story 8-4). QuranEnc embeds a ~750 KB PNG cover in
+   * every ayah file; `-c copy` alone carries it into the output as a video stream. Mapping audio
+   * only drops the picture and COPIES the recitation bytes — no re-encode, no modification of the
+   * narration. `english_rwwad` measured 5.59 GB with the art, 0.90 GB without.
+   */
+  audioOnly = false
 ): Promise<void> {
   const versesDir = resolve(TMP_DIR, reciter.id, 'verses');
   const sss = padSurah(surahNumber);
@@ -634,7 +810,20 @@ async function concatSurah(
   writeFileSync(filelistPath, lines.join('\n'), 'utf-8');
 
   const { exitCode, stderr } = await run(
-    ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', filelistPath, '-c', 'copy', outputPath],
+    [
+      'ffmpeg',
+      '-y',
+      '-f',
+      'concat',
+      '-safe',
+      '0',
+      '-i',
+      filelistPath,
+      ...(audioOnly ? ['-map', '0:a'] : []),
+      '-c',
+      'copy',
+      outputPath,
+    ],
     { cwd: versesDir, timeoutMs: 5 * 60_000 }
   );
   if (exitCode !== 0) {
@@ -760,12 +949,156 @@ async function processEveryAyahReciter(reciter: ReciterConfig): Promise<Manifest
   return manifest;
 }
 
+// ─── QuranEnc narration pipeline (story 8-4) ─────────────────────────────────
+
+/** Every ayah of the book as `(surah, verse)`, in order. */
+function everyAyah(): { surah: number; verse: number }[] {
+  const out: { surah: number; verse: number }[] = [];
+  for (let surah = 1; surah <= TOTAL_SURAHS; surah++) {
+    for (let verse = 1; verse <= SURAH_METADATA[surah - 1].verseCount; verse++) {
+      out.push({ surah, verse });
+    }
+  }
+  return out;
+}
+
+/** Run `tasks` with at most `limit` in flight — the upstream throttle. */
+async function withConcurrency<T>(limit: number, tasks: (() => Promise<T>)[]): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < tasks.length) {
+      const index = next++;
+      results[index] = await tasks[index]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
+
+/**
+ * The ayat a narration cannot be published without, named — the completeness gate's answer.
+ *
+ * ⚠️ PURE, AND EXPORTED FOR THE REASON `missingVerses` HAS A DOCBLOCK: the refusal is the one
+ * property of this pipeline a wrong `if` would silently remove. `durations` holds a measured
+ * length in ms per `surah:verse`, or nothing when the file was absent, empty or undecodable.
+ */
+export function missingAyat(
+  durations: ReadonlyMap<string, number>,
+  ayat: readonly { surah: number; verse: number }[] = everyAyah()
+): string[] {
+  return ayat
+    .map(({ surah, verse }) => `${surah}:${verse}`)
+    .filter((key) => !((durations.get(key) ?? 0) > 0));
+}
+
+/**
+ * One narrated edition: fetch 6,236 ayat, measure each, refuse unless ALL are usable, then
+ * concatenate 114 surah tracks and build the manifest from the measurements.
+ *
+ * ⚠️ IT FAILS CLOSED FOR THE WHOLE EDITION, NOT PER SURAH. The recitation path publishes an empty
+ * manifest entry for a surah it refused; a narration that cannot narrate one ayah is not
+ * published at all (the story's frozen rule, and `abdulkareem`'s lesson: an absent voice is
+ * visible, a voice with a hole in it is not). The per-ayah files stay on disk after a refusal so
+ * a re-run resumes rather than re-fetching 6,000 files.
+ */
+async function processQuranEncNarration(reciter: ReciterConfig): Promise<Manifest> {
+  const key = reciter.quranEncKey;
+  if (!key) throw new Error(`Reciter ${reciter.id} is 'quranenc' but names no quranEncKey`);
+  const dir = resolve(TMP_DIR, reciter.id);
+  const versesDir = resolve(dir, 'verses');
+  mkdirSync(versesDir, { recursive: true });
+  const ayat = everyAyah();
+  const fileOf = (surah: number, verse: number) => `${padSurah(surah)}${padVerse(verse)}.mp3`;
+
+  // 1a. Fetch, bounded. A file already on disk from an earlier run is kept.
+  let fetched = 0;
+  const failures: string[] = [];
+  await withConcurrency(
+    QURANENC_CONCURRENCY,
+    ayat.map(({ surah, verse }) => async () => {
+      const dest = resolve(versesDir, fileOf(surah, verse));
+      if (existsSync(dest) && statSync(dest).size > 0) return;
+      try {
+        await downloadFile(`${QURANENC_AUDIO_BASE}/${key}/${fileOf(surah, verse)}`, dest);
+      } catch (err) {
+        rmSync(dest, { force: true });
+        failures.push(`${surah}:${verse} (${err instanceof Error ? err.message : err})`);
+      }
+      fetched++;
+      if (fetched % 500 === 0) console.log(`  ${reciter.id}: fetched ${fetched} ayat...`);
+    })
+  );
+  if (failures.length > 0)
+    console.warn(`  ⚠️  ${failures.length} fetch failure(s), first: ${failures[0]}`);
+
+  // 1b. Measure every file. Duration is the only property that answers "is this ayah here" —
+  // a file with a header and no decodable audio passes every size test (`abdulkareem`, 2026-09-08).
+  // Measured as the PACKET length, which is what the concat below adds — see `probePacketDuration`.
+  console.log(`  ${reciter.id}: probing ${ayat.length} durations...`);
+  const durations = new Map<string, number>();
+  await withConcurrency(
+    FFPROBE_WORKERS,
+    ayat.map(({ surah, verse }) => async () => {
+      const file = resolve(versesDir, fileOf(surah, verse));
+      if (!existsSync(file) || statSync(file).size === 0) return;
+      try {
+        const ms = await probePacketDuration(file);
+        if (ms > 0) durations.set(`${surah}:${verse}`, ms);
+      } catch {
+        // Undecodable: absent from `durations`, which is what `missingAyat` reads.
+      }
+    })
+  );
+
+  // 1c. THE GATE. Every ayah or nothing.
+  const missing = missingAyat(durations, ayat);
+  if (missing.length > 0) {
+    const shown = missing.slice(0, 40).join(', ');
+    throw new Error(
+      `${key}: ${missing.length} of ${ayat.length} ayat missing, empty or undecodable — ` +
+        `${shown}${missing.length > 40 ? ', …' : ''}. Refusing to publish this narration: a ` +
+        'voice with a hole in it is not a narration of the Quran.'
+    );
+  }
+
+  // 1d. Concatenate (audio stream only — see `concatSurah`) and check each track's real length
+  // against the measurements the manifest is about to be built from.
+  const manifest: Manifest = {};
+  for (let surah = 1; surah <= TOTAL_SURAHS; surah++) {
+    const verseCount = SURAH_METADATA[surah - 1].verseCount;
+    const surahDurations = Array.from(
+      { length: verseCount },
+      (_, i) => durations.get(`${surah}:${i + 1}`) as number
+    );
+    await concatSurah(reciter, surah, verseCount, true);
+    const track = resolve(dir, `${padSurah(surah)}.mp3`);
+    const measured = surahDurations.reduce((a, b) => a + b, 0);
+    const actual = await probePacketDuration(track);
+    if (Math.abs(actual - measured) > QURANENC_MAX_DRIFT_MS) {
+      rmSync(track, { force: true });
+      throw new Error(
+        `${key}: surah ${surah} concatenated to ${actual}ms but its ayat measure ${measured}ms. ` +
+          'Refusing: the highlight would drift off the narration.'
+      );
+    }
+    manifest[String(surah)] = generateManifestFromDurations(surah, surahDurations);
+    if (surah % 10 === 0) console.log(`  ${reciter.id}: ${surah}/114 surahs concatenated`);
+  }
+
+  writeFileSync(resolve(dir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+  // Only after a COMPLETE build: the per-ayah files are the resume point for a refused one.
+  rmSync(versesDir, { recursive: true, force: true });
+  return manifest;
+}
+
 async function phase1Download(): Promise<void> {
   console.log('\n=== Phase 1: Download audio files ===\n');
 
   for (const reciter of targetReciters) {
-    if (reciter.downloadFormat === 'everyayah') {
-      // EveryAyah reciters are handled in phase1+2 combined (processEveryAyahReciter)
+    if (reciter.downloadFormat === 'everyayah' || reciter.downloadFormat === 'quranenc') {
+      // Per-ayah sources are handled in phase1+2 combined (processEveryAyahReciter /
+      // processQuranEncNarration): the download, the measurement and the manifest are one pass.
       continue;
     }
     console.log(
@@ -863,6 +1196,20 @@ async function phase2Manifests(): Promise<void> {
   console.log('\n=== Phase 2: Build timing manifests ===\n');
 
   for (const reciter of targetReciters) {
+    if (reciter.downloadFormat === 'quranenc') {
+      console.log(`Processing ${reciter.id} (quranenc: ${reciter.quranEncKey})...`);
+      try {
+        const manifest = await processQuranEncNarration(reciter);
+        const windows = Object.values(manifest).reduce((n, timings) => n + timings.length, 0);
+        console.log(`  ✅ ${reciter.id}: 114 surah tracks, ${windows} measured windows`);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        refused.set(reciter.id, reason);
+        console.error(`  ❌ ${reciter.id} REFUSED: ${reason}`);
+      }
+      continue;
+    }
+
     if (reciter.downloadFormat === 'everyayah') {
       // EveryAyah: download + probe + concat + manifest all in one pass
       console.log(`Processing ${reciter.id} (everyayah: ${reciter.everyAyahFolder})...`);
@@ -941,10 +1288,31 @@ async function uploadToR2(localPath: string, r2Key: string, retries = 3): Promis
   }
 }
 
+/**
+ * ── COST, WRITTEN DOWN BEFORE IT RUNS (AGENTS.md § Cost safety) ─────────────────────────────────
+ *
+ * Per voice: 114 surah MP3s + 1 manifest = 115 R2 Class A writes. The 13 narration voices are
+ * 13 × 115 = 1,495 writes; with the 75 content packs and their catalogue (`prepare-packs.ts`) the
+ * story's ceiling is ~1,600 Class A writes, inside R2's free 1M/month. Stored: audio-only
+ * narration measures 0.73–1.82 GB per voice, ~15 GB for all 13 ≈ $0.23/month at $0.015/GB. R2
+ * egress is free. Upstream: 13 × 6,236 ≈ 81,000 GETs to d.quranenc.com, not billed to us and
+ * throttled to `QURANENC_CONCURRENCY` in flight. A re-run of one voice repeats its 115 writes —
+ * the upload does not skip — which is the bounded worst case. Nothing here loops unattended: it
+ * runs when a human types it, one voice per `--reciter` if they choose.
+ *
+ * The upload stays on `wrangler r2 object put`; moving to the `cf` CLI is its own change
+ * (`_bmad-output/implementation-artifacts/deferred-work.md`).
+ */
 async function phase3Upload(): Promise<void> {
   console.log('\n=== Phase 3: Upload to R2 ===\n');
 
   for (const reciter of targetReciters) {
+    // ⚠️ A REFUSED VOICE IS NEVER UPLOADED — not its manifest, and not the surah tracks an
+    // earlier run may have left on disk. The refusal is the gate; this is where it holds.
+    if (refused.has(reciter.id)) {
+      console.log(`  ⏭️  ${reciter.id}: refused in phase 2, not uploading`);
+      continue;
+    }
     const dir = resolve(TMP_DIR, reciter.id);
     if (!existsSync(dir)) {
       console.error(`  ❌ Directory not found: ${dir}`);
@@ -1002,10 +1370,19 @@ async function main(): Promise<void> {
     console.log('\n⏭️  Skipping Phase 3 (upload) — files remain local only');
   }
 
+  if (refused.size > 0) {
+    console.error(`\n❌ ${refused.size} voice(s) refused and NOT published:`);
+    for (const [id, reason] of refused) console.error(`   ${id}: ${reason}`);
+    process.exit(1);
+  }
   console.log('\n✅ Pipeline complete!');
 }
 
-main().catch((err) => {
-  console.error('\n❌ Pipeline failed:', err);
-  process.exit(1);
-});
+// Only when RUN, never when imported: `missingAyat` is exported for the pipeline's self-test, and
+// an import that also ran the pipeline would start downloading audio.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('\n❌ Pipeline failed:', err);
+    process.exit(1);
+  });
+}

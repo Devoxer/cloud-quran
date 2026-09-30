@@ -74,12 +74,13 @@ it('renders nothing at all when no audio has been downloaded', async () => {
 });
 
 it('states the total across every voice, which no single row can', async () => {
-  // 39 reciters × 1,000,000 bytes each; the assertion is a literal, not the sum re-derived.
+  // 50 voices (39 reciters + 11 narrations) × 1,000,000 bytes = 50,000,000 B = 47.68 MiB; the
+  // assertion is a literal, not the sum re-derived.
   mockBytesOnDisk = 1_000_000;
   await renderSettled();
 
   expect(screen.getByTestId('download-storage-total')).toHaveTextContent(
-    '37.2 MB downloaded on this device'
+    '47.7 MB downloaded on this device'
   );
 });
 

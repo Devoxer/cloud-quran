@@ -158,6 +158,9 @@
     "sourcesUnavailable": "Could not read what is installed on this device.",
     "sourceWithKey": "{{title}} ({{key}})",
     "release": "Release",
-    "rowLabel": "{{name}} · {{verse}}"
+    "rowLabel": "{{name}} · {{verse}}",
+    "findSource": "Find a source ({{number}})",
+    "searchSources": "Search by language or title",
+    "noMatches": "Nothing matches that search."
   }
 }

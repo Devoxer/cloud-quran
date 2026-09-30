@@ -28,22 +28,54 @@
  * with itself forever. `verify-artifacts.ts:201-210` already encodes this lesson for the bundled
  * artifacts; a pack needs its own copy because it is verified on the DEVICE, at install time.
  *
+ * ⚠️ THE EDITIONS ARE GENERATED, NOT LISTED (story 8-4). Every edition QuranEnc's list API offers
+ * becomes a pack; the committed decision is the per-edition PIN in `LICENCES.md`, and an edition
+ * with no pin, or whose live version is not its pin, stops the build. See `scripts/quranenc.ts`.
+ *
+ * ⚠️ `packVersion` IS DERIVED FROM THE BYTES, NOT TYPED. A pack is first built at the version the
+ * committed catalogue already publishes; if the result is not byte-identical to what that version
+ * shipped, it is rebuilt at the next version. So a corrected upstream edition, a new `pack_meta`
+ * field, or anything else that moves the digest becomes a NEW FILE NAME on its own — the one thing
+ * the atomic-update design above needs — and nothing can overwrite a published object in place.
+ *
  * Usage:
- *   node scripts/prepare-packs.ts --skip-upload   # build + catalogue only, nothing leaves the box
- *   node scripts/prepare-packs.ts                 # + idempotent upload to R2 (a second run skips)
- *   node scripts/prepare-packs.ts --force         # re-upload everything, ignoring the HEAD check
+ *   node scripts/prepare-packs.ts --skip-upload           # build + catalogue only, nothing leaves the box
+ *   node scripts/prepare-packs.ts                         # + idempotent upload to R2 (a second run skips)
+ *   node scripts/prepare-packs.ts --force                 # re-upload everything, ignoring the digest check
+ *   node scripts/prepare-packs.ts --pack french_rashid    # rebuild ONE edition (key or pack id)
+ *   node scripts/prepare-packs.ts --language ur           # rebuild one language's editions
+ *
+ * With a filter, every other edition is carried forward from the committed catalogue unchanged —
+ * rebuilding 75 packs to fix one is the cost the filter exists to avoid.
  */
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { TOTAL_VERSES } from '../packages/quran-data/src/constants.ts';
+import {
+  assertPinned,
+  attributionOf,
+  fetchQuranEncEditions,
+  fetchUpstreamDatabase,
+  languageNameOf,
+  ledgerPins,
+  packIdOf,
+  type QuranEncEdition,
+  readUpstreamRows,
+  type UpstreamRow,
+} from './quranenc.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const PACKS_DIR = resolve(ROOT, 'packages/quran-data/data/packs');
 const CATALOGUE_PATH = resolve(PACKS_DIR, 'index.json');
+const LEDGER_PATH = resolve(PACKS_DIR, 'LICENCES.md');
+/** The ledger entry every QuranEnc pack's rights, and its per-edition pin, come from. */
+const QURANENC_LICENCE_ID = 'quranenc-republication';
+/** Written into `pack_meta` and the catalogue — the grant's "credit QuranEnc", as data. */
+const QURANENC_SOURCE = 'QuranEnc';
 /** Where built `.db` files land. Gitignored — a pack is never committed. */
 const BUILD_DIR = resolve(ROOT, 'build/packs');
 
@@ -56,70 +88,90 @@ const PACK_CDN_BASE = `${CDN_BASE}/${KEY_PREFIX}`;
 /** Bumped only by a breaking change to the catalogue SHAPE. The app refuses any other value. */
 const CATALOGUE_VERSION = 1;
 
-const QURANENC_LIST_URL = 'https://quranenc.com/api/v1/translations/list';
-const quranEncDbUrl = (key: string) => `https://quranenc.com/downloads/sqlite/${key}.sqlite`;
-
 const skipUpload = process.argv.includes('--skip-upload');
 const force = process.argv.includes('--force');
 
-/**
- * ⚠️ ONE PACK. This story ships the MECHANISM and exactly one pack to prove it end to end;
- * widening this list is story 8-4's job and is the scope creep 8-2 was written to refuse.
- *
- * French, because the pack has to be a translation in a language the app does not already carry —
- * English is bundled in `quran.db` and would prove less — and because `french_rashid` is one of
- * the two QuranEnc keys the 2026-09-16 licensing audit confirmed end to end.
- */
+/** `--name=value` or `--name value`, the `prepare-audio.ts --reciter` parsing. */
+function flag(name: string): string | null {
+  const inline = process.argv.find((a) => a.startsWith(`--${name}=`));
+  if (inline) return inline.slice(name.length + 3);
+  const at = process.argv.indexOf(`--${name}`);
+  return at >= 0 ? (process.argv[at + 1] ?? null) : null;
+}
+const packFilter = flag('pack');
+const languageFilter = flag('language');
+
+/** One edition to build, generated from the list API. See the header. */
 interface PackSpec {
   /** Stable pack id. Also the file-name stem, with `-v{n}` appended. */
   id: string;
-  /** Bumped when the BYTES change. A new version is a new file; see the header. */
-  packVersion: number;
   type: 'translation';
-  /** BCP-47 language of the pack's content. */
+  /** The edition's language code, as QuranEnc gives it. */
   language: string;
   /** The language's own name, for a reader who does not read the interface language. */
   languageName: string;
-  /** Title as the reader sees it. */
+  /** The same language's English name — a search alias on the device, never a heading. */
+  languageNameEnglish: string;
+  /** Content direction, from the list API. The app renders from this, never from a list. */
+  direction: 'ltr' | 'rtl';
+  /** The publisher's own title, in the edition's language when QuranEnc localizes into it. */
   title: string;
   /** The ledger entry in `LICENCES.md` this pack's rights come from. */
   licenceId: string;
-  /**
-   * Rendered beside the text wherever the pack is read. The grant requires it.
-   *
-   * ⚠️ IT IS A TEMPLATE, NOT A LITERAL, AND `{version}` IS SUBSTITUTED FROM THE PIN. A hand-written
-   * "(v1.0.3)" is a second copy of a fact the pin already owns, and nothing cross-checked them —
-   * so a version bump that updated the pin and forgot the string would publish text CLAIMING a
-   * version it is not, which is the one condition of the grant this whole pipeline protects.
-   * (Story 8-2 review, C6.)
-   */
-  attribution: string;
   /** How many rows the finished pack must hold. See `assertPackSize`. */
   expectedRows: number;
   upstream: {
     /** QuranEnc's own key for the edition. */
     key: string;
-    /** The upstream version this build is pinned to — stated because the grant requires it. */
+    /** The pinned upstream version — equal to the live one, or the build has already stopped. */
     version: string;
   };
 }
 
-const PACKS: PackSpec[] = [
-  {
-    id: 'translation-fr-rashid',
-    packVersion: 1,
-    type: 'translation',
-    language: 'fr',
-    languageName: 'Français',
-    title: 'Le Noble Coran — Rachid Maach',
-    licenceId: 'quranenc-republication',
-    attribution: 'Traduction française : Rachid Maach. Source : QuranEnc.com (v{version}).',
-    // A complete translation is one row per ayah. ⚠️ NOT a constant of the pipeline — see
-    // `assertPackSize`; tafsir and asbab editions are next and are legitimately shorter.
-    expectedRows: TOTAL_VERSES,
-    upstream: { key: 'french_rashid', version: '1.0.3' },
-  },
-];
+/**
+ * Specs for the editions this run builds, from the live list.
+ *
+ * ⚠️ THE TITLE IS QURANENC'S OWN, IN THE EDITION'S LANGUAGE WHERE QURANENC HAS ONE. The English
+ * list says "Urdu Translation - …"; asked with `localization=ur` it answers "اردو ترجمہ - …", which
+ * is what an Urdu reader expects to find and is still the publisher's text rather than ours. A
+ * language QuranEnc does not localize into answers the English title, which is fine for the same
+ * reason.
+ */
+async function generateSpecs(
+  editions: QuranEncEdition[],
+  pins: ReadonlyMap<string, string>
+): Promise<PackSpec[]> {
+  const titles = new Map<string, string>();
+  for (const language of [...new Set(editions.map((e) => e.language_iso_code))]) {
+    for (const localized of await fetchQuranEncEditions(language)) {
+      if (localized.language_iso_code === language) titles.set(localized.key, localized.title);
+    }
+  }
+  const specs = editions.map((edition): PackSpec => {
+    assertPinned(edition, pins, QURANENC_LICENCE_ID);
+    const names = languageNameOf(edition.language_iso_code);
+    return {
+      id: packIdOf(edition),
+      type: 'translation',
+      language: edition.language_iso_code,
+      languageName: names.native,
+      languageNameEnglish: names.english,
+      direction: edition.direction,
+      title: titles.get(edition.key) ?? edition.title,
+      licenceId: QURANENC_LICENCE_ID,
+      // A complete translation is one row per ayah. ⚠️ NOT a constant of the pipeline — see
+      // `assertPackSize`; tafsir and asbab editions are next and are legitimately shorter.
+      expectedRows: TOTAL_VERSES,
+      upstream: { key: edition.key, version: edition.version },
+    };
+  });
+  const ids = new Set<string>();
+  for (const spec of specs) {
+    if (ids.has(spec.id)) throw new Error(`Two editions derive the same pack id "${spec.id}"`);
+    ids.add(spec.id);
+  }
+  return specs;
+}
 
 /** What one catalogue line says. The app's `features/packs/lib/catalogue.ts` validates this shape. */
 interface CatalogueEntry {
@@ -128,8 +180,12 @@ interface CatalogueEntry {
   type: string;
   language: string;
   languageName: string;
+  languageNameEnglish: string;
+  direction: 'ltr' | 'rtl';
   title: string;
   source: string;
+  /** The upstream edition key — what the ledger's per-edition pin is keyed by. */
+  sourceKey: string;
   sourceVersion: string;
   licenceId: string;
   attribution: string;
@@ -139,9 +195,15 @@ interface CatalogueEntry {
   digest: string;
 }
 
-/** The attribution as it ships, with the pinned version substituted in. The single source. */
+/**
+ * The attribution as it ships, built from the pinned version. The single source.
+ *
+ * ⚠️ BUILT, NEVER HAND-WRITTEN (story 8-2 review, C6). A hand-written "(v1.0.3)" is a second copy
+ * of a fact the pin already owns, and a bump that moved one and not the other would publish text
+ * CLAIMING a version it is not.
+ */
 function resolveAttribution(spec: PackSpec): string {
-  return spec.attribution.replaceAll('{version}', spec.upstream.version);
+  return attributionOf(spec.title, spec.upstream.version);
 }
 
 /**
@@ -162,81 +224,7 @@ function assertPackSize(spec: PackSpec, rows: number): void {
   }
 }
 
-// ─── Phase 1: the upstream version pin ───────────────────────────────────────
-
-interface QuranEncEdition {
-  key: string;
-  version: string;
-  title: string;
-}
-
-async function fetchQuranEncIndex(): Promise<Map<string, QuranEncEdition>> {
-  const response = await fetch(QURANENC_LIST_URL);
-  if (!response.ok) throw new Error(`QuranEnc list returned HTTP ${response.status}`);
-  const body = (await response.json()) as { translations?: QuranEncEdition[] };
-  if (!Array.isArray(body.translations) || body.translations.length === 0) {
-    throw new Error('QuranEnc list returned no translations');
-  }
-  return new Map(body.translations.map((entry) => [entry.key, entry]));
-}
-
-function assertPinHolds(spec: PackSpec, index: Map<string, QuranEncEdition>): void {
-  const live = index.get(spec.upstream.key);
-  if (!live) {
-    throw new Error(
-      `QuranEnc no longer offers "${spec.upstream.key}". Do not fall back to another edition — ` +
-        'the ledger names this one.'
-    );
-  }
-  if (live.version !== spec.upstream.version) {
-    throw new Error(
-      `${spec.id}: upstream ${spec.upstream.key} is now v${live.version}, the pin says ` +
-        `v${spec.upstream.version}. The grant requires the version to be STATED, so a drift is a ` +
-        'deliberate bump: update the pin AND the attribution, raise `packVersion`, and re-run.'
-    );
-  }
-}
-
 // ─── Phase 2: build the pack ─────────────────────────────────────────────────
-
-interface UpstreamRow {
-  sura: number;
-  aya: number;
-  translation: string;
-  footnotes: string | null;
-}
-
-/** Download the upstream SQLite once per run, into the build directory. */
-async function fetchUpstreamDatabase(spec: PackSpec): Promise<string> {
-  const target = resolve(BUILD_DIR, `upstream-${spec.upstream.key}.sqlite`);
-  const response = await fetch(quranEncDbUrl(spec.upstream.key));
-  if (!response.ok) {
-    throw new Error(`Upstream database for ${spec.upstream.key} returned HTTP ${response.status}`);
-  }
-  // ⚠️ NOT jsDelivr, and not any mirror: above its package limit jsDelivr answers HTTP 200 with a
-  // plain-text error body, so a naive fetcher stores garbage under a correct name. QuranEnc serves
-  // its own downloads; the row assertions below are the second half of the check.
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length < 1024 || bytes.subarray(0, 15).toString('latin1') !== 'SQLite format 3') {
-    throw new Error(
-      `Upstream download for ${spec.upstream.key} is not a SQLite file (${bytes.length} bytes). ` +
-        'A 200 with an error body is the failure this check exists for.'
-    );
-  }
-  writeFileSync(target, bytes);
-  return target;
-}
-
-function readUpstreamRows(path: string): UpstreamRow[] {
-  // ⚠️ camelCase `readOnly`. `node:sqlite` SILENTLY IGNORES an unknown constructor option, so
-  // Bun's `{ readonly: true }` opens read-WRITE — the trap story 5-3's port recorded.
-  const db = new DatabaseSync(path, { readOnly: true });
-  const rows = db
-    .prepare('SELECT sura, aya, translation, footnotes FROM translations ORDER BY sura, aya')
-    .all() as unknown as UpstreamRow[];
-  db.close();
-  return rows;
-}
 
 /**
  * Build `{id}-v{n}.db` from the upstream rows.
@@ -245,8 +233,8 @@ function readUpstreamRows(path: string): UpstreamRow[] {
  * re-containers the rows and changes not one character of them. The footnote column is carried
  * too: it is part of the edition, and dropping it would be a modification by subtraction.
  */
-function buildPack(spec: PackSpec, rows: UpstreamRow[]): string {
-  const outPath = resolve(BUILD_DIR, `${spec.id}-v${spec.packVersion}.db`);
+function buildPack(spec: PackSpec, packVersion: number, rows: UpstreamRow[]): string {
+  const outPath = resolve(BUILD_DIR, `${spec.id}-v${packVersion}.db`);
   rmSync(outPath, { force: true });
 
   const db = new DatabaseSync(outPath);
@@ -279,16 +267,22 @@ function buildPack(spec: PackSpec, rows: UpstreamRow[]): string {
   db.exec('BEGIN TRANSACTION');
   for (const [key, value] of [
     ['id', spec.id],
-    ['packVersion', String(spec.packVersion)],
+    ['packVersion', String(packVersion)],
     ['type', spec.type],
     ['language', spec.language],
+    // ⚠️ THE DIRECTION TRAVELS WITH THE BYTES (story 8-4). Offline the catalogue is unreachable
+    // and an installed pack describes itself from here — without it an Urdu pack read on a plane
+    // would fall back to `ltr` and range every paragraph the wrong way.
+    ['direction', spec.direction],
     // ⚠️ THE LANGUAGE'S OWN NAME, NOT JUST ITS CODE. Offline the catalogue is unreachable and a
     // pack describes itself from `pack_meta`; without this the shelf falls back to rendering the
     // BCP-47 code at a reader ("fr · 1.4 MB"), which is a machine value in a sentence of copy.
     // Measured on the emulator, 2026-09-18.
     ['languageName', spec.languageName],
+    ['languageNameEnglish', spec.languageNameEnglish],
     ['title', spec.title],
-    ['source', 'QuranEnc'],
+    ['source', QURANENC_SOURCE],
+    ['sourceKey', spec.upstream.key],
     ['sourceVersion', spec.upstream.version],
     ['licenceId', spec.licenceId],
     ['attribution', resolveAttribution(spec)],
@@ -401,6 +395,9 @@ async function uploadPack(
   localPath: string
 ): Promise<'uploaded' | 'skipped'> {
   const key = `${KEY_PREFIX}/${entry.id}-v${entry.packVersion}.db`;
+  // ⚠️ AN EXISTING KEY IS NEVER OVERWRITTEN WITH DIFFERENT BYTES. `packVersion` is derived from the
+  // digest (see the header), so the only way a served object can disagree with the catalogue at
+  // the same key is a failed or partial earlier upload — which is exactly what the re-put repairs.
   if (!force) {
     const served = await remoteDigest(key);
     if (served !== null && served === entry.digest) return 'skipped';
@@ -411,53 +408,116 @@ async function uploadPack(
 
 // ─── main ────────────────────────────────────────────────────────────────────
 
+/** The committed catalogue, by id — what each pack's `packVersion` is derived from. */
+function readPreviousCatalogue(): Map<string, CatalogueEntry> {
+  if (!existsSync(CATALOGUE_PATH)) return new Map();
+  const body = JSON.parse(readFileSync(CATALOGUE_PATH, 'utf-8')) as { packs?: CatalogueEntry[] };
+  return new Map((body.packs ?? []).map((entry) => [entry.id, entry]));
+}
+
+/** Whether `--pack` / `--language` select this edition. No filter selects everything. */
+function selected(spec: PackSpec): boolean {
+  if (packFilter !== null && packFilter !== spec.id && packFilter !== spec.upstream.key) {
+    return false;
+  }
+  if (languageFilter !== null && languageFilter !== spec.language) return false;
+  return true;
+}
+
+/**
+ * Build one edition and decide its `packVersion` — see the header.
+ *
+ * Built first at the version the committed catalogue publishes. Identical bytes keep that version
+ * (the upload then skips); different bytes are rebuilt one version up, so a changed pack is always
+ * a new file name.
+ */
+function buildEdition(
+  spec: PackSpec,
+  rows: UpstreamRow[],
+  previous: CatalogueEntry | undefined
+): { entry: CatalogueEntry; path: string } {
+  let packVersion = previous?.packVersion ?? 1;
+  let path = buildPack(spec, packVersion, rows);
+  if (previous && sha256OfFile(path) !== previous.digest) {
+    rmSync(path, { force: true });
+    packVersion += 1;
+    path = buildPack(spec, packVersion, rows);
+  }
+  const packRows = countPackRows(path);
+  // ⚠️ THE POPULATION CHECK, ON THE BUILD PATH. A digest minted from a truncated pack agrees with
+  // itself forever, so the only place truncation can be caught is here.
+  assertPackSize(spec, packRows);
+  return {
+    path,
+    entry: {
+      id: spec.id,
+      packVersion,
+      type: spec.type,
+      language: spec.language,
+      languageName: spec.languageName,
+      languageNameEnglish: spec.languageNameEnglish,
+      direction: spec.direction,
+      title: spec.title,
+      source: QURANENC_SOURCE,
+      sourceKey: spec.upstream.key,
+      sourceVersion: spec.upstream.version,
+      licenceId: spec.licenceId,
+      attribution: resolveAttribution(spec),
+      url: `${PACK_CDN_BASE}/${spec.id}-v${packVersion}.db`,
+      bytes: statSync(path).size,
+      rows: packRows,
+      digest: sha256OfFile(path),
+    },
+  };
+}
+
 async function main(): Promise<void> {
   console.log('Cloud Quran content-pack pipeline');
   console.log(`  Target: r2://${BUCKET}/${KEY_PREFIX}/ (${PACK_CDN_BASE})`);
+  if (packFilter !== null) console.log(`  Filter: --pack ${packFilter}`);
+  if (languageFilter !== null) console.log(`  Filter: --language ${languageFilter}`);
   mkdirSync(BUILD_DIR, { recursive: true });
   mkdirSync(PACKS_DIR, { recursive: true });
 
-  console.log('\n=== Phase 1: upstream version pin ===');
-  const index = await fetchQuranEncIndex();
-  for (const spec of PACKS) {
-    assertPinHolds(spec, index);
-    console.log(`  ✓ ${spec.id} ← ${spec.upstream.key} v${spec.upstream.version}`);
+  console.log('\n=== Phase 1: editions and their per-edition pins ===');
+  const pins = ledgerPins(readFileSync(LEDGER_PATH, 'utf-8'), QURANENC_LICENCE_ID);
+  const editions = await fetchQuranEncEditions();
+  // Every edition is checked against its pin even when a filter narrows the BUILD: a catalogue
+  // written by this run must not carry forward an edition whose upstream has moved under it.
+  const specs = await generateSpecs(editions, pins);
+  const targets = specs.filter(selected);
+  if (targets.length === 0) {
+    throw new Error(
+      `No edition matches --pack ${packFilter ?? '*'} --language ${languageFilter ?? '*'}`
+    );
+  }
+  for (const spec of targets) {
+    console.log(
+      `  ✓ ${spec.id} ← ${spec.upstream.key} v${spec.upstream.version} (${spec.direction})`
+    );
+  }
+  const stale = [...pins.keys()].filter((key) => !editions.some((e) => e.key === key));
+  if (stale.length > 0) {
+    // Not fatal: QuranEnc withdrawing an edition is not a reason to stop publishing the others.
+    // It IS a reason for a human to look, and for the ledger to stop pinning it.
+    console.warn(`  ⚠️  pinned in LICENCES.md but no longer offered upstream: ${stale.join(', ')}`);
   }
 
   console.log('\n=== Phase 2: build ===');
+  const previous = readPreviousCatalogue();
   const built: { entry: CatalogueEntry; path: string }[] = [];
-  for (const spec of PACKS) {
-    const upstreamPath = await fetchUpstreamDatabase(spec);
-    const rows = readUpstreamRows(upstreamPath);
-    const packPath = buildPack(spec, rows);
-    const packRows = countPackRows(packPath);
-    // ⚠️ THE POPULATION CHECK, ON THE BUILD PATH. A digest minted from a truncated pack agrees
-    // with itself forever, so the only place truncation can be caught is here.
-    assertPackSize(spec, packRows);
-    const bytes = statSync(packPath).size;
-    const digest = sha256OfFile(packPath);
-    built.push({
-      path: packPath,
-      entry: {
-        id: spec.id,
-        packVersion: spec.packVersion,
-        type: spec.type,
-        language: spec.language,
-        languageName: spec.languageName,
-        title: spec.title,
-        source: 'QuranEnc',
-        sourceVersion: spec.upstream.version,
-        licenceId: spec.licenceId,
-        attribution: resolveAttribution(spec),
-        url: `${PACK_CDN_BASE}/${spec.id}-v${spec.packVersion}.db`,
-        bytes,
-        rows: packRows,
-        digest,
-      },
-    });
+  for (const spec of targets) {
+    const upstreamPath = resolve(BUILD_DIR, `upstream-${spec.upstream.key}.sqlite`);
+    await fetchUpstreamDatabase(spec.upstream.key, upstreamPath);
+    const result = buildEdition(spec, readUpstreamRows(upstreamPath), previous.get(spec.id));
+    built.push(result);
+    const { entry } = result;
+    const bumped =
+      previous.has(entry.id) && previous.get(entry.id)?.packVersion !== entry.packVersion;
     console.log(
-      `  ✓ ${spec.id}-v${spec.packVersion}.db  ${packRows} rows  ` +
-        `${(bytes / 1024 / 1024).toFixed(2)} MB  ${digest.slice(0, 16)}…`
+      `  ✓ ${entry.id}-v${entry.packVersion}.db  ${entry.rows} rows  ` +
+        `${(entry.bytes / 1024 / 1024).toFixed(2)} MB  ${entry.digest.slice(0, 16)}…` +
+        (bumped ? '  (new version: the bytes changed)' : '')
     );
   }
 
@@ -467,19 +527,38 @@ async function main(): Promise<void> {
    * script" — and a diff that is always dirty is a diff nobody reads. Every pack line already
    * carries a digest, which identifies the content exactly and changes only when it should.
    * (Story 8-2 review, S8.)
+   *
+   * ⚠️ A FILTERED RUN CARRIES EVERY OTHER EDITION FORWARD, and only editions the live list still
+   * offers: the catalogue is always the whole shelf, never the slice this run happened to build.
    */
-  const catalogue = {
-    catalogueVersion: CATALOGUE_VERSION,
-    packs: built.map(({ entry }) => entry),
-  };
+  const rebuilt = new Map(built.map(({ entry }) => [entry.id, entry]));
+  const packs = specs
+    .map((spec) => rebuilt.get(spec.id) ?? previous.get(spec.id))
+    .filter((entry): entry is CatalogueEntry => entry !== undefined)
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const catalogue = { catalogueVersion: CATALOGUE_VERSION, packs };
   writeFileSync(CATALOGUE_PATH, `${JSON.stringify(catalogue, null, 2)}\n`, 'utf-8');
-  console.log(`  ✓ catalogue written to ${CATALOGUE_PATH}`);
+  console.log(`  ✓ catalogue written to ${CATALOGUE_PATH} (${packs.length} packs)`);
 
   if (skipUpload) {
     console.log('\n⏭️  Skipping Phase 3 (upload) — nothing left this machine');
     return;
   }
 
+  /**
+   * ── COST, WRITTEN DOWN BEFORE IT RUNS (AGENTS.md § Cost safety) ─────────────────────────────
+   *
+   * A full run is 75 pack objects + 1 catalogue = 76 R2 Class A writes at most (a re-run skips
+   * every pack whose served digest already matches, so it is 1 write), and 76 + 75 GETs of our
+   * own CDN for the digest checks, which R2 does not bill as egress. Upstream: 75 SQLite GETs +
+   * 57 list GETs to QuranEnc, not billed to us. Stored: 75 packs × ~1–3 MB ≈ 0.15 GB ≈ $0.002/month.
+   * Together with the 13 narration voices (`prepare-audio.ts`) the story's ceiling is ~1,600
+   * Class A writes — inside R2's free 1M/month — and ~15 GB stored ≈ $0.23/month. It runs only
+   * when a human types it; nothing here loops or polls.
+   *
+   * The upload stays on `wrangler r2 object put`; moving to the `cf` CLI is its own change
+   * (`_bmad-output/implementation-artifacts/deferred-work.md`).
+   */
   console.log('\n=== Phase 3: upload to R2 ===');
   for (const { entry, path } of built) {
     const result = await uploadPack(entry, path);
@@ -492,9 +571,10 @@ async function main(): Promise<void> {
   console.log('  ↑ index.json');
 
   // The corners that matter: the catalogue resolves, and every pack it offers is actually served
-  // at the size it claims. A catalogue pointing at a 404 is the one failure that would reach a
-  // reader as "install failed" with nothing to retry.
-  for (const { entry } of built) {
+  // at the digest it claims. A catalogue pointing at a 404 is the one failure that would reach a
+  // reader as "install failed" with nothing to retry. EVERY pack, not only the rebuilt ones: a
+  // carried-forward entry is as much a promise as a fresh one.
+  for (const entry of packs) {
     const served = await remoteDigest(`${KEY_PREFIX}/${entry.id}-v${entry.packVersion}.db`);
     if (served !== entry.digest) {
       console.error(
@@ -504,7 +584,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
   }
-  console.log(`  ✓ CDN serves ${built.length} pack(s) at the catalogue's digest, and the index`);
+  console.log(`  ✓ CDN serves ${packs.length} pack(s) at the catalogue's digest, and the index`);
   console.log('\n✅ Pack pipeline complete');
 }
 

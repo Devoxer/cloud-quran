@@ -163,6 +163,7 @@ jest.mock('expo-file-system', () => {
 import { AppState } from 'react-native';
 
 import { downloadKey, setDownloadEntry, useDownloadQueueStore } from '@/stores/downloadQueueStore';
+import { RECITERS } from '../data/reciters';
 import {
   __resetDownloadRunner,
   availableDownloadSpace,
@@ -925,5 +926,29 @@ describe('orphaned downloads', () => {
     deleteOrphanedDownloads(['husary']);
     expect(orphanedDownloadBytes(['husary'])).toBe(0);
     expect(isDownloaded('husary', 1)).toBe(true);
+  });
+});
+
+describe('a narration voice (story 8-4)', () => {
+  it('downloads through the same runner, into the same per-voice layout', async () => {
+    await downloadSurah('narration-fr-rashid', 114);
+
+    expect(mockDownload.mock.calls[0][0]).toBe(
+      'https://cdn.nobleachievements.com/audio/narration-fr-rashid/114.mp3'
+    );
+    expect(mockDownload.mock.calls[0][1].uri).toBe(`${DOC}/audio/narration-fr-rashid/114.mp3.part`);
+    expect(isDownloaded('narration-fr-rashid', 114)).toBe(true);
+    expect(localSurahUri('narration-fr-rashid', 114)).toBe(
+      `${DOC}/audio/narration-fr-rashid/114.mp3`
+    );
+  });
+
+  it('is a catalogue voice, so the orphan sweep never deletes what a reader kept', () => {
+    seedFile(uriFor('narration-fr-rashid', 1), 4000);
+    const catalogue = RECITERS.map((reciter) => reciter.id);
+
+    expect(orphanedDownloadBytes(catalogue)).toBe(0);
+    deleteOrphanedDownloads(catalogue);
+    expect(isDownloaded('narration-fr-rashid', 1)).toBe(true);
   });
 });

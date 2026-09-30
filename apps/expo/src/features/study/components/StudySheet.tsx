@@ -40,6 +40,15 @@
  * Escape closes and the number keys switch source, both from ONE listener registered only on web
  * and only while the sheet is open. There is no long-press anywhere in this story and there is no
  * hover affordance; a keyboard reader gets the same two actions a touch reader gets.
+ *
+ * ── ⚠️ DOZENS OF SOURCES, NOT ONE (story 8-4) ───────────────────────────────────────────────
+ *
+ * QuranEnc grants 75 editions in 56 languages, so both lists here — the sources a reader HAS and
+ * the ones they could GET — are grouped by language with the reader's own language first
+ * (`features/packs` § `buildPackGroups`, `ReciterPicker`'s shape), and searchable once they are
+ * long. The chip row stays for the common case of a few installed editions, with a "find" chip
+ * that opens the grouped, searchable list when there are more than a row can show. The offer list
+ * is a virtualized list in a bounded box, so 75 offers never push the Arabic off the sheet.
  */
 
 import { FlashList } from '@shopify/flash-list';
@@ -48,20 +57,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
-import { BottomSheet, Chip, InlineError, LoadingView, SegmentedControl } from '@/components/ui';
+import {
+  BottomSheet,
+  Chip,
+  InlineError,
+  LoadingView,
+  SearchBar,
+  SegmentedControl,
+} from '@/components/ui';
 import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { OPACITY } from '@/constants/opacity';
 import { PACKS_SESSION_ONLY } from '@/constants/packs';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
+import { buildPackGroups, type PackListRow } from '@/features/packs';
 import { formatBytes, isolate, useQuranNumerals } from '@/lib/format';
-import { contentTextAlign, isRTLContentLanguage, TEXT_ALIGN_START } from '@/lib/rtl';
+import { contentTextAlign, isRTLContent, TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
 import type { VersePair } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
+import { usePackProgress } from '@/stores/packStore';
 import { type StudyRow, useStudyContent } from '../hooks/useStudyContent';
-import { type StudyOffer, useStudySources } from '../hooks/useStudySources';
+import { type StudyOffer, type StudySource, useStudySources } from '../hooks/useStudySources';
 import { resolveScope, STUDY_SCOPES, type StudyScope } from '../lib/scope';
 import { STUDY_TYPES, type StudyType, studyTypeLabelKey } from '../lib/types';
 
@@ -80,6 +98,18 @@ const SHEET_ARABIC_FONT_SIZE = FONT_SIZE.h3;
 
 /** How many sources a number key can reach. Nine, because there is no key for a tenth. */
 const SOURCE_HOTKEYS = 9;
+
+/**
+ * Past this many installed sources the chip row also offers "find a source" — the grouped,
+ * searchable list. Below it, every source is a chip in view or one flick away.
+ */
+const SOURCE_CHIP_LIMIT = 6;
+
+/** Past this many offers the offer list gains a search field. */
+const OFFER_SEARCH_THRESHOLD = 6;
+
+/** The offer list's own box, as a share of the sheet body — the rest stays the Arabic's. */
+const OFFER_LIST_RATIO = 0.45;
 
 export interface StudySheetProps {
   open: boolean;
@@ -120,9 +150,15 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
     ? (chosen[type] ?? null)
     : (readable[0]?.id ?? null);
   const source = readable.find((s) => s.id === sourceId) ?? null;
+  /** Whether the grouped, searchable source list is open in place of the chip row's overflow. */
+  const [findingSource, setFindingSource] = useState(false);
 
   const range = useMemo(() => resolveScope(scope, verse), [scope, verse]);
-  const { state, retry } = useStudyContent(range, sourceId);
+  // The PAIR: the content hook opens the pack it reads (story 8-4), which takes its version.
+  const { state, retry } = useStudyContent(
+    range,
+    source === null ? null : { id: source.id, version: source.version }
+  );
 
   /**
    * ⚠️ A BARE AYAH NUMBER IS AMBIGUOUS THE MOMENT THE RANGE CROSSES A SURAH (owner, on an iPhone,
@@ -145,7 +181,10 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
   };
 
   const chooseSource = useCallback(
-    (id: string) => setChosen((current) => ({ ...current, [type]: id })),
+    (id: string) => {
+      setChosen((current) => ({ ...current, [type]: id }));
+      setFindingSource(false);
+    },
     [type]
   );
   // Same reason as `sources`: the listener is registered once and reads the current handlers.
@@ -241,7 +280,8 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
           ))}
         </ScrollView>
 
-        {/* Only when there is a choice to make: one source names itself in the attribution. */}
+        {/* Only when there is a choice to make: one source names itself in the attribution. The
+            chips are in `readable`'s order — grouped by language, the reader's own first. */}
         {readable.length > 1 ? (
           <ScrollView
             horizontal
@@ -250,6 +290,17 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
             contentContainerStyle={styles.chipRow}
             testID="study-sources"
           >
+            {readable.length > SOURCE_CHIP_LIMIT ? (
+              <Chip
+                icon="search"
+                label={t('common:study.findSource', {
+                  number: formatQuranNumber(readable.length),
+                })}
+                isSelected={findingSource}
+                onPress={() => setFindingSource((open) => !open)}
+                testID="study-source-find"
+              />
+            ) : null}
             {readable.map((entry, index) => (
               <Chip
                 key={entry.id}
@@ -278,6 +329,15 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
           </ScrollView>
         ) : null}
 
+        {findingSource && readable.length > SOURCE_CHIP_LIMIT ? (
+          <SourceFinder
+            sources={readable}
+            selectedId={sourceId}
+            onChoose={chooseSource}
+            height={bodyStyle.height * OFFER_LIST_RATIO}
+          />
+        ) : null}
+
         {/* ⚠️ "NOTHING IS INSTALLED" AND "WE CANNOT SAY YET" ARE DIFFERENT ANSWERS, AND THE SHEET
             USED TO GIVE THE FIRST FOR BOTH (story 8-3 review, C2). While the pack directory is
             still being listed — and whenever the listing FAILED — offering a reader a re-download
@@ -304,7 +364,7 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
             catalogue={catalogue}
             onLoadCatalogue={loadCatalogue}
             onInstall={install}
-            percentOf={formatQuranNumber}
+            listHeight={bodyStyle.height * OFFER_LIST_RATIO}
           />
         ) : null}
 
@@ -330,7 +390,7 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
               renderItem={({ item }) => (
                 <StudyEntry
                   row={item}
-                  contentLanguage={source?.language ?? null}
+                  contentDirection={source?.direction ?? null}
                   verseLabel={rowLabel(item)}
                   /* ⚠️ SILENT WHEN THERE IS NO SOURCE AT ALL (story 8-3 review, S1). Surah scope
                      on Al-Baqarah drew 286 copies of "Nothing for this ayah" beneath a panel that
@@ -345,17 +405,24 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
           ) : null}
         </View>
 
-        {/* Required by the pack's grant, rendered WITH its text rather than buried. */}
+        {/* Required by the pack's grant, rendered WITH its text rather than buried.
+            ⚠️ IT MAY OVERFLOW, AND IT IS NEVER CLIPPED (story 8-4). The credit is QuranEnc's own
+            title + QuranEnc + version, and a Tamil or Urdu title runs to several lines at a large
+            font scale. It holds its own height against the reading list (`flexShrink: 0`), and a
+            credit taller than its box scrolls inside it rather than being cut by the sheet. */}
         {source && source.attribution.length > 0 ? (
-          <Text
-            style={[
-              styles.attribution,
-              isRTLContentLanguage(source.language) ? styles.rtl : styles.ltr,
-            ]}
-            testID="study-attribution"
+          <ScrollView
+            style={styles.attributionBox}
+            contentContainerStyle={styles.attributionContent}
+            testID="study-attribution-box"
           >
-            {source.attribution}
-          </Text>
+            <Text
+              style={[styles.attribution, isRTLContent(source.direction) ? styles.rtl : styles.ltr]}
+              testID="study-attribution"
+            >
+              {source.attribution}
+            </Text>
+          </ScrollView>
         ) : null}
         {/* ⚠️ THE ONLY WAY TO LET A HELD SOURCE GO (story 8-3 review, C6). `/content` returns early
             on web, so `usePacks.remove` was unreachable there — a reader who tried three sources
@@ -386,19 +453,20 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
 /** One ayah: the Quran, then what the source says about it. */
 function StudyEntry({
   row,
-  contentLanguage,
+  contentDirection,
   verseLabel,
   saysAbsent,
 }: {
   row: StudyRow;
-  contentLanguage: string | null;
+  /** The SOURCE's own `direction` (story 8-4) — never a language lookup, never the interface's. */
+  contentDirection: string | null;
   verseLabel: string;
   /** Whether "this source has nothing here" is worth saying — see the call site. */
   saysAbsent: boolean;
 }) {
   const { t } = useTranslation();
   const styles = useStyles();
-  const contentStyle = isRTLContentLanguage(contentLanguage) ? styles.rtl : styles.ltr;
+  const contentStyle = isRTLContent(contentDirection) ? styles.rtl : styles.ltr;
   return (
     <View style={styles.entry} testID={`study-entry-${row.surah}-${row.verse}`}>
       <Text style={styles.verseNumber}>{verseLabel}</Text>
@@ -435,12 +503,107 @@ function StudyEntry({
 }
 
 /**
+ * The grouped, searchable list of the sources a reader HAS — for when there are more than a chip
+ * row can hold (story 8-4). Choosing one closes it.
+ */
+function SourceFinder({
+  sources,
+  selectedId,
+  onChoose,
+  height,
+}: {
+  sources: StudySource[];
+  selectedId: string | null;
+  onChoose: (id: string) => void;
+  height: number;
+}) {
+  const { t, i18n } = useTranslation();
+  const styles = useStyles();
+  const [query, setQuery] = useState('');
+  const rows = useMemo(
+    () => buildPackGroups(sources, query, i18n.language),
+    [sources, query, i18n.language]
+  );
+  return (
+    <View style={styles.panel} testID="study-source-finder">
+      <SearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('common:study.searchSources')}
+        style={styles.panelSearch}
+        testID="study-source-search"
+      />
+      <View style={{ height }}>
+        {rows.length === 0 ? (
+          <Text style={styles.notice} testID="study-source-no-matches">
+            {t('common:study.noMatches')}
+          </Text>
+        ) : (
+          <FlashList
+            data={rows}
+            keyExtractor={(row) =>
+              row.kind === 'language' ? `language-${row.language}` : row.pack.id
+            }
+            getItemType={(row) => row.kind}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }: { item: PackListRow<StudySource> }) =>
+              item.kind === 'language' ? (
+                <LanguageHeading name={item.languageName} language={item.language} />
+              ) : (
+                <Pressable
+                  onPress={() => onChoose(item.pack.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: item.pack.id === selectedId }}
+                  accessibilityLabel={t('common:study.a11y.source', { title: item.pack.title })}
+                  style={styles.action}
+                  testID={`study-source-option-${item.pack.id}`}
+                >
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      item.pack.id === selectedId && styles.optionSelected,
+                      isRTLContent(item.pack.direction) ? styles.rtl : styles.ltr,
+                    ]}
+                  >
+                    {item.pack.title}
+                  </Text>
+                </Pressable>
+              )
+            }
+            testID="study-source-list"
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** A language group's heading: the language's OWN name, never translated. */
+function LanguageHeading({ name, language }: { name: string; language: string }) {
+  const styles = useStyles();
+  return (
+    <Text
+      style={styles.groupLabel}
+      accessibilityRole="header"
+      testID={`study-language-${language}`}
+    >
+      {name}
+    </Text>
+  );
+}
+
+/**
  * The empty state, which is never an empty panel.
  *
  * ⚠️ IT SAYS WHICH TYPE IS MISSING AND OFFERS THE DOWNLOAD, AND THE CATALOGUE IS FETCHED ONLY
  * WHEN THE READER ASKS. `idle` is the state the frozen "opening the sheet touches no network"
  * constraint produces; it is neither `loading` (which would spin forever) nor `unavailable`
  * (which would tell a connected reader they are offline).
+ *
+ * ⚠️ AND THE OFFERS ARE A GROUPED, VIRTUALIZED LIST IN A BOUNDED BOX (story 8-4). 8-3 drew them as
+ * a flat `map` inside a fixed-height panel — right for one French pack, and with 75 editions it
+ * either clipped them or pushed the Arabic off the sheet. They are grouped by language, the
+ * reader's own first, and searchable once there are more than a handful.
  */
 function NoSourcePanel({
   typeLabel,
@@ -448,19 +611,24 @@ function NoSourcePanel({
   catalogue,
   onLoadCatalogue,
   onInstall,
-  percentOf,
+  listHeight,
 }: {
   typeLabel: string;
   offers: StudyOffer[];
   catalogue: ReturnType<typeof useStudySources>['catalogue'];
   onLoadCatalogue: () => void;
   onInstall: ReturnType<typeof useStudySources>['install'];
-  percentOf: (value: number) => string;
+  listHeight: number;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const styles = useStyles();
+  const [query, setQuery] = useState('');
   // See the offer rows: "one install at a time" is the shelf's rule, and the reader has to see it.
   const busy = offers.some((offer) => offer.status === 'installing');
+  const rows = useMemo(
+    () => buildPackGroups(offers, query, i18n.language),
+    [offers, query, i18n.language]
+  );
   return (
     <View style={styles.panel} testID="study-no-source">
       <Text style={styles.panelTitle}>{t('common:study.noSource', { type: typeLabel })}</Text>
@@ -496,49 +664,107 @@ function NoSourcePanel({
         </Text>
       ) : null}
 
-      {offers.map((offer) => {
-        const running = offer.status === 'installing';
-        return (
-          <View key={offer.id}>
-            <Pressable
-              onPress={() => onInstall(offer.pack)}
-              /**
-               * ⚠️ DISABLED WHILE **ANY** TRANSFER RUNS, NOT ONLY THIS ONE (story 8-3 review, S5).
-               * `usePacks.install` enforces "one install at a time" by returning silently, so a
-               * press on a second offer did nothing at all and said nothing at all — the reader
-               * cannot see the first transfer from here, because this panel only ever draws the
-               * type they are looking at.
-               */
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              accessibilityLabel={t('common:study.a11y.install', { title: offer.title })}
-              style={[styles.action, busy && !running && styles.actionDim]}
-              testID={`study-install-${offer.id}`}
-            >
-              <Text style={styles.actionLabel}>
-                {running
-                  ? t('common:study.installing', {
-                      percent: percentOf(Math.round(offer.progress * 100)),
-                    })
-                  : t('common:study.install', {
-                      title: isolate(offer.title),
-                      size: isolate(formatBytes(offer.bytes)),
-                    })}
-              </Text>
-            </Pressable>
-            {/* ⚠️ THE REASON THE LAST ATTEMPT FAILED, WHICH THE SHEET USED TO SWALLOW (review S5).
-                A digest mismatch, a dead network and a pack too large to verify all re-rendered as
-                a plain "Get {title}", so the reader pressed it again and was told nothing —
-                `/content` has had four distinct sentences for exactly these states since 8-2. */}
-            {offer.status === 'error' ? (
-              <Text style={styles.notice} testID={`study-install-${offer.id}-failure`}>
-                {t(`profile:content.failure.${offer.failure ?? 'failed'}`)}
-              </Text>
-            ) : null}
-          </View>
-        );
-      })}
+      {offers.length > OFFER_SEARCH_THRESHOLD ? (
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('common:study.searchSources')}
+          style={styles.panelSearch}
+          testID="study-offer-search"
+        />
+      ) : null}
+
+      {offers.length > 0 ? (
+        // A bounded box that shrinks to its content for a short list: `maxHeight`, and a list that
+        // measures itself, so three offers do not leave a tall empty panel above the Arabic.
+        <View style={{ height: Math.min(listHeight, estimatedHeight(rows)) }}>
+          {rows.length === 0 ? (
+            <Text style={styles.notice} testID="study-offer-no-matches">
+              {t('common:study.noMatches')}
+            </Text>
+          ) : (
+            <FlashList
+              data={rows}
+              keyExtractor={(row) =>
+                row.kind === 'language' ? `language-${row.language}` : row.pack.id
+              }
+              getItemType={(row) => row.kind}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }: { item: PackListRow<StudyOffer> }) =>
+                item.kind === 'language' ? (
+                  <LanguageHeading name={item.languageName} language={item.language} />
+                ) : (
+                  <OfferRow offer={item.pack} busy={busy} onInstall={onInstall} />
+                )
+              }
+              testID="study-offer-list"
+            />
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Roughly how tall a grouped list is — a heading line and an offer line are about the same. */
+function estimatedHeight(rows: readonly unknown[]): number {
+  return Math.max(rows.length, 1) * OFFER_ROW_ESTIMATE;
+}
+/** One heading or one offer line, at the body font with its padding. */
+const OFFER_ROW_ESTIMATE = 36;
+
+/**
+ * One offer. It reads its OWN progress per key, so a tick re-renders this row and not the list
+ * (`@/stores/packStore` § `usePackStatuses`).
+ */
+function OfferRow({
+  offer,
+  busy,
+  onInstall,
+}: {
+  offer: StudyOffer;
+  busy: boolean;
+  onInstall: ReturnType<typeof useStudySources>['install'];
+}) {
+  const { t } = useTranslation();
+  const styles = useStyles();
+  const formatQuranNumber = useQuranNumerals();
+  const progress = usePackProgress(offer.id);
+  const running = offer.status === 'installing';
+  return (
+    <View>
+      <Pressable
+        onPress={() => onInstall(offer.pack)}
+        /**
+         * ⚠️ DISABLED WHILE **ANY** TRANSFER RUNS, NOT ONLY THIS ONE (story 8-3 review, S5).
+         * `usePacks.install` enforces "one install at a time" by returning silently, so a press on
+         * a second offer did nothing at all and said nothing at all — the reader cannot see the
+         * first transfer from here, because this panel only ever draws the type they are on.
+         */
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: busy }}
+        accessibilityLabel={t('common:study.a11y.install', { title: offer.title })}
+        style={[styles.action, busy && !running && styles.actionDim]}
+        testID={`study-install-${offer.id}`}
+      >
+        <Text style={styles.actionLabel}>
+          {running
+            ? t('common:study.installing', {
+                percent: formatQuranNumber(Math.round(progress * 100)),
+              })
+            : t('common:study.install', {
+                title: isolate(offer.title),
+                size: isolate(formatBytes(offer.bytes)),
+              })}
+        </Text>
+      </Pressable>
+      {/* ⚠️ THE REASON THE LAST ATTEMPT FAILED, WHICH THE SHEET USED TO SWALLOW (review S5). */}
+      {offer.status === 'error' ? (
+        <Text style={styles.notice} testID={`study-install-${offer.id}-failure`}>
+          {t(`profile:content.failure.${offer.failure ?? 'failed'}`)}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -622,6 +848,34 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       color: theme.colors.text.tertiary,
     },
+    /** The credit's own box: never squeezed by the list (`flexShrink: 0`), scrolls if taller. */
+    attributionBox: {
+      flexGrow: 0,
+      flexShrink: 0,
+      maxHeight: FONT_SIZE.caption * LINE_HEIGHT.body * 4,
+    },
+    attributionContent: {
+      paddingBottom: SPACING.xs,
+    },
+    panelSearch: {
+      paddingHorizontal: 0,
+    },
+    groupLabel: {
+      fontSize: FONT_SIZE.caption,
+      fontWeight: FONT_WEIGHT.semibold,
+      color: theme.colors.text.tertiary,
+      textAlign: TEXT_ALIGN_START,
+      paddingTop: SPACING.sm,
+      paddingBottom: SPACING.xs,
+    },
+    optionLabel: {
+      fontSize: FONT_SIZE.bodySmall,
+      color: theme.colors.text.primary,
+    },
+    optionSelected: {
+      fontWeight: FONT_WEIGHT.semibold,
+      color: theme.colors.accent.primary,
+    },
     notice: {
       fontSize: FONT_SIZE.caption,
       color: theme.colors.text.secondary,
@@ -666,7 +920,7 @@ const useStyles = () =>
      * the INTERFACE's start edge — the right. So with the app in Arabic the French translation
      * rendered flush RIGHT and ragged LEFT: every line ending at the same edge, each one starting
      * somewhere different, which is how a Latin paragraph is never set. It is the same mistake
-     * `isRTLContentLanguage` fixed one field over — a CONTENT value taking the interface's answer
+     * `isRTLContent` fixed one field over — a CONTENT value taking the interface's answer
      * — and it is invisible in an English build, where the two answers coincide.
      *
      * `'auto'` aligns by the text's OWN resolved direction on all three platforms: natural

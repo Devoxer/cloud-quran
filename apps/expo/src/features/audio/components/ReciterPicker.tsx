@@ -1,6 +1,11 @@
 /**
- * ReciterPicker — the voice surface: 39 reciters, grouped by style, one of them chosen
- * (story 7-2).
+ * ReciterPicker — the voice surface: 39 reciters grouped by style, then 11 narrated translations
+ * (story 8-4), one of them chosen (story 7-2).
+ *
+ * ⚠️ NARRATION IS A GROUP IN THIS LIST, NOT A SECOND PICKER. A narration voice is chosen, written
+ * and played exactly like a reciter (`data/reciters.ts` § the header), so the only thing that
+ * differs is its heading. It comes LAST: a reader who opens the voice list in a Quran app is
+ * looking for a reciter first, and the narration group says what it is in one line.
  *
  * ⚠️ IT RENDERS NO HEADER, AND THAT IS THE SHELL'S JOB. The `(profile)` group mounts `AppHeader`
  * + `AppTabBar` ONCE, above the navigator (story 6-6), with the title resolved from the focused
@@ -90,9 +95,10 @@ import { useDownloadAllPrompt } from '../hooks/useDownloadAllPrompt';
 import { DOWNLOADS_SUPPORTED, reciterDownloadCounts } from '../lib/audioDownloads';
 import { ReciterDownloadButton } from './ReciterDownloadButton';
 
-/** One entry of the flat list: a style heading, or a reciter under it. */
+/** One entry of the flat list: a style heading, the narration heading, or a voice under one. */
 export type ReciterRow =
   | { kind: 'style'; style: ReciterStyle }
+  | { kind: 'narration' }
   | { kind: 'reciter'; reciter: Reciter };
 
 /**
@@ -128,24 +134,37 @@ function matches(reciter: Reciter, query: string): boolean {
   return (
     fold(reciter.nameEnglish).includes(query) ||
     fold(reciter.id).includes(query) ||
-    fold(reciter.nameArabic).includes(query)
+    fold(reciter.nameArabic).includes(query) ||
+    // A narration also answers to its language's own name — "Français", "فارسی" — which neither
+    // title carries in that form.
+    (reciter.kind === 'narration' && fold(reciter.languageName).includes(query))
   );
 }
 
 /**
- * The list, grouped and filtered — murattal, then mujawwad, then muallim.
+ * The list, grouped and filtered — murattal, then mujawwad, then muallim, then narration.
  *
- * A style whose reciters all filter out drops its heading with them: a heading over nothing reads
+ * A group whose voices all filter out drops its heading with them: a heading over nothing reads
  * as a loading row rather than as an absence.
  */
 export function buildReciterRows(query: string): ReciterRow[] {
   const needle = fold(query);
   const rows: ReciterRow[] = [];
   for (const style of RECITER_STYLES) {
-    const group = RECITERS.filter((reciter) => reciter.style === style && matches(reciter, needle));
+    const group = RECITERS.filter(
+      (reciter) =>
+        reciter.kind === 'recitation' && reciter.style === style && matches(reciter, needle)
+    );
     if (group.length === 0) continue;
     rows.push({ kind: 'style', style });
     for (const reciter of group) rows.push({ kind: 'reciter', reciter });
+  }
+  const narrations = RECITERS.filter(
+    (reciter) => reciter.kind === 'narration' && matches(reciter, needle)
+  );
+  if (narrations.length > 0) {
+    rows.push({ kind: 'narration' });
+    for (const reciter of narrations) rows.push({ kind: 'reciter', reciter });
   }
   return rows;
 }
@@ -208,6 +227,14 @@ export function ReciterPicker({ listFooter }: ReciterPickerProps) {
   };
 
   const renderRow = ({ item }: { item: ReciterRow }) => {
+    if (item.kind === 'narration') {
+      return (
+        <View testID="reciter-group-narration">
+          <Text style={styles.groupLabel}>{t('player:reciters.narration.title')}</Text>
+          <Text style={styles.groupGloss}>{t('player:reciters.narration.gloss')}</Text>
+        </View>
+      );
+    }
     if (item.kind === 'style') {
       return (
         <View testID={`reciter-style-${item.style}`}>
@@ -315,10 +342,15 @@ export function ReciterPicker({ listFooter }: ReciterPickerProps) {
             data={rows}
             renderItem={renderRow}
             keyExtractor={(item) =>
-              item.kind === 'style' ? `style-${item.style}` : item.reciter.id
+              item.kind === 'style'
+                ? `style-${item.style}`
+                : item.kind === 'narration'
+                  ? 'group-narration'
+                  : item.reciter.id
             }
-            // Headings and rows are different heights; FlashList recycles per type.
-            getItemType={(item) => item.kind}
+            // Headings and rows are different heights; FlashList recycles per type. The two kinds
+            // of heading share one type: they are the same two-line shape.
+            getItemType={(item) => (item.kind === 'reciter' ? 'reciter' : 'heading')}
             ListFooterComponent={
               listFooter === undefined ? null : <View style={styles.footer}>{listFooter}</View>
             }

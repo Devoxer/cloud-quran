@@ -232,6 +232,13 @@
     },
     "storage_one": "{{number}} pack installed · {{size}}",
     "storage_other": "{{number}} packs installed · {{size}}",
-    "diskUnavailable": "Could not read what is installed on this device."
+    "diskUnavailable": "Could not read what is installed on this device.",
+    "searchPlaceholder": "Search by language or title",
+    "noMatchesTitle": "No packs found",
+    "noMatchesBody": "Try a language's name in English or in that language.",
+    "bundled": {
+      "label": "Included with the app",
+      "description": "Used by search. Always available, even offline."
+    }
   }
 }

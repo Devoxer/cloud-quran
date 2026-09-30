@@ -52,10 +52,19 @@ const mockOpened: DatabaseSync[] = [];
 // Jest hoists `jest.mock` above the imports, so a factory referencing a top-level binding reads an
 // uninitialized variable; the `mock` prefix is the documented opt-out and the `require` keeps the
 // driver out of the temporal dead zone entirely.
+/** Every database name the module asked to delete — the superseded-file reclaim (story 8-4). */
+const mockDeleted: string[] = [];
+
 jest.mock('expo-sqlite', () => ({
   importDatabaseFromAssetAsync: jest.fn(async (name: string) => {
     mockImports(name);
     if (mockState.importFailure) throw mockState.importFailure;
+  }),
+  // ⚠️ IT REJECTS, LIKE THE NATIVE MODULE DOES FOR A FILE THAT IS NOT THERE — which is every launch
+  // after the first. The reclaim must swallow that, or it would surface as an unhandled rejection.
+  deleteDatabaseAsync: jest.fn(async (name: string) => {
+    mockDeleted.push(name);
+    throw new Error(`Database not found: ${name}`);
   }),
   // ⚠️ ASYNC, MIRRORING THE MODULE. The open was `openDatabaseSync` until 2026-09-10, when it
   // was found walking into the very `WorkerChannel` defect story 6-1 made every READ async to
@@ -84,12 +93,15 @@ jest.mock('expo-sqlite', () => ({
   },
 }));
 
+import { parsePackFileName } from '@/constants/packs';
 import {
   __resetQuranDbForTests,
   getAllVersesForSearch,
   getSurahMetadata,
   getSurahVerses,
   getVersesForPositions,
+  QURAN_DATABASE_NAME,
+  SUPERSEDED_DATABASE_NAMES,
 } from './quranDb';
 
 beforeEach(() => {
@@ -97,6 +109,7 @@ beforeEach(() => {
   mockImports.mockClear();
   mockExeced.length = 0;
   mockClosed.length = 0;
+  mockDeleted.length = 0;
   mockState.importFailure = null;
   mockState.pragmaFailure = null;
 });
@@ -333,6 +346,46 @@ describe('opening', () => {
   });
 });
 
+/**
+ * THE VERSIONED DATABASE NAME (story 8-4).
+ *
+ * ⚠️ A CHANGED `quran.db` NEVER REACHES AN EXISTING INSTALL UNDER THE SAME NAME. The import copies
+ * the asset once (`forceOverwrite: false`) and the copy on disk wins forever — green on a fresh
+ * simulator, silently stale for every reader who already has the app. Story 8-4 re-sourced the
+ * bundled English, so the name moved; these cases pin that it did, that the old file is reclaimed,
+ * and that it is reclaimed only once the new one has opened.
+ */
+describe('the bundled database name', () => {
+  it('imports under a name no earlier build used', async () => {
+    await getSurahVerses(1);
+    expect(QURAN_DATABASE_NAME).toBe('quran-2.db');
+    expect(mockImports).toHaveBeenCalledWith('quran-2.db');
+    expect(SUPERSEDED_DATABASE_NAMES).toEqual(['quran.db']);
+    expect(SUPERSEDED_DATABASE_NAMES).not.toContain(QURAN_DATABASE_NAME);
+  });
+
+  it('is never mistaken for a content pack in the same directory', () => {
+    // ⚠️ `{id}-v{n}.db` IS A PACK. `quran-v2.db` would list the Quran on the shelf as "quran",
+    // with a Remove button.
+    expect(parsePackFileName(QURAN_DATABASE_NAME)).toBeNull();
+  });
+
+  it('reclaims the superseded file AFTER the new one opens, and swallows "already gone"', async () => {
+    await getSurahVerses(1);
+    // The reclaim is not awaited by the read; let it run.
+    await new Promise((settle) => setImmediate(settle));
+    expect(mockDeleted).toEqual(['quran.db']);
+  });
+
+  it('reclaims NOTHING when the new database failed to open', async () => {
+    // Deleting the old copy before the new one is known good could leave a reader with neither.
+    mockState.importFailure = new Error('asset missing');
+    await expect(getSurahVerses(1)).rejects.toThrow('asset missing');
+    await new Promise((settle) => setImmediate(settle));
+    expect(mockDeleted).toEqual([]);
+  });
+});
+
 describe('the whole corpus — the search reader (story 6-7)', () => {
   it('answers every verse in the book, in mushaf order, in ONE query', () => {
     // The order is load-bearing: `search.ts` does no sorting at all, so "results come back in
@@ -381,7 +434,10 @@ describe('the whole corpus — the search reader (story 6-7)', () => {
           '\u0627\u0644\u0644\u0651\u064E\u0647\u0650 ' +
           '\u0627\u0644\u0631\u0651\u064E\u062D\u0652\u0645\u064E\u0670\u0646\u0650 ' +
           '\u0627\u0644\u0631\u0651\u064E\u062D\u0650\u064A\u0645\u0650',
-        translation: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
+        // QuranEnc's `english_rwwad` since story 8-4 — NOT the Tanzil Saheeh text it replaced
+        // ("the Entirely Merciful, the Especially Merciful"). A literal, so a rebuild from the
+        // wrong source reddens here rather than passing on shape alone.
+        translation: 'In the name of Allah, the Most Compassionate, the Most Merciful.',
       });
       // The whole difference between the two columns of this verse, stated as an equation.
       expect(rows[0]?.textUthmani.replace(/\u0671/g, '\u0627')).toBe(rows[0]?.textSimple);

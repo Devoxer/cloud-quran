@@ -14,7 +14,7 @@ export const ARTIFACT_DIGESTS: Record<string, ArtifactDigest> = {
     rows: 6236,
   },
   translations: {
-    digest: 'ab756b138e2f7a860bd734ee6eb7f375a4bb63643b57e4fae635b4e15c8b322e',
+    digest: 'bdd9ba6437e2e9597cd43214973eaaa6cbee74490168d974db9ea97bcf385c65',
     rows: 6236,
   },
   surah_metadata: {

@@ -103,23 +103,32 @@ function search(query: string) {
   fireEvent.changeText(screen.getByTestId('reciter-search-input'), query);
 }
 
-describe('grouping — murattal, then mujawwad, then muallim', () => {
-  it('lists all thirty-nine voices under three headings', () => {
+/** A row's shape: `#heading`, a reciter's style, or `narration` for a narration voice. */
+const shapeOf = (row: ReturnType<typeof buildReciterRows>[number]) =>
+  row.kind === 'style'
+    ? `#${row.style}`
+    : row.kind === 'narration'
+      ? '#narration'
+      : row.reciter.kind === 'recitation'
+        ? row.reciter.style
+        : 'narration';
+
+describe('grouping — murattal, then mujawwad, then muallim, then narration', () => {
+  it('lists all fifty voices under four headings', () => {
     const rows = buildReciterRows('');
-    expect(rows.filter((row) => row.kind === 'reciter')).toHaveLength(39);
-    expect(rows.filter((row) => row.kind === 'style').map((row) => row.style)).toEqual([
-      'murattal',
-      'mujawwad',
-      'muallim',
+    expect(rows.filter((row) => row.kind === 'reciter')).toHaveLength(50);
+    expect(rows.filter((row) => row.kind !== 'reciter').map(shapeOf)).toEqual([
+      '#murattal',
+      '#mujawwad',
+      '#muallim',
+      '#narration',
     ]);
   });
 
-  it('puts each heading immediately above its own style, in catalogue order', () => {
-    // The literal head and tail of the sequence: a heading, then its members, and no reciter of
-    // one style anywhere inside another's run.
-    const shape = buildReciterRows('').map((row) =>
-      row.kind === 'style' ? `#${row.style}` : row.reciter.style
-    );
+  it('puts each heading immediately above its own group, in catalogue order', () => {
+    // The literal head and tail of the sequence: a heading, then its members, and no voice of
+    // one group anywhere inside another's run.
+    const shape = buildReciterRows('').map(shapeOf);
     expect(shape.slice(0, 3)).toEqual(['#murattal', 'murattal', 'murattal']);
     expect(shape.slice(35, 40)).toEqual([
       'murattal',
@@ -128,7 +137,17 @@ describe('grouping — murattal, then mujawwad, then muallim', () => {
       'mujawwad',
       'mujawwad',
     ]);
-    expect(shape.slice(40)).toEqual(['#muallim', 'muallim']);
+    expect(shape.slice(40, 43)).toEqual(['#muallim', 'muallim', '#narration']);
+    expect(shape.slice(43)).toEqual(Array(11).fill('narration'));
+  });
+
+  it('never files a narration under a recitation style (story 8-4)', () => {
+    const rows = buildReciterRows('');
+    const narrationHeading = rows.findIndex((row) => row.kind === 'narration');
+    rows.forEach((row, index) => {
+      if (row.kind !== 'reciter') return;
+      expect(row.reciter.kind === 'narration').toBe(index > narrationHeading);
+    });
   });
 
   it('renders the headings and the rows', () => {
@@ -146,6 +165,9 @@ describe('grouping — murattal, then mujawwad, then muallim', () => {
     expect(screen.getByText('Ornamented, melodic recitation.')).toBeTruthy();
     expect(screen.getByText('Teaching style — phrases repeated to learn by.')).toBeTruthy();
     expect(screen.getByTestId('reciter-row-alafasy')).toBeTruthy();
+    expect(screen.getByTestId('reciter-group-narration')).toBeTruthy();
+    expect(screen.getByText('Narrated translations')).toBeTruthy();
+    expect(screen.getByTestId('reciter-row-narration-fr-rashid')).toBeTruthy();
   });
 });
 
@@ -153,7 +175,7 @@ describe('the search filter', () => {
   it('matches the English name, case-insensitively', () => {
     expect(
       buildReciterRows('HUSARY')
-        .map((row) => (row.kind === 'style' ? null : row.reciter.id))
+        .map((row) => (row.kind === 'reciter' ? row.reciter.id : null))
         .filter(Boolean)
     ).toEqual(['husary', 'husary-mujawwad', 'husary-muallim']);
   });
@@ -186,15 +208,32 @@ describe('the search filter', () => {
     // stripped U+0300–U+036F range and survives the fold. Comparing that against an NFC-composed
     // catalogue matched nothing — 7 of 39 names were unfindable in Arabic while the suite was green.
     expect(
-      buildReciterRows('أحمد').map((row) => (row.kind === 'style' ? row.style : row.reciter.id))
-    ).toEqual(['murattal', 'ajmi', 'neana']);
+      buildReciterRows('أحمد').map((row) =>
+        row.kind === 'reciter' ? row.reciter.id : shapeOf(row)
+      )
+    ).toEqual(['#murattal', 'ajmi', 'neana']);
   });
 
   it('drops a heading whose whole style filtered out', () => {
     // Only murattal has an Al-Afasy; a bare `#mujawwad` over nothing reads as a stuck row.
     expect(
-      buildReciterRows('afasy').map((row) => (row.kind === 'style' ? row.style : row.reciter.id))
-    ).toEqual(['murattal', 'alafasy']);
+      buildReciterRows('afasy').map((row) =>
+        row.kind === 'reciter' ? row.reciter.id : shapeOf(row)
+      )
+    ).toEqual(['#murattal', 'alafasy']);
+  });
+
+  it("finds a narration by its language's own name, and by its title in either script", () => {
+    const ids = (query: string) =>
+      buildReciterRows(query)
+        .filter((row) => row.kind === 'reciter')
+        .map((row) => (row.kind === 'reciter' ? row.reciter.id : ''));
+    expect(ids('فارسی')).toEqual(['narration-fa-ih']);
+    expect(ids('francais')).toEqual(['narration-fr-rashid']);
+    expect(ids('somali')).toEqual(['narration-so-yacob']);
+    expect(ids('الترجمة الفرنسية')).toEqual(['narration-fr-rashid']);
+    // …and under its own heading only.
+    expect(buildReciterRows('somali').map(shapeOf)).toEqual(['#narration', 'narration']);
   });
 
   it('an empty query is every reciter, not none', () => {

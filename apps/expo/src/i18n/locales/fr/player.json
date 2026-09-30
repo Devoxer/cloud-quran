@@ -127,6 +127,10 @@
       "murattal": "Récitation mesurée et sans ornement.",
       "mujawwad": "Récitation mélodique et ornementée.",
       "muallim": "Style d'enseignement — phrases répétées pour apprendre."
+    },
+    "narration": {
+      "title": "Traductions récitées",
+      "gloss": "Le sens lu à voix haute dans une autre langue, verset par verset."
     }
   },
   "download": {

@@ -10,8 +10,11 @@
  * mistaken entry would send a reader's fetch to a third party that then learns what they study.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { PACK_CATALOGUE_URL } from '@/constants/packs';
 import { fetchCatalogue, parseCatalogue, parseCataloguePack } from './catalogue';
+import { buildPackGroups } from './packGroups';
 
 const VALID = {
   id: 'translation-fr-rashid',
@@ -19,6 +22,8 @@ const VALID = {
   type: 'translation',
   language: 'fr',
   languageName: 'Français',
+  languageNameEnglish: 'French',
+  direction: 'ltr',
   title: 'Le Noble Coran — Rachid Maach',
   source: 'QuranEnc',
   sourceVersion: '1.0.3',
@@ -186,5 +191,110 @@ describe('asking for a fresh copy', () => {
     const init = await initFor('android');
     expect(init.headers).toEqual({ 'cache-control': 'no-cache' });
     expect(init.cache).toBeUndefined();
+  });
+});
+
+describe('direction is DATA (story 8-4)', () => {
+  it("carries an 'rtl' edition's direction through", () => {
+    expect(parseCataloguePack({ ...VALID, direction: 'rtl' })?.direction).toBe('rtl');
+  });
+
+  it('treats a missing or unrecognised direction as ltr, and KEEPS the entry', () => {
+    // The I/O matrix: missing/unknown → ltr. A wrongly-ranged paragraph is recoverable; an edition
+    // dropped from the shelf over a typo is not.
+    const { direction: _dropped, ...noDirection } = VALID;
+    expect(parseCataloguePack(noDirection)?.direction).toBe('ltr');
+    expect(parseCataloguePack({ ...VALID, direction: 'RTL' })?.direction).toBe('ltr');
+    expect(parseCataloguePack({ ...VALID, direction: 42 })?.direction).toBe('ltr');
+  });
+
+  it('answers an empty English name rather than refusing an entry without one', () => {
+    const { languageNameEnglish: _dropped, ...noAlias } = VALID;
+    expect(parseCataloguePack(noAlias)?.languageNameEnglish).toBe('');
+  });
+});
+
+describe('a catalogue that repeats an id (story 8-4)', () => {
+  it('keeps ONE entry per id — the higher packVersion — in first-appearance order', () => {
+    const v2 = {
+      ...VALID,
+      packVersion: 2,
+      url: 'https://cdn.nobleachievements.com/packs/translation-fr-rashid-v2.db',
+    };
+    const other = {
+      ...VALID,
+      id: 'translation-en-rwwad',
+      url: 'https://cdn.nobleachievements.com/packs/translation-en-rwwad-v1.db',
+    };
+    const parsed = parseCatalogue({ catalogueVersion: 1, packs: [VALID, other, v2, VALID] });
+    expect(parsed?.map((pack) => `${pack.id}@${pack.packVersion}`)).toEqual([
+      'translation-fr-rashid@2',
+      'translation-en-rwwad@1',
+    ]);
+  });
+});
+
+/**
+ * THE COMMITTED CATALOGUE, PARSED BY THE APP'S OWN PARSER (story 8-4).
+ *
+ * ⚠️ IT IS READ FROM THE REPO, NOT FROM A FIXTURE, because the property is "every edition the
+ * pipeline published survives the device's validation". A catalogue whose URLs, digests or
+ * versions the parser refuses would ship a shelf with holes in it and every other gate green.
+ * The literals below are QuranEnc's measured shape on 2026-09-29: 75 editions, 56 languages, six
+ * of them right to left — including N'Ko, which no hand-written list in this repo had.
+ */
+describe('the committed catalogue', () => {
+  const committed = JSON.parse(
+    readFileSync(
+      join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        '..',
+        'packages',
+        'quran-data',
+        'data',
+        'packs',
+        'index.json'
+      ),
+      'utf8'
+    )
+  );
+  const parsed = parseCatalogue(committed) ?? [];
+
+  it('parses all 75 editions, dropping none', () => {
+    expect(committed.packs).toHaveLength(75);
+    expect(parsed).toHaveLength(75);
+    expect(new Set(parsed.map((pack) => pack.id)).size).toBe(75);
+    expect(parsed.every((pack) => pack.rows === 6236)).toBe(true);
+  });
+
+  it('carries the six right-to-left editions QuranEnc marks, by data alone', () => {
+    expect(
+      parsed
+        .filter((pack) => pack.direction === 'rtl')
+        .map((pack) => pack.language)
+        .sort()
+    ).toEqual(['fa', 'ku', 'nqo', 'ps', 'ug', 'ur']);
+  });
+
+  it('groups into 56 languages, the reader’s own first', () => {
+    const rows = buildPackGroups(parsed, '', 'fr');
+    const headings = rows.filter((row) => row.kind === 'language');
+    expect(headings).toHaveLength(56);
+    expect(headings[0]).toMatchObject({ kind: 'language', language: 'fr', count: 2 });
+    expect(rows.filter((row) => row.kind === 'pack')).toHaveLength(75);
+  });
+
+  it('finds Urdu by its English name, its own name and its code', () => {
+    for (const query of ['urdu', 'اردو', 'ur']) {
+      const ids = buildPackGroups(parsed, query, 'en').flatMap((row) =>
+        row.kind === 'pack' ? [row.pack.id] : []
+      );
+      expect(ids).toContain('translation-ur-junagarhi');
+    }
   });
 });

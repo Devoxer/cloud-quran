@@ -1,3 +1,5 @@
+export type { BundledTranslationRecord } from './bundled-translation';
+export { BUNDLED_TRANSLATION } from './bundled-translation';
 export { SURAH_COUNT, TOTAL_PAGES, TOTAL_VERSES } from './constants';
 export { VERSE_HASHES } from './hashes';
 export type { HizbMetadata, JuzMetadata } from './juz-hizb-metadata';

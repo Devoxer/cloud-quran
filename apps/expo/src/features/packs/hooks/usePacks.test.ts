@@ -38,29 +38,28 @@ jest.mock('../lib/catalogue', () => ({
   fetchCatalogue: (...args: unknown[]) => mockFetchCatalogue(...args),
 }));
 
-const mockOpenPack = jest.fn<Promise<void>, unknown[]>(() => Promise.resolve());
-const mockReadable = { value: true };
+/**
+ * ⚠️ `describePack` IS THE ONLY READ, AND `openPack` / `getPackSurah` ARE DELIBERATELY ABSENT (story
+ * 8-4). The shelf used to OPEN every installed pack and read a preview row from each on every
+ * mount; a mock that still exposed those names would let that come back silently. Calling either
+ * now throws "is not a function" into the hook's catch and files the pack as broken.
+ */
+const mockDescribePack = jest.fn<Promise<Record<string, string>>, unknown[]>(() =>
+  Promise.resolve({
+    title: 'Le Noble Coran — Rachid Maach',
+    language: 'fr',
+    languageName: 'Français',
+    languageNameEnglish: 'French',
+    direction: 'ltr',
+    type: 'translation',
+    source: 'QuranEnc',
+    sourceVersion: '1.0.3',
+    attribution: 'Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).',
+  })
+);
 jest.mock('@/lib/quranDb', () => ({
   closePack: jest.fn(() => Promise.resolve()),
-  getPackMeta: jest.fn(() =>
-    Promise.resolve({
-      title: 'Le Noble Coran — Rachid Maach',
-      language: 'fr',
-      languageName: 'Français',
-      type: 'translation',
-      source: 'QuranEnc',
-      sourceVersion: '1.0.3',
-      attribution: 'Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).',
-    })
-  ),
-  getPackSurah: jest.fn(() =>
-    Promise.resolve([
-      { surah: 1, verse: 1, text: 'Au nom d’Allah…', footnotes: null },
-      { surah: 1, verse: 2, text: 'Louange à Allah…', footnotes: null },
-    ])
-  ),
-  isPackReadable: () => mockReadable.value,
-  openPack: (...args: unknown[]) => mockOpenPack(...args),
+  describePack: (...args: unknown[]) => mockDescribePack(...args),
 }));
 
 jest.mock('@/lib/errors', () => ({ captureException: jest.fn() }));
@@ -68,7 +67,7 @@ jest.mock('@/lib/errors', () => ({ captureException: jest.fn() }));
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { usePackStore } from '@/stores/packStore';
-import { buildRows, usePacks } from './usePacks';
+import { __resetDescribedPacksForTests, buildRows, usePacks } from './usePacks';
 
 const OFFERED = {
   id: 'translation-fr-rashid',
@@ -76,6 +75,8 @@ const OFFERED = {
   type: 'translation',
   language: 'fr',
   languageName: 'Français',
+  languageNameEnglish: 'French',
+  direction: 'ltr' as const,
   title: 'Le Noble Coran — Rachid Maach',
   source: 'QuranEnc',
   sourceVersion: '1.0.3',
@@ -96,17 +97,18 @@ const LOCAL = {
     language: 'fr',
     title: 'Le Noble Coran — Rachid Maach',
     languageName: 'Français',
+    languageNameEnglish: 'French',
+    direction: 'ltr',
     type: 'translation',
     source: 'QuranEnc',
     sourceVersion: '1.0.3',
     attribution: 'Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).',
-    preview: 'Au nom d’Allah, le Tout Miséricordieux, le Très Miséricordieux[1].',
   },
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockReadable.value = true;
+  __resetDescribedPacksForTests();
   mockAnyInstallRunning.mockReturnValue(false);
   mockInstalledPackBytes.mockReturnValue(0);
   mockListInstalledPacks.mockReturnValue([]);
@@ -125,7 +127,7 @@ describe('the shelf, driven', () => {
     expect(result.current.disk).toBe('ready');
   });
 
-  it('flips the row to installed WITH A PREVIEW after a successful install', async () => {
+  it('flips the row to installed, described by its own file, after a successful install', async () => {
     const { result } = renderHook(() => usePacks());
     await waitFor(() => expect(result.current.rows).toHaveLength(1));
 
@@ -141,12 +143,44 @@ describe('the shelf, driven', () => {
     });
 
     await waitFor(() => expect(result.current.rows[0].status).toBe('installed'));
-    // ⚠️ THE HEADLINE PROMISE: readable WITHOUT A RESTART. The preview is a row read out of the
-    // file that has just been installed, so its presence is the proof.
-    expect(result.current.rows[0].preview).toBe('Au nom d’Allah…');
+    // ⚠️ THE HEADLINE PROMISE: the row is described by the file that has just been installed,
+    // with no restart — and WITHOUT opening it into a handle (story 8-4).
     expect(result.current.rows[0].attribution).toContain('v1.0.3');
     expect(result.current.installedBytes).toBe(1_425_408);
-    expect(mockOpenPack).toHaveBeenCalledWith('translation-fr-rashid', 1);
+    expect(mockDescribePack).toHaveBeenCalledWith('translation-fr-rashid', 1);
+  });
+
+  it('reads each installed FILE once per process, however often the shelf mounts (story 8-4)', async () => {
+    // ⚠️ THE SCALE DEFECT. 8-2 opened and previewed every installed pack on every mount of the
+    // content screen AND of every study sheet. A file under a versioned name never changes, so
+    // its description is read once.
+    mockListInstalledPacks.mockReturnValue(ON_DISK);
+    const first = renderHook(() => usePacks());
+    await waitFor(() => expect(first.result.current.rows[0]?.status).toBe('installed'));
+    first.unmount();
+    const second = renderHook(() => usePacks());
+    await waitFor(() => expect(second.result.current.rows[0]?.status).toBe('installed'));
+    expect(mockDescribePack).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries the pack’s own DIRECTION, so an RTL pack is RTL offline (story 8-4)', async () => {
+    mockDescribePack.mockResolvedValueOnce({
+      title: 'اردو ترجمہ - محمد جوناگڑھی',
+      language: 'ur',
+      languageName: 'اردو',
+      direction: 'rtl',
+      type: 'translation',
+      source: 'QuranEnc',
+      sourceVersion: '1.1.3',
+      attribution: 'اردو ترجمہ - محمد جوناگڑھی · QuranEnc.com · v1.1.3',
+    });
+    mockListInstalledPacks.mockReturnValue([
+      { id: 'translation-ur-junagarhi', version: 1, bytes: 7_299_072 },
+    ]);
+    mockFetchCatalogue.mockResolvedValue(null);
+    const { result } = renderHook(() => usePacks());
+    await waitFor(() => expect(result.current.disk).toBe('ready'));
+    expect(result.current.rows[0].direction).toBe('rtl');
   });
 
   it('turns a typed failure into an error row carrying the reason', async () => {
@@ -248,16 +282,17 @@ describe('the shelf, driven', () => {
     expect(result.current.installedBytes).toBe(0);
   });
 
-  it('files a pack whose handle never registered as broken-but-present, not as absent', async () => {
-    // The delete-races-hydration guard in `openPack` resolves without registering a handle.
+  it('files a pack whose file will not describe itself as broken-but-present, not as absent', async () => {
+    // A delete landing mid-read, or a corrupt file: the row stays, so the reader can remove it,
+    // and it is not cached — the next arrival tries again.
     mockListInstalledPacks.mockReturnValue(ON_DISK);
-    mockReadable.value = false;
+    mockDescribePack.mockRejectedValueOnce(new Error('file is not a database'));
     const { result } = renderHook(() => usePacks());
 
     await waitFor(() => expect(result.current.disk).toBe('ready'));
-    // Nothing could be read from it, so it contributes no local facts — and the catalogue's own
-    // row is what the reader sees, rather than a crash or a half-populated row.
-    expect(result.current.rows[0].preview).toBeNull();
+    expect(result.current.rows[0].installedVersion).toBe(1);
+    // The catalogue's facts fill in what the file could not say.
+    expect(result.current.rows[0].title).toBe('Le Noble Coran — Rachid Maach');
   });
 });
 
@@ -277,7 +312,17 @@ describe('what the shelf shows', () => {
     expect(row.attribution).toBe(
       'Traduction française : Rachid Maach. Source : QuranEnc.com (v1.0.3).'
     );
-    expect(row.preview).toBe('Au nom d’Allah, le Tout Miséricordieux, le Très Miséricordieux[1].');
+  });
+
+  it('takes the catalogue’s direction when the installed file predates the field', () => {
+    // Story 8-2's French pack has no `direction` in its `pack_meta`; the catalogue's answer for the
+    // same edition fills it rather than leaving it to a default.
+    const [row] = buildRows(
+      [{ ...OFFERED, direction: 'rtl' }],
+      { 'translation-fr-rashid': { ...LOCAL['translation-fr-rashid'], direction: '' } },
+      {}
+    );
+    expect(row.direction).toBe('rtl');
   });
 
   it('still lists an installed pack when the catalogue could not be read', () => {
@@ -306,17 +351,19 @@ describe('what the shelf shows', () => {
     const [row] = buildRows(
       [OFFERED],
       {},
-      { 'translation-fr-rashid': { status: 'installing', version: 1, progress: 0.42 } }
+      { 'translation-fr-rashid': { status: 'installing', version: 1 } }
     );
     expect(row.status).toBe('installing');
-    expect(row.progress).toBe(0.42);
+    // The percentage is NOT on the row: it is read per key by the row that draws it, so a tick
+    // does not rebuild the shelf (`@/stores/packStore` § `usePackStatuses`).
+    expect(Object.hasOwn(row, 'progress')).toBe(false);
   });
 
   it('carries a typed failure through to the row', () => {
     const [row] = buildRows(
       [OFFERED],
       {},
-      { 'translation-fr-rashid': { status: 'error', version: 1, progress: 0, error: 'rows' } }
+      { 'translation-fr-rashid': { status: 'error', version: 1, error: 'rows' } }
     );
     expect(row.status).toBe('error');
     expect(row.failure).toBe('rows');

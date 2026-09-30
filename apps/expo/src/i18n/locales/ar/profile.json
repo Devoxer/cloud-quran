@@ -236,6 +236,13 @@
     "storage_few": "{{number}} حزم مثبّتة · {{size}}",
     "storage_many": "{{number}} حزمة مثبّتة · {{size}}",
     "storage_other": "{{number}} حزمة مثبّتة · {{size}}",
-    "diskUnavailable": "تعذّرت قراءة ما هو مثبّت على هذا الجهاز."
+    "diskUnavailable": "تعذّرت قراءة ما هو مثبّت على هذا الجهاز.",
+    "searchPlaceholder": "ابحث باللغة أو العنوان",
+    "noMatchesTitle": "لا توجد حزم مطابقة",
+    "noMatchesBody": "جرّب اسم اللغة بالإنجليزية أو بتلك اللغة نفسها.",
+    "bundled": {
+      "label": "مضمّن في التطبيق",
+      "description": "يستخدمه البحث، وهو متاح دائمًا حتى دون اتصال."
+    }
   }
 }

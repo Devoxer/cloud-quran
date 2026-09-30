@@ -31,7 +31,7 @@
 import type { Verse } from 'quran-data';
 import { useCallback, useEffect, useState } from 'react';
 import { captureException } from '@/lib/errors';
-import { getPackRange, getVersesForPositions } from '@/lib/quranDb';
+import { getPackRange, getVersesForPositions, openPack } from '@/lib/quranDb';
 import { verseKey } from '@/lib/usePosition';
 import { rangeKey, type VerseRange, versesInRange } from '../lib/scope';
 
@@ -64,14 +64,22 @@ export interface StudyContent {
 /** Empty rows for a state that has none yet — one object, so `loading` never allocates. */
 const NO_ROWS: StudyRow[] = [];
 
+/** The pack to read — the pair, because opening one takes its version. */
+export interface StudyContentSource {
+  id: string;
+  version: number;
+}
+
 export function useStudyContent(
   range: VerseRange | null,
-  /** The pack id to read, or `null` when this type has no installed source. */
-  sourceId: string | null
+  /** The pack to read, or `null` when this type has no installed source. */
+  source: StudyContentSource | null
 ): StudyContent {
   const [state, setState] = useState<StudyContentState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const key = range === null ? null : rangeKey(range);
+  const sourceId = source?.id ?? null;
+  const sourceVersion = source?.version ?? null;
 
   // ⚠️ `attempt` IS IN THE DEPENDENCIES AND IS DELIBERATELY NOT READ IN THE BODY — it IS the retry
   // trigger, and Biome's "more dependencies than necessary" reads only the body. Taking its
@@ -94,7 +102,9 @@ export function useStudyContent(
         const pairs = versesInRange(range);
         const [verses, entries] = await Promise.all([
           getVersesForPositions(pairs),
-          sourceId === null ? Promise.resolve([]) : getPackRange(sourceId, range.from, range.to),
+          sourceId === null || sourceVersion === null
+            ? Promise.resolve([])
+            : readSource(sourceId, sourceVersion, range),
         ]);
         if (cancelled) return;
         const rows = joinRows(pairs, verses, entries);
@@ -108,10 +118,27 @@ export function useStudyContent(
     return () => {
       cancelled = true;
     };
-  }, [key, sourceId, attempt]);
+  }, [key, sourceId, sourceVersion, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   return { state, retry };
+}
+
+/**
+ * Open the pack if it is not open yet, then read the range.
+ *
+ * ⚠️ THIS IS WHERE A PACK IS OPENED NOW, AND THE ONLY PLACE (story 8-4). The shelf used to open
+ * every installed pack on every mount so that this read would find a handle; it now only reads
+ * their metadata, so the reader of the TEXT opens what it reads. `openPack` is idempotent for the
+ * same version and a no-op for a web pack, which `holdPack` registered already.
+ */
+async function readSource(
+  id: string,
+  version: number,
+  range: VerseRange
+): Promise<Awaited<ReturnType<typeof getPackRange>>> {
+  await openPack(id, version);
+  return getPackRange(id, range.from, range.to);
 }
 
 /**

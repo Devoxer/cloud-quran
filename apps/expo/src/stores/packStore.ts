@@ -17,6 +17,7 @@
  * second source of truth with no way to be right.
  */
 
+import { useMemo } from 'react';
 import { create } from 'zustand';
 
 /**
@@ -134,17 +135,59 @@ export function hydratePackEntries(
   usePackStore.getState().hydrate(installed);
 }
 
+// ─── Selectors ──────────────────────────────────────────────────────────────────────────────
+
+/** What the shelf's STRUCTURE needs of one slice — everything but the moving progress figure. */
+export interface PackStatusSlice {
+  status: PackStatus;
+  version: number;
+  error?: string;
+}
+
 /**
- * ⚠️ FOUR SELECTORS LIVED HERE AND WERE DELETED UNUSED — `usePackEntry` by id,
- * `useInstalledPackCount`, `useAnyPackInstalling`, and a per-key shallow subscription nothing
- * subscribed to. `usePacks` reads `entries` whole, because the shelf is a handful of rows rather
- * than 114 and per-key selection buys nothing at that size.
+ * Every slice WITHOUT its progress — the shelf's structure, which a progress tick does not move.
  *
- * ⚠️ `useAnyPackInstalling` LOOKED LOAD-BEARING AND WAS NOT. It reads like the "one install at a
- * time" guard the hook's docblock promises, and a store cannot answer that question: the store is
- * a MIRROR, and only `features/packs/lib/packStore.ts`'s `inFlight` knows whether a native
- * transfer is running. A selector answering it from the mirror would be confidently wrong between
- * the press and the first progress tick — which is exactly the window a double-press lands in.
- * The real guard is `anyInstallRunning()`, in the module that owns the disk.
- * (Story 8-2 review, S7.)
+ * ⚠️ THE SHELF USED TO READ `entries` WHOLE, AND THAT WAS WRITTEN DOWN AS A SCALE ASSUMPTION (story
+ * 8-4). The note here said "a handful of rows rather than 114, so per-key selection buys
+ * nothing" — true for one French pack, and false for a shelf of 75 editions, where every progress
+ * tick of one install rebuilt every row and re-rendered the whole virtualized list. The selector
+ * answers a STRING signature, which Zustand compares with `Object.is`: a tick changes only a
+ * `progress`, which the signature does not contain, so nothing subscribed here re-renders. The
+ * progress itself is read per KEY by the one row that shows it, through {@link usePackProgress}.
+ */
+export function usePackStatuses(): Readonly<Record<string, PackStatusSlice>> {
+  const signature = usePackStore((state) =>
+    JSON.stringify(
+      Object.entries(state.entries)
+        .map(([id, entry]) => [id, entry.status, entry.version, entry.error ?? null] as const)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    )
+  );
+  return useMemo(() => {
+    const parsed = JSON.parse(signature) as [string, PackStatus, number, string | null][];
+    return Object.fromEntries(
+      parsed.map(([id, status, version, error]) => [
+        id,
+        error === null ? { status, version } : { status, version, error },
+      ])
+    );
+  }, [signature]);
+}
+
+/**
+ * One pack's transfer progress, 0–1 — PER KEY, so a tick re-renders the one row drawing it and
+ * nothing else. `0` for a pack with no slice.
+ */
+export function usePackProgress(id: string): number {
+  return usePackStore((state) => state.entries[id]?.progress ?? 0);
+}
+
+/**
+ * ⚠️ `useAnyPackInstalling` LOOKED LOAD-BEARING AND WAS NOT, AND IT STAYS DELETED. It reads like
+ * the "one install at a time" guard the hook's docblock promises, and a store cannot answer that
+ * question: the store is a MIRROR, and only `features/packs/lib/packStore.ts`'s `inFlight` knows
+ * whether a native transfer is running. A selector answering it from the mirror would be
+ * confidently wrong between the press and the first progress tick — which is exactly the window
+ * a double-press lands in. The real guard is `anyInstallRunning()`, in the module that owns the
+ * disk. (Story 8-2 review, S7.)
  */

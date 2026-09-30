@@ -43,10 +43,11 @@
  *   2. **The module's surface.** Only `getAllAsync` / `getFirstAsync` with `SELECT` text leave
  *      this file, and the `SQLiteDatabase` handle is never exported. There is no `exec` door.
  *
- * That matters because `pnpm verify` covers `uthmani_text` ONLY — `simple_text`, `translations`
- * and the 8.2 MB mushaf layouts have no baseline at all, so a runtime mutation of any of them
- * would pass the integrity gate clean. The non-negotiable is enforced here by there being no way
- * to write, not downstream by a hash.
+ * That matters because `pnpm verify` hashes the REPO's copy at build time — `uthmani_text` per
+ * ayah, and `simple_text`, `translations` (text AND footnotes, since story 8-4) and the mushaf
+ * layouts as whole-artifact digests (`scripts/verify-artifacts.ts`) — and none of that can see the
+ * copy on a reader's device. A runtime mutation there would pass every gate clean, so the
+ * non-negotiable is enforced here by there being no way to write, not downstream by a hash.
  *
  * ── snake_case in, camelCase out ─────────────────────────────────────────────────────────────
  *
@@ -67,14 +68,20 @@
  * a rejected promise than by a Suspense boundary.
  *
  * ⚠️ `forceOverwrite` IS LEFT AT ITS DEFAULT (`false`), WHICH MEANS THE COPY IS MADE ONCE PER
- * INSTALL. If a future story ships a corrected `quran.db`, the copy already on disk WINS and the
- * fix never reaches an existing reader — flip `forceOverwrite` (or version the database name) in
- * the story that changes the file. Nothing here can detect it: the integrity gate runs at build
- * time against the repo's copy, not against the device's.
+ * INSTALL — so a changed asset NEVER reaches a reader who already has the app. The copy on disk
+ * wins, a fresh simulator looks correct, and every existing install keeps the old text forever.
+ * Nothing here could detect it: the integrity gate runs at build time against the repo's copy.
+ *
+ * ⚠️ SO THE DATABASE NAME IS VERSIONED, AND STORY 8-4 IS THE FIRST TO BUMP IT. It re-sourced the
+ * bundled English from QuranEnc (`scripts/prepare-data.ts`), which changed the file. A new name is
+ * a file the device has never seen, so the import copies it; `forceOverwrite: true` would instead
+ * re-copy 4 MB on EVERY launch, and would have to overwrite a file SQLite may already hold open.
+ * The superseded name is then deleted — see {@link SUPERSEDED_DATABASE_NAMES}.
  */
 
 import {
   defaultDatabaseDirectory,
+  deleteDatabaseAsync,
   deserializeDatabaseAsync,
   importDatabaseFromAssetAsync,
   openDatabaseAsync,
@@ -86,11 +93,25 @@ import { packFileName } from '@/constants/packs';
 /**
  * The name the bundled database is copied to inside the SQLite directory.
  *
- * ⚠️ CHANGING IT ORPHANS THE OLD COPY rather than replacing it — see the `forceOverwrite` warning
- * in the header. That is the sanctioned way to ship a corrected database, and it costs the old
- * file's disk until the app is reinstalled.
+ * ⚠️ BUMP IT WHENEVER `apps/expo/src/data/quran.db` CHANGES, and move the old name into
+ * {@link SUPERSEDED_DATABASE_NAMES} — see the `forceOverwrite` warning in the header. It is the
+ * only way a corrected database reaches an existing install.
+ *
+ * ⚠️ NEVER `quran-v{n}.db`. `constants/packs.ts` § `parsePackFileName` reads `{id}-v{n}.db` in
+ * this same directory as an installed content pack, so that spelling would put the Quran on the
+ * content shelf as a pack called "quran" with a Remove button. `-2`, not `-v2`.
  */
-export const QURAN_DATABASE_NAME = 'quran.db';
+export const QURAN_DATABASE_NAME = 'quran-2.db';
+
+/**
+ * Names earlier builds imported the bundled database under, oldest first.
+ *
+ * ⚠️ THE HEADER USED TO CALL THE OLD COPY UNRECLAIMABLE, AND IT IS NOT: WE KNOW ITS NAME. Each is
+ * deleted once the current name has OPENED — never before, so a failed import can never leave a
+ * reader with neither file — and best-effort, because "already gone" is the ordinary answer on
+ * every launch after the first and on every fresh install.
+ */
+export const SUPERSEDED_DATABASE_NAMES: readonly string[] = ['quran.db'];
 
 /** Rows exactly as the `verses` table stores them. Never leaves this module. */
 interface VerseRow {
@@ -178,6 +199,8 @@ async function openQuranDb(): Promise<SQLiteDatabase> {
         throw error;
       }
       handle = opened;
+      // Not awaited: reclaiming disk must never delay the first verse. See the constant.
+      void reclaimSupersededDatabases();
       return opened;
     })().catch((error: unknown) => {
       opening = null;
@@ -185,6 +208,19 @@ async function openQuranDb(): Promise<SQLiteDatabase> {
     });
   }
   return opening;
+}
+
+/**
+ * Delete every database file an earlier build imported the Quran under (story 8-4).
+ *
+ * Nothing opens those names any more, so nothing holds them; a delete that fails — the file is
+ * already gone, which is the usual case — is swallowed, because there is nothing a reader could
+ * do about it and the text they are reading comes from {@link QURAN_DATABASE_NAME}.
+ */
+async function reclaimSupersededDatabases(): Promise<void> {
+  for (const name of SUPERSEDED_DATABASE_NAMES) {
+    await deleteDatabaseAsync(name).catch(() => {});
+  }
 }
 
 /**
@@ -269,7 +305,8 @@ export async function getSurahMetadata(surah: number): Promise<Surah | null> {
  * The translation the search corpus reads.
  *
  * ⚠️ HARDCODED, AND HONESTLY SO: the `translations` table has a `language` column and exactly ONE
- * value in it — `'en'`, 6,236 rows, one per verse (`scripts/prepare-data.ts:208`). Threading the
+ * value in it — `'en'`, 6,236 rows, one per verse, QuranEnc's `english_rwwad` since story 8-4
+ * (`scripts/prepare-data.ts`). Threading the
  * UI language through would be a parameter whose only legal argument is this string, and the
  * first day a second translation ships it has to be a reader PREFERENCE anyway, not the interface
  * language. Named rather than inlined so that story has one place to look.
@@ -528,6 +565,35 @@ export async function getPackMeta(id: string): Promise<Record<string, string>> {
     'SELECT key, value FROM pack_meta'
   );
   return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+}
+
+/**
+ * A pack's `pack_meta`, read WITHOUT registering a handle — the shelf's listing read (story 8-4).
+ *
+ * ⚠️ IT EXISTS SO THAT LISTING WHAT IS INSTALLED DOES NOT OPEN EVERYTHING THAT IS INSTALLED. The
+ * 8-2 shelf opened every installed pack into {@link packHandles} (which nothing closes at runtime)
+ * and read a preview row from each, serially, on every mount of the content screen and of every
+ * study sheet. That was right for one French pack; with 75 editions on offer it is a connection
+ * per edition held for the life of the process, for a screen that only needed their titles. A
+ * pack is now OPENED only when something reads its text ({@link openPack}, from the study sheet).
+ *
+ * A pack that already has a live handle at this version is read through it — web's held packs
+ * always do, since they have no file. Otherwise the file is opened, read and closed here, exactly
+ * like {@link countPackRows}; `expo-sqlite` reference-counts a shared connection per path, so a
+ * concurrent {@link openPack} of the same file is not closed underneath its caller.
+ */
+export async function describePack(id: string, version: number): Promise<Record<string, string>> {
+  const live = packHandles.get(id);
+  if (live?.version === version) return getPackMeta(id);
+  const db = await openReadOnly(packFileName(id, version));
+  try {
+    const rows = await db.getAllAsync<{ key: string; value: string }>(
+      'SELECT key, value FROM pack_meta'
+    );
+    return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  } finally {
+    await db.closeAsync().catch(() => {});
+  }
 }
 
 /**
