@@ -122,15 +122,17 @@ case "$cmd" in
     # prod + preview get the SAME file; `eas env:push --force` is an idempotent upsert
     # (it does NOT delete EAS vars absent from the file), so if `preview` ever fails
     # after `production`, re-running secrets:push:expo re-syncs both.
-    command -v eas >/dev/null 2>&1 || { echo "✗ eas not installed — 'npm i -g eas-cli'" >&2; exit 1; }
+    # eas-cli from PATH, else the latest through npx (neither MSI nor the Mac has a global install).
+    if command -v eas >/dev/null 2>&1; then eas="eas"; else eas="npx -y eas-cli@latest"; fi
     full="$(mktemp)"; pub="$(mktemp)"; chmod 600 "$full" "$pub"
     trap 'rm -f "$full" "$pub"' EXIT INT TERM HUP
     decrypt_to "$EXPO_FILE" "$full"
     grep -E '^EXPO_PUBLIC_' "$full" > "$pub" || true
     [ -s "$pub" ] || { echo "✗ no EXPO_PUBLIC_* keys in $EXPO_FILE — nothing to push to EAS" >&2; exit 1; }
     ( cd "$ROOT/apps/expo" \
-        && eas env:push production --path "$pub" --force \
-        && eas env:push preview --path "$pub" --force )
+        && set -a && . ./.env.local && set +a \
+        && $eas env:push production --path "$pub" --force \
+        && $eas env:push preview --path "$pub" --force )
     echo "✓ pushed expo EXPO_PUBLIC_* env to EAS (production + preview)"
     ;;
   push:local)

@@ -123,10 +123,17 @@
     },
     "extra": {
       "router": {},
-      "_comment_easProjectAndUpdates": "OTA and the EAS project id are BLOCKED on an owner action; the checklist lives in deferred-work.md under story 5-7. Kept to one line because `extra` is embedded verbatim in the runtime manifest and readable as Constants.expoConfig.extra — internal process notes must not ship in every build."
+      "eas": {
+        "projectId": "b1dfb2cb-dcfe-40c0-8ff6-9f40b72cc8ae"
+      }
     },
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "owner": "devoxer",
+    "updates": {
+      "url": "https://u.expo.dev/b1dfb2cb-dcfe-40c0-8ff6-9f40b72cc8ae",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

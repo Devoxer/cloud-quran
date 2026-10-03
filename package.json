@@ -43,6 +43,7 @@
     "verify": "node scripts/verify-quran.ts && node scripts/verify-artifacts.ts && node scripts/verify-licences.ts",
     "prepare-audio": "node scripts/prepare-audio.ts",
     "prepare-packs": "node scripts/prepare-packs.ts",
+    "update:publish": "bash scripts/publish-update.sh",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "test:verify-gate": "node --test scripts/__tests__/verify-quran.test.mjs",
     "test:licences": "node --test scripts/__tests__/verify-licences.test.mjs",
