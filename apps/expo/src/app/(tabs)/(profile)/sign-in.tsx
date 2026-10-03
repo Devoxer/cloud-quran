@@ -66,9 +66,9 @@ import { useThemedStyles } from '@/lib/useThemedStyles';
 /**
  * Where the "what syncs and who sees it" link goes.
  *
- * ⚠️ A STAND-IN FOR A PUBLISHED PRIVACY POLICY URL, which epic 9's marketing site owns and which
- * both the App Store and Play require before submission — swapping this route for that URL is a
- * one-line change here (see `deferred-work.md`, "There is no privacy policy page").
+ * The in-app "Your Data" screen, deliberately, rather than the published policy
+ * (`constants/legal.ts`): it works offline, in the reader's language, and holds the controls the
+ * disclosure talks about. The policy itself is linked from Settings.
  */
 const DISCLOSURE_ROUTE = '/data';
 

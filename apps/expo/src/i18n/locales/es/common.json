@@ -14,16 +14,9 @@
     "clearAll": "Borrar todo",
     "dismiss": "Descartar",
     "signUp": "Registrarse",
-    "maybeLater": "Quizás más tarde",
-    "newMix": "Nueva mezcla",
-    "manageOfflineBooks": "Gestionar libros sin conexión"
-  },
-  "badge": {
-    "premium": "Premium",
-    "premiumCaps": "PREMIUM"
+    "maybeLater": "Quizás más tarde"
   },
   "search": {
-    "booksPlaceholder": "Buscar libros...",
     "placeholder": "Buscar en el Corán",
     "restingTitle": "Encuentra una aleya",
     "restingBody": "Escribe palabras de una aleya en árabe o de la traducción al inglés.",
@@ -44,44 +37,10 @@
     "message": "Esta pantalla no existe.",
     "goHome": "¡Ir a la pantalla de inicio!"
   },
-  "sectionPicker": {
-    "title": "Selector de secciones",
-    "sectionsPerBook": "Secciones por libro",
-    "hint": "Selecciona qué secciones reproducir para cada libro",
-    "apply": "Aplicar ({{selected}})"
-  },
-  "sections": {
-    "aboutBook": "Sobre el libro",
-    "summaryBrief": "Resumen breve",
-    "summaryCore": "Resumen principal",
-    "summaryInDepth": "Resumen detallado",
-    "keyTakeaways": "Puntos clave",
-    "notableQuotes": "Citas destacadas",
-    "faq": "Preguntas frecuentes"
-  },
-  "durationBadge": {
-    "1min": "1 min",
-    "5min": "5 min",
-    "15min": "15 min"
-  },
   "moreCount": "+{{moreCount}} más",
   "unknownTitle": "Título desconocido",
-  "unknownAuthor": "Autor desconocido",
-  "dialogs": {
-    "removeOffline": {
-      "title": "¿Eliminar descarga sin conexión?",
-      "message": "¿Quitar «{{title}}» de este dispositivo? Libera {{size}}. Puedes descargarlo de nuevo."
-    },
-    "offlineLimit": {
-      "title": "Límite de descarga alcanzado",
-      "message": "{{saved}}/{{limit}} libros guardados sin conexión. Elimina uno para guardar otro."
-    }
-  },
   "errors": {
     "network": "No se pudo conectar con el servidor. Comprueba tu conexión."
-  },
-  "signUpPrompt": {
-    "defaultMessage": "Regístrate para acceder a esta función"
   },
   "relativeTime": {
     "justNow": "ahora mismo",

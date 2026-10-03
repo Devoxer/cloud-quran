@@ -27,59 +27,31 @@
 import arA11y from './locales/ar/a11y.json';
 import arBook from './locales/ar/book.json';
 import arCommon from './locales/ar/common.json';
-import arDiscover from './locales/ar/discover.json';
-import arFeed from './locales/ar/feed.json';
-import arLibrary from './locales/ar/library.json';
 import arNavigation from './locales/ar/navigation.json';
-import arNotes from './locales/ar/notes.json';
 import arNotifications from './locales/ar/notifications.json';
 import arPlayer from './locales/ar/player.json';
 import arProfile from './locales/ar/profile.json';
-import arQuiz from './locales/ar/quiz.json';
-import arQuotes from './locales/ar/quotes.json';
-import arStats from './locales/ar/stats.json';
 import a11y from './locales/en/a11y.json';
 import book from './locales/en/book.json';
 import common from './locales/en/common.json';
-import discover from './locales/en/discover.json';
-import feed from './locales/en/feed.json';
-import library from './locales/en/library.json';
 import navigation from './locales/en/navigation.json';
-import notes from './locales/en/notes.json';
 import notifications from './locales/en/notifications.json';
 import player from './locales/en/player.json';
 import profile from './locales/en/profile.json';
-import quiz from './locales/en/quiz.json';
-import quotes from './locales/en/quotes.json';
-import stats from './locales/en/stats.json';
 import esA11y from './locales/es/a11y.json';
 import esBook from './locales/es/book.json';
 import esCommon from './locales/es/common.json';
-import esDiscover from './locales/es/discover.json';
-import esFeed from './locales/es/feed.json';
-import esLibrary from './locales/es/library.json';
 import esNavigation from './locales/es/navigation.json';
-import esNotes from './locales/es/notes.json';
 import esNotifications from './locales/es/notifications.json';
 import esPlayer from './locales/es/player.json';
 import esProfile from './locales/es/profile.json';
-import esQuiz from './locales/es/quiz.json';
-import esQuotes from './locales/es/quotes.json';
-import esStats from './locales/es/stats.json';
 import frA11y from './locales/fr/a11y.json';
 import frBook from './locales/fr/book.json';
 import frCommon from './locales/fr/common.json';
-import frDiscover from './locales/fr/discover.json';
-import frFeed from './locales/fr/feed.json';
-import frLibrary from './locales/fr/library.json';
 import frNavigation from './locales/fr/navigation.json';
-import frNotes from './locales/fr/notes.json';
 import frNotifications from './locales/fr/notifications.json';
 import frPlayer from './locales/fr/player.json';
 import frProfile from './locales/fr/profile.json';
-import frQuiz from './locales/fr/quiz.json';
-import frQuotes from './locales/fr/quotes.json';
-import frStats from './locales/fr/stats.json';
 
 export const defaultNS = 'common' as const;
 
@@ -97,15 +69,8 @@ export const resources = {
     common,
     a11y,
     navigation,
-    discover,
-    library,
-    feed,
     player,
     book,
-    notes,
-    quotes,
-    quiz,
-    stats,
     profile,
     notifications,
   },
@@ -113,15 +78,8 @@ export const resources = {
     common: arCommon,
     a11y: arA11y,
     navigation: arNavigation,
-    discover: arDiscover,
-    library: arLibrary,
-    feed: arFeed,
     player: arPlayer,
     book: arBook,
-    notes: arNotes,
-    quotes: arQuotes,
-    quiz: arQuiz,
-    stats: arStats,
     profile: arProfile,
     notifications: arNotifications,
   },
@@ -129,15 +87,8 @@ export const resources = {
     common: esCommon,
     a11y: esA11y,
     navigation: esNavigation,
-    discover: esDiscover,
-    library: esLibrary,
-    feed: esFeed,
     player: esPlayer,
     book: esBook,
-    notes: esNotes,
-    quotes: esQuotes,
-    quiz: esQuiz,
-    stats: esStats,
     profile: esProfile,
     notifications: esNotifications,
   },
@@ -145,15 +96,8 @@ export const resources = {
     common: frCommon,
     a11y: frA11y,
     navigation: frNavigation,
-    discover: frDiscover,
-    library: frLibrary,
-    feed: frFeed,
     player: frPlayer,
     book: frBook,
-    notes: frNotes,
-    quotes: frQuotes,
-    quiz: frQuiz,
-    stats: frStats,
     profile: frProfile,
     notifications: frNotifications,
   },

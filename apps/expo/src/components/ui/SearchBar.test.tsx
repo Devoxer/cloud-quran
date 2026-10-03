@@ -79,7 +79,7 @@ describe('SearchBar', () => {
     it('renders default placeholder when not provided', () => {
       const { getByTestId } = render(<SearchBar {...defaultProps} testID="search-bar" />);
       const input = getByTestId('search-bar-input');
-      expect(input.props.placeholder).toBe('Search books...');
+      expect(input.props.placeholder).toBe('Search the Quran');
     });
 
     it('renders cancel button when onCancel is provided', () => {

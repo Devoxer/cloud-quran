@@ -1,14 +1,10 @@
 /**
- * Legal page URLs - shared across Profile and Subscription screens
+ * The published privacy policy.
+ *
+ * ⚠️ IT IS SERVED BY THE WEB APP ITSELF (`public/privacy.html`), NOT BY A MARKETING SITE. The
+ * stores require a policy URL before submission, and `apps/marketing` is still a placeholder; the
+ * web app's own domain is live today. When epic 9's site exists it can link here or move the page —
+ * this constant is the one place the app reads it from. (Until 2026-10-03 this file listed four
+ * `cloudquran.app` pages that never existed, and nothing imported it.)
  */
-// ⚠️ Story 5-1 review: these pointed at wisdomfruits.com and nothing imports this file — the
-// trap being the next screen that wires up a module which looks already-configured. The domain
-// below is Cloud Quran's own and is NOT live yet; the marketing site (apps/marketing) publishes
-// these pages. `refund` is retained only for shape — Cloud Quran is free and waqf-funded, so
-// there is nothing to refund; delete it when a settings screen actually renders this list.
-export const LEGAL_URLS = {
-  privacy: 'https://cloudquran.app/privacy',
-  terms: 'https://cloudquran.app/terms',
-  refund: 'https://cloudquran.app/refund',
-  contact: 'https://cloudquran.app/contact',
-} as const;
+export const PRIVACY_POLICY_URL = 'https://cloudquran.nobleachievements.com/privacy';

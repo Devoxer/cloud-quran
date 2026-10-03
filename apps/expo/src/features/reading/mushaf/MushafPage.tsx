@@ -224,6 +224,16 @@ const useStyles = () =>
       color: theme.colors.text.primary,
       writingDirection: 'rtl',
       textAlign: 'center',
+      /**
+       * ⚠️ THE LINE SPANS THE PAGE; IT IS NOT SIZED TO ITS TEXT. Pages 1–2 sit in
+       * `specialPageFrame`, whose `alignItems: 'center'` shrank each line to its MEASURED width —
+       * and on Android the page face measured narrower than it drew, so the centered line spilled
+       * out of its own box and was clipped: the Basmala's first letter on a cold start, the ①
+       * after a language switch (2026-10-03). Ordinary pages already stretch (the column's
+       * default). Stretched, the measurement no longer decides what is visible; `textAlign`
+       * still centres the glyphs.
+       */
+      alignSelf: 'stretch',
     },
     highlightedWord: {
       backgroundColor: theme.colors.accent.faint,

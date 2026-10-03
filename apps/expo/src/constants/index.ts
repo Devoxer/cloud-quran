@@ -30,7 +30,6 @@ export type {
 } from './Colors';
 export { default as Colors } from './Colors';
 // Library home (Story 23.15)
-export { LIBRARY_PREVIEW_CAP } from './library';
 // Mushaf rendering — per-page QPC V1 geometry + font CDN (story 6-2)
 export {
   BASMALA_SCALE,

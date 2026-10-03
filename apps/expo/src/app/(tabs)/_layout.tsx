@@ -1,6 +1,39 @@
+import { usePathname, useRouter } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
+import { useEffect } from 'react';
+import { BackHandler } from 'react-native';
 
 import { TABS } from '@/constants/navigation';
+
+/** The mushaf — `TABS[0]`, the home surface. */
+const HOME = TABS[0].href;
+
+/**
+ * Android hardware back on a tab that is not home goes HOME, rather than out of the app.
+ *
+ * ⚠️ `backBehavior="none"` ABOVE IS WHY THIS EXISTS. A tab switch is not history, so with nothing
+ * to pop the system back left the app from Read, Bookmarks or Settings — a reader one tap from the
+ * mushaf was dropped on the launcher (confirmed on `emulator-5556`, 2026-10-03). `"firstRoute"`
+ * would fix the back key but make `router.canGoBack()` true on every tab, drawing `AppHeader`'s
+ * back chevron where there is no push. So the navigator stays history-free and this handler takes
+ * the one case it leaves: back at a tab root. ⚠️ IT RUNS BEFORE REACT NAVIGATION'S OWN HANDLER
+ * (measured: an unconditional version sent back from Settings › Recitation to the mushaf instead of
+ * Settings), so it defers whenever there is real history — `canGoBack()` — and navigation pops.
+ * Sheets register their handlers later still and close first. On home it declines, and back leaves
+ * the app as Android expects.
+ */
+function useBackToHome(): void {
+  const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (pathname === HOME || router.canGoBack()) return false;
+      router.navigate(HOME);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [pathname, router]);
+}
 
 /**
  * The tab shell — a NAVIGATOR ONLY, since story 6-6. It paints no chrome: `tabBar` renders
@@ -32,6 +65,7 @@ import { TABS } from '@/constants/navigation';
  */
 
 export default function TabLayout() {
+  useBackToHome();
   return (
     <Tabs
       tabBar={() => null}

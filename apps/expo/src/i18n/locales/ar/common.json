@@ -14,16 +14,9 @@
     "clearAll": "مسح الكل",
     "dismiss": "إخفاء",
     "signUp": "إنشاء حساب",
-    "maybeLater": "ربما لاحقًا",
-    "newMix": "مزيج جديد",
-    "manageOfflineBooks": "إدارة الكتب دون اتصال"
-  },
-  "badge": {
-    "premium": "مميّز",
-    "premiumCaps": "مميّز"
+    "maybeLater": "ربما لاحقًا"
   },
   "search": {
-    "booksPlaceholder": "ابحث في الكتب...",
     "placeholder": "ابحث في القرآن",
     "restingTitle": "ابحث عن آية",
     "restingBody": "اكتب كلمات من الآية بالعربية أو من الترجمة الإنجليزية.",
@@ -47,44 +40,10 @@
     "message": "هذه الشاشة غير موجودة.",
     "goHome": "العودة إلى الشاشة الرئيسية!"
   },
-  "sectionPicker": {
-    "title": "اختيار الأقسام",
-    "sectionsPerBook": "الأقسام لكل كتاب",
-    "hint": "اختر الأقسام التي تُشغَّل من كل كتاب",
-    "apply": "تطبيق ({{selected}})"
-  },
-  "sections": {
-    "aboutBook": "عن الكتاب",
-    "summaryBrief": "ملخص موجز",
-    "summaryCore": "الملخص الأساسي",
-    "summaryInDepth": "ملخص معمّق",
-    "keyTakeaways": "أهم الأفكار",
-    "notableQuotes": "اقتباسات بارزة",
-    "faq": "الأسئلة الشائعة"
-  },
-  "durationBadge": {
-    "1min": "دقيقة واحدة",
-    "5min": "5 دقائق",
-    "15min": "15 دقيقة"
-  },
   "moreCount": "+{{moreCount}} أخرى",
   "unknownTitle": "عنوان غير معروف",
-  "unknownAuthor": "مؤلف غير معروف",
-  "dialogs": {
-    "removeOffline": {
-      "title": "إزالة التنزيل؟",
-      "message": "إزالة \"{{title}}\" من هذا الجهاز؟ يوفّر {{size}}. يمكنك تنزيله مجددًا."
-    },
-    "offlineLimit": {
-      "title": "بلغت حد التنزيل",
-      "message": "حفظت {{saved}} من {{limit}} كتابًا. أزل واحدًا لحفظ غيره."
-    }
-  },
   "errors": {
     "network": "تعذّر الوصول إلى الخادم. تحقق من اتصالك."
-  },
-  "signUpPrompt": {
-    "defaultMessage": "أنشئ حسابًا للوصول إلى هذه الميزة"
   },
   "relativeTime": {
     "justNow": "الآن",

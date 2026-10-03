@@ -1117,21 +1117,21 @@ test('loadBaseBundleKeys FAILS CLOSED when a namespace the app loads is absent',
 
 /**
  * ⚠️ AND ON AN *EMPTIED* NAMESPACE, WHICH THE MISSING-FILE GUARD ABOVE WALKS STRAIGHT PAST
- * (Story 24.19 Step I). `library.json` holding `{}` answers "yes" to every container question —
+ * (Story 24.19 Step I). `player.json` holding `{}` answers "yes" to every container question —
  * the directory exists, the namespace is declared, the whole-bundle key count is healthy on the
- * other namespaces — while every `library:*` key becomes unresolvable and sink (b) stops asking
+ * other namespaces — while every `player:*` key becomes unresolvable and sink (b) stops asking
  * about that namespace at all. Same shape as the missing file, one level in: a completeness guard
  * keyed on the CONTAINER cannot see an empty MEMBER.
  */
 test('loadBaseBundleKeys FAILS CLOSED when a namespace file is present but EMPTY', () => {
   const emptied = mkdtempSync(join(tmpdir(), 'lint-i18n-empty-ns-'));
   for (const ns of declaredNamespaces()) {
-    writeFileSync(join(emptied, `${ns}.json`), JSON.stringify(ns === 'library' ? {} : { k: 'v' }));
+    writeFileSync(join(emptied, `${ns}.json`), JSON.stringify(ns === 'player' ? {} : { k: 'v' }));
   }
-  assert.throws(() => loadBaseBundleKeys(emptied), /hold no keys: library/);
+  assert.throws(() => loadBaseBundleKeys(emptied), /hold no keys: player/);
   // The control: the identical tree with that one namespace populated indexes fine, so the throw
   // is the empty member and not the fixture.
-  writeFileSync(join(emptied, 'library.json'), JSON.stringify({ k: 'v' }));
+  writeFileSync(join(emptied, 'player.json'), JSON.stringify({ k: 'v' }));
   assert.ok(loadBaseBundleKeys(emptied).plain.size > 0);
   rmSync(emptied, { recursive: true });
 });
@@ -1139,8 +1139,9 @@ test('loadBaseBundleKeys FAILS CLOSED when a namespace file is present but EMPTY
 test('declaredNamespaces reads the namespaces the APP loads, and fails closed if it cannot', () => {
   const declared = declaredNamespaces();
   // Anti-vacuity against the real tree: a narrowed or mis-parsed read would return a short list.
-  assert.ok(declared.length >= 10, `expected the app's namespaces, got ${declared.join(',')}`);
-  assert.ok(declared.includes('common') && declared.includes('library'));
+  // Seven since the Wisdom Fruits namespaces were pruned (2026-10-03).
+  assert.ok(declared.length >= 7, `expected the app's namespaces, got ${declared.join(',')}`);
+  assert.ok(declared.includes('common') && declared.includes('player'));
   // A resources module that moved, or whose shape changed, must THROW rather than silently
   // returning nothing — an empty expectation is what turns the check above into a no-op.
   assert.throws(() => declaredNamespaces('/definitely/not/a/module.ts'), /missing/);
@@ -1155,7 +1156,7 @@ test('loadBaseBundleKeys indexes the REAL base bundle, and it is not empty', () 
   const real = loadBaseBundleKeys();
   assert.ok(real.plain.size > 100, `expected a populated base bundle, got ${real.plain.size}`);
   assert.ok(real.plural.size > 0, 'expected at least one plural stem in the base bundle');
-  assert.equal(real.plural.has('library:offline.deleteAllMessage'), true);
+  assert.equal(real.plural.has('common:search.resultsA11y'), true);
 });
 
 /**

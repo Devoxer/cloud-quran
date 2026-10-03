@@ -451,7 +451,7 @@ describe('start-edge text alignment', () => {
   /** Anti-vacuity: the walk really reaches the tree, so an empty result means something. */
   it('the scan sees the whole source tree', () => {
     const files = sourceFiles(SRC).map((f) => relative(SRC, f));
-    expect(files.length).toBeGreaterThan(200);
+    expect(files.length).toBeGreaterThan(150); // 186 after the 2026-10-03 prune
     expect(files).toContain('components/ui/ListRow.tsx');
     expect(files).toContain('features/reading/components/VerseRow.tsx');
   });
@@ -615,7 +615,7 @@ describe('start-edge text alignment', () => {
   /** Anti-vacuity: the walk really reaches the tree, so an empty result means something. */
   it('the scan sees the whole source tree', () => {
     const files = sourceFiles(SRC).map((f) => relative(SRC, f));
-    expect(files.length).toBeGreaterThan(200);
+    expect(files.length).toBeGreaterThan(150); // 186 after the 2026-10-03 prune
     expect(files).toContain('components/ui/ListRow.tsx');
     expect(files).toContain('features/reading/components/VerseRow.tsx');
   });

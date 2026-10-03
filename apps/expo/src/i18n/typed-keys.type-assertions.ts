@@ -28,8 +28,8 @@ i18n.t('common:this.key.does.not.exist');
 i18n.t('player:actions.tryAgain');
 
 // An unnamespaced key that is not in the default namespace (`common`) must be rejected.
-// @ts-expect-error — 'sections.shuffle' is a `discover` key, and bare keys resolve against `common`
-i18n.t('sections.shuffle');
+// @ts-expect-error — 'reciters.narration.title' is a `player` key, and bare keys resolve against `common`
+i18n.t('reciters.narration.title');
 
 // A whole namespace that does not exist must be rejected.
 // @ts-expect-error — there is no `nosuchns` namespace
@@ -38,4 +38,4 @@ i18n.t('nosuchns:whatever');
 // ...and the positive control: real keys, both prefixed and bare, must still compile.
 i18n.t('common:actions.tryAgain');
 i18n.t('actions.tryAgain');
-i18n.t('discover:sections.shuffle');
+i18n.t('player:reciters.narration.title');

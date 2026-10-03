@@ -179,7 +179,7 @@ export function SearchBar({
           value={value}
           onChangeText={onChangeText}
           onSubmitEditing={handleSubmit}
-          placeholder={placeholder ?? t('common:search.booksPlaceholder')}
+          placeholder={placeholder ?? t('common:search.placeholder')}
           placeholderTextColor={colors.text.tertiary}
           style={styles.input}
           returnKeyType="search"

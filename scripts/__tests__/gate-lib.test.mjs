@@ -41,6 +41,7 @@ import {
   lineOfIndex,
   splitLines,
 } from '../gate-lib.mjs';
+import { GATES as LINT_ALL_GATES } from '../lint-all.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -376,7 +377,16 @@ const expandScript = (scripts, name, seen = new Set()) => {
 
 test('every gate script is RUN by `pnpm lint`, and every gate suite by `pnpm test`', () => {
   const { scripts } = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
-  const lintChain = expandScript(scripts, 'lint');
+  // `pnpm lint` is `node scripts/lint-all.mjs`, which runs its GATES list (so one failure cannot
+  // hide the rest) — expand those commands too, or every gate would look unwired.
+  const lintChain = [
+    expandScript(scripts, 'lint'),
+    ...LINT_ALL_GATES.map(([, command]) =>
+      command.replace(/\bpnpm\s+([\w:-]+)/g, (whole, ref) =>
+        ref in scripts ? expandScript(scripts, ref) : whole
+      )
+    ),
+  ].join(' ');
   // ⚠️ EXPAND `test`, NOT `test:gates` — THE ROOT OF THE CHAIN, NOT A LINK IN IT. Checking
   // `test:gates` proves its members are wired to IT and asks nothing about whether IT is wired to
   // anything: dropping `pnpm test:gates &&` from `test` removes all seven gate suites from local

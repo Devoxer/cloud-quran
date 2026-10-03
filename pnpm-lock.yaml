@@ -41,7 +41,7 @@ importers:
     dependencies:
       '@better-auth/expo':
         specifier: 1.7.1
-        version: 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(better-auth@1.7.1(@cloudflare/workers-types@4.20260524.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260524.1)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(kysely@0.29.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@3.0.9(@types/node@25.9.1)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)))(expo-constants@58.0.9)(expo-linking@58.0.10)(expo-network@58.0.3(expo@58.0.2)(react@19.3.0))(expo-secure-store@58.0.2(expo@58.0.2))(expo-web-browser@58.0.4(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)))
+        version: 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(better-auth@1.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(expo-constants@58.0.9)(expo-linking@58.0.10)(expo-network@58.0.3(expo@58.0.2)(react@19.3.0))(expo-secure-store@58.0.2(expo@58.0.2))(expo-web-browser@58.0.4(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)))
       '@cloudquran/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -80,7 +80,7 @@ importers:
         version: 5.102.3(react@19.3.0)
       better-auth:
         specifier: 1.7.1
-        version: 1.7.1(@cloudflare/workers-types@4.20260524.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260524.1)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(kysely@0.29.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@3.0.9(@types/node@25.9.1)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3))
+        version: 1.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       cloud-quran-api:
         specifier: workspace:*
         version: link:../worker
@@ -171,9 +171,6 @@ importers:
       expo-status-bar:
         specifier: ~58.0.3
         version: 58.0.3(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      expo-store-review:
-        specifier: ~58.0.2
-        version: 58.0.2(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))
       expo-symbols:
         specifier: ^58.0.3
         version: 58.0.3(expo-font@58.0.5)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -207,9 +204,6 @@ importers:
       react-native-gesture-handler:
         specifier: ~3.2.1
         version: 3.2.1(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      react-native-get-random-values:
-        specifier: ^2.0.0
-        version: 2.0.0(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))
       react-native-keyboard-controller:
         specifier: 1.22.4
         version: 1.22.4(react-native-reanimated@4.7.0(react-native-worklets@0.13.0(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -4235,12 +4229,6 @@ packages:
       react: '*'
       react-native: '*'
 
-  expo-store-review@58.0.2:
-    resolution: {integrity: sha512-kzK8tVMCKAH+ztvJPsX0aNsjGQCGzyNtQgxhyt/Jzjlrpy2+GQA54jVPcsxUb5EMGEUIqImN94duAlC9tJXzwQ==}
-    peerDependencies:
-      expo: '*'
-      react-native: '*'
-
   expo-structured-headers@58.0.1:
     resolution: {integrity: sha512-wIduvAIUdGQk82osLjFiYYq3TFHUdG4RgmN+C//EySxn/2PTu0RsJsdgBtXrp/OT3YGeesNgfzb1mFxq5Zhp0g==}
 
@@ -4301,9 +4289,6 @@ packages:
 
   exponential-backoff@3.1.3:
     resolution: {integrity: sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA==}
-
-  fast-base64-decode@1.0.0:
-    resolution: {integrity: sha512-qwaScUgUGBYeDNRnbc/KyllVU88Jk1pRHPStuF/lO7B0/RTRLj7U0lkdTAutlBblY08rwZDff6tNU9cjv6j//Q==}
 
   fast-csv@4.3.6:
     resolution: {integrity: sha512-2RNSpuwwsJGP0frGsOmTb9oUF+VkFSM4SyLTDgwf2ciHWTarN0lQTC+F2f/t5J9QjW+c65VFIAAu85GsvMIusw==}
@@ -5764,11 +5749,6 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
-
-  react-native-get-random-values@2.0.0:
-    resolution: {integrity: sha512-wx7/aPqsUIiWsG35D+MsUJd8ij96e3JKddklSdrdZUrheTx89gPtz3Q2yl9knBArj5u26Cl23T88ai+Q0vypdQ==}
-    peerDependencies:
-      react-native: '>=0.81'
 
   react-native-is-edge-to-edge@1.3.1:
     resolution: {integrity: sha512-NIXU/iT5+ORyCc7p0z2nnlkouYKX425vuU1OEm6bMMtWWR9yvb+Xg5AZmImTKoF9abxCPqrKC3rOZsKzUYgYZA==}
@@ -7406,6 +7386,18 @@ snapshots:
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260524.1
 
+  '@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)':
+    dependencies:
+      '@better-auth/utils': 0.4.2
+      '@better-fetch/fetch': 1.3.1
+      '@opentelemetry/semantic-conventions': 1.43.0
+      '@standard-schema/spec': 1.1.0
+      better-call: 1.4.0(zod@4.4.3)
+      jose: 6.2.10
+      kysely: 0.29.5
+      nanostores: 1.5.2
+      zod: 4.4.3
+
   '@better-auth/drizzle-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260524.1)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(kysely@0.29.5))':
     dependencies:
       '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
@@ -7413,11 +7405,30 @@ snapshots:
     optionalDependencies:
       drizzle-orm: 0.45.2(@cloudflare/workers-types@4.20260524.1)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(kysely@0.29.5)
 
+  '@better-auth/drizzle-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/utils': 0.4.2
+
   '@better-auth/expo@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(better-auth@1.7.1(@cloudflare/workers-types@4.20260524.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260524.1)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(kysely@0.29.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@3.0.9(@types/node@25.9.1)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)))(expo-constants@58.0.9)(expo-linking@58.0.10)(expo-network@58.0.3(expo@58.0.2)(react@19.3.0))(expo-secure-store@58.0.2(expo@58.0.2))(expo-web-browser@58.0.4(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)))':
     dependencies:
       '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
       '@better-fetch/fetch': 1.3.1
       better-auth: 1.7.1(@cloudflare/workers-types@4.20260524.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260524.1)(expo-sqlite@58.0.8(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(kysely@0.29.5))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@3.0.9(@types/node@25.9.1)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3))
+      better-call: 1.4.0(zod@4.4.3)
+      zod: 4.4.3
+    optionalDependencies:
+      expo-constants: 58.0.9(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(typescript@6.0.3)
+      expo-linking: 58.0.10(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      expo-network: 58.0.3(expo@58.0.2)(react@19.3.0)
+      expo-secure-store: 58.0.2(expo@58.0.2)
+      expo-web-browser: 58.0.4(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))
+
+  '@better-auth/expo@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(better-auth@1.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(expo-constants@58.0.9)(expo-linking@58.0.10)(expo-network@58.0.3(expo@58.0.2)(react@19.3.0))(expo-secure-store@58.0.2(expo@58.0.2))(expo-web-browser@58.0.4(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)))':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-fetch/fetch': 1.3.1
+      better-auth: 1.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       better-call: 1.4.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
@@ -7434,9 +7445,21 @@ snapshots:
     optionalDependencies:
       kysely: 0.29.5
 
+  '@better-auth/kysely-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(kysely@0.29.5)':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/utils': 0.4.2
+    optionalDependencies:
+      kysely: 0.29.5
+
   '@better-auth/memory-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
     dependencies:
       '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/utils': 0.4.2
+
+  '@better-auth/memory-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
       '@better-auth/utils': 0.4.2
 
   '@better-auth/mongo-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
@@ -7444,14 +7467,30 @@ snapshots:
       '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
       '@better-auth/utils': 0.4.2
 
+  '@better-auth/mongo-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/utils': 0.4.2
+
   '@better-auth/prisma-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
     dependencies:
       '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
       '@better-auth/utils': 0.4.2
 
+  '@better-auth/prisma-adapter@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/utils': 0.4.2
+
   '@better-auth/telemetry@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)':
     dependencies:
       '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260524.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/utils': 0.4.2
+      '@better-fetch/fetch': 1.3.1
+
+  '@better-auth/telemetry@1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)':
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
 
@@ -9718,6 +9757,32 @@ snapshots:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
 
+  better-auth@1.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+    dependencies:
+      '@better-auth/core': 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@better-auth/drizzle-adapter': 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
+      '@better-auth/kysely-adapter': 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(kysely@0.29.5)
+      '@better-auth/memory-adapter': 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
+      '@better-auth/mongo-adapter': 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
+      '@better-auth/prisma-adapter': 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
+      '@better-auth/telemetry': 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)
+      '@better-auth/utils': 0.4.2
+      '@better-fetch/fetch': 1.3.1
+      '@noble/ciphers': 2.3.0
+      '@noble/hashes': 2.3.0
+      better-call: 1.4.0(zod@4.4.3)
+      defu: 6.1.7
+      jose: 6.2.10
+      kysely: 0.29.5
+      nanostores: 1.5.2
+      zod: 4.4.3
+    optionalDependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+    transitivePeerDependencies:
+      - '@cloudflare/workers-types'
+      - '@opentelemetry/api'
+
   better-call@1.4.0(zod@4.4.3):
     dependencies:
       '@better-auth/utils': 0.5.0
@@ -10711,11 +10776,6 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)
 
-  expo-store-review@58.0.2(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)):
-    dependencies:
-      expo: 58.0.2(@babel/core@7.29.0)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.10)(expo-router@58.0.12)(react-dom@19.3.0(react@19.3.0))(react-native-web@0.21.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
-      react-native: 0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)
-
   expo-structured-headers@58.0.1: {}
 
   expo-symbols@58.0.3(expo-font@58.0.5)(expo@58.0.2)(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
@@ -10807,8 +10867,6 @@ snapshots:
       - utf-8-validate
 
   exponential-backoff@3.1.3: {}
-
-  fast-base64-decode@1.0.0: {}
 
   fast-csv@4.3.6:
     dependencies:
@@ -12558,11 +12616,6 @@ snapshots:
       '@types/react-test-renderer': 19.1.0
       invariant: 2.2.4
       react: 19.3.0
-      react-native: 0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)
-
-  react-native-get-random-values@2.0.0(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)):
-    dependencies:
-      fast-base64-decode: 1.0.0
       react-native: 0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0)
 
   react-native-is-edge-to-edge@1.3.1(react-native@0.88.0-rc.3(@babel/core@7.29.0)(@react-native/metro-config@0.88.0-rc.3(@babel/core@7.29.0))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):

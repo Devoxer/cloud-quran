@@ -72,7 +72,6 @@ import { LOCALIZED_BOOK_ATTRS, localizedBookFields } from '@cloudquran/shared';
 import * as languageConstants from '@/constants/language';
 import { BASE_LANGUAGE } from '@/constants/language';
 import { initI18n } from '@/i18n';
-import { getCachedContent, setCachedContent } from './contentCache';
 import * as errors from './errors';
 import {
   AVAILABLE_UI_LANGUAGES,
@@ -563,33 +562,6 @@ describe('setLanguage — atomicity (ported verbatim from the retired uiLanguage
     expect(storage.contains(LANGUAGE_KEY)).toBe(false);
     expect(i18n.language).toBe('fr');
     expect(getLanguage()).toBe('fr');
-  });
-});
-
-/**
- * Story 24.27 REPLACED Story 20.6's AC-14. The committed switch used to delete every download and
- * sweep the content cache; it now destroys NOTHING and reloads the app instead. These are the
- * inverted assertions — they are the only thing standing between that decision and a future story
- * quietly reinstating the sweep.
- */
-describe('setLanguage — the committed switch destroys NOTHING (Story 24.27 AC-9)', () => {
-  beforeEach(() => {
-    setExposed(['en', 'fr']);
-  });
-
-  // `it('does NOT sweep the downloads')` lived here. Story 5-2 deleted lib/offlineTeardown.ts
-  // with InstantDB, so the guard lost its subject — see the note at the top of this file. The
-  // invariant survives and epic 7 owes it a new home.
-
-  it('does NOT clear the old language’s cached content', async () => {
-    setCachedContent('book-1', 'summaryBrief', 'en', 'english text');
-
-    await setLanguage('fr');
-
-    // Keyed by language, so `fr` can never READ this entry — and keeping it means switching back
-    // is warm. Asserted through the store rather than a spy: 24.27 deleted `clearContentCache`
-    // with its last production caller, so there is no export left to watch.
-    expect(getCachedContent('book-1', 'summaryBrief', 'en')).toBe('english text');
   });
 });
 

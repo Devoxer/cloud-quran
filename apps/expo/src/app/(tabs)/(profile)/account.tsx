@@ -20,11 +20,13 @@
  */
 
 import { Stack, useRouter } from 'expo-router';
+import { openBrowserAsync } from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow } from '@/components/ui';
 import { uiLanguageLabel } from '@/constants/language';
+import { PRIVACY_POLICY_URL } from '@/constants/legal';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { RECITERS, reciterNameOf, resolveReciterId } from '@/features/audio';
 import { isPlaceholderEmail, signOut, useSession } from '@/lib/auth';
@@ -246,6 +248,16 @@ export default function AccountScreen() {
           trailing="chevron"
           onPress={() => router.push('/feedback')}
           testID="feedback-row"
+        />
+        {/* The published policy — what the stores link to, readable in a browser by anyone. The
+            in-app "Your Data" screen above is the reader's own controls; this is the statement. */}
+        <SettingsRow
+          icon="document-text-outline"
+          label={t('profile:rows.privacyPolicy')}
+          trailing="chevron"
+          onPress={() => void openBrowserAsync(PRIVACY_POLICY_URL)}
+          accessibilityHint={t('profile:a11y.legal.privacyPolicyHint')}
+          testID="privacy-policy-row"
         />
       </SettingsGroup>
 
