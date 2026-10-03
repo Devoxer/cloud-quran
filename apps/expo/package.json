@@ -17,6 +17,8 @@
   "dependencies": {
     "@better-auth/expo": "1.7.1",
     "@cloudquran/shared": "workspace:*",
+    "@expo/dom-webview": "~58.0.2",
+    "@expo/metro-runtime": "~58.0.10",
     "@expo/ui": "~58.0.11",
     "@expo/vector-icons": "^15.1.1",
     "@quidone/react-native-wheel-picker": "^1.7.0",

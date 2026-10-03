@@ -22,10 +22,11 @@ packages:
   #   (wired but not run in 16.5).
 overrides:
   '@electron/node-gyp': '10.2.0-electron.2'
-  # SDK 58 (story 5-9, 2026-10-03): the three SDK-56 overrides — @expo/dom-webview,
-  # @expo/metro-runtime and @expo/ui — were dropped with a clean re-resolve. Each existed to
-  # defeat a stale SDK-56 lockfile pin or a 56.0.18 jest regression; re-add one only with a
-  # failing check that needs it.
+  # SDK 58 (story 5-9): the SDK-56 overrides for @expo/dom-webview, @expo/metro-runtime and
+  # @expo/ui are gone. The first two are PEERS of expo / expo-router, which pnpm satisfies from
+  # whatever is already installed — an override never reached them, and the lockfile kept 56.0.x
+  # under SDK 58 (caught by expo-doctor). They are direct dependencies of apps/expo instead, at the
+  # versions expo 58 declares. Move them with every SDK bump; `npx expo-doctor` checks.
 
   # Build-script allowlist. pnpm v11 uses the `allowBuilds` map (package → boolean);
   # the v10 `onlyBuiltDependencies` array was removed, and the package.json "pnpm"
