@@ -114,7 +114,8 @@
         }
       ],
       "expo-sqlite",
-      "./plugins/withAutoSigning"
+      "./plugins/withAutoSigning",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

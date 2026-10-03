@@ -45,7 +45,7 @@
  */
 
 import { useCallback, useMemo, useRef } from 'react';
-import { Gesture, type TapGesture } from 'react-native-gesture-handler';
+import { Gesture, type LegacyTapGesture as TapGesture } from 'react-native-gesture-handler';
 
 export interface SurfaceTap {
   /** Hand this to the `<GestureDetector>` wrapping the whole reading area. */

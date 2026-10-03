@@ -91,7 +91,7 @@ describe('route tree integrity', () => {
     }
   });
 
-  it('anchors initialRouteName at a segment that exists, in EVERY layout', () => {
+  it('anchors every layout at a segment that exists', () => {
     // ⚠️ Widened by the story 5-2 review, for the second time this guard was too narrow. It
     // read only `(tabs)/_layout.tsx` and therefore passed while `(tabs)/(profile)/_layout.tsx`
     // anchored on 'profile', a route deleted with the InstantDB account screen. A missing
@@ -99,13 +99,15 @@ describe('route tree integrity', () => {
     // privacy-settings instead of feedback, silently. Check every layout that declares one.
     const checked: string[] = [];
     for (const layoutPath of allLayouts(APP_DIR)) {
-      const match = readFileSync(layoutPath, 'utf8').match(/initialRouteName:\s*'([^']+)'/);
+      // `anchor` since expo-router 58 (it warns on the old `initialRouteName`).
+      const match = readFileSync(layoutPath, 'utf8').match(/anchor:\s*'([^']+)'/);
       if (!match) continue;
       checked.push(relative(APP_DIR, layoutPath));
       expect(routeSegments(dirname(layoutPath))).toContain(match[1]);
     }
     // Anti-vacuity: if nothing declares an anchor this loop asserts nothing at all.
-    expect(checked.length).toBeGreaterThan(0);
+    // The root and settings layouts. `(tabs)` must NOT declare one — see its layout's header.
+    expect(checked.sort()).toEqual(['(tabs)/(profile)/_layout.tsx', '_layout.tsx']);
   });
 
   it('keeps every tab href pointing at a route that exists', () => {

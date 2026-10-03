@@ -1,6 +1,12 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
+    // RN 0.88 (SDK 58) ships generated "strict" types by default. This condition selects the
+    // previous types (`types_DEPRECATED`) because Expo's own `expo/types/react-native-web.d.ts`
+    // augments `ViewStyle` with web values (`position: 'fixed' | 'sticky'`, …) that the strict
+    // style types reject — an Expo-side incompatibility (same finding as Wisdom Fruits). Remove
+    // this when Expo's types catch up.
+    "customConditions": ["react-native-legacy-deep-imports"],
     "strict": true,
     // TS 6.0 (SDK 56) deprecates `baseUrl` (removed in 7.0). The @/* path-alias
     // pattern (cheat-sheet canonical) + Metro/Jest resolution rely on it, so keep

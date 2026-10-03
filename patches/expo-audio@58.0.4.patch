@@ -1,0 +1,97 @@
+diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+index d748338c505fb85f14ca7b17d76535465c19fa5b..6d626b6b3a0716a6b8766fc37e2c64525eef928a 100644
+--- a/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -705,19 +705,22 @@ class AudioModule : Module() {
+       }
+ 
+       Function("setActiveForLockScreen") { ref: AudioPlayer, active: Boolean, metadata: Metadata?, options: AudioLockScreenOptions? ->
+-        runOnMain {
++        // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
++        postOnMain {
+           ref.setActiveForLockScreen(active, metadata, options)
+         }
+       }
+ 
+       Function("updateLockScreenMetadata") { ref: AudioPlayer, metadata: Metadata ->
+-        runOnMain {
++        // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
++        postOnMain {
+           ref.updateLockScreenMetadata(metadata)
+         }
+       }
+ 
+       Function("clearLockScreenControls") { ref: AudioPlayer ->
+-        runOnMain {
++        // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
++        postOnMain {
+           ref.clearLockScreenControls()
+         }
+       }
+@@ -1095,19 +1098,22 @@ class AudioModule : Module() {
+       }
+ 
+       Function("setActiveForLockScreen") { ref: AudioPlaylist, active: Boolean, metadata: Metadata?, options: AudioLockScreenOptions? ->
+-        runOnMain {
++        // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
++        postOnMain {
+           ref.setActiveForLockScreen(active, metadata, options)
+         }
+       }
+ 
+       Function("updateLockScreenMetadata") { ref: AudioPlaylist, metadata: Metadata ->
+-        runOnMain {
++        // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
++        postOnMain {
+           ref.updateLockScreenMetadata(metadata)
+         }
+       }
+ 
+       Function("clearLockScreenControls") { ref: AudioPlaylist ->
+-        runOnMain {
++        // cloud-quran: `postOnMain`, not `runOnMain` — see that helper for the ANR it closes.
++        postOnMain {
+           ref.clearLockScreenControls()
+         }
+       }
+@@ -1207,6 +1213,22 @@ class AudioModule : Module() {
+   private fun <T> runOnMain(block: () -> T): T =
+     runBlocking(appContext.mainQueue.coroutineContext) { block() }
+ 
++  /**
++   * cloud-quran: post to main WITHOUT blocking the caller.
++   *
++   * `runOnMain` is `runBlocking`, and the lock-screen calls sit on the hot path (the engine pushes
++   * metadata once per ayah). The JS thread parks waiting for main while main can be parked in
++   * Fabric's `executeSynchronouslyOnSameThread_CAN_DEADLOCK` waiting for JS: neither moves and the
++   * app ANRs mid-recitation (reproduced on SDK 56; SDK 58 still uses `runOnMain` here).
++   *
++   * Only for calls that return nothing and tolerate arriving late: each `LockScreenPlayable` entry
++   * point checks `isActiveForLockScreen` and null-checks the service binder. One main queue, FIFO,
++   * so an activate followed by a metadata push still arrives in that order.
++   */
++  private fun postOnMain(block: () -> Unit) {
++    appContext.mainQueue.launch { block() }
++  }
++
+   private fun checkRecordingPermission() {
+     val permission = ContextCompat.checkSelfPermission(appContext.throwingActivity.applicationContext, Manifest.permission.RECORD_AUDIO)
+     if (permission != PackageManager.PERMISSION_GRANTED) {
+diff --git a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+index bd5d4c3814f20a68833c80a29ff5cdb004594eef..ada74b1b14239811d07f6db4b24e3b7e82064990 100644
+--- a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
++++ b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+@@ -575,6 +575,13 @@ class AudioControlsService : MediaSessionService() {
+           }
+         }
+       }
++    } else if (artworkLoadJob?.isActive != true) {
++      // cloud-quran: the SAME url still answers. Upstream skips the load and never calls back,
++      // and the callback is the only place `updateArtwork` re-posts the notification — so with
++      // one constant artwork url every metadata push after the first left the shade's title and
++      // artist frozen on the previous ayah/surah (measured on a Pixel 9 Pro, story 7-3). Hand
++      // back the bitmap already held; a load still in flight will call back itself.
++      callback(currentArtwork)
+     }
+   }
+ 

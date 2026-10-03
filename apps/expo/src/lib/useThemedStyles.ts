@@ -19,9 +19,12 @@ import { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { type ThemeContextValue, useTheme } from '@/lib/theme';
 
-export function useThemedStyles<T extends StyleSheet.NamedStyles<T>>(
-  factory: (theme: ThemeContextValue) => T
-): T {
+/** `StyleSheet.create`'s own input type — RN 0.88's strict types removed `StyleSheet.NamedStyles`. */
+type Styles = Parameters<typeof StyleSheet.create>[0];
+
+export function useThemedStyles<T extends Styles>(
+  factory: (theme: ThemeContextValue) => T & Styles
+): Readonly<T> {
   const theme = useTheme();
   // Recompute only when the theme changes (per STACK-CHEAT-SHEET § Theme). `factory` is
   // intentionally excluded: the documented call site passes an inline arrow (fresh identity

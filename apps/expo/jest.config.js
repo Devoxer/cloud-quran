@@ -48,7 +48,12 @@ module.exports = {
   // Runs in jest's MAIN process — the only place that can see what sets the exit code.
   globalSetup: '<rootDir>/jest.global-setup.js',
   globalTeardown: '<rootDir>/jest.global-teardown.js',
-  setupFiles: ['<rootDir>/jest.setup.js'],
+  // react-native-gesture-handler 3 (SDK 58) touches its native module when the package loads, so
+  // its own documented Jest mocks are required; 2.x never needed them.
+  setupFiles: [
+    require.resolve('react-native-gesture-handler/jestSetup'),
+    '<rootDir>/jest.setup.js',
+  ],
   setupFilesAfterEnv: [],
   moduleNameMapper: {
     // Strip the `.js` extension off RELATIVE imports so Jest's resolver finds the

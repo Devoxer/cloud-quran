@@ -54,11 +54,11 @@
  * than merging, so a partial push strips a card that already had the other. The artist is the
  * LOADED track's voice read from the store, never the preference, which is what the NEXT track
  * will use. The artwork is `assets/audio-artwork.png` resolved once per process and carried on
- * every `AudioSource` — and deliberately NOT on the metadata, for which `lockScreenMetadata` is
+ * the metadata — safe only with the patch's artwork callback, for which `lockScreenMetadata` is
  * the argument. Pushes are deduped against the card the native side is already showing.
  *
- * ⚠️ NONE OF IT EXISTS ON WEB — the patched module's web playlist implements all three
- * lock-screen calls as empty bodies. See `LOCK_SCREEN_OPTIONS`.
+ * ⚠️ ON WEB, expo-audio 58's playlist drives the browser's Media Session API for these three
+ * calls (upstream since SDK 58; the SDK-56 patch made them empty bodies). See `LOCK_SCREEN_OPTIONS`.
  *
  * ── Why no `useState` anywhere in here ───────────────────────────────────────────────────────
  *
@@ -269,24 +269,10 @@ async function configureAudioMode(): Promise<void> {
  * would mean rebuilding the playlist from a delete, which is exactly the queue shape this story
  * is forbidden to touch. Stated rather than hidden. (Story 7-5 review, P11.)
  *
- * ⚠️ EVERY TRACK CARRIES THE ARTWORK, AND THIS IS THE ONLY PLACE IT IS SENT (story 7-3, measured
- * twice on a Pixel 9 Pro). Android's notification cover comes from `loadArtworkFromUrl`, which
- * SKIPS the load when the url matches the one it already holds and has no `else` branch, so its
- * callback never fires. Our artwork is one constant url for every surah, and that broke the
- * metadata route twice over: the first playlist of a session got a cover and every rebuild after
- * it got `largeIcon=null` (`setActivePlaylist` clears the bitmap first), and — the worse half —
- * the notification is RE-POSTED only from that callback, so its title and artist froze on the
- * previous surah. The per-source `artworkUrl` reaches the lock screen by a different road
- * entirely: Android sets it as the MediaItem's `MediaMetadata.artworkUri` and the SYSTEM media
- * card is built from the session, while iOS prefers it over the JS-pushed metadata and pre-warms
- * the next track's — which is exactly what the native patch added it for. Fixing the skip itself
- * would be a change to `patches/expo-audio@56.0.11.patch`, which this story may not make.
+ * The artwork is NOT here: expo-audio 58 has no per-source artwork, so it travels in the
+ * lock-screen metadata (`lockScreenMetadata`) on both platforms (story 5-9).
  */
-function buildSources(
-  reciterId: string,
-  startSurah: number,
-  artworkUrl: string | undefined
-): AudioSource[] {
+function buildSources(reciterId: string, startSurah: number): AudioSource[] {
   const uris = resolveSurahUris(reciterId, startSurah, SURAH_COUNT);
   const sources: AudioSource[] = [];
   for (let surah = startSurah; surah <= SURAH_COUNT; surah++) {
@@ -294,7 +280,6 @@ function buildSources(
       uri: uris[surah - startSurah],
       // The lock screen reads this per track; the ayah is refreshed separately, mid-track.
       name: surahName(surah),
-      artworkUrl,
     });
   }
   return sources;
@@ -428,6 +413,8 @@ export function useRecitationEngine(selectedReciterId: string): void {
      * would keep re-sending it. The frozen matrix's "never a stale ayah number" is this line.
      */
     let lockScreenTitle: string | null = null;
+    /** The resolved artwork url, set when a playlist is built (story 5-9). */
+    let lockScreenArtwork: string | undefined;
 
     /**
      * The now-playing payload — ONE builder, because both call sites need all three fields.
@@ -442,24 +429,17 @@ export function useRecitationEngine(selectedReciterId: string): void {
      * new one, and naming it over the old one's audio is the same confident-wrong-answer the
      * highlight rules exist to prevent.
      *
-     * ⚠️ THERE IS NO `artworkUrl` HERE, AND ITS ABSENCE IS LOAD-BEARING — MEASURED ON A PIXEL 9
-     * PRO. The artwork reaches the lock screen through every `AudioSource` instead (see
-     * `buildSources`), which is the path that actually renders: Android sets it as the MediaItem's
-     * `MediaMetadata.artworkUri` and the SYSTEM media card — the thing on the lock screen — is
-     * built from the session, not from this app's notification. Putting it here as well looked
-     * free and was not: Android's `setPlaylistMetadata` re-posts the notification only from
-     * `loadArtworkFromUrl`'s CALLBACK, and that loader skips a url equal to the one it already
-     * holds and has **no `else` branch** — so with one constant artwork url the callback never
-     * fired again and the notification's title and artist FROZE on whatever was posted last.
-     * Measured: after a lock-screen skip the app, the store and the system card all read
-     * "Ali-Imran" while the shade notification still said "Al-Baqarah · 1", twenty-four seconds
-     * in. Dropping the field puts `setPlaylistMetadata` back on its `?: run { … }` branch, which
-     * posts unconditionally. The only thing lost is the notification's large icon; the card keeps
-     * its full-res cover, and iOS prefers the per-source url anyway.
+     * ⚠️ THE ARTWORK RIDES HERE SINCE SDK 58 (story 5-9), AND THAT IS SAFE ONLY BECAUSE OF THE
+     * PATCH. Android's `updateArtwork` re-posts the notification only from the artwork loader's
+     * callback, and upstream's loader skips a url equal to the one it holds with no `else` — so
+     * with our one constant url every push after the first froze the shade's title and artist
+     * (measured on a Pixel 9 Pro, story 7-3). `patches/expo-audio@58.0.4.patch` calls back with
+     * the bitmap already held. Drop the patch and this field freezes the notification again.
      */
     const lockScreenMetadata = (): AudioMetadata => ({
       title: lockScreenTitle ?? undefined,
       artist: loadedReciterName(store.getState().reciterId),
+      artworkUrl: lockScreenArtwork,
     });
 
     /** The card the native side is currently showing — what a push is compared against. */
@@ -946,8 +926,8 @@ export function useRecitationEngine(selectedReciterId: string): void {
       teardown();
       try {
         /**
-         * ⚠️ THE ARTWORK IS RESOLVED HERE, IN THE ONE PLACE THAT ALREADY AWAITS, because every
-         * TRACK carries it and `buildSources` below needs it synchronously. It is memoized for
+         * ⚠️ THE ARTWORK IS RESOLVED HERE, IN THE ONE PLACE THAT ALREADY AWAITS, because the
+         * first card below (`setActiveForLockScreen`) needs it synchronously. It is memoized for
          * the process and kicked off at boot, so by the first press it is already settled;
          * resolving it lazily in the background instead would leave the FIRST card artwork-less,
          * and on an untimed surah — which never pushes another update — permanently so.
@@ -959,8 +939,9 @@ export function useRecitationEngine(selectedReciterId: string): void {
           lockScreenArtworkUri(),
         ]);
         startSurah.current = surah;
+        lockScreenArtwork = artwork;
         const player = createAudioPlaylist({
-          sources: buildSources(reciter, surah, artwork),
+          sources: buildSources(reciter, surah),
           updateInterval: PLAYLIST_TICK_MS,
           loop: 'none',
         });

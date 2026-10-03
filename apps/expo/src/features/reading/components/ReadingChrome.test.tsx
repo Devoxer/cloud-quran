@@ -21,6 +21,27 @@
  * VoiceOver user's swipe would also find, which is the defect.
  */
 
+/**
+ * The fade-in has to take time here, as it does on a device. Reanimated's Jest mock (SDK 58's
+ * global setup) completes `withTiming` synchronously, which deletes the "still fading in" window
+ * the touch tests below exist to pin — `interactive` turns on from the animation's completion.
+ * Defer that completion by the animation's own duration; the value still lands at once.
+ */
+jest.mock('react-native-reanimated', () => {
+  const mock = jest.requireActual('react-native-reanimated/mock');
+  return {
+    ...mock,
+    withTiming: (
+      toValue: unknown,
+      config?: { duration?: number },
+      callback?: (finished: boolean) => void
+    ) => {
+      setTimeout(() => callback?.(true), config?.duration ?? 300);
+      return toValue;
+    },
+  };
+});
+
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';

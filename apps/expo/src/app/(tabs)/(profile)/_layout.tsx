@@ -14,7 +14,7 @@
  * absent on the tab home (`backBehavior="none"` on the tab navigator is what keeps a tab switch
  * out of that answer).
  *
- * ⚠️ `initialRouteName` must name a route that EXISTS — a missing anchor silently falls back to
+ * ⚠️ `anchor` (`initialRouteName` before expo-router 58) must name a route that EXISTS — a missing anchor silently falls back to
  * alphabetical order (this file shipped that defect twice; `route-integrity.test.ts` checks
  * every layout's anchor against the filesystem).
  */
@@ -30,7 +30,7 @@ import { useThemedStyles } from '@/lib/useThemedStyles';
 export const unstable_settings = {
   // story 5-5: `account.tsx` is the settings list — the tab is labelled Settings and this is
   // the screen that makes it one.
-  initialRouteName: 'account',
+  anchor: 'account',
 };
 
 /** The focused segment → its header title key (the `navigation` namespace's `titles.*`). */

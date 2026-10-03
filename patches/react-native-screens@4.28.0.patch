@@ -1,8 +1,8 @@
 diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt
-index 7aee121f4bcf11495269a46951b276e96655cb1e..c238348ebcd34db0b8e60dfb4f210266d5ea0958 100644
+index 10b64cf..d81d758 100644
 --- a/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt
 +++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt
-@@ -496,7 +496,35 @@ class ScreenStackFragment :
+@@ -507,7 +507,35 @@ class ScreenStackFragment :
  
      override fun canNavigateBack(): Boolean {
          val container: ScreenContainer? = screen.container
@@ -40,14 +40,14 @@ index 7aee121f4bcf11495269a46951b276e96655cb1e..c238348ebcd34db0b8e60dfb4f210266
              // this screen is the root of the container, if it is nested we can check parent container
              // if it is also a root or not
 diff --git a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
-index 3916fdc2ac05a87caf39dfa6c55e4a071a6aabf6..ab1e836a0e7d191122ad91eaf9be01a48de654ad 100644
+index b98825c..4463972 100644
 --- a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
 +++ b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
-@@ -378,7 +378,29 @@ class TabsContainer internal constructor(
+@@ -399,7 +399,32 @@ class TabsContainer internal constructor(
      // region TabsScreenDelegate impl
  
      override fun onAppearanceChanged(tabsScreen: TabsScreen) {
--        if (selectedTab.tabsScreen === tabsScreen) {
+-        if (isAttachedToWindow && selectedTab.tabsScreen === tabsScreen) {
 +        // wisdom-fruits Story 36.6 — local patch for the SECOND upstream `check()` in this library
 +        // that forbids a state the library itself produces. (The first is in ScreenStackFragment,
 +        // patched at Story 20.8; see the comment there.)
@@ -70,7 +70,10 @@ index 3916fdc2ac05a87caf39dfa6c55e4a071a6aabf6..ab1e836a0e7d191122ad91eaf9be01a4
 +        // the same hazard. It is deliberately NOT patched: it has never been observed to throw
 +        // (the crash trace names only this method), and a guard written from a guess is a claim
 +        // about the future that the next upgrade has to re-verify. Fix it if it ever bites.
-+        if (getFragmentForScreenKey(navState.selectedScreenKey)?.tabsScreen === tabsScreen) {
++        //
++        // 4.26 added the `isAttachedToWindow` guard upstream; it does not cover this: the tabs are
++        // attached during a theme flip, and `selectedTab` still throws while no fragment is registered.
++        if (isAttachedToWindow && getFragmentForScreenKey(navState.selectedScreenKey)?.tabsScreen === tabsScreen) {
              invalidationFlags.isNavigationMenuAppearanceInvalidated = true
              post {
                  this.flushPendingUpdates()

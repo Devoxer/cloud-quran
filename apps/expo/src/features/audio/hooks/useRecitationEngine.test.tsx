@@ -313,8 +313,8 @@ describe('the lock-screen artwork, when the asset system fails', () => {
       title: 'Al-Fatihah',
       artist: 'Mahmoud Khalil Al-Husary',
     });
-    // And no track carries a broken path, rather than carrying one.
-    expect(createdWith.sources[0].artworkUrl).toBeUndefined();
+    // And the card carries no broken path, rather than carrying one.
+    expect(playlist.setActiveForLockScreen.mock.calls[0][1].artworkUrl).toBeUndefined();
   });
 
   /**
@@ -338,7 +338,9 @@ describe('the lock-screen artwork, when the asset system fails', () => {
     });
 
     expect(engine().errorKey).toBeNull();
-    expect(createdWith.sources[0].artworkUrl).toBe('file:///mock/asset');
+    expect(playlist.setActiveForLockScreen.mock.calls.at(-1)?.[1].artworkUrl).toBe(
+      'file:///mock/asset'
+    );
   });
 });
 
@@ -417,7 +419,7 @@ describe('the queue is surahs', () => {
      */
     expect(playlist.setActiveForLockScreen).toHaveBeenCalledWith(
       true,
-      { title: 'Al-Fatihah', artist: 'Mahmoud Khalil Al-Husary' },
+      { title: 'Al-Fatihah', artist: 'Mahmoud Khalil Al-Husary', artworkUrl: 'file:///mock/asset' },
       {
         showNextTrack: true,
         showPreviousTrack: true,
@@ -474,6 +476,7 @@ describe('the status tick drives the highlight', () => {
     expect(playlist.updateLockScreenMetadata).toHaveBeenLastCalledWith({
       title: 'Al-Fatihah · 3',
       artist: 'Mahmoud Khalil Al-Husary',
+      artworkUrl: 'file:///mock/asset',
     });
   });
 
@@ -546,6 +549,7 @@ describe('the lock-screen card', () => {
     expect(lastCard()).toEqual({
       title: 'Al-Fatihah · 3',
       artist: 'Mishary Rashid Al-Afasy',
+      artworkUrl: 'file:///mock/asset',
     });
   });
 
@@ -598,6 +602,7 @@ describe('the lock-screen card', () => {
     expect(lastCard()).toEqual({
       title: 'Al-Baqarah',
       artist: 'Mahmoud Khalil Al-Husary',
+      artworkUrl: 'file:///mock/asset',
     });
   });
 
@@ -686,32 +691,33 @@ describe('the lock-screen card', () => {
   });
 
   /**
-   * ⚠️ THE TRACKS ARE THE **ONLY** PLACE THE ARTWORK IS SENT, and that is the shape two separate
-   * measurements on a Pixel 9 Pro forced. Android's notification cover loader skips a url equal
-   * to the one it holds and has no `else` branch, so with one constant artwork url (a) the
-   * metadata route dressed only the FIRST playlist of a session and left `largeIcon=null` for
-   * every rebuild after it, and (b) — worse — the notification stopped being re-posted at all,
-   * freezing its title and artist on the previous surah. The per-source url reaches the system
-   * media card by a different road entirely (the MediaItem's `artworkUri`, which is what the lock
-   * screen renders), and iOS prefers it over the metadata anyway.
+   * ⚠️ THE CARD CARRIES THE ARTWORK, AND NO TRACK DOES (SDK 58, story 5-9). expo-audio 58 has no
+   * per-source artwork, so the metadata is the only road on both platforms. That is safe on
+   * Android only because `patches/expo-audio@58.0.4.patch` re-posts the notification for an
+   * unchanged url — upstream's loader skips it with no `else`, which froze the shade's title on
+   * the previous surah (story 7-3, Pixel 9 Pro). Every push carries it: native stores each push
+   * as the card's ENTIRE metadata, so one without it would strip the cover.
    *
-   * MUTATION: drop `artworkUrl` from the object `buildSources` pushes.
+   * MUTATION: drop `artworkUrl` from `lockScreenMetadata`; this reddens.
    */
-  it('sends the artwork on every track, and never on the metadata', async () => {
+  it('sends the artwork on every card, and on no track', async () => {
     await act(async () => {
-      await engine().playSurah(112);
+      await engine().playSurah(1);
     });
-    expect(createdWith.sources).toHaveLength(3);
+    await tick(12);
     for (const source of createdWith.sources) {
-      expect(source.artworkUrl).toBe('file:///mock/asset');
+      expect(source).not.toHaveProperty('artworkUrl');
     }
-    // ⚠️ AND NOT ON THE CARD — putting it there froze Android's notification (see the docblock).
-    for (const [, card] of playlist.setActiveForLockScreen.mock.calls as [boolean, object][]) {
-      expect(card).not.toHaveProperty('artworkUrl');
-    }
-    for (const [card] of playlist.updateLockScreenMetadata.mock.calls as [object][]) {
-      expect(card).not.toHaveProperty('artworkUrl');
-    }
+    const cards = [
+      ...(playlist.setActiveForLockScreen.mock.calls as [boolean, { artworkUrl?: string }][]).map(
+        ([, card]) => card
+      ),
+      ...(playlist.updateLockScreenMetadata.mock.calls as [{ artworkUrl?: string }][]).map(
+        ([card]) => card
+      ),
+    ];
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+    for (const card of cards) expect(card.artworkUrl).toBe('file:///mock/asset');
   });
 });
 

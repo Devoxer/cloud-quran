@@ -37,6 +37,40 @@ if (typeof global.__ExpoImportMetaRegistry === 'undefined') {
 // extensionless ESM imports (raw Node can't).
 jest.mock('react-native-worklets', () => require('react-native-worklets/lib/module/mock'));
 
+// react-native-reanimated 4.7 (SDK 58): its native initializer registers a CSS event handler, and
+// under Jest that module is JSReanimated, whose `setCSSEventHandler` throws ("not available in
+// JSReanimated") — every suite importing reanimated failed to load, the package's own `./mock`
+// included. Stub only that call (Wisdom Fruits' SDK 58 finding). The package's `./mock` loads the
+// SOURCE tree (`src/`), the app's import the compiled one, so both are stubbed.
+jest.mock('../../node_modules/react-native-reanimated/lib/module/css/native', () => ({
+  ...jest.requireActual('../../node_modules/react-native-reanimated/lib/module/css/native'),
+  setCSSEventHandler: () => {},
+}));
+jest.mock('../../node_modules/react-native-reanimated/src/css/native', () => ({
+  ...jest.requireActual('../../node_modules/react-native-reanimated/src/css/native'),
+  setCSSEventHandler: () => {},
+}));
+// …and its animated components cannot find a host instance under RN 0.88's test renderer, so use
+// the package's own Jest mock, whose animated components are plain views. (With the worklets mock
+// above and the stub, the `./mock` that SDK 55 could not load now loads.)
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+
+// @expo/ui's community bottom sheet mounts its native `Host` with `pointerEvents="none"` (an
+// absolute overlay; on a device the native sheet presents the React content in its own window).
+// React Native Testing Library honours that prop, so no press reached anything inside a sheet —
+// the symptom that held @expo/ui at 56.0.16. Under jest only, render the Host without it. RN 0.88's
+// resolver loads the compiled `build/` tree, the old one `src/`; mock both. (Wisdom Fruits, SDK 58.)
+const mockHostWithoutPointerBlock = (actual) => ({
+  ...actual,
+  Host: ({ pointerEvents, ...props }) => actual.Host(props),
+});
+for (const tree of ['src', 'build']) {
+  for (const platform of ['swift-ui', 'jetpack-compose']) {
+    const path = `../../node_modules/@expo/ui/${tree}/${platform}/Host`;
+    jest.mock(path, () => mockHostWithoutPointerBlock(jest.requireActual(path)));
+  }
+}
+
 // react-native-keyboard-controller — native module (Story 17.6). The package ships
 // its own documented Jest mock: KeyboardProvider → a host stub, KeyboardAwareScrollView
 // → a real RN ScrollView, all hooks/modules stubbed. Use it so the form render-smokes

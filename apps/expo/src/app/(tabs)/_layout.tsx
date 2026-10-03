@@ -1,5 +1,7 @@
 import { Tabs } from 'expo-router/js-tabs';
 
+import { TABS } from '@/constants/navigation';
+
 /**
  * The tab shell — a NAVIGATOR ONLY, since story 6-6. It paints no chrome: `tabBar` renders
  * nothing, the JS header is off, and the ONE tab bar every platform gets is
@@ -22,11 +24,12 @@ import { Tabs } from 'expo-router/js-tabs';
  * only where a real push exists (the settings sub-screens). Without it, every non-initial tab
  * would draw a phantom back chevron.
  *
- * ⚠️ `initialRouteName` must name a segment that EXISTS — a missing anchor does not error,
- * expo-router falls back to alphabetical order silently. `route-integrity.test.ts` checks it
- * against the filesystem. `index` is the mushaf, the home surface (`TABS[0]`).
+ * ⚠️ NO `anchor` HERE, DELIBERATELY (expo-router 58, story 5-9). With `unstable_settings.anchor`
+ * set, 58's static renderer pre-rendered EVERY tab URL as the anchor: `/read`, `/bookmarks` and
+ * every settings page shipped the mushaf's HTML and the client hydrated onto it. The anchor only
+ * restated the default anyway — the first declared screen is the initial route, and `TABS[0]` is
+ * `index`, the mushaf. `tabs-layout.test.tsx` and `route-integrity.test.ts` hold both halves.
  */
-export const unstable_settings = { initialRouteName: 'index' };
 
 export default function TabLayout() {
   return (
@@ -34,6 +37,14 @@ export default function TabLayout() {
       tabBar={() => null}
       backBehavior="none"
       screenOptions={{ headerShown: false, lazy: true }}
-    />
+    >
+      {/* ⚠️ DECLARED, OR NOTHING RENDERS (expo-router 58). An undeclared route is no longer a
+          tab: with no `Tabs.Screen` children the navigator renders an empty screen on every
+          platform, and only a dev-mode warning says why. Read from `TABS`, so the navigator and
+          `AppTabBar` cannot disagree about which tabs exist. */}
+      {TABS.map((tab) => (
+        <Tabs.Screen key={tab.name} name={tab.name} />
+      ))}
+    </Tabs>
   );
 }

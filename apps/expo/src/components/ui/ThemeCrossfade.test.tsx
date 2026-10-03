@@ -19,7 +19,8 @@ jest.unmock('@/lib/theme');
 
 const mockWithTiming = jest.fn();
 jest.mock('react-native-reanimated', () => {
-  const actual = jest.requireActual('react-native-reanimated');
+  // The global setup's mock (RN 0.88, SDK 58), not the real module, which cannot render here.
+  const actual = jest.requireActual('react-native-reanimated/mock');
   return {
     ...actual,
     __esModule: true,
