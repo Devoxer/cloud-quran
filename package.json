@@ -19,6 +19,8 @@
     "test": "pnpm verify && pnpm test:gates && turbo test --concurrency=1",
     "typecheck": "pnpm typecheck:scripts && turbo typecheck",
     "lint": "node scripts/lint-all.mjs",
+    "gates": "node scripts/gates.mjs",
+    "mirror:publish": "bash scripts/publish-mirror.sh",
     "lint:layers": "node scripts/lint-layers.mjs",
     "lint:style": "node scripts/lint-style.mjs",
     "lint:i18n": "node scripts/lint-i18n.mjs",
