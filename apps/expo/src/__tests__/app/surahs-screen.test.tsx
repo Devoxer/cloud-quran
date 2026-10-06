@@ -132,9 +132,9 @@ describe('the Surahs segment', () => {
     // Row 1, field by field — the frozen matrix's row-content row.
     expect(screen.getByText('Al-Fatihah')).toBeTruthy();
     expect(screen.getByText('الفاتحة')).toBeTruthy();
-    expect(screen.getByText('The Opening · 7 verses · Meccan')).toBeTruthy();
+    expect(screen.getByText('⁨The Opening⁩ · ⁨7⁩ verses · Meccan')).toBeTruthy();
     // A Medinan row too, so the revelation branch is not one-sided.
-    expect(screen.getByText('The Cow · 286 verses · Medinan')).toBeTruthy();
+    expect(screen.getByText('⁨The Cow⁩ · ⁨286⁩ verses · Medinan')).toBeTruthy();
   });
 
   it('opens scrolled to and highlighting the surah being read', () => {
@@ -184,7 +184,7 @@ describe('the Surahs segment', () => {
       // ONE `الفاتحة` in the row — the trailing slot is gone rather than repeating the title.
       expect(row.getAllByText('الفاتحة')).toHaveLength(1);
       // The subtitle's name slot is the ROMANIZATION, not the English meaning.
-      expect(row.getByText('Al-Fatihah · 7 آية · مكية')).toBeTruthy();
+      expect(row.getByText('⁨Al-Fatihah⁩ · ⁨٧⁩ آيات · مكية')).toBeTruthy();
       expect(screen.queryByText(/The Opening/)).toBeNull();
     });
 
@@ -342,10 +342,10 @@ describe('the way out', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('deep-linked (no history): the chevron is ABSENT and a selection replaces to reading’s home', () => {
+  it('deep-linked: the back control remains available and a selection replaces to reading’s home', () => {
     mockCanGoBack.mockReturnValue(false);
     render(<Surahs />);
-    expect(screen.queryByTestId('chrome-back')).toBeNull();
+    expect(screen.getByTestId('chrome-back')).toBeTruthy();
     select('surah-row-5');
     expect(mockBack).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/read');

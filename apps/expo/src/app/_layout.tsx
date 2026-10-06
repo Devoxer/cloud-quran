@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 // SDK 56: expo-router no longer depends on react-navigation; it re-exports ThemeProvider.
 import { ThemeProvider as NavigationThemeProvider, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,6 +13,7 @@ import 'react-native-reanimated';
 import { AlertHost } from '@/components/ui/AlertHost';
 import { ThemeCrossfade } from '@/components/ui/ThemeCrossfade';
 import { UTHMANI_WEB_FONT } from '@/constants/arabic';
+import { SURAH_HEADER_FONTS } from '@/constants/surah-header';
 import { RecitationEngineHost } from '@/features/audio';
 import { initI18n } from '@/i18n';
 import { ensureAnonymousSession, useSession } from '@/lib/auth';
@@ -22,9 +24,10 @@ import { createNavigationTheme } from '@/lib/nav-theme';
 // Side-effect import: keeps the present-but-unwired baseline native-module
 // wrappers (secure-store / clipboard / sharing) in the bundle graph. Story 17.9.
 import '@/lib/nativeBaseline';
+import { useLanguage } from '@/lib/language';
 import { initializeNotifications } from '@/lib/notifications';
 import { isTelemetryEnabled } from '@/lib/privacyPrefs';
-import { applyStoredDirection } from '@/lib/rtl';
+import { applyStoredDirection, applyWebDirection, isInterfaceRTL } from '@/lib/rtl';
 import { prefetchSyncReads, queryClient, setSyncUserId, startSyncManagers } from '@/lib/sync';
 import { useTheme } from '@/lib/theme';
 
@@ -92,6 +95,8 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 
 function RootLayout() {
+  const { language } = useLanguage();
+  useEffect(() => applyWebDirection(language), [language]);
   const [loaded, error] = useFonts({
     SpaceMono: require('../../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -112,7 +117,12 @@ function RootLayout() {
   // its return value is deliberately not read, nothing waits for it, and a failure means Arabic
   // in a fallback face on ONE screen. The map is empty on native (`UTHMANI_WEB_FONT`), where the
   // config plugin has already installed the face, so this is a no-op there.
-  useFonts(UTHMANI_WEB_FONT);
+  useFonts({
+    ...UTHMANI_WEB_FONT,
+    ...SURAH_HEADER_FONTS,
+    Amiri: require('../../assets/fonts/amiri/Amiri-Regular.ttf'),
+    'Amiri-Bold': require('../../assets/fonts/amiri/Amiri-Bold.ttf'),
+  });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree. ⚠️ Only the boot
   // font map's error reaches it — see the Arabic call above for why that face must not.
@@ -179,9 +189,15 @@ function RootLayout() {
     // over a conditional is how a comment stops being checkable; the claim that matters is about
     // the network, and that one is true.
     <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={styles.gestureRoot}>
+      <GestureHandlerRootView
+        style={styles.gestureRoot}
+        {...(Platform.OS === 'web'
+          ? { dir: isInterfaceRTL() ? 'rtl' : 'ltr', lang: language }
+          : {})}
+      >
         {/* Mirrors the resolved session id into the query/cache keys. Renders null. */}
         <SyncIdentityBridge />
+        <AppStatusBar />
         {/* ⚠️ story 6-5: THE THEME CROSSFADE, AND IT IS NOT A BOOT GATE. It mounts at opacity 1
             and animates only on a SUBSEQUENT `(palette, colorScheme)` change, so the first frame
             of a cold launch is never dimmed and nothing here waits on anything — see
@@ -364,3 +380,8 @@ const styles = StyleSheet.create({
 // default (see the gate at the top of this file), would be every user. Same condition, same
 // module scope, so the two cannot drift apart.
 export default isTelemetryEnabled() ? withSentry(RootLayout) : RootLayout;
+
+function AppStatusBar() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}

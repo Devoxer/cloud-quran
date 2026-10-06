@@ -389,10 +389,17 @@ export function sqliteDirectoryUri(): string | null {
   return raw.startsWith('file://') ? raw : `file://${raw}`;
 }
 
-/** A pack row exactly as the `entries` table stores it. Never leaves this module. */
+/**
+ * A pack row exactly as the `entries` table stores it. Never leaves this module.
+ *
+ * `last_verse` exists only in a PASSAGE pack (story 8-5 — tafsir): one row per passage, stored at
+ * its first ayah, covering through `last_verse` of the same surah. A translation pack has one row
+ * per ayah and no such column.
+ */
 interface PackEntryRow {
   surah_number: number;
   verse_number: number;
+  last_verse?: number;
   text: string;
   footnotes: string | null;
 }
@@ -400,7 +407,13 @@ interface PackEntryRow {
 /** One pack row, in the app's shape. The `footnotes` column is part of the edition, never dropped. */
 export interface PackEntry {
   surah: number;
+  /** The first ayah this row's text is about. */
   verse: number;
+  /**
+   * The LAST ayah it is about, in the same surah: `verse` itself for a one-ayah row (every
+   * translation), later for a tafsir passage written once over several ayat (story 8-5).
+   */
+  lastVerse: number;
   text: string;
   footnotes: string | null;
 }
@@ -409,6 +422,7 @@ function toPackEntry(row: PackEntryRow): PackEntry {
   return {
     surah: row.surah_number,
     verse: row.verse_number,
+    lastVerse: row.last_verse ?? row.verse_number,
     text: row.text,
     footnotes: row.footnotes,
   };
@@ -424,8 +438,35 @@ export class PackNotOpenError extends Error {
   }
 }
 
+/**
+ * One open pack. `passages` is learned once per handle — see {@link holdsPassages}.
+ */
+interface PackHandle {
+  version: number;
+  db: SQLiteDatabase;
+  passages?: boolean;
+}
+
 /** Open pack handles, by pack id. One per id: a pack has exactly one installed version. */
-const packHandles = new Map<string, { version: number; db: SQLiteDatabase }>();
+const packHandles = new Map<string, PackHandle>();
+
+/**
+ * Whether this pack stores PASSAGES (a `last_verse` column) rather than one row per ayah.
+ *
+ * ⚠️ ASKED OF THE FILE, ONCE PER HANDLE, NEVER OF THE CATALOGUE (story 8-5). An installed pack is
+ * read offline, where the catalogue is unreachable, and its `type` in `pack_meta` is a label rather
+ * than a schema. `pragma_table_info('entries')` is the schema itself, and the answer cannot change
+ * for the life of a handle — a new version is a new file and therefore a new handle.
+ */
+async function holdsPassages(entry: PackHandle): Promise<boolean> {
+  if (entry.passages === undefined) {
+    const row = await entry.db.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM pragma_table_info('entries') WHERE name = 'last_verse'"
+    );
+    entry.passages = (row?.count ?? 0) > 0;
+  }
+  return entry.passages;
+}
 /**
  * In-flight opens, so concurrent callers share one connection (the Quran handle's discipline).
  *
@@ -606,8 +647,11 @@ export async function describePack(id: string, version: number): Promise<Record<
 export async function getPackSurah(id: string, surah: number): Promise<PackEntry[]> {
   const entry = packHandles.get(id);
   if (!entry) throw new PackNotOpenError(id);
+  const columns = (await holdsPassages(entry))
+    ? 'surah_number, verse_number, last_verse, text, footnotes'
+    : 'surah_number, verse_number, text, footnotes';
   const rows = await entry.db.getAllAsync<PackEntryRow>(
-    'SELECT surah_number, verse_number, text, footnotes FROM entries WHERE surah_number = ? ORDER BY verse_number',
+    `SELECT ${columns} FROM entries WHERE surah_number = ? ORDER BY verse_number`,
     surah
   );
   return rows.map(toPackEntry);
@@ -626,6 +670,15 @@ export async function getPackSurah(id: string, surah: number): Promise<PackEntry
  *
  * Rejects with `PackNotOpenError` when the pack is not open, which is a STATE the caller renders
  * ("no source installed"), never an error surface. A range outside the book answers `[]`.
+ *
+ * ── ⚠️ A PASSAGE PACK ANSWERS EVERY PASSAGE THAT OVERLAPS THE RANGE (story 8-5) ─────────────
+ *
+ * A tafsir passage is stored once, at its first ayah, so "the rows between from and to" would miss
+ * the passage 2:1–5 for a reader on 2:3 — the commonest case there is. Overlap is
+ * `(surah, verse) <= to AND (surah, last_verse) >= from`, still as row values, so a page that
+ * crosses surahs still cannot match a cross product. The extra lower bound `(surah, verse) >=
+ * (from.surah, 1)` is what keeps the read an index range rather than a scan from 1:1: it is exact
+ * because a passage never crosses a surah (the pipeline splits the few that do).
  */
 export async function getPackRange(
   id: string,
@@ -634,6 +687,20 @@ export async function getPackRange(
 ): Promise<PackEntry[]> {
   const entry = packHandles.get(id);
   if (!entry) throw new PackNotOpenError(id);
+  if (await holdsPassages(entry)) {
+    const passages = await entry.db.getAllAsync<PackEntryRow>(
+      'SELECT surah_number, verse_number, last_verse, text, footnotes FROM entries ' +
+        'WHERE (surah_number, verse_number) >= (?, 1) AND (surah_number, verse_number) <= (?, ?) ' +
+        'AND (surah_number, last_verse) >= (?, ?) ' +
+        'ORDER BY surah_number, verse_number',
+      from.surah,
+      to.surah,
+      to.verse,
+      from.surah,
+      from.verse
+    );
+    return passages.map(toPackEntry);
+  }
   const rows = await entry.db.getAllAsync<PackEntryRow>(
     'SELECT surah_number, verse_number, text, footnotes FROM entries ' +
       'WHERE (surah_number, verse_number) >= (?, ?) AND (surah_number, verse_number) <= (?, ?) ' +

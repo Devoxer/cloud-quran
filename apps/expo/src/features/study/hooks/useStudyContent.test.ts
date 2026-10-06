@@ -30,7 +30,7 @@ jest.mock('@/lib/errors', () => ({
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { VerseRange } from '../lib/scope';
-import { useStudyContent } from './useStudyContent';
+import { joinRows, useStudyContent } from './useStudyContent';
 
 /** Al-Fatihah 1–3, as the bundled database answers them — deliberately out of range order. */
 const QURAN = [
@@ -62,9 +62,9 @@ beforeEach(() => {
 describe('with a source', () => {
   it('joins the source onto the Quran, IN RANGE ORDER', async () => {
     mockGetPackRange.mockResolvedValue([
-      { surah: 1, verse: 2, text: 'Louange à Allah', footnotes: 'note' },
-      { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
-      { surah: 1, verse: 3, text: 'le Tout Miséricordieux', footnotes: null },
+      { surah: 1, verse: 2, lastVerse: 2, text: 'Louange à Allah', footnotes: 'note' },
+      { surah: 1, verse: 1, lastVerse: 1, text: 'Au nom d’Allah', footnotes: null },
+      { surah: 1, verse: 3, lastVerse: 3, text: 'le Tout Miséricordieux', footnotes: null },
     ]);
     const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('ready'));
@@ -74,7 +74,7 @@ describe('with a source', () => {
     // MUTATION: order by either query's answer. Both are shuffled above, and both would pass a
     // test that only counted rows.
     expect(state.rows.map((row) => row.verse)).toEqual([1, 2, 3]);
-    expect(state.rows[0].arabic).toBe('بِسْمِ ٱللَّهِ');
+    expect(state.rows[0].ayat).toEqual([{ surah: 1, verse: 1, arabic: 'بِسْمِ ٱللَّهِ' }]);
     expect(state.rows[0].content).toBe('Au nom d’Allah');
     expect(state.rows[1].footnotes).toBe('note');
   });
@@ -94,7 +94,7 @@ describe('with a source', () => {
     // A partial edition, or an ayah an editor skipped. `useBookmarkRows`' rule: a row survives
     // its join failing — a silently shorter list is not information.
     mockGetPackRange.mockResolvedValue([
-      { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
+      { surah: 1, verse: 1, lastVerse: 1, text: 'Au nom d’Allah', footnotes: null },
     ]);
     const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('ready'));
@@ -103,7 +103,7 @@ describe('with a source', () => {
     if (state.kind !== 'ready') throw new Error('expected ready');
     expect(state.rows).toHaveLength(3);
     expect(state.rows[1].content).toBeNull();
-    expect(state.rows[1].arabic).toBe('ٱلْحَمْدُ لِلَّهِ');
+    expect(state.rows[1].ayat).toEqual([{ surah: 1, verse: 2, arabic: 'ٱلْحَمْدُ لِلَّهِ' }]);
   });
 });
 
@@ -147,7 +147,11 @@ describe('without a source', () => {
     const state = result.current.state;
     if (state.kind !== 'empty') throw new Error('expected empty');
     expect(mockGetPackRange).not.toHaveBeenCalled();
-    expect(state.rows.map((row) => row.arabic)).toEqual(['بِسْمِ ٱللَّهِ', 'ٱلْحَمْدُ لِلَّهِ', 'ٱلرَّحْمَٰنِ ٱلرَّحِيمِ']);
+    expect(state.rows.map((row) => row.ayat[0].arabic)).toEqual([
+      'بِسْمِ ٱللَّهِ',
+      'ٱلْحَمْدُ لِلَّهِ',
+      'ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+    ]);
     expect(state.rows.every((row) => row.content === null)).toBe(true);
   });
 });
@@ -163,7 +167,7 @@ describe('failure', () => {
   it('retries by RE-RUNNING the reads, not by replaying the failure', async () => {
     mockGetPackRange.mockRejectedValueOnce(new Error('transient'));
     mockGetPackRange.mockResolvedValue([
-      { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
+      { surah: 1, verse: 1, lastVerse: 1, text: 'Au nom d’Allah', footnotes: null },
     ]);
     const { result } = renderHook(() => useStudyContent(RANGE, FRENCH));
     await waitFor(() => expect(result.current.state.kind).toBe('error'));
@@ -192,8 +196,8 @@ describe('a scope change mid-read', () => {
     rerender({ range: narrower });
 
     await act(async () => {
-      second.settle([{ surah: 1, verse: 2, text: 'the new scope', footnotes: null }]);
-      first.settle([{ surah: 1, verse: 1, text: 'the OLD scope', footnotes: null }]);
+      second.settle([{ surah: 1, verse: 2, lastVerse: 2, text: 'the new scope', footnotes: null }]);
+      first.settle([{ surah: 1, verse: 1, lastVerse: 1, text: 'the OLD scope', footnotes: null }]);
       await Promise.resolve();
     });
 
@@ -202,5 +206,172 @@ describe('a scope change mid-read', () => {
     if (state.kind !== 'ready') throw new Error('expected ready');
     expect(state.rows).toHaveLength(1);
     expect(state.rows[0].content).toBe('the new scope');
+  });
+});
+
+/**
+ * PASSAGES (story 8-5) — the spec's I/O matrix, against the pure join.
+ *
+ * ⚠️ A TAFSIR IS WRITTEN ONCE OVER SEVERAL AYAT. The mutations these catch all render a plausible
+ * sheet: a per-ayah join (the passage 2:1–5 vanishes for a reader on 2:3, because it is stored at
+ * 2:1), a join that repeats the text under every ayah, an order taken from a query, and a passage
+ * that swallows the ayah after it so a real gap reads as covered.
+ */
+describe('passages (story 8-5)', () => {
+  const ayah = (surah: number, verse: number) => ({
+    surah,
+    verse,
+    textUthmani: `${surah}:${verse}`,
+    textSimple: '',
+  });
+  const passage = (surah: number, verse: number, lastVerse: number, text: string) => ({
+    surah,
+    verse,
+    lastVerse,
+    text,
+    footnotes: null,
+  });
+  const pairsOf = (surah: number, from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => ({ surah, verse: from + i }));
+
+  it('reads a passage that STARTS BEFORE the range, labelled by its span, Arabic of the range only', () => {
+    // Ayah scope 2:3, passage 2:1–5.
+    const rows = joinRows([{ surah: 2, verse: 3 }], [ayah(2, 3)], [passage(2, 1, 5, 'P')]);
+    expect(rows).toEqual([
+      {
+        surah: 2,
+        verse: 1,
+        lastSurah: 2,
+        lastVerse: 5,
+        ayat: [{ surah: 2, verse: 3, arabic: '2:3' }],
+        content: 'P',
+        footnotes: null,
+      },
+    ]);
+  });
+
+  it('draws each passage once, with its in-range ayat together, when a range crosses passages', () => {
+    // Surah scope Al-Fatihah, passages 1:1–1 and 1:2–7.
+    const pairs = pairsOf(1, 1, 7);
+    const rows = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(1, 2, 7, 'B'), passage(1, 1, 1, 'A')]
+    );
+    expect(rows.map((row) => [row.verse, row.lastVerse, row.content])).toEqual([
+      [1, 1, 'A'],
+      [2, 7, 'B'],
+    ]);
+    expect(rows[1].ayat.map((a) => a.verse)).toEqual([2, 3, 4, 5, 6, 7]);
+  });
+
+  it('orders passages from three surahs by recitation, none from the cross product', () => {
+    // Page 604: 112:1–4, 113:1–5, 114:1–6. The passages arrive shuffled.
+    const pairs = [...pairsOf(112, 1, 4), ...pairsOf(113, 1, 5), ...pairsOf(114, 1, 6)];
+    const rows = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(114, 1, 6, 'Nas'), passage(112, 1, 4, 'Ikhlas'), passage(113, 1, 5, 'Falaq')]
+    );
+    expect(rows.map((row) => `${row.surah}:${row.verse}–${row.lastVerse}`)).toEqual([
+      '112:1–4',
+      '113:1–5',
+      '114:1–6',
+    ]);
+    expect(rows.map((row) => row.ayat.length)).toEqual([4, 5, 6]);
+  });
+
+  it('gives an ayah no passage covers its own row, with nothing for it', () => {
+    // A passage gap at 2:7.
+    const pairs = pairsOf(2, 6, 8);
+    const rows = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(2, 6, 6, 'six'), passage(2, 8, 10, 'eight')]
+    );
+    expect(rows.map((row) => [row.verse, row.lastVerse, row.content])).toEqual([
+      [6, 6, 'six'],
+      [7, 7, null],
+      [8, 10, 'eight'],
+    ]);
+    expect(rows[1].ayat).toEqual([{ surah: 2, verse: 7, arabic: '2:7' }]);
+  });
+
+  it('reads a translation — one ayah per entry — exactly as before passages existed', () => {
+    const pairs = pairsOf(1, 1, 3);
+    const rows = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(1, 1, 1, 'a'), passage(1, 3, 3, 'c')]
+    );
+    const one = (verse: number, content: string | null) => ({
+      surah: 1,
+      verse,
+      lastSurah: 1,
+      lastVerse: verse,
+      ayat: [{ surah: 1, verse, arabic: `1:${verse}` }],
+      content,
+      footnotes: null,
+    });
+    expect(rows).toEqual([one(1, 'a'), one(2, null), one(3, 'c')]);
+  });
+
+  it('never draws one ayah under two passages when a pack’s passages overlap', () => {
+    // A pack built before the pipeline merged overlaps: 38:48–49 and 38:49–54.
+    const pairs = pairsOf(38, 48, 50);
+    const rows = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(38, 48, 49, 'first'), passage(38, 49, 54, 'second')]
+    );
+    expect(rows.map((row) => [row.content, row.ayat.map((a) => a.verse)])).toEqual([
+      ['first', [48, 49]],
+      ['second', [50]],
+    ]);
+  });
+
+  it('clamps a malformed span (`last_verse` before `verse`) to the one ayah', () => {
+    const rows = joinRows([{ surah: 2, verse: 4 }], [ayah(2, 4)], [passage(2, 4, 2, 'odd')]);
+    expect(rows).toEqual([
+      {
+        surah: 2,
+        verse: 4,
+        lastSurah: 2,
+        lastVerse: 4,
+        ayat: [{ surah: 2, verse: 4, arabic: '2:4' }],
+        content: 'odd',
+        footnotes: null,
+      },
+    ]);
+  });
+
+  it('draws a passage the pipeline split at a surah boundary ONCE, both surahs under one row', () => {
+    // Fi Zilal's 103:1–104:6, stored as 103:1–3 and 104:1–6 with the same text.
+    const pairs = [...pairsOf(103, 1, 3), ...pairsOf(104, 1, 6)];
+    const rows = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(103, 1, 3, 'Al-Asr and Al-Humazah'), passage(104, 1, 6, 'Al-Asr and Al-Humazah')]
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ surah: 103, verse: 1, lastSurah: 104, lastVerse: 6 });
+    expect(rows[0].ayat.map((a) => `${a.surah}:${a.verse}`)).toEqual([
+      '103:1',
+      '103:2',
+      '103:3',
+      '104:1',
+      '104:2',
+      '104:3',
+      '104:4',
+      '104:5',
+      '104:6',
+    ]);
+    // Different texts across the same boundary stay two rows.
+    const apart = joinRows(
+      pairs,
+      pairs.map((p) => ayah(p.surah, p.verse)),
+      [passage(103, 1, 3, 'Al-Asr'), passage(104, 1, 6, 'Al-Humazah')]
+    );
+    expect(apart).toHaveLength(2);
   });
 });

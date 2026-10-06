@@ -429,7 +429,7 @@ export default function Read() {
     () => ({
       ...screenContentStyle('main'),
       paddingTop: headerInset,
-      paddingBottom: CHROME_BAR_HEIGHT + insets.bottom + SPACING.xxl,
+      paddingBottom: CHROME_BAR_HEIGHT * 2 + insets.bottom + SPACING.xxl,
     }),
     [headerInset, insets.bottom]
   );
@@ -690,6 +690,7 @@ export default function Read() {
               ListFooterComponent={
                 content.verses.length > 0 ? (
                   <SurahNavigator
+                    current={surah}
                     prev={preceding}
                     prevName={prevSurahName}
                     next={upcoming}

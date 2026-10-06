@@ -28,6 +28,15 @@ const mockDownload = jest.fn<Promise<void>, [string, { uri: string }, Record<str
 const mockListingBroken = { value: false };
 /** Flipped by the C1 case: the COMMIT throws, the way a full disk would. */
 const mockMoveBroken = { value: false };
+/**
+ * How the install verifies (story 8-5): every `File.bytes()` read — which must be NONE, because
+ * that puts the whole pack in the JS heap — and every `File.digest()` algorithm asked for.
+ */
+const mockReads = { bytes: 0, digests: [] as string[] };
+/** Flipped to answer the digest in upper case, as a platform's hex encoder may. */
+const mockDigestUpper = { value: false };
+/** What `Paths.availableDiskSpace` answers; `undefined` is "the platform cannot say". */
+const mockFreeDisk: { value: number | undefined } = { value: undefined };
 
 /** What `countPackRows` answers for a given file name. The truncation case moves it. */
 const mockRowCount = { value: 6236 };
@@ -115,7 +124,22 @@ jest.mock('expo-file-system', () => {
       mockBytes.delete(this.uri);
     }
     bytes() {
+      mockReads.bytes++;
       return Promise.resolve(mockBytes.get(this.uri) ?? new Uint8Array());
+    }
+    /**
+     * The NATIVE streamed digest, modelled by a ONE-SHOT SHA-256 from Node's own crypto over the
+     * same bytes — a real digest, never the one under test, and the equality the streaming
+     * implementation has to keep.
+     */
+    digest(algorithm: string) {
+      mockReads.digests.push(algorithm);
+      // biome-ignore lint/style/noCommonJs: a Jest module factory cannot use a hoisted import.
+      const { createHash } = require('node:crypto');
+      const hex = createHash('sha256')
+        .update(Buffer.from(mockBytes.get(this.uri) ?? new Uint8Array()))
+        .digest('hex');
+      return Promise.resolve(mockDigestUpper.value ? hex.toUpperCase() : hex);
     }
     moveSync(destination: any) {
       if (mockMoveBroken.value) throw new Error('ENOSPC');
@@ -133,18 +157,24 @@ jest.mock('expo-file-system', () => {
     }
   }
 
-  return { __esModule: true, Directory, File, Paths: { document: 'file:///documents' } };
+  return {
+    __esModule: true,
+    Directory,
+    File,
+    Paths: {
+      document: 'file:///documents',
+      get availableDiskSpace() {
+        return mockFreeDisk.value;
+      },
+    },
+  };
 });
 
 import { createHash } from 'node:crypto';
 
 import { AppState } from 'react-native';
 
-import {
-  PACK_MAX_VERIFIABLE_BYTES,
-  PACK_STALL_TIMEOUT_MS,
-  PACKS_SUPPORTED,
-} from '@/constants/packs';
+import { PACK_NATIVE_MAX_BYTES, PACK_STALL_TIMEOUT_MS, PACKS_SUPPORTED } from '@/constants/packs';
 import type { CataloguePack } from './catalogue';
 import {
   __resetPackInstalls,
@@ -532,23 +562,107 @@ describe('cancelling', () => {
   });
 });
 
-describe('the verification ceiling', () => {
-  it('refuses a pack the catalogue already says is too big, without fetching it', async () => {
-    // ⚠️ `expo-crypto` has no incremental digest, so verifying means holding the whole file in
-    // the JS heap. Spending a reader's data on something that can only end in an OOM is worse
-    // than saying no.
-    const huge = { ...PACK, bytes: PACK_MAX_VERIFIABLE_BYTES + 1 };
+/**
+ * NO CEILING ON NATIVE, BECAUSE THE DIGEST IS STREAMED (story 8-5).
+ *
+ * ⚠️ THE CLASSICAL TAFSIRS ARE 40–54 MB AND THE OLD CEILING WAS 32. It existed because the digest
+ * was `expo-crypto` over `File.bytes()` — the whole pack in the JS heap. MUTATIONS: put the
+ * ceiling back (Tabari is refused `tooLarge`), go back to `bytes()` (the read counter), or compare
+ * the native hex without normalising its case (a platform that answers upper case fails every
+ * install with `digest`, behind a retry that can never succeed).
+ */
+describe('a pack bigger than the old 32 MB ceiling', () => {
+  const TABARI_BYTES = 37_912_576;
+  const TABARI: CataloguePack = {
+    ...PACK,
+    id: 'tafsir-ar-tabari',
+    type: 'tafsir',
+    url: 'https://cdn.nobleachievements.com/packs/tafsir-ar-tabari-v1.db',
+    bytes: TABARI_BYTES,
+  };
+  const TABARI_URI = `${SQLITE_DIR}/tafsir-ar-tabari-v1.db`;
 
-    await expect(installPack(huge)).resolves.toEqual({ ok: false, reason: 'tooLarge' });
+  beforeEach(() => {
+    mockReads.bytes = 0;
+    mockReads.digests = [];
+    mockDigestUpper.value = false;
+    mockDownload.mockImplementation((_url, file) => {
+      seedFile(file.uri, GOOD_BYTES, TABARI_BYTES);
+      return Promise.resolve();
+    });
+  });
+
+  it('installs, verified by a streamed SHA-256 of the FILE and never a whole-file read', async () => {
+    await expect(installPack(TABARI)).resolves.toEqual({ ok: true });
+    expect(mockFiles.get(TABARI_URI)).toBe(TABARI_BYTES);
+    expect(mockReads.digests).toEqual(['SHA-256']);
+    expect(mockReads.bytes).toBe(0);
+  });
+
+  it('agrees with a one-shot digest whatever case the platform spells its hex in', async () => {
+    mockDigestUpper.value = true;
+    await expect(installPack(TABARI)).resolves.toEqual({ ok: true });
+  });
+
+  it('still refuses a mismatch, and removes the `.part`', async () => {
+    await expect(installPack({ ...TABARI, digest: 'f'.repeat(64) })).resolves.toEqual({
+      ok: false,
+      reason: 'digest',
+    });
+    expect(mockFiles.has(`${TABARI_URI}.part`)).toBe(false);
+    expect(listInstalledPacks()).toEqual([]);
+  });
+});
+
+/**
+ * BEFORE A BYTE IS FETCHED (story 8-5 review): room on the device, and a size that is not nonsense.
+ * MUTATIONS: drop the free-space check (a 54 MB pack fails mid-write on a full phone, after
+ * spending the reader's data); treat an UNKNOWN free space as zero (every install refused on a
+ * platform that cannot say); drop the sanity cap (a corrupt catalogue size starts a download that
+ * never ends).
+ */
+describe('preflight', () => {
+  afterEach(() => {
+    mockFreeDisk.value = undefined;
+  });
+
+  it('refuses with `noSpace` when free space is under twice the pack, fetching nothing', async () => {
+    mockFreeDisk.value = PACK.bytes * 2 - 1;
+    await expect(installPack(PACK)).resolves.toEqual({ ok: false, reason: 'noSpace' });
     expect(mockDownload).not.toHaveBeenCalled();
   });
 
-  it('refuses one whose real size exceeds the ceiling even when the catalogue understated it', async () => {
+  it('proceeds when the platform cannot say how much space is free', async () => {
+    mockFreeDisk.value = undefined;
     mockDownload.mockImplementation((_url, file) => {
-      seedFile(file.uri, GOOD_BYTES, PACK_MAX_VERIFIABLE_BYTES + 1);
+      seedFile(file.uri, GOOD_BYTES);
       return Promise.resolve();
     });
+    await expect(installPack(PACK)).resolves.toEqual({ ok: true });
+  });
 
+  it('refuses a catalogue size past the sanity cap, fetching nothing', async () => {
+    await expect(installPack({ ...PACK, bytes: PACK_NATIVE_MAX_BYTES + 1 })).resolves.toEqual({
+      ok: false,
+      reason: 'tooLarge',
+    });
+    expect(mockDownload).not.toHaveBeenCalled();
+  });
+
+  it('stops a transfer that outgrows the sanity cap mid-flight, and leaves nothing', async () => {
+    mockDownload.mockImplementation(
+      (_url, file, options) =>
+        new Promise((_resolve, reject) => {
+          (options.signal as AbortSignal).addEventListener('abort', () =>
+            reject(new Error('aborted'))
+          );
+          seedFile(file.uri, GOOD_BYTES);
+          (options.onProgress as (p: { bytesWritten: number; totalBytes: number }) => void)({
+            bytesWritten: PACK_NATIVE_MAX_BYTES + 1,
+            totalBytes: 0,
+          });
+        })
+    );
     await expect(installPack(PACK)).resolves.toEqual({ ok: false, reason: 'tooLarge' });
     expect(mockFiles.has(PART_URI)).toBe(false);
     expect(listInstalledPacks()).toEqual([]);

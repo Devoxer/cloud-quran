@@ -18,6 +18,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { politeFetch } from './polite-fetch.ts';
 import { type LedgerEntry, parseLedger, pinnedEditions } from './verify-licences.ts';
 
 export const QURANENC_LIST_URL = 'https://quranenc.com/api/v1/translations/list';
@@ -69,7 +70,8 @@ export async function fetchQuranEncEditions(localization?: string): Promise<Qura
 }
 
 /**
- * Every language's name IN THAT LANGUAGE, for the 56 codes QuranEnc publishes.
+ * Every language's name IN THAT LANGUAGE, for the 56 codes QuranEnc publishes and the four more
+ * the tafsir packs add (story 8-5: Arabic, Bengali, Italian, Russian).
  *
  * ⚠️ A COMMITTED TABLE, NOT `Intl.DisplayNames`, AND THE REASON IS THE DIGEST. The name is written
  * into every pack's `pack_meta`, so it is part of the bytes the catalogue digests. ICU's answer
@@ -85,8 +87,10 @@ export const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
   aa: 'Qafaraf',
   ak: 'Akan',
   am: 'አማርኛ',
+  ar: 'العربية',
   as: 'অসমীয়া',
   az: 'Azərbaycan',
+  bn: 'বাংলা',
   bs: 'Bosanski',
   ceb: 'Binisaya',
   de: 'Deutsch',
@@ -100,6 +104,7 @@ export const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
   hi: 'हिन्दी',
   hr: 'Hrvatski',
   id: 'Bahasa Indonesia',
+  it: 'Italiano',
   ja: '日本語',
   km: 'ខ្មែរ',
   kn: 'ಕನ್ನಡ',
@@ -119,6 +124,7 @@ export const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
   pt: 'Português',
   rn: 'Ikirundi',
   ro: 'Română',
+  ru: 'Русский',
   rw: 'Ikinyarwanda',
   si: 'සිංහල',
   so: 'Soomaali',
@@ -151,8 +157,10 @@ export const LANGUAGE_NAMES_ENGLISH: Readonly<Record<string, string>> = {
   aa: 'Afar',
   ak: 'Akan',
   am: 'Amharic',
+  ar: 'Arabic',
   as: 'Assamese',
   az: 'Azerbaijani',
+  bn: 'Bengali',
   bs: 'Bosnian',
   ceb: 'Cebuano',
   de: 'German',
@@ -166,6 +174,7 @@ export const LANGUAGE_NAMES_ENGLISH: Readonly<Record<string, string>> = {
   hi: 'Hindi',
   hr: 'Croatian',
   id: 'Indonesian',
+  it: 'Italian',
   ja: 'Japanese',
   km: 'Khmer',
   kn: 'Kannada',
@@ -185,6 +194,7 @@ export const LANGUAGE_NAMES_ENGLISH: Readonly<Record<string, string>> = {
   pt: 'Portuguese',
   rn: 'Kirundi',
   ro: 'Romanian',
+  ru: 'Russian',
   rw: 'Kinyarwanda',
   si: 'Sinhala',
   so: 'Somali',
@@ -302,6 +312,46 @@ export async function fetchUpstreamDatabase(key: string, target: string): Promis
     );
   }
   writeFileSync(target, bytes);
+}
+
+/** Whether a failed download was QuranEnc saying "there is no SQLite build of this edition". */
+export const isMissingDownload = (error: unknown): boolean =>
+  error instanceof Error && /returned HTTP 404/.test(error.message);
+
+/**
+ * An edition's rows from QuranEnc's sura API — for an edition published without a SQLite build.
+ *
+ * ⚠️ THE SAME TEXT, ANOTHER DOOR (story 8-5). `oromo_rwwad` (added 2026-10-05) is listed and
+ * served by `/api/v1/translation/sura/{key}/{n}` but its `/downloads/sqlite/` URL redirects to a
+ * 404. The API answers the same `sura`, `aya`, `translation`, `footnotes` fields the SQLite build
+ * holds, verbatim; 114 throttled requests, and the row-count check refuses anything short.
+ */
+export async function fetchUpstreamRowsViaApi(key: string): Promise<UpstreamRow[]> {
+  const rows: UpstreamRow[] = [];
+  for (let sura = 1; sura <= 114; sura++) {
+    const url = `https://quranenc.com/api/v1/translation/sura/${encodeURIComponent(key)}/${sura}`;
+    const response = await politeFetch(url);
+    if (!response.ok)
+      throw new Error(`QuranEnc sura API returned HTTP ${response.status} for ${url}`);
+    const body = (await response.json()) as { result?: unknown };
+    if (!Array.isArray(body.result) || body.result.length === 0) {
+      throw new Error(`QuranEnc sura API returned no rows for ${url}`);
+    }
+    for (const raw of body.result) {
+      const entry = raw as Record<string, unknown>;
+      const footnotes =
+        typeof entry.footnotes === 'string' && entry.footnotes.length > 0 ? entry.footnotes : null;
+      if (typeof entry.translation !== 'string')
+        throw new Error(`${url}: a row with no translation`);
+      rows.push({
+        sura: Number(entry.sura),
+        aya: Number(entry.aya),
+        translation: entry.translation,
+        footnotes,
+      });
+    }
+  }
+  return rows.sort((a, b) => a.sura - b.sura || a.aya - b.aya);
 }
 
 /** Every row of a downloaded edition, in book order. */

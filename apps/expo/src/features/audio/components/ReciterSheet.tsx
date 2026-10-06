@@ -23,12 +23,12 @@
  * sheet entirely for a centered dialog card whose body is `{ flexShrink: 1, minHeight: 0 }` —
  * exactly the unbounded host above. So the detent covers phones and nothing else, and iPad,
  * Android tablet and wide web would have shipped on an argument that does not hold there. The
- * explicit height below is what makes the claim true on every form factor; the detent stays,
- * because on a phone it is what decides how much of the app the sheet covers.
+ * explicit height below bounds the list on every form factor. iOS and web keep a detent;
+ * Android fits that body because its fractional detent otherwise leaves an empty tail.
  */
 
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import { BottomSheet } from '@/components/ui';
 import { ReciterPicker } from './ReciterPicker';
 
@@ -62,7 +62,8 @@ export function ReciterSheet({ open, onClose }: ReciterSheetProps) {
       open={open}
       onClose={onClose}
       title={t('player:reciters.sheetTitle')}
-      snapPoints={SHEET_SNAP_POINTS}
+      // Android ignores fractional detents; fit the bounded body instead of leaving a blank tail.
+      snapPoints={Platform.OS === 'android' ? undefined : SHEET_SNAP_POINTS}
       closeTestID="reciter-sheet-close"
       testID="reciter-sheet"
     >

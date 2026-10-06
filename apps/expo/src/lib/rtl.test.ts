@@ -18,6 +18,8 @@ import { createAppMMKV } from './mmkv';
 import {
   applyDirectionForLanguage,
   applyStoredDirection,
+  applyWebDirection,
+  contentTextAlign,
   isRTL,
   isRTLContent,
   isRTLLanguage,
@@ -127,13 +129,13 @@ describe('applyStoredDirection', () => {
     applyStoredDirection();
     expect(allowSpy).toHaveBeenCalledWith(true);
     expect(forceSpy).toHaveBeenCalledWith(true);
-    expect(isRTL()).toBe(true);
+    expect(isRTL()).toBe(I18nManager.isRTL);
   });
 
   it('forces RTL OFF for English — the switch BACK, which a sticky native flag would eat', () => {
     languageStorage.set(LANGUAGE_KEY, 'en');
     applyStoredDirection();
-    expect(allowSpy).toHaveBeenCalledWith(true);
+    expect(allowSpy).toHaveBeenCalledWith(false);
     expect(forceSpy).toHaveBeenCalledWith(false);
     expect(isRTL()).toBe(false);
   });
@@ -152,11 +154,11 @@ describe('applyStoredDirection', () => {
     expect(forceSpy).toHaveBeenCalledWith(false);
   });
 
-  it('floors to LTR on web even with Arabic stored', () => {
+  it('keeps native pager math LTR on web without writing native direction', () => {
     setPlatform('web');
     languageStorage.set(LANGUAGE_KEY, 'ar');
     applyStoredDirection();
-    expect(forceSpy).toHaveBeenCalledWith(false);
+    expect(forceSpy).not.toHaveBeenCalled();
     expect(isRTL()).toBe(false);
   });
 });
@@ -221,7 +223,7 @@ describe('applyDirectionForLanguage — the pre-reload write', () => {
   it('takes the SAME web floor — a web picker tap must not write RTL either', () => {
     setPlatform('web');
     applyDirectionForLanguage('ar');
-    expect(forceSpy).toHaveBeenCalledWith(false);
+    expect(forceSpy).not.toHaveBeenCalled();
   });
 
   it('treats an absent or unknown code as left to right', () => {
@@ -247,24 +249,10 @@ describe('applyDirectionForLanguage — the pre-reload write', () => {
 });
 
 describe('isRTL vs `I18nManager.isRTL`', () => {
-  it('is allowed to disagree ONLY while the framework has not caught up', () => {
-    /**
-     * ⚠️ BOUNDED ON PURPOSE. An earlier cut of this case asserted the divergence as simply
-     * correct, which blessed two real defects: a web reader stuck on `true` forever, and a fresh
-     * Arabic-device install stuck on `true` for its whole first session. The divergence is
-     * legitimate in exactly ONE window — a native process whose pref was written before this one
-     * started, where RN's module-scope capture is the stale value and OURS is the true one. Every
-     * other route out of that window is now closed in code: the web floor
-     * (`resolveDirection`) and the boot reconcile's one reload.
-     */
+  it('keeps pager math on the framework direction while boot reconciles', () => {
     languageStorage.set(LANGUAGE_KEY, 'ar');
     applyStoredDirection();
-
-    // The window: we say RTL, the framework still says LTR.
-    expect(isRTL()).toBe(true);
-    expect(I18nManager.isRTL).toBe(false);
-
-    // …and it is not left standing. The boot path noticed and reloaded exactly once.
+    expect(isRTL()).toBe(false);
     expect(mockReloadAppAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -412,7 +400,10 @@ describe('start-edge text alignment', () => {
     const offenders = sourceFiles(SRC)
       .filter((file) => /textAlign:\s*'right'/.test(stripComments(readFileSync(file, 'utf8'))))
       .map((file) => relative(SRC, file));
-    expect(offenders.sort()).toEqual(CONTENT_ALLOWED.sort());
+    expect(offenders).toEqual([]);
+    for (const file of CONTENT_ALLOWED) {
+      expect(readFileSync(join(SRC, file), 'utf8')).toContain('contentTextAlign(true)');
+    }
   });
 
   /**
@@ -502,13 +493,13 @@ describe('contentTextAlign', () => {
    * stored language would be asking a question the module had already answered.
    */
   function alignFor(language: string, contentIsRTL: boolean): string {
-    languageStorage.set(LANGUAGE_KEY, language);
-    let answer = '';
-    jest.isolateModules(() => {
-      const rtl = require('./rtl') as typeof import('./rtl');
-      answer = rtl.contentTextAlign(contentIsRTL);
-    });
-    return answer;
+    const original = I18nManager.isRTL;
+    I18nManager.isRTL = language === 'ar';
+    try {
+      return contentTextAlign(contentIsRTL);
+    } finally {
+      I18nManager.isRTL = original;
+    }
   }
 
   it('aligns to START when the content and the interface agree', () => {
@@ -576,7 +567,10 @@ describe('start-edge text alignment', () => {
     const offenders = sourceFiles(SRC)
       .filter((file) => /textAlign:\s*'right'/.test(stripComments(readFileSync(file, 'utf8'))))
       .map((file) => relative(SRC, file));
-    expect(offenders.sort()).toEqual(CONTENT_ALLOWED.sort());
+    expect(offenders).toEqual([]);
+    for (const file of CONTENT_ALLOWED) {
+      expect(readFileSync(join(SRC, file), 'utf8')).toContain('contentTextAlign(true)');
+    }
   });
 
   /**
@@ -618,5 +612,26 @@ describe('start-edge text alignment', () => {
     expect(files.length).toBeGreaterThan(150); // 186 after the 2026-10-03 prune
     expect(files).toContain('components/ui/ListRow.tsx');
     expect(files).toContain('features/reading/components/VerseRow.tsx');
+  });
+});
+
+describe('web direction', () => {
+  it('sets document direction and language while keeping pager math LTR', () => {
+    setPlatform('web');
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    const documentStub = { documentElement: { dir: '', lang: '' } };
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: documentStub });
+    try {
+      applyWebDirection('ar');
+      expect(documentStub.documentElement).toEqual({ dir: 'rtl', lang: 'ar' });
+      expect(isRTL()).toBe(false);
+      expect(contentTextAlign(true)).toBe('right');
+      expect(contentTextAlign(false)).toBe('left');
+      applyWebDirection('en');
+      expect(documentStub.documentElement).toEqual({ dir: 'ltr', lang: 'en' });
+    } finally {
+      if (previous) Object.defineProperty(globalThis, 'document', previous);
+      else Reflect.deleteProperty(globalThis, 'document');
+    }
   });
 });

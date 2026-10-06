@@ -47,3 +47,9 @@ it('lets the page load the mushaf faces the CDN serves', () => {
 it('fetches audio manifests from the same allowed origin', () => {
   expect(directives().get('connect-src') ?? []).toContain(originOf(AUDIO_CDN_BASE));
 });
+
+it('admits the exported SQLite blob worker without allowing blob scripts', () => {
+  const policy = directives();
+  expect(policy.get('worker-src')).toEqual(["'self'", 'blob:']);
+  expect(policy.get('script-src')).not.toContain('blob:');
+});

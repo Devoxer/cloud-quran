@@ -166,13 +166,13 @@ describe('the measured geometry', () => {
 });
 
 describe('the three line types', () => {
-  it('frames the surah header with the surah’s Arabic name in the KFGQPC face', async () => {
+  it('keeps the surah name readable before the band is measured', async () => {
     render(<MushafPage pageNumber={40} />);
     await screen.findByTestId('mushaf-page-40');
-    const name = SURAH_METADATA[1].nameArabic; // '002' on the header line, resolved from data
-    const style = styleOfGlyph(name);
-    expect(style.fontFamily).toBe(UTHMANI_FONT_FAMILY);
-    expect(style.writingDirection).toBe('rtl');
+    expect(screen.getByTestId('surah-band-2').props.accessibilityLabel).toBe(
+      SURAH_METADATA[1].nameArabic
+    );
+    expect(screen.getByText(SURAH_METADATA[1].nameArabic)).toBeTruthy();
   });
 
   it('renders the basmala from the CONSTANT — the data rows carry no glyph — at 0.8×', async () => {

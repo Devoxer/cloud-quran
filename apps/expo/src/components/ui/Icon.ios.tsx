@@ -10,7 +10,7 @@
  * — that is a Metro self-cycle; see STACK-CHEAT-SHEET § Don't / RN).
  */
 import { SymbolView } from 'expo-symbols';
-import { isRTL } from '@/lib/rtl';
+import { isInterfaceRTL } from '@/lib/rtl';
 import { IconFrame, type IconProps } from './IconBase';
 import { ICON_REGISTRY, mirrorIcon } from './icon-registry';
 
@@ -37,7 +37,7 @@ export function Icon({
    * while sitting on the right. The registry's names are absolute now and the swap is explicit and
    * identical on every platform. See `RTL_MIRRORED_ICONS`.
    */
-  const entry = ICON_REGISTRY[mirrorIcon(name, isRTL())];
+  const entry = ICON_REGISTRY[mirrorIcon(name, isInterfaceRTL())];
   // Defensive: a name absent from the registry (only reachable if the typed union is widened /
   // a value is `as IconName`-cast) renders the fallback instead of crashing on `entry.sf`.
   if (!entry) {

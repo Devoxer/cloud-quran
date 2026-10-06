@@ -223,19 +223,29 @@
       "rows": "The download was incomplete. Nothing was installed.",
       "stalled": "The download stopped responding. Nothing was installed.",
       "failed": "The pack could not be installed.",
-      "tooLarge": "This pack is too large for this device to verify."
+      "tooLarge": "This pack is too large to open here.",
+      "noSpace": "Not enough free space on this device. Nothing was installed."
     },
     "a11y": {
       "installPack": "Install {{name}}",
       "removePack": "Remove {{name}}",
-      "cancelPack": "Cancel the installation of {{name}}"
+      "cancelPack": "Cancel the installation of {{name}}",
+      "types": "Pack type"
     },
     "storage_one": "{{number}} pack installed · {{size}}",
     "storage_other": "{{number}} packs installed · {{size}}",
     "diskUnavailable": "Could not read what is installed on this device.",
     "searchPlaceholder": "Search by language or title",
+    "types": {
+      "translation": "Translations",
+      "tafsir": "Tafsir",
+      "irab": "I'rab",
+      "meanings": "Meanings"
+    },
     "noMatchesTitle": "No packs found",
     "noMatchesBody": "Try a language's name in English or in that language.",
+    "emptyTypeTitle": "Nothing of this type yet",
+    "emptyTypeBody": "Packs of this type will appear here when they are on offer.",
     "bundled": {
       "label": "Included with the app",
       "description": "Used by search. Always available, even offline."

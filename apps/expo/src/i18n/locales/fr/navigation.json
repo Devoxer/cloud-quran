@@ -31,7 +31,6 @@
       "juz": "Juz'",
       "hizb": "Hizb"
     },
-    "surahSubtitle": "{{name}} · {{verses}} versets · {{revelation}}",
     "revelation": {
       "meccan": "Mecquoise",
       "medinan": "Médinoise"
@@ -39,6 +38,9 @@
     "juzTitle": "Juz' {{number}}",
     "hizbTitle": "Hizb {{number}}",
     "boundarySubtitle": "{{name}} {{surah}}:{{verse}} · Page {{page}}",
-    "titleHint": "Ouvre l'index des sourates, juz' et hizb"
+    "titleHint": "Ouvre l'index des sourates, juz' et hizb",
+    "surahSubtitle_one": "{{name}} · {{verses}} verset · {{revelation}}",
+    "surahSubtitle_other": "{{name}} · {{verses}} versets · {{revelation}}",
+    "surahSubtitle_many": "{{name}} · {{verses}} versets · {{revelation}}"
   }
 }

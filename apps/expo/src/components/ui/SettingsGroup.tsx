@@ -21,7 +21,7 @@ import { Children, cloneElement, isValidElement, type ReactElement, type ReactNo
 import { type StyleProp, Text, type TextStyle, View } from 'react-native';
 import { SPACING } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
+import { isArabicUi, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { Card } from './Card';
 
@@ -80,7 +80,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
-      letterSpacing: captionLetterSpacing(isRTL()),
+      letterSpacing: captionLetterSpacing(isArabicUi()),
       paddingStart: SPACING.md,
       paddingBottom: SPACING.sm,
       color: t.colors.text.tertiary,

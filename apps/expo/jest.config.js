@@ -43,7 +43,8 @@ module.exports = {
     // which is to say from most of the suite. `@better-auth/*` needs its own alternative
     // because the `@expo(nent)?/` one above does not match a scoped package that merely
     // CONTAINS "expo" in its subpath.
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|@unimodules/.*|unimodules|sentry-expo|@sentry/.*|native-base|react-native-svg|uuid|@react-native-google-signin/.*|better-auth|@better-auth/.*|@better-fetch/.*|better-call|nanostores|invariant)',
+    // The pager regression exercises FlashList's actual ESM layout manager rather than its UI mock.
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|@unimodules/.*|unimodules|sentry-expo|@sentry/.*|@shopify/flash-list/.*|native-base|react-native-svg|uuid|@react-native-google-signin/.*|better-auth|@better-auth/.*|@better-fetch/.*|better-call|nanostores|invariant)',
   ],
   // Runs in jest's MAIN process — the only place that can see what sets the exit code.
   globalSetup: '<rootDir>/jest.global-setup.js',

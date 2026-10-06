@@ -12,7 +12,7 @@
  * see STACK-CHEAT-SHEET § Don't / RN).
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { isRTL } from '@/lib/rtl';
+import { isInterfaceRTL } from '@/lib/rtl';
 import { IconFrame, type IconProps } from './IconBase';
 import { ICON_REGISTRY, mirrorIcon } from './icon-registry';
 
@@ -37,7 +37,7 @@ export function Icon({
    * turned out not to self-mirror inside `SymbolView`, so the registry's `sf` names became absolute
    * and both renderers share this one swap.
    */
-  const entry = ICON_REGISTRY[mirrorIcon(name, isRTL())];
+  const entry = ICON_REGISTRY[mirrorIcon(name, isInterfaceRTL())];
   // Defensive: a name absent from the registry renders the fallback instead of crashing.
   if (!entry) {
     return <>{fallback ?? null}</>;

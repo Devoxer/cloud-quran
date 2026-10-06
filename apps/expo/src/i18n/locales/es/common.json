@@ -30,7 +30,8 @@
     "rowA11y": "{{name}}, aleya {{verse}}, {{side}}. {{text}}. Abre esta aleya.",
     "resultsA11y_one": "{{count}} resultado",
     "resultsA11y_many": "{{count}} resultados",
-    "resultsA11y_other": "{{count}} resultados"
+    "resultsA11y_other": "{{count}} resultados",
+    "rowMetaArabic": "{{name}} {{surah}}:{{verse}}"
   },
   "notFound": {
     "title": "¡Ups!",
@@ -72,7 +73,10 @@
     "pageErrorA11y": "Página {{page}}, error de carga",
     "pageErrorTitle": "No se pudo cargar esta página",
     "pageErrorBody": "Su fuente aún no está en este dispositivo. Comprueba tu conexión e inténtalo de nuevo.",
-    "toggleChrome": "Mostrar u ocultar las barras"
+    "toggleChrome": "Mostrar u ocultar las barras",
+    "nextPage": "Página siguiente",
+    "previousPage": "Página anterior",
+    "location": "Página {{page}} · Juz’ {{juz}} · Hizb {{hizb}}"
   },
   "bookmarks": {
     "add": "Añadir marcador",

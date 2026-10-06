@@ -73,7 +73,7 @@ export const FONT_FAMILY = {
  * no case — so it needs no branch; this does.)
  *
  * Pure, and it takes the direction rather than reading it, so `constants/` stays a leaf that
- * imports nothing from `lib/`. Callers pass `isRTL()`.
+ * imports nothing from `lib/`. Callers pass `isArabicUi()`.
  */
 export function captionLetterSpacing(rtl: boolean): number {
   return rtl ? 0 : 1.0;

@@ -31,7 +31,6 @@
       "juz": "الأجزاء",
       "hizb": "الأحزاب"
     },
-    "surahSubtitle": "{{name}} · {{verses}} آية · {{revelation}}",
     "revelation": {
       "meccan": "مكية",
       "medinan": "مدنية"
@@ -39,6 +38,12 @@
     "juzTitle": "الجزء {{number}}",
     "hizbTitle": "الحزب {{number}}",
     "boundarySubtitle": "{{name}} {{surah}}:{{verse}} · صفحة {{page}}",
-    "titleHint": "يفتح فهرس السور والأجزاء والأحزاب"
+    "titleHint": "يفتح فهرس السور والأجزاء والأحزاب",
+    "surahSubtitle_zero": "{{name}} · {{verses}} آيات · {{revelation}}",
+    "surahSubtitle_one": "{{name}} · {{verses}} آية · {{revelation}}",
+    "surahSubtitle_two": "{{name}} · {{verses}} آيتان · {{revelation}}",
+    "surahSubtitle_few": "{{name}} · {{verses}} آيات · {{revelation}}",
+    "surahSubtitle_many": "{{name}} · {{verses}} آية · {{revelation}}",
+    "surahSubtitle_other": "{{name}} · {{verses}} آية · {{revelation}}"
   }
 }

@@ -38,35 +38,74 @@
  * field, or anything else that moves the digest becomes a NEW FILE NAME on its own — the one thing
  * the atomic-update design above needs — and nothing can overwrite a published object in place.
  *
+ * ⚠️ FOUR PACK TYPES, TWO SHAPES, ONE CATALOGUE (story 8-5). A `translation` pack is one row per
+ * ayah, from QuranEnc. A `tafsir`, `irab` or `meanings` pack is one row per PASSAGE — a text
+ * written once over several ayat — with the passage's last ayah in `last_verse`, from QUL
+ * (`scripts/qul.ts`, every resource it lists as tafsir) and from QuranEnc's browse pages
+ * (`scripts/quranenc-saadi.ts`, As-Saadi in Swahili). Both shapes keep the table name `entries`,
+ * so the device's row-count check is the same query for every pack. The file itself is written by
+ * `scripts/pack-writer.ts`; the translation build is byte-for-byte what story 8-4 published.
+ *
  * Usage:
  *   node scripts/prepare-packs.ts --skip-upload           # build + catalogue only, nothing leaves the box
  *   node scripts/prepare-packs.ts                         # + idempotent upload to R2 (a second run skips)
  *   node scripts/prepare-packs.ts --force                 # re-upload everything, ignoring the digest check
  *   node scripts/prepare-packs.ts --pack french_rashid    # rebuild ONE edition (key or pack id)
  *   node scripts/prepare-packs.ts --language ur           # rebuild one language's editions
+ *   node scripts/prepare-packs.ts --type tafsir,irab      # some pack types (translation, tafsir, irab, meanings)
+ *   node scripts/prepare-packs.ts --refresh-qul           # re-read QUL's listing, not the cached meta.json
  *
  * With a filter, every other edition is carried forward from the committed catalogue unchanged —
- * rebuilding 75 packs to fix one is the cost the filter exists to avoid.
+ * rebuilding 75 packs to fix one is the cost the filter exists to avoid. `--type tafsir` never
+ * touches QuranEnc's translation list at all: the translations are carried forward as committed.
  */
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { TOTAL_VERSES } from '../packages/quran-data/src/constants.ts';
+import {
+  assertDirection,
+  assertNoMarkup,
+  countPackRows,
+  type PackInput,
+  sha256OfFile,
+  writePack,
+} from './pack-writer.ts';
+import {
+  countSourcePassages,
+  directionOf,
+  ensureQulDatabase,
+  loadQulListing,
+  QUL_TAFSIRS,
+  type QulWork,
+  qulAttributionOf,
+  qulKeyOf,
+  qulPackIdOf,
+  qulRawTextLength,
+  qulTypeOf,
+  readQulPassages,
+} from './qul.ts';
 import {
   assertPinned,
   attributionOf,
   fetchQuranEncEditions,
   fetchUpstreamDatabase,
+  fetchUpstreamRowsViaApi,
+  isMissingDownload,
   languageNameOf,
   ledgerPins,
   packIdOf,
   type QuranEncEdition,
   readUpstreamRows,
-  type UpstreamRow,
 } from './quranenc.ts';
+import {
+  countSwahiliSaadiPassages,
+  mirrorSwahiliSaadi,
+  readSwahiliSaadiPassages,
+  SWAHILI_SAADI_KEY,
+} from './quranenc-saadi.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const PACKS_DIR = resolve(ROOT, 'packages/quran-data/data/packs');
@@ -76,6 +115,11 @@ const LEDGER_PATH = resolve(PACKS_DIR, 'LICENCES.md');
 const QURANENC_LICENCE_ID = 'quranenc-republication';
 /** Written into `pack_meta` and the catalogue — the grant's "credit QuranEnc", as data. */
 const QURANENC_SOURCE = 'QuranEnc';
+/** The ledger entry for every QUL resource, with one pin per resource (`qul_{id}`). */
+const QUL_LICENCE_ID = 'qul-tafsir';
+const QUL_SOURCE = 'QUL';
+/** The ledger entry for As-Saadi mirrored from QuranEnc's browse pages. */
+const QURANENC_SAADI_LICENCE_ID = 'quranenc-saadi';
 /** Where built `.db` files land. Gitignored — a pack is never committed. */
 const BUILD_DIR = resolve(ROOT, 'build/packs');
 
@@ -90,6 +134,8 @@ const CATALOGUE_VERSION = 1;
 
 const skipUpload = process.argv.includes('--skip-upload');
 const force = process.argv.includes('--force');
+/** Re-read QUL's listing rather than trusting the cached `meta.json`. */
+const refreshQul = process.argv.includes('--refresh-qul');
 
 /** `--name=value` or `--name value`, the `prepare-audio.ts --reciter` parsing. */
 function flag(name: string): string | null {
@@ -100,36 +146,78 @@ function flag(name: string): string | null {
 }
 const packFilter = flag('pack');
 const languageFilter = flag('language');
+/**
+ * Every pack type the catalogue carries. `irab` and `meanings` are QUL works the owner moved off
+ * the tafsir row on 2026-10-05 (`scripts/qul.ts` § `QUL_TAFSIRS`).
+ */
+const PACK_TYPES = ['translation', 'tafsir', 'irab', 'meanings'] as const;
+type PackType = (typeof PACK_TYPES)[number];
+const typeFilter = flag('type');
+/** `--type tafsir` or `--type tafsir,irab,meanings`. The pack types this run regenerates. */
+const runTypes: readonly PackType[] =
+  typeFilter === null
+    ? PACK_TYPES
+    : typeFilter.split(',').map((type) => {
+        if (!(PACK_TYPES as readonly string[]).includes(type)) {
+          throw new Error(`--type takes ${PACK_TYPES.join(', ')} (comma-separated), not "${type}"`);
+        }
+        return type as PackType;
+      });
 
-/** One edition to build, generated from the list API. See the header. */
+/** One edition to build, resolved from its upstream. See the header. */
 interface PackSpec {
   /** Stable pack id. Also the file-name stem, with `-v{n}` appended. */
   id: string;
-  type: 'translation';
-  /** The edition's language code, as QuranEnc gives it. */
+  type: PackType;
+  /** The content's ISO 639 language code (QuranEnc's own code for a translation). */
   language: string;
   /** The language's own name, for a reader who does not read the interface language. */
   languageName: string;
   /** The same language's English name — a search alias on the device, never a heading. */
   languageNameEnglish: string;
-  /** Content direction, from the list API. The app renders from this, never from a list. */
+  /** Content direction: QuranEnc's list API, or the QUL language table. Checked against the text. */
   direction: 'ltr' | 'rtl';
-  /** The publisher's own title, in the edition's language when QuranEnc localizes into it. */
+  /** The publisher's title (QuranEnc's, localized where it can be) or the committed QUL title. */
   title: string;
   /** The ledger entry in `LICENCES.md` this pack's rights come from. */
   licenceId: string;
-  /** How many rows the finished pack must hold. See `assertPackSize`. */
-  expectedRows: number;
+  /** Who the text came from, as `pack_meta.source` and the catalogue state it. */
+  source: string;
+  /** The credit line, BUILT from the pinned version, never typed (story 8-2 review, C6). */
+  attribution: string;
   upstream: {
-    /** QuranEnc's own key for the edition. */
+    /** The upstream's own key for the edition (`qul_{id}` for QUL). What the ledger pins. */
     key: string;
     /** The pinned upstream version — equal to the live one, or the build has already stopped. */
     version: string;
   };
+  /** Read (and, for a translation, download) the rows. */
+  load: () => Promise<PackInput>;
+  /**
+   * How many rows the finished pack must hold, counted INDEPENDENTLY of `load` — see
+   * `assertPackSize`.
+   */
+  expectedRows: (input: PackInput) => number;
 }
 
 /**
- * Specs for the editions this run builds, from the live list.
+ * An edition this run COULD build, known by id before anything is prepared.
+ *
+ * ⚠️ `resolve` IS WHERE THE WORK IS, AND ONLY SELECTED CANDIDATES REACH IT (story 8-5 review).
+ * Resolving a QUL work unzips and measures every export of it; resolving Swahili As-Saadi mirrors
+ * 114 pages. `--pack tafsir-ar-tabari` must not do either for the 104 packs it did not ask for.
+ */
+interface Candidate {
+  id: string;
+  type: PackType;
+  language: string;
+  /** Every upstream key the candidate answers to under `--pack`. */
+  keys: string[];
+  resolve: () => Promise<PackSpec>;
+}
+
+/**
+ * Candidates for the editions QuranEnc's list offers.
  *
  * ⚠️ THE TITLE IS QURANENC'S OWN, IN THE EDITION'S LANGUAGE WHERE QURANENC HAS ONE. The English
  * list says "Urdu Translation - …"; asked with `localization=ur` it answers "اردو ترجمہ - …", which
@@ -137,40 +225,182 @@ interface PackSpec {
  * language QuranEnc does not localize into answers the English title, which is fine for the same
  * reason.
  */
-async function generateSpecs(
+async function translationCandidates(
   editions: QuranEncEdition[],
   pins: ReadonlyMap<string, string>
-): Promise<PackSpec[]> {
+): Promise<Candidate[]> {
   const titles = new Map<string, string>();
   for (const language of [...new Set(editions.map((e) => e.language_iso_code))]) {
     for (const localized of await fetchQuranEncEditions(language)) {
       if (localized.language_iso_code === language) titles.set(localized.key, localized.title);
     }
   }
-  const specs = editions.map((edition): PackSpec => {
+  return editions.map((edition): Candidate => {
+    // Every edition is checked against its pin even when a filter narrows the BUILD: a catalogue
+    // written by this run must not carry forward an edition whose upstream has moved under it.
     assertPinned(edition, pins, QURANENC_LICENCE_ID);
     const names = languageNameOf(edition.language_iso_code);
-    return {
+    const title = titles.get(edition.key) ?? edition.title;
+    const spec: PackSpec = {
       id: packIdOf(edition),
       type: 'translation',
       language: edition.language_iso_code,
       languageName: names.native,
       languageNameEnglish: names.english,
       direction: edition.direction,
-      title: titles.get(edition.key) ?? edition.title,
+      title,
       licenceId: QURANENC_LICENCE_ID,
-      // A complete translation is one row per ayah. ⚠️ NOT a constant of the pipeline — see
-      // `assertPackSize`; tafsir and asbab editions are next and are legitimately shorter.
-      expectedRows: TOTAL_VERSES,
+      source: QURANENC_SOURCE,
+      attribution: attributionOf(title, edition.version),
       upstream: { key: edition.key, version: edition.version },
+      load: async () => {
+        const upstreamPath = resolve(BUILD_DIR, `upstream-${edition.key}.sqlite`);
+        try {
+          await fetchUpstreamDatabase(edition.key, upstreamPath);
+        } catch (error) {
+          // An edition QuranEnc publishes without a SQLite build (`oromo_rwwad`) is read from its
+          // sura API instead — the same fields, verbatim. Any other failure stops the build.
+          if (!isMissingDownload(error)) throw error;
+          console.log(`    ${edition.key}: no SQLite build upstream; reading the sura API`);
+          return { shape: 'ayah', rows: await fetchUpstreamRowsViaApi(edition.key) };
+        }
+        return { shape: 'ayah', rows: readUpstreamRows(upstreamPath) };
+      },
+      // A complete translation is one row per ayah — the Quran's own dimension.
+      expectedRows: () => TOTAL_VERSES,
+    };
+    return {
+      id: spec.id,
+      type: 'translation',
+      language: spec.language,
+      keys: [edition.key],
+      resolve: async () => spec,
     };
   });
-  const ids = new Set<string>();
-  for (const spec of specs) {
-    if (ids.has(spec.id)) throw new Error(`Two editions derive the same pack id "${spec.id}"`);
-    ids.add(spec.id);
+}
+
+/**
+ * Candidates for every QUL work in `QUL_TAFSIRS` (tafsir, i'rab, meanings), and As-Saadi in
+ * Swahili.
+ *
+ * ⚠️ ONE PACK PER (type, language, work). QUL lists As-Saadi in Arabic three times (once under
+ * another work's title) and in Russian twice; the resource with the most upstream text — over its
+ * rows deduplicated by ayah — is the one built, the spec's rule. A resource QUL lists that the
+ * table does not name stops the build — a new source is a decision, not a default.
+ */
+async function passageCandidates(
+  qulPins: ReadonlyMap<string, string>,
+  saadiPins: ReadonlyMap<string, string>
+): Promise<Candidate[]> {
+  const listing = await loadQulListing({ refresh: refreshQul });
+  const unknown = [...listing.keys()].filter((id) => QUL_TAFSIRS[id] === undefined);
+  if (unknown.length > 0) {
+    throw new Error(
+      `QUL lists tafsir resource(s) ${unknown.join(', ')} that scripts/qul.ts QUL_TAFSIRS does ` +
+        'not name. Add each one (or a `skip` with its reason) — a new source is a decision.'
+    );
   }
-  return specs;
+  const withdrawn = Object.keys(QUL_TAFSIRS)
+    .map(Number)
+    .filter((id) => !listing.has(id));
+  if (withdrawn.length > 0) console.warn(`  ⚠️  no longer listed by QUL: ${withdrawn.join(', ')}`);
+
+  const works = new Map<string, number[]>();
+  for (const qulId of [...listing.keys()].sort((a, b) => a - b)) {
+    const work = QUL_TAFSIRS[qulId];
+    if (work === undefined || 'skip' in work) {
+      console.log(`  · qul ${qulId} not published: ${work && 'skip' in work ? work.skip : ''}`);
+      continue;
+    }
+    const id = qulPackIdOf(work);
+    works.set(id, [...(works.get(id) ?? []), qulId]);
+  }
+
+  const candidates: Candidate[] = [];
+  for (const [id, members] of works) {
+    const work = QUL_TAFSIRS[members[0]] as QulWork;
+    candidates.push({
+      id,
+      type: qulTypeOf(work),
+      language: work.language,
+      keys: members.map(qulKeyOf),
+      resolve: async () => {
+        let chosen: { qulId: number; path: string; version: string; size: number } | null = null;
+        for (const qulId of members) {
+          const { path, version } = await ensureQulDatabase(qulId, listing.get(qulId));
+          const size = qulRawTextLength(path);
+          // The larger text wins; on a tie (250 and 308 are the same bytes) the later resource.
+          if (chosen === null || size >= chosen.size) {
+            if (chosen)
+              console.log(`  · qul ${chosen.qulId} is a smaller copy of ${id}; not published`);
+            chosen = { qulId, path, version, size };
+          } else {
+            console.log(`  · qul ${qulId} is a smaller copy of ${id}; not published`);
+          }
+        }
+        if (chosen === null) throw new Error(`${id}: no QUL resource to build from`);
+        const { qulId, path, version } = chosen;
+        const key = qulKeyOf(qulId);
+        assertPinned({ key, version }, qulPins, QUL_LICENCE_ID);
+        const names = languageNameOf(work.language);
+        return {
+          id,
+          type: qulTypeOf(work),
+          language: work.language,
+          languageName: names.native,
+          languageNameEnglish: names.english,
+          direction: directionOf(work.language),
+          title: work.title,
+          licenceId: QUL_LICENCE_ID,
+          source: QUL_SOURCE,
+          attribution: qulAttributionOf(work.title, version),
+          upstream: { key, version },
+          load: async () => ({ shape: 'passage', rows: readQulPassages(path) }),
+          expectedRows: () => countSourcePassages(path),
+        };
+      },
+    });
+  }
+
+  candidates.push({
+    id: 'tafsir-sw-saadi',
+    type: 'tafsir',
+    language: 'sw',
+    keys: [SWAHILI_SAADI_KEY],
+    resolve: async () => {
+      const version = await mirrorSwahiliSaadi();
+      assertPinned({ key: SWAHILI_SAADI_KEY, version }, saadiPins, QURANENC_SAADI_LICENCE_ID);
+      const swahili = languageNameOf('sw');
+      const title = 'Tafsir As-Saadi';
+      return {
+        id: 'tafsir-sw-saadi',
+        type: 'tafsir',
+        language: 'sw',
+        languageName: swahili.native,
+        languageNameEnglish: swahili.english,
+        direction: 'ltr',
+        title,
+        licenceId: QURANENC_SAADI_LICENCE_ID,
+        source: QURANENC_SOURCE,
+        attribution: attributionOf(title, version),
+        upstream: { key: SWAHILI_SAADI_KEY, version },
+        load: async () => ({ shape: 'passage', rows: readSwahiliSaadiPassages() }),
+        expectedRows: () => countSwahiliSaadiPassages(),
+      };
+    },
+  });
+  return candidates.filter((candidate) => runTypes.includes(candidate.type));
+}
+
+/** Refuse two candidates that derive one pack id — they would install into the same file. */
+function assertUniqueIds(candidates: readonly Candidate[]): void {
+  const ids = new Set<string>();
+  for (const candidate of candidates) {
+    if (ids.has(candidate.id)) {
+      throw new Error(`Two editions derive the same pack id "${candidate.id}"`);
+    }
+    ids.add(candidate.id);
+  }
 }
 
 /** What one catalogue line says. The app's `features/packs/lib/catalogue.ts` validates this shape. */
@@ -196,17 +426,6 @@ interface CatalogueEntry {
 }
 
 /**
- * The attribution as it ships, built from the pinned version. The single source.
- *
- * ⚠️ BUILT, NEVER HAND-WRITTEN (story 8-2 review, C6). A hand-written "(v1.0.3)" is a second copy
- * of a fact the pin already owns, and a bump that moved one and not the other would publish text
- * CLAIMING a version it is not.
- */
-function resolveAttribution(spec: PackSpec): string {
-  return attributionOf(spec.title, spec.upstream.version);
-}
-
-/**
  * ⚠️ THE EXPECTED ROW COUNT COMES FROM THE PACK, NOT FROM THE QURAN'S DIMENSION. The first cut
  * threw unless a pack held exactly 6,236 rows, which is right for a complete translation and
  * wrong for every other pack type architecture §17 names — a tafsir dedupes into blocks, an asbab
@@ -215,10 +434,10 @@ function resolveAttribution(spec: PackSpec): string {
  * and is the number the catalogue then publishes for the device to re-check.
  * (Story 8-2 review, C8.)
  */
-function assertPackSize(spec: PackSpec, rows: number): void {
-  if (rows !== spec.expectedRows) {
+function assertPackSize(spec: PackSpec, rows: number, expectedRows: number): void {
+  if (rows !== expectedRows) {
     throw new Error(
-      `${spec.id}: built ${rows} rows, the spec says ${spec.expectedRows}. Refusing to publish — ` +
+      `${spec.id}: built ${rows} rows, the spec says ${expectedRows}. Refusing to publish — ` +
         'a digest cannot see truncation, so this is the only place it can be caught.'
     );
   }
@@ -226,95 +445,30 @@ function assertPackSize(spec: PackSpec, rows: number): void {
 
 // ─── Phase 2: build the pack ─────────────────────────────────────────────────
 
-/**
- * Build `{id}-v{n}.db` from the upstream rows.
- *
- * ⚠️ THE TEXT IS COPIED VERBATIM. The grant permits republication WITHOUT modification, so this
- * re-containers the rows and changes not one character of them. The footnote column is carried
- * too: it is part of the edition, and dropping it would be a modification by subtraction.
- */
-function buildPack(spec: PackSpec, packVersion: number, rows: UpstreamRow[]): string {
+/** Write `{id}-v{n}.db` through the pack writer (`scripts/pack-writer.ts`). */
+function buildPack(spec: PackSpec, packVersion: number, input: PackInput): string {
   const outPath = resolve(BUILD_DIR, `${spec.id}-v${packVersion}.db`);
-  rmSync(outPath, { force: true });
-
-  const db = new DatabaseSync(outPath);
-  // ⚠️ NEVER WAL FOR A DISTRIBUTED FILE. A WAL database is not one file, and a reader opening it
-  // has to be able to create `-wal`/`-shm` beside it. `DELETE` keeps the pack a single artifact.
-  db.exec('PRAGMA journal_mode = DELETE');
-  // Zero freed page space, the determinism pragma `prepare-data.ts:127-132` records: without it
-  // stale bytes sit in the free list and the same inputs produce a different digest.
-  db.exec('PRAGMA secure_delete = FAST');
-  db.exec(`
-    CREATE TABLE pack_meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-
-    CREATE TABLE entries (
-      surah_number INTEGER NOT NULL,
-      verse_number INTEGER NOT NULL,
-      text TEXT NOT NULL,
-      footnotes TEXT,
-      PRIMARY KEY (surah_number, verse_number)
-    );
-  `);
-
-  const insertMeta = db.prepare('INSERT INTO pack_meta (key, value) VALUES (?, ?)');
-  const insertEntry = db.prepare(
-    'INSERT INTO entries (surah_number, verse_number, text, footnotes) VALUES (?, ?, ?, ?)'
+  writePack(
+    outPath,
+    {
+      id: spec.id,
+      type: spec.type,
+      language: spec.language,
+      direction: spec.direction,
+      languageName: spec.languageName,
+      languageNameEnglish: spec.languageNameEnglish,
+      title: spec.title,
+      source: spec.source,
+      sourceKey: spec.upstream.key,
+      sourceVersion: spec.upstream.version,
+      licenceId: spec.licenceId,
+      attribution: spec.attribution,
+    },
+    packVersion,
+    input
   );
-
-  db.exec('BEGIN TRANSACTION');
-  for (const [key, value] of [
-    ['id', spec.id],
-    ['packVersion', String(packVersion)],
-    ['type', spec.type],
-    ['language', spec.language],
-    // ⚠️ THE DIRECTION TRAVELS WITH THE BYTES (story 8-4). Offline the catalogue is unreachable
-    // and an installed pack describes itself from here — without it an Urdu pack read on a plane
-    // would fall back to `ltr` and range every paragraph the wrong way.
-    ['direction', spec.direction],
-    // ⚠️ THE LANGUAGE'S OWN NAME, NOT JUST ITS CODE. Offline the catalogue is unreachable and a
-    // pack describes itself from `pack_meta`; without this the shelf falls back to rendering the
-    // BCP-47 code at a reader ("fr · 1.4 MB"), which is a machine value in a sentence of copy.
-    // Measured on the emulator, 2026-09-18.
-    ['languageName', spec.languageName],
-    ['languageNameEnglish', spec.languageNameEnglish],
-    ['title', spec.title],
-    ['source', QURANENC_SOURCE],
-    ['sourceKey', spec.upstream.key],
-    ['sourceVersion', spec.upstream.version],
-    ['licenceId', spec.licenceId],
-    ['attribution', resolveAttribution(spec)],
-  ]) {
-    insertMeta.run(key, value);
-  }
-  // Ordered inserts — the rows arrive ordered and are written in that order, so the file's
-  // physical layout is a function of the data rather than of insertion whim.
-  for (const row of rows) {
-    insertEntry.run(row.sura, row.aya, row.translation, row.footnotes ?? null);
-  }
-  db.exec('COMMIT');
-  // Compacts the file and rewrites its pages in key order. Deterministic, and it is what keeps a
-  // rebuilt pack byte-comparable to the one that shipped.
-  db.exec('VACUUM');
-  db.close();
-
   return outPath;
 }
-
-/** The pack's own row count, read back from the built file — never from the input array. */
-function countPackRows(path: string): number {
-  const db = new DatabaseSync(path, { readOnly: true });
-  const row = db.prepare('SELECT COUNT(*) AS count FROM entries').get() as unknown as {
-    count: number;
-  };
-  db.close();
-  return row.count;
-}
-
-const sha256OfFile = (path: string): string =>
-  createHash('sha256').update(readFileSync(path)).digest('hex');
 
 // ─── Phase 3: upload ─────────────────────────────────────────────────────────
 
@@ -362,7 +516,8 @@ async function remoteDigest(key: string): Promise<string | null> {
 async function putObject(key: string, localPath: string, contentType: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const { exitCode, stderr } = await run([
-      'npx',
+      'pnpm',
+      'exec',
       'wrangler',
       'r2',
       'object',
@@ -416,11 +571,12 @@ function readPreviousCatalogue(): Map<string, CatalogueEntry> {
 }
 
 /** Whether `--pack` / `--language` select this edition. No filter selects everything. */
-function selected(spec: PackSpec): boolean {
-  if (packFilter !== null && packFilter !== spec.id && packFilter !== spec.upstream.key) {
+function selected(candidate: Candidate): boolean {
+  // `--type` decided which candidates exist at all; this narrows within them.
+  if (packFilter !== null && packFilter !== candidate.id && !candidate.keys.includes(packFilter)) {
     return false;
   }
-  if (languageFilter !== null && languageFilter !== spec.language) return false;
+  if (languageFilter !== null && languageFilter !== candidate.language) return false;
   return true;
 }
 
@@ -433,20 +589,24 @@ function selected(spec: PackSpec): boolean {
  */
 function buildEdition(
   spec: PackSpec,
-  rows: UpstreamRow[],
+  input: PackInput,
   previous: CatalogueEntry | undefined
 ): { entry: CatalogueEntry; path: string } {
+  // ⚠️ THE TEXT IS CHECKED BEFORE A BYTE IS WRITTEN: no markup a reader would see printed, and a
+  // declared direction its own letters agree with.
+  assertNoMarkup(spec.id, input);
+  assertDirection(spec.id, spec.direction, input);
   let packVersion = previous?.packVersion ?? 1;
-  let path = buildPack(spec, packVersion, rows);
+  let path = buildPack(spec, packVersion, input);
   if (previous && sha256OfFile(path) !== previous.digest) {
     rmSync(path, { force: true });
     packVersion += 1;
-    path = buildPack(spec, packVersion, rows);
+    path = buildPack(spec, packVersion, input);
   }
   const packRows = countPackRows(path);
   // ⚠️ THE POPULATION CHECK, ON THE BUILD PATH. A digest minted from a truncated pack agrees with
   // itself forever, so the only place truncation can be caught is here.
-  assertPackSize(spec, packRows);
+  assertPackSize(spec, packRows, spec.expectedRows(input));
   return {
     path,
     entry: {
@@ -458,11 +618,11 @@ function buildEdition(
       languageNameEnglish: spec.languageNameEnglish,
       direction: spec.direction,
       title: spec.title,
-      source: QURANENC_SOURCE,
+      source: spec.source,
       sourceKey: spec.upstream.key,
       sourceVersion: spec.upstream.version,
       licenceId: spec.licenceId,
-      attribution: resolveAttribution(spec),
+      attribution: spec.attribution,
       url: `${PACK_CDN_BASE}/${spec.id}-v${packVersion}.db`,
       bytes: statSync(path).size,
       rows: packRows,
@@ -476,19 +636,41 @@ async function main(): Promise<void> {
   console.log(`  Target: r2://${BUCKET}/${KEY_PREFIX}/ (${PACK_CDN_BASE})`);
   if (packFilter !== null) console.log(`  Filter: --pack ${packFilter}`);
   if (languageFilter !== null) console.log(`  Filter: --language ${languageFilter}`);
+  if (typeFilter !== null) console.log(`  Filter: --type ${typeFilter}`);
   mkdirSync(BUILD_DIR, { recursive: true });
   mkdirSync(PACKS_DIR, { recursive: true });
 
   console.log('\n=== Phase 1: editions and their per-edition pins ===');
-  const pins = ledgerPins(readFileSync(LEDGER_PATH, 'utf-8'), QURANENC_LICENCE_ID);
-  const editions = await fetchQuranEncEditions();
-  // Every edition is checked against its pin even when a filter narrows the BUILD: a catalogue
-  // written by this run must not carry forward an edition whose upstream has moved under it.
-  const specs = await generateSpecs(editions, pins);
-  const targets = specs.filter(selected);
+  const ledger = readFileSync(LEDGER_PATH, 'utf-8');
+  const candidates: Candidate[] = [];
+  if (runTypes.includes('translation')) {
+    const pins = ledgerPins(ledger, QURANENC_LICENCE_ID);
+    const editions = await fetchQuranEncEditions();
+    candidates.push(...(await translationCandidates(editions, pins)));
+    const stale = [...pins.keys()].filter((key) => !editions.some((e) => e.key === key));
+    if (stale.length > 0) {
+      // Not fatal: QuranEnc withdrawing an edition is not a reason to stop publishing the others.
+      // It IS a reason for a human to look, and for the ledger to stop pinning it.
+      console.warn(
+        `  ⚠️  pinned in LICENCES.md but no longer offered upstream: ${stale.join(', ')}`
+      );
+    }
+  }
+  if (runTypes.some((type) => type !== 'translation')) {
+    candidates.push(
+      ...(await passageCandidates(
+        ledgerPins(ledger, QUL_LICENCE_ID),
+        ledgerPins(ledger, QURANENC_SAADI_LICENCE_ID)
+      ))
+    );
+  }
+  assertUniqueIds(candidates);
+  const targets: PackSpec[] = [];
+  for (const candidate of candidates.filter(selected)) targets.push(await candidate.resolve());
   if (targets.length === 0) {
     throw new Error(
-      `No edition matches --pack ${packFilter ?? '*'} --language ${languageFilter ?? '*'}`
+      `No edition matches --pack ${packFilter ?? '*'} --language ${languageFilter ?? '*'} ` +
+        `--type ${typeFilter ?? '*'}`
     );
   }
   for (const spec of targets) {
@@ -496,20 +678,12 @@ async function main(): Promise<void> {
       `  ✓ ${spec.id} ← ${spec.upstream.key} v${spec.upstream.version} (${spec.direction})`
     );
   }
-  const stale = [...pins.keys()].filter((key) => !editions.some((e) => e.key === key));
-  if (stale.length > 0) {
-    // Not fatal: QuranEnc withdrawing an edition is not a reason to stop publishing the others.
-    // It IS a reason for a human to look, and for the ledger to stop pinning it.
-    console.warn(`  ⚠️  pinned in LICENCES.md but no longer offered upstream: ${stale.join(', ')}`);
-  }
 
   console.log('\n=== Phase 2: build ===');
   const previous = readPreviousCatalogue();
   const built: { entry: CatalogueEntry; path: string }[] = [];
   for (const spec of targets) {
-    const upstreamPath = resolve(BUILD_DIR, `upstream-${spec.upstream.key}.sqlite`);
-    await fetchUpstreamDatabase(spec.upstream.key, upstreamPath);
-    const result = buildEdition(spec, readUpstreamRows(upstreamPath), previous.get(spec.id));
+    const result = buildEdition(spec, await spec.load(), previous.get(spec.id));
     built.push(result);
     const { entry } = result;
     const bumped =
@@ -530,12 +704,20 @@ async function main(): Promise<void> {
    *
    * ⚠️ A FILTERED RUN CARRIES EVERY OTHER EDITION FORWARD, and only editions the live list still
    * offers: the catalogue is always the whole shelf, never the slice this run happened to build.
+   * A TYPE this run did not generate (`--type tafsir` leaves the translations alone) is carried
+   * forward exactly as committed — dropping it because it has no spec here would empty the shelf
+   * of every other type (story 8-5).
    */
   const rebuilt = new Map(built.map(({ entry }) => [entry.id, entry]));
-  const packs = specs
-    .map((spec) => rebuilt.get(spec.id) ?? previous.get(spec.id))
-    .filter((entry): entry is CatalogueEntry => entry !== undefined)
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const carried = [...previous.values()].filter(
+    (entry) => !(runTypes as readonly string[]).includes(entry.type)
+  );
+  const packs = [
+    ...carried,
+    ...candidates
+      .map((candidate) => rebuilt.get(candidate.id) ?? previous.get(candidate.id))
+      .filter((entry): entry is CatalogueEntry => entry !== undefined),
+  ].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const catalogue = { catalogueVersion: CATALOGUE_VERSION, packs };
   writeFileSync(CATALOGUE_PATH, `${JSON.stringify(catalogue, null, 2)}\n`, 'utf-8');
   console.log(`  ✓ catalogue written to ${CATALOGUE_PATH} (${packs.length} packs)`);
@@ -548,13 +730,15 @@ async function main(): Promise<void> {
   /**
    * ── COST, WRITTEN DOWN BEFORE IT RUNS (AGENTS.md § Cost safety) ─────────────────────────────
    *
-   * A full run is 75 pack objects + 1 catalogue = 76 R2 Class A writes at most (a re-run skips
-   * every pack whose served digest already matches, so it is 1 write), and 76 + 75 GETs of our
-   * own CDN for the digest checks, which R2 does not bill as egress. Upstream: 75 SQLite GETs +
-   * 57 list GETs to QuranEnc, not billed to us. Stored: 75 packs × ~1–3 MB ≈ 0.15 GB ≈ $0.002/month.
-   * Together with the 13 narration voices (`prepare-audio.ts`) the story's ceiling is ~1,600
-   * Class A writes — inside R2's free 1M/month — and ~15 GB stored ≈ $0.23/month. It runs only
-   * when a human types it; nothing here loops or polls.
+   * A full run is 76 translation + 103 passage pack objects + 1 catalogue = 180 R2 Class A writes
+   * before retries (each upload has at most 3 attempts: 540 PUT attempts per full run).
+   * A re-run skips matching packs: 1 catalogue write, at most 3 attempts. Digest verification
+   * makes at most 179 + 179 pack GETs and 1 catalogue GET from our CDN per full run.
+   * Upstream: 75 SQLite GETs + 114 Oromo API GETs + 57 list GETs to QuranEnc; the tafsir sources are read from
+   * `build/qul-cache/` and `build/quranenc-cache/` and touch the network only for what is not
+   * cached (at most ~110 QUL and 114 QuranEnc GETs, throttled) — none of it billed to us. Stored:
+   * 76 translations × ~1–3 MB ≈ 0.15 GB, plus 103 tafsirs ≈ 1.25 GB (measured 2026-10-05; the
+   * largest, al-Alusi, is 54 MB). It runs only when a human types it; no unattended runs.
    *
    * The upload stays on `wrangler r2 object put`; moving to the `cf` CLI is its own change
    * (`_bmad-output/implementation-artifacts/deferred-work.md`).

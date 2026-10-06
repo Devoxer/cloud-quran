@@ -101,19 +101,19 @@ describe('Icon — the RTL swap is WIRED, not merely available (story 8-1)', () 
     (tree.getByTestId(testID).children[0] as any).props.name;
 
   it('Android/web: draws `chevron-back` as the FORWARD glyph under RTL', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(true);
     expect(glyphOf(render(<IonIcon name="chevron-back" testID="i" />), 'i')).toBe(
       'chevron-forward'
     );
   });
 
   it('Android/web: draws `chevron-back` as itself under LTR — the mutation control', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(false);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(false);
     expect(glyphOf(render(<IonIcon name="chevron-back" testID="i" />), 'i')).toBe('chevron-back');
   });
 
   it('Android/web: leaves a non-directional glyph alone under RTL', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(true);
     expect(glyphOf(render(<IonIcon name="search" testID="i" />), 'i')).toBe('search');
   });
 
@@ -129,23 +129,23 @@ describe('Icon — the RTL swap is WIRED, not merely available (story 8-1)', () 
    * `chevron.backward` would leave these passing while the device regressed.
    */
   it('iOS: draws `chevron-back` as the RIGHT-pointing SF glyph under RTL', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(true);
     expect(glyphOf(render(<Icon name="chevron-back" testID="i" />), 'i')).toBe('chevron.right');
   });
 
   it('iOS: draws `chevron-back` as the LEFT-pointing SF glyph under LTR — the mutation control', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(false);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(false);
     expect(glyphOf(render(<Icon name="chevron-back" testID="i" />), 'i')).toBe('chevron.left');
   });
 
   it('iOS: mirrors the arrows too, in both directions', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(true);
     expect(glyphOf(render(<Icon name="arrow-back" testID="a" />), 'a')).toBe('arrow.right');
     expect(glyphOf(render(<Icon name="arrow-forward" testID="b" />), 'b')).toBe('arrow.left');
   });
 
   it('iOS: leaves a non-directional glyph alone under RTL', () => {
-    jest.spyOn(rtl, 'isRTL').mockReturnValue(true);
+    jest.spyOn(rtl, 'isInterfaceRTL').mockReturnValue(true);
     expect(glyphOf(render(<Icon name="search" testID="i" />), 'i')).toBe('magnifyingglass');
   });
 });

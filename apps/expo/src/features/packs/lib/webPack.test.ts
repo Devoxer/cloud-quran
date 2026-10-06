@@ -17,9 +17,11 @@ const mockOpenPackFromBytes = jest.fn<Promise<unknown>, unknown[]>(() =>
 );
 const mockReadable = { value: true };
 
+const mockClosePack = jest.fn<Promise<void>, [string]>(() => Promise.resolve());
 jest.mock('@/lib/quranDb', () => ({
   openPackFromBytes: (...args: unknown[]) => mockOpenPackFromBytes(...args),
   isPackReadable: () => mockReadable.value,
+  closePack: (id: string) => mockClosePack(id),
 }));
 
 const mockSha256Hex = jest.fn<Promise<string>, unknown[]>(() => Promise.resolve(DIGEST));
@@ -37,7 +39,7 @@ jest.mock('@/lib/errors', () => ({
   isDeviceOfflineError: () => false,
 }));
 
-import { PACK_STALL_TIMEOUT_MS } from '@/constants/packs';
+import { PACK_STALL_TIMEOUT_MS, PACK_WEB_MAX_BYTES } from '@/constants/packs';
 import type { CataloguePack } from './catalogue';
 import {
   __resetHeldPacks,
@@ -148,8 +150,14 @@ describe('integrity', () => {
     expect(listHeldPacks()).toEqual([]);
   });
 
+  it('HOLDS a tafsir above the old 32 MB native ceiling (story 8-5)', async () => {
+    // Tabari is 38 MB, al-Alusi 54. Web keeps its own, larger, ceiling: the bytes ARE the pack.
+    respondWith(54 * 1024 * 1024);
+    await expect(holdPack({ ...PACK, bytes: 54 * 1024 * 1024 })).resolves.toEqual({ ok: true });
+  });
+
   it('refuses a pack the catalogue already says is too large, before fetching', async () => {
-    const huge = { ...PACK, bytes: 64 * 1024 * 1024 };
+    const huge = { ...PACK, bytes: PACK_WEB_MAX_BYTES + 1 };
     await expect(holdPack(huge)).resolves.toEqual({ ok: false, reason: 'tooLarge' });
     expect(global.fetch).not.toHaveBeenCalled();
   });
@@ -157,7 +165,7 @@ describe('integrity', () => {
   it('…and re-checks the ceiling against what ACTUALLY landed', async () => {
     // A catalogue understating a pack's size would otherwise walk straight into the heap the
     // pre-flight check exists to protect.
-    respondWith(64 * 1024 * 1024);
+    respondWith(PACK_WEB_MAX_BYTES + 1);
     await expect(holdPack(PACK)).resolves.toEqual({ ok: false, reason: 'tooLarge' });
     expect(mockOpenPackFromBytes).not.toHaveBeenCalled();
   });
@@ -256,5 +264,59 @@ describe('a hung, poisoned or broken hold', () => {
     }) as unknown as typeof fetch;
     await expect(holdPack(PACK)).resolves.toEqual({ ok: false, reason: 'offline' });
     expect(mockCapture).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE SESSION'S TOTAL (story 8-5 review). Every held pack sits in the heap until released, and
+ * only the sheet's release control lets one go on web. MUTATIONS: no budget (three 70 MB tafsirs
+ * held at once); evict the MOST recently used (the pack the reader just re-opened goes first).
+ */
+describe('the session budget', () => {
+  const SEVENTY_MB = 70 * 1024 * 1024;
+  const pack = (id: string) => ({
+    ...PACK,
+    id,
+    url: `https://cdn.nobleachievements.com/packs/${id}-v1.db`,
+    bytes: SEVENTY_MB,
+  });
+
+  it('releases the least recently used held pack to make room, and closes its handle', async () => {
+    respondWith(SEVENTY_MB);
+    expect(await holdPack(pack('tafsir-a'))).toEqual({ ok: true });
+    expect(await holdPack(pack('tafsir-b'))).toEqual({ ok: true });
+    // Re-opening A makes B the least recently used.
+    expect(await holdPack(pack('tafsir-a'))).toEqual({ ok: true });
+    expect(await holdPack(pack('tafsir-c'))).toEqual({ ok: true });
+
+    expect(listHeldPacks().map((held) => held.id)).toEqual(['tafsir-a', 'tafsir-c']);
+    expect(mockClosePack).toHaveBeenCalledWith('tafsir-b');
+    expect(mockClosePack).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases nothing while the session is under budget', async () => {
+    respondWith(1_000_000);
+    await holdPack({ ...pack('tafsir-a'), bytes: 1_000_000 });
+    await holdPack({ ...pack('tafsir-b'), bytes: 1_000_000 });
+    expect(listHeldPacks()).toHaveLength(2);
+    expect(mockClosePack).not.toHaveBeenCalled();
+  });
+
+  it('keeps working packs when an incoming pack fails verification', async () => {
+    respondWith(SEVENTY_MB);
+    await holdPack(pack('tafsir-a'));
+    await holdPack(pack('tafsir-b'));
+    mockSha256Hex.mockResolvedValue('b'.repeat(64));
+    expect(await holdPack(pack('tafsir-c'))).toEqual({ ok: false, reason: 'digest' });
+    expect(listHeldPacks().map((held) => held.id)).toEqual(['tafsir-a', 'tafsir-b']);
+    expect(mockClosePack).not.toHaveBeenCalled();
+  });
+
+  it('uses the verified body size when the catalogue understates it', async () => {
+    respondWith(SEVENTY_MB);
+    await holdPack(pack('tafsir-a'));
+    await holdPack(pack('tafsir-b'));
+    await holdPack({ ...pack('tafsir-c'), bytes: 1_000_000 });
+    expect(listHeldPacks().map((held) => held.id)).toEqual(['tafsir-b', 'tafsir-c']);
   });
 });

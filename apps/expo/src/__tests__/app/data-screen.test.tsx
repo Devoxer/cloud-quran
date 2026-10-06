@@ -13,6 +13,12 @@
  * `data.test.tsx` becomes a phantom route (`route-integrity.test.ts` asserts exactly that).
  */
 
+const mockSession = {
+  current: { user: { id: 'test-user', isAnonymous: false } } as {
+    user: { id: string; isAnonymous: boolean };
+  } | null,
+};
+
 const mockExportMyData = jest.fn();
 const mockPurgeMyData = jest.fn();
 const mockDeleteAccount = jest.fn();
@@ -31,6 +37,7 @@ jest.mock('@/lib/sync', () => ({
   purgeMyData: (...args: unknown[]) => mockPurgeMyData(...args),
 }));
 jest.mock('@/lib/auth', () => ({
+  useSession: () => ({ data: mockSession.current }),
   deleteAccount: (...args: unknown[]) => mockDeleteAccount(...args),
 }));
 
@@ -84,6 +91,7 @@ import DataScreen from '@/app/(tabs)/(profile)/data';
 import { isSyncEnabled, privacyStore, setSyncEnabled } from '@/lib/privacyPrefs';
 
 beforeEach(() => {
+  mockSession.current = { user: { id: 'test-user', isAnonymous: false } };
   privacyStore.clearAll();
   jest.clearAllMocks();
   mockExportMyData.mockResolvedValue('shared');
@@ -333,4 +341,14 @@ describe('the busy lock — one action at a time, or two erasures race', () => {
     // Anti-vacuity: the lock releases, so this is a lock rather than a permanently dead screen.
     expect(screen.getByTestId('export-data-row').props.accessibilityState?.disabled).toBe(false);
   });
+});
+
+it('hides server deletion controls while signed out or anonymous', () => {
+  mockSession.current = null;
+  const { rerender } = render(<DataScreen />);
+  expect(screen.queryByTestId('delete-account-row')).toBeNull();
+  expect(screen.queryByTestId('purge-data-row')).toBeNull();
+  mockSession.current = { user: { id: 'guest', isAnonymous: true } };
+  rerender(<DataScreen />);
+  expect(screen.queryByTestId('delete-account-row')).toBeNull();
 });

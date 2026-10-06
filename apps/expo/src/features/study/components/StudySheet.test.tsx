@@ -71,6 +71,7 @@ jest.mock('@/features/packs', () => ({
 }));
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { StudySheet } from './StudySheet';
 
 /** One shelf row, in `PackRow`'s shape. `installedVersion` is what makes it READABLE. */
@@ -160,8 +161,8 @@ beforeEach(() => {
   mockPacks.disk = 'ready';
   mockGetVersesForPositions.mockResolvedValue(ALFATIHAH);
   mockGetPackRange.mockResolvedValue([
-    { surah: 1, verse: 1, text: 'Au nom d’Allah', footnotes: null },
-    { surah: 1, verse: 2, text: 'Louange à Allah', footnotes: null },
+    { surah: 1, verse: 1, lastVerse: 1, text: 'Au nom d’Allah', footnotes: null },
+    { surah: 1, verse: 2, lastVerse: 2, text: 'Louange à Allah', footnotes: null },
   ]);
 });
 
@@ -241,6 +242,7 @@ describe('changing scope', () => {
       { surah: 2, verse: 253 },
       { surah: 2, verse: 256 }
     );
+    expect(screen.getByRole('header').props.children).toBe('⁨Al-Baqarah⁩ · ⁨253–256⁩');
   });
 
   it('…and for the whole SURAH', async () => {
@@ -313,6 +315,42 @@ describe('a type with no installed source', () => {
     expect(mockInstall).toHaveBeenCalledWith(offered);
   });
 
+  it('offers I’rab and Meanings packs under their own rows, and nothing of theirs under Tafsir (story 8-5)', async () => {
+    mockPacks.catalogue = 'ready';
+    const offer = (id: string, type: string, title: string) =>
+      packRow({
+        id,
+        title,
+        type,
+        language: 'ar',
+        installedVersion: null,
+        status: 'available',
+        offered: { id, packVersion: 1, bytes: 1_000_000 },
+      });
+    mockPacks.rows = [
+      packRow(),
+      offer('irab-ar-darwish', 'irab', 'إعراب القرآن لدرويش'),
+      offer('meanings-ar-tahlil-kalimat', 'meanings', 'تحليل كلمات القرآن'),
+      offer('tafsir-ar-tabari', 'tafsir', 'تفسير الطبري'),
+    ];
+    await open();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-type-irab'));
+    });
+    expect(screen.getByTestId('study-install-irab-ar-darwish')).toBeTruthy();
+    expect(screen.queryByTestId('study-install-tafsir-ar-tabari')).toBeNull();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-type-meanings'));
+    });
+    expect(screen.getByTestId('study-install-meanings-ar-tahlil-kalimat')).toBeTruthy();
+    expect(screen.queryByTestId('study-install-irab-ar-darwish')).toBeNull();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-type-tafsir'));
+    });
+    expect(screen.getByTestId('study-install-tafsir-ar-tabari')).toBeTruthy();
+    expect(screen.queryByTestId('study-install-irab-ar-darwish')).toBeNull();
+  });
+
   it('says the catalogue is unreachable rather than claiming nothing is offered', async () => {
     // Offline and "nothing on offer" are different answers; conflating them tells a reader on a
     // plane that the source they want does not exist.
@@ -337,6 +375,7 @@ describe('several sources for one type', () => {
         {
           surah: 1,
           verse: 1,
+          lastVerse: 1,
           text: id === 'translation-en-saheeh' ? 'In the name of Allah' : 'Au nom d’Allah',
           footnotes: null,
         },
@@ -432,7 +471,13 @@ describe('several sources for one type', () => {
       }),
     ];
     mockGetPackRange.mockResolvedValue([
-      { surah: 1, verse: 1, text: 'شروع کرتا ہوں اللہ تعالیٰ کے نام سے', footnotes: 'حاشیہ' },
+      {
+        surah: 1,
+        verse: 1,
+        lastVerse: 1,
+        text: 'شروع کرتا ہوں اللہ تعالیٰ کے نام سے',
+        footnotes: 'حاشیہ',
+      },
     ]);
     await open();
     const flat = (testID: string) => {
@@ -737,6 +782,104 @@ describe('a range that crosses a surah', () => {
     });
     await waitFor(() => expect(screen.getByTestId('study-entry-1-1')).toBeTruthy(), SETTLE);
     expect(within(screen.getByTestId('study-entry-1-1')).getByText('1')).toBeTruthy();
+  });
+});
+
+/**
+ * A TAFSIR PASSAGE (story 8-5): one row per passage, labelled by its span, the text drawn once.
+ *
+ * ⚠️ THE MUTATIONS RENDER PLAUSIBLY. A per-ayah label reads "2" over a commentary that begins at
+ * 1:1; one `Text` for the whole passage draws the same words in one 170,000-character node; and a
+ * direction taken from the interface ranges Arabic tafsir left in an English build.
+ */
+describe('a tafsir passage', () => {
+  beforeEach(() => {
+    mockPacks.rows = [
+      packRow(),
+      packRow({
+        id: 'tafsir-ar-saadi',
+        type: 'tafsir',
+        title: 'تفسير السعدي',
+        language: 'ar',
+        languageName: 'العربية',
+        direction: 'rtl',
+        attribution: 'تفسير السعدي · QUL (qul.tarteel.ai) · v2025.5.27',
+      }),
+    ];
+    mockGetPackRange.mockResolvedValue([
+      {
+        surah: 1,
+        verse: 1,
+        lastVerse: 7,
+        text: 'الفقرة الأولى\n\nالفقرة الثانية',
+        footnotes: null,
+      },
+    ]);
+  });
+
+  it('labels the row by the passage span, draws the in-range Arabic and the text once, RTL', async () => {
+    await open({ surah: 1, verse: 2 });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-type-tafsir'));
+    });
+    await waitFor(() => expect(screen.getByTestId('study-entry-1-1')).toBeTruthy(), SETTLE);
+
+    const entry = within(screen.getByTestId('study-entry-1-1'));
+    // `s:a–b`, bidi-isolated — written out so dropping the wrapper reddens this.
+    expect(entry.getByText('\u20681:1–7\u2069')).toBeTruthy();
+    // Ayah scope 1:2: the passage covers 1:1–7 but the range is one ayah — drawn with its marker,
+    // and that marker is the SELECTED ayah's, emphasised so the reader finds their place.
+    expect(
+      within(screen.getByTestId('study-arabic-1-1')).getByText('ٱلْحَمْدُ لِلَّهِ', { exact: false })
+    ).toBeTruthy();
+    expect(screen.getByTestId('study-marker-1-2-selected').props.children).toEqual(['(', '2', ')']);
+    // One `Text` per paragraph, and the passage's direction is the PACK's.
+    expect(screen.getByTestId('study-content-1-1').props.children).toBe('الفقرة الأولى');
+    expect(screen.getByTestId('study-content-1-1-1').props.children).toBe('الفقرة الثانية');
+    expect(StyleSheet.flatten(screen.getByTestId('study-content-1-1').props.style)).toMatchObject({
+      writingDirection: 'rtl',
+    });
+    expect(screen.queryByTestId('study-entry-1-2')).toBeNull();
+  });
+
+  it('marks only the selected ayah inside a multi-ayah passage', async () => {
+    await open({ surah: 1, verse: 1 });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-type-tafsir'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-scope-2'));
+    });
+    await waitFor(() => expect(screen.getByTestId('study-entry-1-1')).toBeTruthy(), SETTLE);
+    expect(screen.getByTestId('study-marker-1-1-selected')).toBeTruthy();
+    expect(screen.getByTestId('study-marker-1-2')).toBeTruthy();
+    expect(screen.queryByTestId('study-marker-1-2-selected')).toBeNull();
+    expect(
+      StyleSheet.flatten(screen.getByTestId('study-marker-1-1-selected').props.style)
+    ).not.toEqual(StyleSheet.flatten(screen.getByTestId('study-marker-1-2').props.style));
+  });
+
+  it('names the surah on a passage label when the rows span more than one surah', async () => {
+    mockGetVersesForPositions.mockResolvedValue([
+      { surah: 10, verse: 107, textUthmani: 'وَإِن يَمْسَسْكَ', textSimple: 'a' },
+      { surah: 11, verse: 1, textUthmani: 'الٓر', textSimple: 'b' },
+      { surah: 11, verse: 2, textUthmani: 'أَلَّا تَعْبُدُوٓا', textSimple: 'c' },
+    ]);
+    mockGetPackRange.mockResolvedValue([
+      { surah: 10, verse: 107, lastVerse: 107, text: 'يونس', footnotes: null },
+      { surah: 11, verse: 1, lastVerse: 4, text: 'هود', footnotes: null },
+    ]);
+    await open({ surah: 11, verse: 1 });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-type-tafsir'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('study-scope-1'));
+    });
+    await waitFor(() => expect(screen.getByTestId('study-entry-11-1')).toBeTruthy(), SETTLE);
+    expect(
+      within(screen.getByTestId('study-entry-11-1')).getByText('\u2068Hud\u2069 · \u20681–4\u2069')
+    ).toBeTruthy();
   });
 });
 

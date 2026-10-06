@@ -102,7 +102,7 @@ const WARM_CHARCOAL_DARK: PaletteSlice = {
     // The LIGHTENED #E8A87C (base #C65D3B is secondary) — do not invert it.
     primary: '#E8A87C',
     secondary: '#C65D3B',
-    faint: 'rgba(198, 93, 59, 0.16)',
+    faint: 'rgba(198, 93, 59, 0.10)',
     soft: '#E3906E',
     strong: '#AE4E30',
   },
@@ -147,7 +147,7 @@ export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = 
       accent: {
         primary: '#E0A96D',
         secondary: '#A8472A',
-        faint: 'rgba(224, 169, 109, 0.16)',
+        faint: 'rgba(224, 169, 109, 0.10)',
         soft: '#D49A5C',
         strong: '#B07F45',
       },
@@ -176,7 +176,7 @@ export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = 
       accent: {
         primary: '#A3B899',
         secondary: '#5C6B52',
-        faint: 'rgba(163, 184, 153, 0.16)',
+        faint: 'rgba(163, 184, 153, 0.10)',
         soft: '#93A889',
         strong: '#7A8F71',
       },
@@ -205,7 +205,7 @@ export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = 
       accent: {
         primary: '#8FC4F5',
         secondary: '#00457A',
-        faint: 'rgba(143, 196, 245, 0.16)',
+        faint: 'rgba(143, 196, 245, 0.10)',
         soft: '#7BB6EE',
         strong: '#5E9AD4',
       },
@@ -234,7 +234,7 @@ export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = 
       accent: {
         primary: '#8FC593',
         secondary: '#3F6B43',
-        faint: 'rgba(143, 197, 147, 0.16)',
+        faint: 'rgba(143, 197, 147, 0.10)',
         soft: '#7DB682',
         strong: '#649C69',
       },
@@ -263,7 +263,7 @@ export const PALETTES: Record<PaletteName, Record<ColorScheme, PaletteSlice>> = 
       accent: {
         primary: '#94B4EC',
         secondary: '#3B5A99',
-        faint: 'rgba(148, 180, 236, 0.16)',
+        faint: 'rgba(148, 180, 236, 0.10)',
         soft: '#83A6E4',
         strong: '#6A8DCB',
       },

@@ -291,12 +291,7 @@ function quranNumeralsFor(system: NumeralSystem): (value: number | string) => st
  * A QURAN STRUCTURE NUMBER — a page, a juz', a hizb, a surah number, an ayah number — rendered in
  * the numerals the READER has chosen. `3` by default, `٣` under the Arabic-Indic setting.
  *
- * ── ⚠️ THE DECISION BEHIND THIS HAS REVERSED TWICE; `lib/numerals.ts` CARRIES ALL THREE STATES ─
- *
- * Short version: 8-1 shipped Western-always, 2026-09-13 made it follow the UI LANGUAGE, and
- * 2026-09-14 made it a DEVICE-LOCAL SETTING that defaults to Western in every language. So this
- * function no longer asks `isArabicUi()` — the language does not decide it, the reader does, and
- * every one of the four (language × numerals) combinations is reachable on purpose.
+ * Arabic UI seeds Arabic-Indic digits until the reader chooses a device-local override.
  *
  * ── ⚠️ THE BOUNDARY, WHICH IS THE WHOLE DESIGN — SCOPE IT OR IT SPREADS ──────────────────────
  *

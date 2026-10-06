@@ -171,6 +171,10 @@ export function parseLedger(markdown: string): LedgerEntry[] {
  * pinning nothing. A pin is now a PAIR, written `` `{key}` v{version} ``, and a pack is checked
  * against the pin for ITS key and no other.
  *
+ * The same shape pins the tafsir sources (story 8-5): QUL resources as `` `qul_{id}` `` at their
+ * export date (`v2025.6.16` — QUL states no version), and QuranEnc's browse-page As-Saadi at its
+ * mirror date. The regex already reads both: a key with an underscore, a dotted number.
+ *
  * ⚠️ A KEY PINNED TWICE IS AMBIGUOUS, NOT "EITHER ONE". It is reported by
  * {@link findLicenceViolations} rather than resolved here by picking one.
  */

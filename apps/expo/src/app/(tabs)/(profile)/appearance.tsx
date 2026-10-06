@@ -84,7 +84,7 @@ import { RADII } from '@/constants/radii';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { haptics } from '@/lib/haptics';
-import { TEXT_ALIGN_START } from '@/lib/rtl';
+import { contentTextAlign, TEXT_ALIGN_START } from '@/lib/rtl';
 import { patchPreferences, usePreferences } from '@/lib/sync';
 import { type ThemeMode, useTheme } from '@/lib/theme';
 import { useColorScheme } from '@/lib/useColorScheme';
@@ -400,6 +400,6 @@ const useStyles = () =>
       fontFamily: UTHMANI_FONT_FAMILY,
       color: t.colors.text.primary,
       writingDirection: 'rtl' as const,
-      textAlign: 'right' as const,
+      textAlign: contentTextAlign(true),
     },
   }));

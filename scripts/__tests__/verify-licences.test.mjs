@@ -330,3 +330,87 @@ describe('verify-licences', () => {
     strictEqual(/not valid JSON/.test(`${result.stdout}${result.stderr}`), true);
   });
 });
+
+/**
+ * QUL TAFSIR PACKS (story 8-5) — the same per-edition pin, keyed `qul_{id}`, dated by export.
+ *
+ * ⚠️ QUL STATES NO VERSION, SO THE PIN IS THE EXPORT DATE, AND IT HAS TO BE AS ENFORCEABLE AS A
+ * SEMVER ONE. MUTATIONS: a pin regex that wants three-part semver (the date never matches, every
+ * QUL pack is refused — or, loosened carelessly, any digits pass); and a gate that accepts a QUL
+ * licence recorded only under "Sources deliberately NOT here", where QUL sat until 2026-10-05.
+ */
+describe('verify-licences — QUL tafsir packs', () => {
+  const QUL_ENTRY = `### qul-tafsir
+
+- **Upstream:** QUL — https://qul.tarteel.ai
+- **Pinned version:** one per resource, the export date:
+  - \`qul_37\` v2025.6.16 — تفسير الطبري
+  - \`qul_308\` v2025.5.27 — تفسير السعدي
+- **Grant:** no per-resource licence; the owner's 2026-10-05 decision.
+- **Conditions we meet, and how:**
+  - Attribution: the work, QUL and the export date are rendered with the text.
+- **Redistribution argument:** public-domain works, and modern ones whose publishers do not forbid
+  reuse; shipped from our own CDN.
+
+---
+
+`;
+  const QUL_LEDGER = GOOD_LEDGER.replace(
+    '## Sources deliberately NOT here',
+    `${QUL_ENTRY}## Sources deliberately NOT here`
+  );
+  const TABARI = {
+    ...GOOD_PACK,
+    id: 'tafsir-ar-tabari',
+    type: 'tafsir',
+    language: 'ar',
+    languageName: 'العربية',
+    title: 'تفسير الطبري',
+    source: 'QUL',
+    sourceKey: 'qul_37',
+    sourceVersion: '2025.6.16',
+    licenceId: 'qul-tafsir',
+    attribution: 'تفسير الطبري · QUL (qul.tarteel.ai) · v2025.6.16',
+    url: 'https://cdn.nobleachievements.com/packs/tafsir-ar-tabari-v1.db',
+    bytes: 39751680,
+    rows: 3636,
+  };
+
+  it('passes a QUL pack pinned at its export date, beside a translation', () => {
+    const { code, out } = run({ ledger: QUL_LEDGER, catalogue: { packs: [GOOD_PACK, TABARI] } });
+    strictEqual(code, 0, out);
+  });
+
+  it('refuses a QUL pack whose export date has moved past its pin', () => {
+    const { code, out } = run({
+      ledger: QUL_LEDGER,
+      catalogue: {
+        packs: [
+          {
+            ...TABARI,
+            sourceVersion: '2025.7.1',
+            attribution: 'تفسير الطبري · QUL (qul.tarteel.ai) · v2025.7.1',
+          },
+        ],
+      },
+    });
+    strictEqual(code, 1);
+    strictEqual(/pins v2025\.6\.16/.test(out), true, out);
+  });
+
+  it('refuses a QUL resource the entry does not pin, even when another resource shares its date', () => {
+    const { code, out } = run({
+      ledger: QUL_LEDGER,
+      catalogue: { packs: [{ ...TABARI, sourceKey: 'qul_22' }] },
+    });
+    strictEqual(code, 1);
+    strictEqual(/pins nothing for it/.test(out), true, out);
+  });
+
+  it('refuses a QUL pack when QUL is recorded only as an EXCLUSION', () => {
+    const excluded = `${GOOD_LEDGER}\n${QUL_ENTRY}`;
+    const { code, out } = run({ ledger: excluded, catalogue: { packs: [TABARI] } });
+    strictEqual(code, 1);
+    strictEqual(/the ledger does not declare/.test(out), true, out);
+  });
+});

@@ -132,12 +132,12 @@ describe('every platform renders the identical control set', () => {
     // control, the mode toggle, the title's index entry (story 6-3), and one item per TABS entry.
     const ios = controlSet('ios');
     expect(ios).toContain('chrome-back');
-    expect(ios).toContain('chrome-mode-toggle');
+    expect(ios).not.toContain('chrome-mode-toggle');
     expect(ios).toContain('chrome-title-entry');
     for (const tab of TABS) {
       expect(ios).toContain(`chrome-tab-${tab.name}`);
     }
-    expect(ios.length).toBeGreaterThanOrEqual(3 + TABS.length);
+    expect(ios.length).toBeGreaterThanOrEqual(2 + TABS.length);
   });
 
   it('the SELECTED-verse row is identical on every platform (story 7-8)', () => {
@@ -174,7 +174,7 @@ describe('every platform renders the identical control set', () => {
       const set = controlSet(platform);
       expect(set).not.toContain('chrome-back');
       // The rest of the inventory is unchanged — absence of history removes ONE control.
-      expect(set).toContain('chrome-mode-toggle');
+      expect(set).toContain('chrome-title-entry');
     }
   });
 });

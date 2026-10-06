@@ -41,9 +41,9 @@ import ExpoBottomSheet, {
   type BottomSheetProps as ExpoBottomSheetProps,
 } from '@expo/ui/community/bottom-sheet';
 import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Modal,
+  Platform,
   Pressable,
   type StyleProp,
   StyleSheet,
@@ -126,7 +126,6 @@ export function BottomSheet({
   children,
 }: BottomSheetProps) {
   const { width } = useWindowDimensions();
-  const { t } = useTranslation();
   const themed = useThemedStyles((t) => ({
     scrim: { backgroundColor: t.colors.overlay.dark },
     card: { backgroundColor: t.colors.background.primary },
@@ -152,8 +151,6 @@ export function BottomSheet({
         <Pressable
           style={[styles.scrim, themed.scrim]}
           onPress={backdropDismissable ? onClose : undefined}
-          accessibilityRole="button"
-          accessibilityLabel={t('a11y:close')}
         >
           {/* Inner Pressable swallows taps so pressing the card never dismisses. */}
           <Pressable
@@ -161,6 +158,7 @@ export function BottomSheet({
             onPress={() => {}}
             testID={testID}
             accessibilityViewIsModal
+            {...(Platform.OS === 'web' ? { role: 'dialog' as const, 'aria-modal': true } : {})}
           >
             {hasHeader && (
               <SheetHeader
@@ -194,7 +192,7 @@ export function BottomSheet({
       onClose={onClose}
       enablePanDownToClose={backdropDismissable}
       handleComponent={dragIndicator ? undefined : null}
-      backgroundStyle={backgroundStyle}
+      backgroundStyle={[themed.card, backgroundStyle]}
     >
       {/* The community sheet has no `testID` prop — surface it on an inner View
           so consumer/test queries can still find the sheet body. That inner View

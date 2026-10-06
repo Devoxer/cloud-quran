@@ -6,7 +6,13 @@
  * literal sequence is the only expectation that cannot pass with the rows in the wrong order.
  */
 
-import { buildPackGroups, foldForSearch, type GroupablePack } from './packGroups';
+import {
+  buildPackGroups,
+  foldForSearch,
+  type GroupablePack,
+  isOnShelf,
+  shelvesPresent,
+} from './packGroups';
 
 const pack = (id: string, language: string, languageName: string, title: string, english = '') =>
   ({ id, language, languageName, languageNameEnglish: english, title }) satisfies GroupablePack;
@@ -80,5 +86,71 @@ describe('search', () => {
     expect(buildPackGroups(SHELF, '   ', 'en')).toHaveLength(
       buildPackGroups(SHELF, '', 'en').length
     );
+  });
+});
+
+/**
+ * THE SHELF'S TWO HALVES (story 8-5). MUTATION: `type === 'translation'` for the first half, and an
+ * installed pack whose metadata could not be read (type `''`) appears on neither — unremovable.
+ */
+describe('isOnShelf', () => {
+  it('puts tafsir on the tafsir half and nowhere else', () => {
+    expect(isOnShelf('tafsir', 'tafsir')).toBe(true);
+    expect(isOnShelf('tafsir', 'translation')).toBe(false);
+  });
+
+  it('puts translations, and any type it has no half for, on the translations half', () => {
+    for (const type of ['translation', '', 'asbab']) {
+      expect(isOnShelf(type, 'translation')).toBe(true);
+      expect(isOnShelf(type, 'tafsir')).toBe(false);
+    }
+  });
+});
+
+describe('a shelf per type (story 8-5 review)', () => {
+  it('gives I’rab and Meanings their own shelves, and nothing of theirs to Tafsir', () => {
+    expect(isOnShelf('irab', 'irab')).toBe(true);
+    expect(isOnShelf('irab', 'tafsir')).toBe(false);
+    expect(isOnShelf('irab', 'translation')).toBe(false);
+    expect(isOnShelf('meanings', 'meanings')).toBe(true);
+    expect(isOnShelf('meanings', 'translation')).toBe(false);
+  });
+
+  it('offers only the shelves that hold something, in a fixed order', () => {
+    expect(
+      shelvesPresent([{ type: 'meanings' }, { type: 'translation' }, { type: 'tafsir' }])
+    ).toEqual(['translation', 'tafsir', 'meanings']);
+    expect(shelvesPresent([{ type: '' }])).toEqual(['translation']);
+    expect(shelvesPresent([])).toEqual([]);
+  });
+});
+
+describe('finding an Arabic-titled work by its Latin name', () => {
+  it('matches the pack id, which carries the work’s Latin slug', () => {
+    // MUTATION: drop `pack.id` from the searched fields — "tabari" finds nothing, because the
+    // title is تفسير الطبري and the language names are "العربية" / "Arabic".
+    const packs: GroupablePack[] = [
+      {
+        id: 'tafsir-ar-tabari',
+        title: 'تفسير الطبري',
+        language: 'ar',
+        languageName: 'العربية',
+        languageNameEnglish: 'Arabic',
+      },
+      {
+        id: 'tafsir-ar-saadi',
+        title: 'تفسير السعدي',
+        language: 'ar',
+        languageName: 'العربية',
+        languageNameEnglish: 'Arabic',
+      },
+    ];
+    const ids = (query: string) =>
+      buildPackGroups(packs, query, 'en').flatMap((row) =>
+        row.kind === 'pack' ? [row.pack.id] : []
+      );
+    expect(ids('tabari')).toEqual(['tafsir-ar-tabari']);
+    expect(ids('Saadi')).toEqual(['tafsir-ar-saadi']);
+    expect(ids('الطبري')).toEqual(['tafsir-ar-tabari']);
   });
 });

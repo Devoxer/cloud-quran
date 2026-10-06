@@ -15,8 +15,19 @@
 
 import { Host as ExpoHost, type UniversalHostProps } from '@expo/ui';
 
+import { isInterfaceRTL } from '@/lib/rtl';
+import { useTheme } from '@/lib/theme';
+
 export type HostProps = UniversalHostProps;
 
 export function Host(props: HostProps) {
-  return <ExpoHost {...props} />;
+  const { colors, isDark } = useTheme();
+  return (
+    <ExpoHost
+      seedColor={colors.accent.primary}
+      colorScheme={isDark ? 'dark' : 'light'}
+      layoutDirection={isInterfaceRTL() ? 'rightToLeft' : 'leftToRight'}
+      {...props}
+    />
+  );
 }

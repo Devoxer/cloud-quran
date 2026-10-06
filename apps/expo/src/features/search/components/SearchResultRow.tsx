@@ -35,7 +35,7 @@ import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/co
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { useQuranNumerals } from '@/lib/format';
-import { TEXT_ALIGN_START } from '@/lib/rtl';
+import { contentTextAlign, TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { type MatchSide, matchedWordRange, type SearchVerse, splitWords } from '../lib/search';
@@ -144,7 +144,7 @@ function SearchResultRowInner({ entry, side, query, onPress, testID }: SearchRes
       fontFamily: UTHMANI_FONT_FAMILY,
       fontSize: ARABIC_FONT_SIZE,
       lineHeight: ARABIC_FONT_SIZE * ARABIC_LINE_HEIGHT,
-      textAlign: 'right',
+      textAlign: contentTextAlign(true),
       writingDirection: 'rtl',
     },
     translation: {
@@ -227,7 +227,7 @@ function SearchResultRowInner({ entry, side, query, onPress, testID }: SearchRes
         testID={testID ? `${testID}-open` : undefined}
       >
         <Text style={styles.meta} numberOfLines={1}>
-          {t('common:search.rowMeta', {
+          {t(side === 'arabic' ? 'common:search.rowMetaArabic' : 'common:search.rowMeta', {
             name,
             surah: formatQuranNumber(entry.surah),
             verse: formatQuranNumber(entry.verse),

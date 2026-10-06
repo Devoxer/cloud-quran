@@ -358,7 +358,7 @@ describe('it overlays; it never occupies layout', () => {
     render(<Harness />);
     fireEvent.press(screen.getByTestId('surface'));
     expect(touchesOf('reading-chrome-header')).toBe('none');
-    expect(screen.queryByTestId('chrome-mode-toggle')).toBeNull();
+    expect(screen.queryByTestId('chrome-title-entry')).toBeNull();
   });
 
   it('hides a dismissed bar from the accessibility tree, not just from touch', async () => {
@@ -394,12 +394,12 @@ describe('it overlays; it never occupies layout', () => {
     for (const id of TAB_IDS) {
       expect(screen.getByTestId(id, ANY).props.tabIndex).toBe(-1);
     }
-    expect(screen.getByTestId('chrome-mode-toggle', ANY).props.tabIndex).toBe(-1);
+    expect(screen.getByTestId('chrome-title-entry', ANY).props.tabIndex).toBe(-1);
     await reveal();
     for (const id of TAB_IDS) {
       expect(screen.getByTestId(id).props.tabIndex).toBe(0);
     }
-    expect(screen.getByTestId('chrome-mode-toggle').props.tabIndex).toBe(0);
+    expect(screen.getByTestId('chrome-title-entry').props.tabIndex).toBe(0);
   });
 });
 
@@ -429,20 +429,20 @@ describe('the controls the chrome carries (story 6-6)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/account');
   });
 
-  it('the mode toggle navigates to the OTHER renderer — and carries no position of its own', async () => {
+  it('the tab bar switches to the mushaf using the shared saved position', async () => {
     // One position, two renderers: the toggle is a plain navigation; the screens re-resolve the
     // saved pair on focus. A toggle that passed a position would be a second source of truth.
     render(<Harness mode="reading" />);
     await reveal();
-    fireEvent.press(screen.getByTestId('chrome-mode-toggle'));
+    fireEvent.press(screen.getByTestId('chrome-tab-index'));
     expect(mockNavigate).toHaveBeenCalledWith(HOME_HREF);
     expect(mockNavigate.mock.calls.every((call) => typeof call[0] === 'string')).toBe(true);
   });
 
-  it('…and from the mushaf it navigates to reading mode', async () => {
+  it('the tab bar switches from the mushaf to reading mode', async () => {
     render(<Harness mode="mushaf" />);
     await reveal();
-    fireEvent.press(screen.getByTestId('chrome-mode-toggle'));
+    fireEvent.press(screen.getByTestId('chrome-tab-read'));
     expect(mockNavigate).toHaveBeenCalledWith(READ_HREF);
   });
 
@@ -558,12 +558,12 @@ describe('the DOM hit-test tree (2026-09-10)', () => {
     // hit a chrome control instead of the band, i.e. the reveal was dead on web. 7 of 7 reach the
     // band with these styles in place. MUTATION: drop any `inert` entry — this reddens.
     render(<Harness />);
-    for (const id of ['chrome-title-entry', 'chrome-mode-toggle', 'chrome-dismiss', TAB_IDS[0]]) {
+    for (const id of ['chrome-title-entry', 'chrome-title-entry', 'chrome-dismiss', TAB_IDS[0]]) {
       expect(styleOf(id).pointerEvents).toBe('none');
     }
 
     await reveal();
-    for (const id of ['chrome-title-entry', 'chrome-mode-toggle', 'chrome-dismiss', TAB_IDS[0]]) {
+    for (const id of ['chrome-title-entry', 'chrome-title-entry', 'chrome-dismiss', TAB_IDS[0]]) {
       expect(styleOf(id).pointerEvents).toBeUndefined();
     }
   });

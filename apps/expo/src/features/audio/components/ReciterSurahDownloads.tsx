@@ -56,7 +56,7 @@ import { SPACING } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
 import { useQuranNumerals } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
-import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
+import { isArabicUi, TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahIndexNames } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import { useReciterDownloadSummary } from '@/stores/downloadQueueStore';
@@ -198,7 +198,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase' as const,
-      letterSpacing: captionLetterSpacing(isRTL()),
+      letterSpacing: captionLetterSpacing(isArabicUi()),
       color: theme.colors.text.tertiary,
     },
     footer: {

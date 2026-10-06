@@ -30,7 +30,8 @@
     "rowA11y": "{{name}}, verset {{verse}}, {{side}}. {{text}}. Ouvre ce verset.",
     "resultsA11y_one": "{{count}} résultat",
     "resultsA11y_many": "{{count}} résultats",
-    "resultsA11y_other": "{{count}} résultats"
+    "resultsA11y_other": "{{count}} résultats",
+    "rowMetaArabic": "{{name}} {{surah}}:{{verse}}"
   },
   "notFound": {
     "title": "Oups !",
@@ -72,7 +73,10 @@
     "pageErrorA11y": "Page {{page}}, échec du chargement",
     "pageErrorTitle": "Impossible de charger cette page",
     "pageErrorBody": "Sa police n'est pas encore sur cet appareil. Vérifiez votre connexion et réessayez.",
-    "toggleChrome": "Afficher ou masquer les barres"
+    "toggleChrome": "Afficher ou masquer les barres",
+    "nextPage": "Page suivante",
+    "previousPage": "Page précédente",
+    "location": "Page {{page}} · Juz’ {{juz}} · Hizb {{hizb}}"
   },
   "bookmarks": {
     "add": "Ajouter un signet",

@@ -1,7 +1,7 @@
 /**
  * Content — the shelf of installable content packs (story 8-2).
  *
- * ⚠️ 75 EDITIONS IN 56 LANGUAGES (story 8-4), SO IT IS A SEARCHABLE, LANGUAGE-GROUPED, VIRTUALIZED
+ * ⚠️ 179 EDITIONS (stories 8-4/8-5), SO IT IS A SEARCHABLE, LANGUAGE-GROUPED, VIRTUALIZED
  * LIST. Story 8-2 shipped one pack and a `ScrollView` over `rows.map`; that shape mounted every
  * card at once and offered no way to find Urdu among dozens. The grouping and the search are
  * `buildPackGroups` (pure, tested on its order), rendered by a `FlashList` — `ReciterPicker`'s
@@ -20,9 +20,15 @@
  *
  * ⚠️ THE TITLE AND THE ATTRIBUTION ARE RENDERED AS THE PACK'S OWN TEXT, WITH THE PACK'S OWN
  * DIRECTION — taken from the pack's `direction` field (story 8-4), never from a language list and
- * never from the interface. This repo sets content direction locally at every content site
- * because web is deliberately not mirrored. The attribution is a sibling of the card rather than
+ * never from the interface. Content direction is local so it stays independent of interface
+ * direction on native and web. The attribution is a sibling of the card rather than
  * a `SettingsRow` `description`, which takes a plain string and no style. (Story 8-2 review, S6.)
+ *
+ * ⚠️ ONE SHELF PER PACK TYPE (story 8-5). Tafsir, i'rab and word-meaning packs joined the 76
+ * translations — 45 Arabic tafsirs alone; a segmented control above the search picks the type,
+ * offering only the types the shelf actually holds, and the grouping and search run inside it
+ * unchanged (`features/packs` § `isOnShelf`). The search query is KEPT across a switch, on
+ * purpose: a reader who searched "Arabic" and switches to I'rab wants the Arabic i'rab.
  *
  * ⚠️ THE ONE-AYAH PREVIEW IS GONE (story 8-4). It was read out of every installed pack on every
  * mount — which is what forced every installed pack OPEN. A pack is read in the study sheet now,
@@ -36,11 +42,27 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { EmptyState, LoadingView, SearchBar, SettingsGroup, SettingsRow } from '@/components/ui';
+import {
+  EmptyState,
+  LoadingView,
+  SearchBar,
+  SegmentedControl,
+  SettingsGroup,
+  SettingsRow,
+} from '@/components/ui';
 import { PACKS_SUPPORTED } from '@/constants/packs';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '@/constants/typography';
-import { buildPackGroups, type PackListRow, type PackRow, usePacks } from '@/features/packs';
+import {
+  buildPackGroups,
+  isOnShelf,
+  type PackListRow,
+  type PackRow,
+  SHELF_TYPES,
+  type ShelfType,
+  shelvesPresent,
+  usePacks,
+} from '@/features/packs';
 import { formatBytes, isolate, useQuranNumerals } from '@/lib/format';
 import { contentTextAlign, isRTLContent, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useThemedStyles } from '@/lib/useThemedStyles';
@@ -51,15 +73,32 @@ export default function ContentScreen() {
   const styles = useStyles();
   const formatQuranNumber = useQuranNumerals();
   const [query, setQuery] = useState('');
+  const [shelf, setShelf] = useState<ShelfType>('translation');
   // ⚠️ `deferCatalogue` ON WEB, BECAUSE THIS SCREEN DOES NOT RENDER A SHELF THERE. Story 8-3 made
   // `usePacks` platform-uniform, so without this the web build would fetch the catalogue to draw
   // a single sentence. Native is unchanged and fetches eagerly.
   const { rows, catalogue, disk, installedBytes, install, cancel, remove, refresh } = usePacks({
     deferCatalogue: !PACKS_SUPPORTED,
   });
+  /**
+   * The shelves with anything on them — plus the one the reader is ON, even once it empties. Their
+   * last I'rab pack removed (or the catalogue gone offline), they stay where they were and are
+   * told the shelf is empty, rather than being moved to another type under their finger.
+   */
+  const shelves = useMemo(() => {
+    const present = shelvesPresent(rows);
+    return present.includes(shelf) || rows.length === 0
+      ? present
+      : SHELF_TYPES.filter((type) => type === shelf || present.includes(type));
+  }, [rows, shelf]);
+  const activeShelf: ShelfType = shelves.includes(shelf) ? shelf : (shelves[0] ?? 'translation');
+  const shelfRows = useMemo(
+    () => rows.filter((row) => isOnShelf(row.type, activeShelf)),
+    [rows, activeShelf]
+  );
   const listRows = useMemo(
-    () => buildPackGroups(rows, query, i18n.language),
-    [rows, query, i18n.language]
+    () => buildPackGroups(shelfRows, query, i18n.language),
+    [shelfRows, query, i18n.language]
   );
 
   if (!PACKS_SUPPORTED) {
@@ -154,6 +193,15 @@ export default function ContentScreen() {
 
       <BundledGroup />
 
+      {shelves.length > 1 ? (
+        <SegmentedControl
+          values={shelves.map((value) => t(`profile:content.types.${value}`))}
+          selectedIndex={shelves.indexOf(activeShelf)}
+          onChange={({ nativeEvent }) => setShelf(shelves[nativeEvent.selectedSegmentIndex])}
+          accessibilityLabel={t('profile:content.a11y.types')}
+          testID="content-types"
+        />
+      ) : null}
       {rows.length > 0 ? (
         <SearchBar
           value={query}
@@ -163,7 +211,17 @@ export default function ContentScreen() {
           testID="content-search"
         />
       ) : null}
-      {rows.length > 0 && listRows.length === 0 ? (
+      {/* ⚠️ "NOTHING OF THIS TYPE" IS NOT "NO MATCH" (story 8-5 review). Advice to try a language's
+          name is only true when a query filtered the list empty. */}
+      {rows.length > 0 && shelfRows.length === 0 && query.trim() === '' ? (
+        <EmptyState
+          icon="library-outline"
+          title={t('profile:content.emptyTypeTitle')}
+          description={t('profile:content.emptyTypeBody')}
+          testID="content-type-empty"
+        />
+      ) : null}
+      {rows.length > 0 && listRows.length === 0 && query.trim() !== '' ? (
         <EmptyState
           icon="search-outline"
           title={t('profile:content.noMatchesTitle')}
@@ -202,6 +260,7 @@ export default function ContentScreen() {
   return (
     <View style={styles.container} testID="content-screen">
       <FlashList
+        key={activeShelf}
         data={listRows}
         renderItem={renderItem}
         keyExtractor={(item) =>
@@ -242,7 +301,7 @@ function BundledGroup() {
         />
       </SettingsGroup>
       <Text style={[styles.attribution, contentStyle]} testID="content-bundled-attribution">
-        {BUNDLED_TRANSLATION.attribution}
+        {attributionDetails(BUNDLED_TRANSLATION.title, BUNDLED_TRANSLATION.attribution)}
       </Text>
     </View>
   );
@@ -300,12 +359,18 @@ const PackCard = memo(function PackCard({ row, t, onInstall, onCancel, onRemove 
           style={[styles.attribution, contentStyle]}
           testID={`content-pack-${row.id}-attribution`}
         >
-          {row.attribution}
+          {attributionDetails(row.title, row.attribution)}
         </Text>
       ) : null}
     </View>
   );
 });
+
+/** The title is already visible above; retain every remaining source and edition credit. */
+function attributionDetails(title: string, attribution: string): string {
+  const prefix = `${title} · `;
+  return attribution.startsWith(prefix) ? attribution.slice(prefix.length) : attribution;
+}
 
 interface PackActionRowsArgs {
   row: PackRow;

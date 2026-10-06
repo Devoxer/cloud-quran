@@ -223,20 +223,30 @@
       "rows": "Le téléchargement est incomplet. Rien n’a été installé.",
       "stalled": "Le téléchargement ne répond plus. Rien n’a été installé.",
       "failed": "Le module n’a pas pu être installé.",
-      "tooLarge": "Ce module est trop volumineux pour être vérifié sur cet appareil."
+      "tooLarge": "Ce pack est trop volumineux pour être ouvert ici.",
+      "noSpace": "Pas assez d’espace libre sur cet appareil. Rien n’a été installé."
     },
     "a11y": {
       "installPack": "Installer {{name}}",
       "removePack": "Supprimer {{name}}",
-      "cancelPack": "Annuler l’installation de {{name}}"
+      "cancelPack": "Annuler l’installation de {{name}}",
+      "types": "Type de pack"
     },
     "storage_one": "{{number}} module installé · {{size}}",
     "storage_many": "{{number}} de modules installés · {{size}}",
     "storage_other": "{{number}} modules installés · {{size}}",
     "diskUnavailable": "Impossible de lire ce qui est installé sur cet appareil.",
     "searchPlaceholder": "Rechercher par langue ou par titre",
+    "types": {
+      "translation": "Traductions",
+      "tafsir": "Tafsir",
+      "irab": "I'rab",
+      "meanings": "Sens"
+    },
     "noMatchesTitle": "Aucun module trouvé",
     "noMatchesBody": "Essayez le nom d'une langue en anglais ou dans cette langue.",
+    "emptyTypeTitle": "Rien de ce type pour l’instant",
+    "emptyTypeBody": "Les packs de ce type apparaîtront ici dès qu’ils seront proposés.",
     "bundled": {
       "label": "Inclus dans l'application",
       "description": "Utilisé par la recherche. Toujours disponible, même hors ligne."

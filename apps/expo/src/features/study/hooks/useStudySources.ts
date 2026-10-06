@@ -111,7 +111,7 @@ export interface StudySources {
   /**
    * Drop a held source (story 8-3 review, C6). ⚠️ THE ONLY WAY OUT ON WEB: `/content` returns
    * early there, so without a control here a reader who tried three sources held all three in the
-   * JS heap — up to 32 MB each — until they reloaded the page.
+   * JS heap — up to 128 MB each (`PACK_WEB_MAX_BYTES`) — until they reloaded the page.
    */
   release: (source: StudySource) => void;
 }

@@ -1,10 +1,19 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useFocusEffect } from 'expo-router';
-import { getFirstVerseForPage, getPageForVerse, SURAH_METADATA, TOTAL_PAGES } from 'quran-data';
+import {
+  getFirstVerseForPage,
+  getHizbForPage,
+  getJuzForPage,
+  getPageForVerse,
+  SURAH_METADATA,
+  TOTAL_PAGES,
+} from 'quran-data';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View, type ViewToken } from 'react-native';
+import { Platform, Pressable, useWindowDimensions, View, type ViewToken } from 'react-native';
 
+import { Icon } from '@/components/ui';
+import { LAYOUT, MIN_TOUCH_TARGET, SPACING } from '@/constants/spacing';
 import { useResumeListening } from '@/features/audio';
 import {
   MushafPage,
@@ -14,9 +23,11 @@ import {
   useChromeReveal,
   WelcomeBackBanner,
 } from '@/features/reading';
+import { useQuranNumerals } from '@/lib/format';
 import { preloadAdjacentPageFonts } from '@/lib/mushafFonts';
-import { isRTL } from '@/lib/rtl';
+import { isInterfaceRTL, isRTL } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
+import { useTheme } from '@/lib/theme';
 import { type ReadingPositionPair, usePosition } from '@/lib/usePosition';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 import {
@@ -138,6 +149,30 @@ export default function Mushaf() {
   const playbackRef = useRef(playback);
   playbackRef.current = playback;
   const listRef = useRef<FlashListRef<number>>(null);
+  const { colors } = useTheme();
+  const n = useQuranNumerals();
+  const pagerReady = useRef(false);
+  const restoring = useRef(true);
+
+  const scrollToPage = useCallback(
+    (page: number, animated = false) => {
+      restoreTarget.current = page;
+      restoring.current = true;
+      if (pagerReady.current)
+        listRef.current?.scrollToIndex({ index: pageToIndex(page, rtl), animated });
+    },
+    [rtl]
+  );
+  // Re-measurements must keep the settled page, rather than reuse a pixel offset at a new width.
+  const previousWidth = useRef(screenWidth);
+  useEffect(() => {
+    if (previousWidth.current === screenWidth) return;
+    previousWidth.current = screenWidth;
+    if (!pagerReady.current) return;
+    restoring.current = true;
+    const frame = requestAnimationFrame(() => scrollToPage(currentPageRef.current));
+    return () => cancelAnimationFrame(frame);
+  }, [screenWidth, scrollToPage]);
   /**
    * Which pages are currently in a failed state — shape 6 in the header. A SET rather than
    * "the page that just failed", because the reveal has TWO edges: a page can fail while it is
@@ -156,6 +191,19 @@ export default function Mushaf() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const styles = useThemedStyles((theme) => ({
+    pager: { flex: 1 },
+    pageArrow: {
+      position: 'absolute',
+      top: '50%',
+      minWidth: MIN_TOUCH_TARGET,
+      minHeight: MIN_TOUCH_TARGET,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.background.secondary,
+      borderRadius: SPACING.xl,
+    },
+    pageArrowLeft: { left: SPACING.md },
+    pageArrowRight: { right: SPACING.md },
     screen: {
       flex: 1,
       backgroundColor: theme.colors.background.primary,
@@ -176,8 +224,8 @@ export default function Mushaf() {
       moved.current = false;
       currentPageRef.current = fresh;
       setCurrentPage(fresh);
-      listRef.current?.scrollToIndex({ index: pageToIndex(fresh, rtl), animated: false });
-    }, [clearSelection, rtl])
+      scrollToPage(fresh);
+    }, [clearSelection, scrollToPage])
   );
 
   /**
@@ -209,8 +257,8 @@ export default function Mushaf() {
     restoreTarget.current = fresh;
     currentPageRef.current = fresh;
     setCurrentPage(fresh);
-    listRef.current?.scrollToIndex({ index: pageToIndex(fresh, rtl), animated: false });
-  }, [saved, rtl]);
+    scrollToPage(fresh);
+  }, [saved, clearSelection, scrollToPage]);
 
   // ±2 neighbour fonts, re-aimed on every settled page (and at the opening page on mount).
   // Fire-and-forget: `preloadAdjacentPageFonts` never throws; a miss becomes that page's own
@@ -222,7 +270,10 @@ export default function Mushaf() {
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<number>[] }) => {
       const page = viewableItems[0]?.item;
-      if (typeof page !== 'number') return;
+      if (typeof page !== 'number' || !pagerReady.current) return;
+      // FlashList reports transient offsets while measuring and restoring. They are not turns.
+      if (restoring.current && page !== restoreTarget.current) return;
+      restoring.current = false;
       // A SETTLED page is a move — the selected ayah was on the page the reader turned away from
       // (story 7-8's review). Cheap: `clearSelection` returns the same state when nothing is
       // selected, so an ordinary page turn re-renders nothing extra.
@@ -286,8 +337,8 @@ export default function Mushaf() {
     if (page < 1 || page > TOTAL_PAGES || page === currentPageRef.current) return;
     currentPageRef.current = page;
     setCurrentPage(page);
-    listRef.current?.scrollToIndex({ index: pageToIndex(page, rtl), animated: true });
-  }, [activeVerseKey, playback.surah, rtl]);
+    scrollToPage(page, true);
+  }, [activeVerseKey, playback.surah, scrollToPage]);
 
   /**
    * The one position write a listening session makes here — `read.tsx`'s effect, same reason, and
@@ -423,40 +474,118 @@ export default function Mushaf() {
     [pageStyle, onPageErrorChange, activeVerseKey, selectedVerseKey, onSelectVerse, toggle]
   );
 
+  const turnPage = useCallback(
+    (delta: number) => {
+      const page = Math.max(1, Math.min(TOTAL_PAGES, currentPageRef.current + delta));
+      if (page === currentPageRef.current) return;
+      clearSelection();
+      moved.current = true;
+      setBannerDismissed(true);
+      currentPageRef.current = page;
+      setCurrentPage(page);
+      scrollToPage(page);
+      const first = getFirstVerseForPage(page);
+      if (playbackRef.current.playbackState !== 'playing') reportVerse(first.surah, first.verse);
+    },
+    [scrollToPage, clearSelection, reportVerse]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+      const onKey = (event: KeyboardEvent) => {
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('input, textarea, [contenteditable="true"], [role="dialog"]')) return;
+        if (document.querySelector('[aria-modal="true"]')) return;
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        turnPage(event.key === 'ArrowLeft' ? 1 : -1);
+      };
+      document.addEventListener('keydown', onKey);
+      return () => document.removeEventListener('keydown', onKey);
+    }, [turnPage])
+  );
+
   const keyExtractor = useCallback((item: number) => `page-${item}`, []);
 
-  // What the chrome names: the settled page's surah. The page number is not repeated — the
-  // facsimile page draws its own (story 6-6's intent: the header carries controls).
+  // Name the settled page and its location so the index entry remains useful while chrome is open.
   const surahNumber = getFirstVerseForPage(currentPage).surah;
   // The UI language's name — the same answer the page header under it gives (`lib/surahName.ts`).
   const title = surahDisplayName(SURAH_METADATA[surahNumber - 1]);
 
   return (
     <View style={styles.screen} testID="mushaf-surface">
-      <FlashList
-        ref={listRef}
-        data={pages}
-        renderItem={renderPage}
-        keyExtractor={keyExtractor}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        initialScrollIndex={pageToIndex(opening, rtl)}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={VIEWABILITY_CONFIG}
-        /* ⚠️ NO `delaysContentTouches` HERE EITHER — see `read.tsx` for the whole answer.
+      <View style={styles.pager} {...(Platform.OS === 'web' ? { dir: 'ltr' } : {})}>
+        <FlashList
+          ref={listRef}
+          data={pages}
+          renderItem={renderPage}
+          keyExtractor={keyExtractor}
+          horizontal
+          style={styles.pager}
+          maintainVisibleContentPosition={{ disabled: true }}
+          onLoad={() => {
+            pagerReady.current = true;
+            // The declarative initial index already restores `opening`. A second scroll here
+            // races FlashList's initial positioning; only a newer target needs an imperative jump.
+            if (restoreTarget.current !== opening) scrollToPage(restoreTarget.current);
+          }}
+          onScrollBeginDrag={() => {
+            restoring.current = false;
+          }}
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={pageToIndex(opening, rtl)}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={VIEWABILITY_CONFIG}
+          /* ⚠️ NO `delaysContentTouches` HERE EITHER — see `read.tsx` for the whole answer.
            The question bites hardest on this list, because it IS the page pager: every word
            press starts inside a scroll view that is deciding about a page turn. Fabric's
            scroll view already sets it to NO unconditionally, and RN 0.85 forwards no such
            prop from JS. */
-        testID="mushaf-list"
-      />
+          testID="mushaf-list"
+        />
+      </View>
+      {Platform.OS === 'web' && screenWidth > LAYOUT.maxWidth.main ? (
+        <>
+          <Pressable
+            style={[styles.pageArrow, styles.pageArrowLeft]}
+            disabled={currentPage === TOTAL_PAGES}
+            onPress={() => turnPage(1)}
+            accessibilityLabel={t('common:mushaf.nextPage')}
+            testID="mushaf-next-page"
+          >
+            <Icon
+              name={isInterfaceRTL() ? 'chevron-forward' : 'chevron-back'}
+              color={colors.text.secondary}
+            />
+          </Pressable>
+          <Pressable
+            style={[styles.pageArrow, styles.pageArrowRight]}
+            disabled={currentPage === 1}
+            onPress={() => turnPage(-1)}
+            accessibilityLabel={t('common:mushaf.previousPage')}
+            testID="mushaf-previous-page"
+          >
+            <Icon
+              name={isInterfaceRTL() ? 'chevron-back' : 'chevron-forward'}
+              color={colors.text.secondary}
+            />
+          </Pressable>
+        </>
+      ) : null}
       {/* Sibling of the chrome, over the pager — NOT inside the reveal: the banner is not
           chrome, and it sits below the header zone so a revealed header never overlaps it. */}
       <WelcomeBackBanner dismissed={bannerDismissed} />
       <ReadingChrome
         reveal={reveal}
         title={title}
+        location={t('common:mushaf.location', {
+          page: n(currentPage),
+          juz: n(getJuzForPage(currentPage)),
+          hizb: n(getHizbForPage(currentPage)),
+        })}
         mode="mushaf"
         playing={playback.playbackState === 'playing'}
         onTogglePlay={togglePlay}

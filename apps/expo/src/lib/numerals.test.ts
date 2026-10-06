@@ -1,18 +1,9 @@
-/**
- * The numeral-system preference (2026-09-14) — the THIRD state of a decision that has reversed
- * twice, so the cases here are written against the reversals rather than against the getter.
- *
- * ⚠️ WHAT THIS SUITE MUST BE ABLE TO CATCH. `lib/numerals.ts` records three states: Western-always
- * (8-1), Arabic-Indic-whenever-the-UI-is-Arabic (2026-09-13), and a device preference defaulting
- * to Western in every language (now). A test that only asserted `set('arabic-indic') → '٣'` would
- * stay green under EITHER of the retired states, so the load-bearing cases are the DEFAULT one
- * and the one that pins the preference has nothing to do with the language. The rendering half
- * lives in `lib/format.test.ts` § formatQuranNumber, which carries the cross cases.
- */
+/** Arabic defaults and durable numeral overrides; samples stay in numeric order. */
 
 import { act, renderHook } from '@testing-library/react-native';
 
 import i18n from '@/i18n';
+import { createAppMMKV } from './mmkv';
 import {
   DEFAULT_NUMERAL_SYSTEM,
   getNumeralSystem,
@@ -22,6 +13,11 @@ import {
   setNumeralSystem,
   useNumeralSystem,
 } from './numerals';
+
+beforeEach(async () => {
+  createAppMMKV('numerals').clearAll();
+  await i18n.changeLanguage('en');
+});
 
 afterEach(async () => {
   setNumeralSystem(DEFAULT_NUMERAL_SYSTEM);
@@ -38,12 +34,13 @@ describe('the preference', () => {
     expect(getNumeralSystem()).toBe('western');
   });
 
-  /**
-   * ⚠️ THE CASE THAT REDS FOR A RE-COUPLING. State 2 lives on in one obvious "simplification":
-   * default to Arabic-Indic when the interface is Arabic. This asserts a fresh Arabic install is
-   * still Western — the owner's whole point, that the language does not decide this.
-   */
-  it('is Western under an ARABIC interface too, with nothing stored', async () => {
+  it('defaults an unset Arabic preference to Arabic-Indic', async () => {
+    await i18n.changeLanguage('ar');
+    expect(getNumeralSystem()).toBe('arabic-indic');
+  });
+
+  it('keeps an explicit Western choice in Arabic', async () => {
+    setNumeralSystem('western');
     await i18n.changeLanguage('ar');
     expect(getNumeralSystem()).toBe('western');
   });
@@ -92,8 +89,8 @@ describe('useNumeralSystem', () => {
 
 describe('numeralSampleLabel', () => {
   it('shows the glyphs themselves, so the row is decidable without reading the label', () => {
-    expect(numeralSampleLabel('western')).toBe('0 1 2 3');
-    expect(numeralSampleLabel('arabic-indic')).toBe('٠ ١ ٢ ٣');
+    expect(numeralSampleLabel('western')).toBe('\u20660 1 2 3\u2069');
+    expect(numeralSampleLabel('arabic-indic')).toBe('\u2066٠ ١ ٢ ٣\u2069');
   });
 
   it('is the SAME sample in every UI language — it is script, not copy', async () => {

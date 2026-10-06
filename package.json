@@ -27,7 +27,7 @@
     "lint:native-patches": "node scripts/lint-native-patches.mjs",
     "lint:header-controls": "node scripts/lint-header-controls.mjs",
     "lint:mushaf-glyphs": "node scripts/lint-mushaf-glyphs.mjs",
-    "test:gates": "pnpm test:gate-lib && pnpm test:verify-gate && pnpm test:licences && pnpm test:lint-all && pnpm test:narration && pnpm test:layers && pnpm test:style && pnpm test:i18n && pnpm test:native-patches && pnpm test:header-controls && pnpm test:mushaf-glyphs",
+    "test:gates": "pnpm test:gate-lib && pnpm test:verify-gate && pnpm test:licences && pnpm test:tafsir && pnpm test:lint-all && pnpm test:narration && pnpm test:layers && pnpm test:style && pnpm test:i18n && pnpm test:native-patches && pnpm test:header-controls && pnpm test:mushaf-glyphs",
     "test:gate-lib": "node --test scripts/__tests__/gate-lib.test.mjs",
     "test:layers": "node --test scripts/__tests__/lint-layers.test.mjs",
     "test:style": "node --test scripts/__tests__/lint-style.test.mjs",
@@ -49,6 +49,7 @@
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "test:verify-gate": "node --test scripts/__tests__/verify-quran.test.mjs",
     "test:licences": "node --test scripts/__tests__/verify-licences.test.mjs",
+    "test:tafsir": "node --test scripts/__tests__/tafsir-pipeline.test.mjs",
     "test:lint-all": "node --test scripts/__tests__/lint-all.test.mjs",
     "test:narration": "node --test scripts/__tests__/narration-pipeline.test.mjs"
   },

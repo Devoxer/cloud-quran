@@ -25,25 +25,48 @@
  * skipped — keeps its row with `content: null`, because "this source says nothing here" is
  * information and a silently shorter list is not.
  *
+ * ⚠️ A ROW IS A PASSAGE, AND A TRANSLATION'S PASSAGES ARE ONE AYAH LONG (story 8-5). Tafsir is
+ * written once over several ayat, so its row carries the passage's whole span (`verse`…
+ * `lastVerse`, for the label) and the in-range ayat it covers (for the Arabic), and draws its text
+ * ONCE. A translation is the degenerate case — every entry spans one ayah — so it reads exactly as
+ * it did before passages existed. An ayah in the range that no passage covers gets a row of its
+ * own with `content: null`.
+ *
  * `lint:layers`: a feature hook — it reaches `@/lib` and its own feature's `lib/`, never a route.
  */
 
-import type { Verse } from 'quran-data';
+import { SURAH_METADATA, type Verse } from 'quran-data';
 import { useCallback, useEffect, useState } from 'react';
 import { captureException } from '@/lib/errors';
 import { getPackRange, getVersesForPositions, openPack } from '@/lib/quranDb';
 import { verseKey } from '@/lib/usePosition';
 import { rangeKey, type VerseRange, versesInRange } from '../lib/scope';
 
-/** One ayah of the range: the Quran, and what the chosen source says about it. */
-export interface StudyRow {
+/** One ayah of the Quran, as a row draws it. */
+export interface StudyAyah {
   surah: number;
   verse: number;
   /** `uthmani_text`, exactly as the database holds it. The draw site strips display marks. */
   arabic: string;
-  /** The source's text for this ayah, or `null` when it has none. Never a reason to drop a row. */
+}
+
+/** One passage of the range: the Quran it covers, and what the chosen source says about it. */
+export interface StudyRow {
+  surah: number;
+  /** The first ayah the source's text is about — for a tafsir passage, possibly before the range. */
+  verse: number;
+  /**
+   * The surah the text ENDS in — `surah` itself, except for a passage the pipeline stored once per
+   * surah because it crosses one (Fi Zilal on 103:1–104:6), which the sheet draws as ONE row.
+   */
+  lastSurah: number;
+  /** The last ayah it is about, in `lastSurah`. Equal to `verse` for every one-ayah row. */
+  lastVerse: number;
+  /** The ayat of the RANGE this row covers, in order. Never empty, never drawn under two rows. */
+  ayat: StudyAyah[];
+  /** The source's text, or `null` when it has none for these ayat. Never a reason to drop a row. */
   content: string | null;
-  /** The edition's own footnotes for this ayah. Part of the edition, never dropped. */
+  /** The edition's own footnotes for this text. Part of the edition, never dropped. */
   footnotes: string | null;
 }
 
@@ -142,36 +165,95 @@ async function readSource(
 }
 
 /**
- * Join the Quran text and the source's entries onto the range's own order.
+ * Join the Quran text and the source's passages onto the range's own order.
  *
- * ⚠️ THE RANGE DECIDES THE ORDER, NOT EITHER QUERY. `getVersesForPositions` documents that its
- * result order is the database's and carries no meaning, and a pack is a third-party file whose
- * `entries` table we do not control. Ordering by the enumeration is what makes the list the ayat
- * in the order they are recited, whatever the two reads answer in.
+ * ⚠️ THE RANGE DECIDES WHICH AYAT ARE DRAWN, NOT EITHER QUERY. `getVersesForPositions` documents
+ * that its result order is the database's and carries no meaning, and a pack is a third-party file
+ * whose `entries` table we do not control. Each passage draws only the ayat of the range it covers
+ * — the passage 2:1–5 under ayah scope 2:3 draws 2:3 — and the rows are ordered by where their
+ * text starts, which is the order the ayat are recited.
  */
-function joinRows(
+export function joinRows(
   pairs: readonly { surah: number; verse: number }[],
   verses: readonly Verse[],
-  entries: readonly { surah: number; verse: number; text: string; footnotes: string | null }[]
+  entries: readonly {
+    surah: number;
+    verse: number;
+    lastVerse: number;
+    text: string;
+    footnotes: string | null;
+  }[]
 ): StudyRow[] {
   const arabic = new Map(verses.map((v) => [verseKey(v.surah, v.verse), v.textUthmani]));
-  const content = new Map(entries.map((e) => [verseKey(e.surah, e.verse), e]));
+  // An ayah the BUNDLED database cannot answer is not drawn at all — there is no Quran to show,
+  // and a commentary with no verse above it is not what the sheet promises. That is a different
+  // case from a pack having no entry, which keeps its row.
+  const inRange = new Set(
+    pairs.map((pair) => verseKey(pair.surah, pair.verse)).filter((id) => arabic.has(id))
+  );
+  const covered = new Set<string>();
   const rows: StudyRow[] = [];
+  const ordered = [...entries].sort((a, b) => a.surah - b.surah || a.verse - b.verse);
+  for (const entry of ordered) {
+    // ⚠️ A MALFORMED SPAN IS CLAMPED, NEVER TRUSTED: `last_verse < verse` would draw no ayah at all.
+    const lastVerse = Math.max(entry.lastVerse, entry.verse);
+    const ayat: StudyAyah[] = [];
+    for (let verse = entry.verse; verse <= lastVerse; verse++) {
+      const id = verseKey(entry.surah, verse);
+      const text = arabic.get(id);
+      // ⚠️ AN AYAH IS DRAWN UNDER ONE PASSAGE ONLY. Two passages that overlap (a pack built before
+      // the pipeline merged them, or a third-party file) would otherwise print the same ayah twice.
+      if (!inRange.has(id) || text === undefined || covered.has(id)) continue;
+      ayat.push({ surah: entry.surah, verse, arabic: text });
+      covered.add(id);
+    }
+    // A passage the query answered that covers none of the range's ayat has nothing to stand under.
+    if (ayat.length === 0) continue;
+    const previous = rows[rows.length - 1];
+    /**
+     * ⚠️ ONE PASSAGE ACROSS A SURAH BOUNDARY IS ONE ROW. The pack stores Fi Zilal's 103:1–104:6 as
+     * two rows with the same text, because a row cannot cross a surah; drawn as stored, a page
+     * holding both surahs would print the whole commentary twice. Consecutive rows with the same
+     * text, the first ending its surah and the second opening the next, are joined back.
+     */
+    if (
+      previous &&
+      previous.content === entry.text &&
+      previous.footnotes === entry.footnotes &&
+      entry.surah === previous.lastSurah + 1 &&
+      entry.verse === 1 &&
+      previous.lastVerse === (SURAH_METADATA[previous.lastSurah - 1]?.verseCount ?? -1)
+    ) {
+      previous.lastSurah = entry.surah;
+      previous.lastVerse = lastVerse;
+      previous.ayat.push(...ayat);
+      continue;
+    }
+    rows.push({
+      surah: entry.surah,
+      verse: entry.verse,
+      lastSurah: entry.surah,
+      lastVerse,
+      ayat,
+      content: entry.text,
+      footnotes: entry.footnotes,
+    });
+  }
   for (const pair of pairs) {
     const id = verseKey(pair.surah, pair.verse);
     const text = arabic.get(id);
-    // An ayah the BUNDLED database cannot answer is not a row at all — there is no Quran to show
-    // and a commentary with no verse above it is not what the sheet promises. That is a different
-    // case from a pack having no entry, which keeps its row.
-    if (text === undefined) continue;
-    const entry = content.get(id);
+    if (text === undefined || covered.has(id) || !inRange.has(id)) continue;
+    covered.add(id);
     rows.push({
       surah: pair.surah,
       verse: pair.verse,
-      arabic: text,
-      content: entry?.text ?? null,
-      footnotes: entry?.footnotes ?? null,
+      lastSurah: pair.surah,
+      lastVerse: pair.verse,
+      ayat: [{ surah: pair.surah, verse: pair.verse, arabic: text }],
+      content: null,
+      footnotes: null,
     });
   }
+  rows.sort((a, b) => a.surah - b.surah || a.verse - b.verse);
   return rows.length === 0 ? NO_ROWS : rows;
 }

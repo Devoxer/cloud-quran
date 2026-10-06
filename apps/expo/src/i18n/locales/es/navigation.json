@@ -31,7 +31,6 @@
       "juz": "Juz'",
       "hizb": "Hizb"
     },
-    "surahSubtitle": "{{name}} · {{verses}} versículos · {{revelation}}",
     "revelation": {
       "meccan": "Mecana",
       "medinan": "Medinesa"
@@ -39,6 +38,9 @@
     "juzTitle": "Juz' {{number}}",
     "hizbTitle": "Hizb {{number}}",
     "boundarySubtitle": "{{name}} {{surah}}:{{verse}} · Página {{page}}",
-    "titleHint": "Abre el índice de suras, juz' y hizb"
+    "titleHint": "Abre el índice de suras, juz' y hizb",
+    "surahSubtitle_one": "{{name}} · {{verses}} versículo · {{revelation}}",
+    "surahSubtitle_other": "{{name}} · {{verses}} versículos · {{revelation}}",
+    "surahSubtitle_many": "{{name}} · {{verses}} versículos · {{revelation}}"
   }
 }

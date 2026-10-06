@@ -25,6 +25,36 @@
 
 import { compareInAppLanguage } from '@/lib/format';
 
+/**
+ * The shelf's halves (story 8-5): one per pack type, one control above the list.
+ *
+ * ⚠️ 76 TRANSLATIONS, 95 TAFSIRS, AND THE I'RAB AND MEANINGS WORKS IN ONE LIST BURY ALL OF THEM.
+ * The Arabic group alone holds 52 tafsirs. The filter is a TYPE, decided before the grouping, so
+ * search and the reader's-language-first order work exactly as before inside each one.
+ */
+export const SHELF_TYPES = ['translation', 'tafsir', 'irab', 'meanings'] as const;
+export type ShelfType = (typeof SHELF_TYPES)[number];
+
+/**
+ * Whether a pack of `type` belongs on the `shelf`.
+ *
+ * ⚠️ A TYPE THE SHELF HAS NO HALF FOR LANDS UNDER TRANSLATIONS, NEVER NOWHERE. An installed pack
+ * whose `pack_meta` could not be read has type `''`, and a future type may reach an older build;
+ * either must still be listed so that it can be REMOVED.
+ */
+export function isOnShelf(type: string, shelf: ShelfType): boolean {
+  if (shelf !== 'translation') return type === shelf;
+  return !(SHELF_TYPES as readonly string[]).includes(type) || type === 'translation';
+}
+
+/**
+ * The shelves that have anything on them, in `SHELF_TYPES` order — the control shows these and no
+ * empty ones. A catalogue that adds a type adds a segment; one that drops a type drops it.
+ */
+export function shelvesPresent(packs: readonly { type: string }[]): ShelfType[] {
+  return SHELF_TYPES.filter((shelf) => packs.some((pack) => isOnShelf(pack.type, shelf)));
+}
+
 /** What an item must carry to be grouped and searched. `PackRow` and the study projections fit. */
 export interface GroupablePack {
   id: string;
@@ -52,12 +82,22 @@ export function foldForSearch(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 
-/** Whether `pack` answers to an already-folded `needle` — title, either language name, or code. */
+/**
+ * Whether `pack` answers to an already-folded `needle` — title, either language name, code, or id.
+ *
+ * ⚠️ THE ID IS SEARCHED TOO (story 8-5 review). An Arabic work's title is Arabic only (تفسير
+ * الطبري), so a reader who knows it as "Tabari" found nothing; its id, `tafsir-ar-tabari`, carries
+ * the Latin name of every work.
+ */
 function matches(pack: GroupablePack, needle: string): boolean {
   if (needle === '') return true;
-  return [pack.title, pack.languageName, pack.languageNameEnglish ?? '', pack.language].some(
-    (field) => foldForSearch(field).includes(needle)
-  );
+  return [
+    pack.title,
+    pack.languageName,
+    pack.languageNameEnglish ?? '',
+    pack.language,
+    pack.id,
+  ].some((field) => foldForSearch(field).includes(needle));
 }
 
 /** The language code without region or script — `fr` for `fr-CA`. The interface's is two letters. */

@@ -4,8 +4,9 @@
  * https://docs.expo.dev/guides/color-schemes/
  */
 
-import { Text as DefaultText } from 'react-native';
+import { Text as DefaultText, StyleSheet } from 'react-native';
 
+import { isArabicUi } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 
 type ThemeProps = {
@@ -38,5 +39,16 @@ export function Text(props: TextProps) {
   const { style, lightColor, darkColor, ...otherProps } = props;
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
 
-  return <DefaultText style={[{ color }, style]} {...otherProps} />;
+  const flat = StyleSheet.flatten(style) ?? {};
+  // Arabic system copy needs more room for dots and vowel marks. Content fonts keep their
+  // own geometry: encoded mushaf glyphs and the prose face must never be rescaled here.
+  const arabicStyle =
+    isArabicUi() && !flat.fontFamily
+      ? {
+          fontSize: (flat.fontSize ?? 15) + 2,
+          lineHeight: Math.max(flat.lineHeight ?? 0, ((flat.fontSize ?? 15) + 2) * 1.6),
+          letterSpacing: 0,
+        }
+      : undefined;
+  return <DefaultText style={[{ color }, style, arabicStyle]} {...otherProps} />;
 }

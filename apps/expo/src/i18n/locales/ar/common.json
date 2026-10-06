@@ -33,7 +33,8 @@
     "resultsA11y_two": "{{count}} نتيجتان",
     "resultsA11y_few": "{{count}} نتائج",
     "resultsA11y_many": "{{count}} نتيجة",
-    "resultsA11y_other": "{{count}} نتيجة"
+    "resultsA11y_other": "{{count}} نتيجة",
+    "rowMetaArabic": "{{name}} {{surah}}:{{verse}}"
   },
   "notFound": {
     "title": "عذرًا!",
@@ -75,7 +76,10 @@
     "pageErrorA11y": "صفحة {{page}}، تعذّر التحميل",
     "pageErrorTitle": "تعذّر تحميل هذه الصفحة",
     "pageErrorBody": "خطّها غير موجود على الجهاز بعد. تحقق من اتصالك وأعد المحاولة.",
-    "toggleChrome": "إظهار أشرطة الأدوات أو إخفاؤها"
+    "toggleChrome": "إظهار أشرطة الأدوات أو إخفاؤها",
+    "nextPage": "الصفحة التالية",
+    "previousPage": "الصفحة السابقة",
+    "location": "صفحة {{page}} · الجزء {{juz}} · الحزب {{hizb}}"
   },
   "bookmarks": {
     "add": "إضافة علامة",

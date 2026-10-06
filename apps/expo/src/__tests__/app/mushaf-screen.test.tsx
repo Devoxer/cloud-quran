@@ -52,6 +52,7 @@ jest.mock('expo-router', () => {
 const mockScrollToIndex = jest.fn();
 /** Captured on every render so a case can assert what the list was configured with. */
 const mockListProps: Record<string, unknown>[] = [];
+let mockAutoLoad = true;
 
 jest.mock('@shopify/flash-list', () => {
   const React = require('react');
@@ -62,6 +63,9 @@ jest.mock('@shopify/flash-list', () => {
       scrollToIndex: mockScrollToIndex,
       scrollToOffset: jest.fn(),
     }));
+    React.useEffect(() => {
+      if (mockAutoLoad) props.onLoad?.();
+    }, []);
     // Props only — see the file header for why no items render here.
     return React.createElement(View, { testID: props.testID });
   });
@@ -124,6 +128,9 @@ function settleOnPage(page: number) {
   const handler = listProps().onViewableItemsChanged as (info: {
     viewableItems: ViewToken<number>[];
   }) => void;
+  act(() => {
+    (listProps().onScrollBeginDrag as () => void)();
+  });
   act(() => handler({ viewableItems: [{ item: page, key: '', index: 0, isViewable: true }] }));
 }
 
@@ -219,6 +226,7 @@ async function expectChromeStayedHidden() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockListProps.length = 0;
+  mockAutoLoad = true;
   mockFocusCallbacks.length = 0;
   mockBlurCallbacks.length = 0;
   mockCanGoBack.mockReturnValue(true);
@@ -269,12 +277,38 @@ describe('the reversed pager', () => {
 });
 
 describe('where it opens', () => {
+  it('waits for list readiness and ignores transient end pages while restoring', () => {
+    mockAutoLoad = false;
+    const view = render(<Mushaf />);
+    mockReadingPositionRow.current = { surah: 2, verse: 255 };
+    view.rerender(<Mushaf />);
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
+
+    const visible = (page: number) =>
+      (listProps().onViewableItemsChanged as any)({
+        viewableItems: [{ item: page, key: '', index: 0, isViewable: true }],
+      });
+    act(() => visible(604));
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+    act(() => (listProps().onLoad as () => void)());
+    expect(mockScrollToIndex).toHaveBeenLastCalledWith({ index: 562, animated: false });
+    act(() => visible(604));
+    act(() => visible(42));
+    expect(mockSetReadingPosition).not.toHaveBeenCalled();
+
+    settleOnPage(43);
+    expect(mockSetReadingPosition).toHaveBeenCalledTimes(1);
+    expect(mockSetReadingPosition.mock.calls[0][0]).toMatchObject({ page: 43 });
+  });
+
   it('opens at the saved pair’s page — declaratively, uniform items making the index exact', () => {
     // 2:255 sits on page 42 of the Madinah mushaf; page 42 sits at index 604−42 under the
     // reversed data.
     mockReadingPositionRow.current = { surah: 2, verse: 255 };
     render(<Mushaf />);
     expect(listProps().initialScrollIndex).toBe(TOTAL_PAGES - 42);
+    // A duplicate imperative jump races FlashList's initial positioning on native.
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
   });
 
   it('re-targets when the saved row arrives AFTER the first render', async () => {
@@ -442,6 +476,7 @@ describe('the focus resync — one position, two renderers (story 6-6)', () => {
     mockReadingPositionRow.current = { surah: 2, verse: 255 };
     const view = render(<Mushaf />);
     settleOnPage(42);
+    mockScrollToIndex.mockClear();
     view.rerender(<Mushaf />);
     refocus();
     expect(mockScrollToIndex).not.toHaveBeenCalled();
@@ -532,10 +567,10 @@ describe('the chrome, and the two bands that toggle it', () => {
     expect(screen.queryByText('Al-Baqarah')).toBeNull();
   });
 
-  it('carries the mode toggle, and it navigates to reading mode', async () => {
+  it('switches to reading mode through the tab bar', async () => {
     render(<Mushaf />);
     await revealChrome();
-    fireEvent.press(screen.getByTestId('chrome-mode-toggle'));
+    fireEvent.press(screen.getByTestId('chrome-tab-read'));
     expect(mockNavigate).toHaveBeenCalledWith('/read');
   });
 

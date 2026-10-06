@@ -40,18 +40,18 @@ describe('formatSleepRemaining (Story 19.5)', () => {
   });
 
   it('formats hours + minutes at/over an hour', () => {
-    expect(formatSleepRemaining(3600000, false)).toBe('1h 0m');
+    expect(formatSleepRemaining(3600000, false)).toBe('1h');
     expect(formatSleepRemaining(3900000, false)).toBe('1h 5m'); // 1h05m
-    expect(formatSleepRemaining(7200000, false)).toBe('2h 0m');
+    expect(formatSleepRemaining(7200000, false)).toBe('2h');
   });
 
   it('carries a ceil-to-60 minute remainder instead of showing "60m" (Story 19.5 CR)', () => {
     // Last minute below an hour: ceil(remainder/60000) === 60 → must read as the next hour.
-    expect(formatSleepRemaining(3570000, false)).toBe('1h 0m'); // 59m30s, not "60m"
-    expect(formatSleepRemaining(3599000, false)).toBe('1h 0m'); // 59m59s, not "60m"
+    expect(formatSleepRemaining(3570000, false)).toBe('1h'); // 59m30s, not "60m"
+    expect(formatSleepRemaining(3599000, false)).toBe('1h'); // 59m59s, not "60m"
     // Last minute below 2h: must read "2h 0m", not "1h 60m".
-    expect(formatSleepRemaining(7170000, false)).toBe('2h 0m'); // 1h59m30s
-    expect(formatSleepRemaining(7199000, false)).toBe('2h 0m'); // 1h59m59s
+    expect(formatSleepRemaining(7170000, false)).toBe('2h'); // 1h59m30s
+    expect(formatSleepRemaining(7199000, false)).toBe('2h'); // 1h59m59s
   });
 });
 
@@ -84,8 +84,8 @@ describe('formatSleepRemaining — localization (fr)', () => {
 
   it('keeps the ceil-to-60 carry correct in fr (the round-1 CR case, re-checked per locale)', async () => {
     await i18n.changeLanguage('fr');
-    expect(formatSleepRemaining(3570000, false)).toBe('1 h 0 min');
-    expect(formatSleepRemaining(7170000, false)).toBe('2 h 0 min');
+    expect(formatSleepRemaining(3570000, false)).toBe('1 h');
+    expect(formatSleepRemaining(7170000, false)).toBe('2 h');
   });
 
   it('still returns the empty string when inactive, in any language', async () => {

@@ -40,7 +40,7 @@ import { ScrollView, View } from 'react-native';
 import { ConfirmDialog, InlineError, SettingsGroup, SettingsRow, Text } from '@/components/ui';
 import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { FONT_SIZE, LINE_HEIGHT } from '@/constants/typography';
-import { deleteAccount } from '@/lib/auth';
+import { deleteAccount, useSession } from '@/lib/auth';
 import { captureException } from '@/lib/errors';
 import { haptics } from '@/lib/haptics';
 import { useSyncEnabled } from '@/lib/privacyPrefs';
@@ -57,6 +57,8 @@ type Busy = 'export' | 'purge' | 'delete-account' | null;
 export default function DataScreen() {
   const { t } = useTranslation();
   const styles = useStyles();
+  const { data: session } = useSession();
+  const signedIn = Boolean(session && !session.user.isAnonymous);
 
   // ⚠️ SHOWN TO EVERYONE, INCLUDING A GUEST. The anonymous session minted at boot syncs exactly
   // like a signed-in one — that is the fact the deleted consent screen missed — so a reader who
@@ -203,28 +205,32 @@ export default function DataScreen() {
           accessibilityLabel={t('profile:a11y.exportData')}
           testID="export-data-row"
         />
-        <SettingsRow
-          icon="trash-outline"
-          label={t('profile:data.purge')}
-          description={t('profile:data.purgeDescription')}
-          trailing={busy === 'purge' ? 'spinner' : undefined}
-          destructive
-          disabled={busy !== null}
-          onPress={() => setPending('purge')}
-          accessibilityLabel={t('profile:a11y.purgeData')}
-          testID="purge-data-row"
-        />
-        <SettingsRow
-          icon="close-circle"
-          label={t('profile:data.deleteAccount')}
-          description={t('profile:data.deleteAccountDescription')}
-          trailing={busy === 'delete-account' ? 'spinner' : undefined}
-          destructive
-          disabled={busy !== null}
-          onPress={() => setPending('delete-account')}
-          accessibilityLabel={t('profile:a11y.deleteAccount')}
-          testID="delete-account-row"
-        />
+        {signedIn && (
+          <SettingsRow
+            icon="trash-outline"
+            label={t('profile:data.purge')}
+            description={t('profile:data.purgeDescription')}
+            trailing={busy === 'purge' ? 'spinner' : undefined}
+            destructive
+            disabled={busy !== null}
+            onPress={() => setPending('purge')}
+            accessibilityLabel={t('profile:a11y.purgeData')}
+            testID="purge-data-row"
+          />
+        )}
+        {signedIn && (
+          <SettingsRow
+            icon="close-circle"
+            label={t('profile:data.deleteAccount')}
+            description={t('profile:data.deleteAccountDescription')}
+            trailing={busy === 'delete-account' ? 'spinner' : undefined}
+            destructive
+            disabled={busy !== null}
+            onPress={() => setPending('delete-account')}
+            accessibilityLabel={t('profile:a11y.deleteAccount')}
+            testID="delete-account-row"
+          />
+        )}
       </SettingsGroup>
 
       {/* ⚠️ A NOTICE IS NOT AN `InlineError`. "Your data was deleted" is the action REPORTING

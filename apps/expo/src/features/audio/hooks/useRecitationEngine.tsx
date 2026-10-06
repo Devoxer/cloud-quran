@@ -433,7 +433,7 @@ export function useRecitationEngine(selectedReciterId: string): void {
      * PATCH. Android's `updateArtwork` re-posts the notification only from the artwork loader's
      * callback, and upstream's loader skips a url equal to the one it holds with no `else` — so
      * with our one constant url every push after the first froze the shade's title and artist
-     * (measured on a Pixel 9 Pro, story 7-3). `patches/expo-audio@58.0.4.patch` calls back with
+     * (measured on a Pixel 9 Pro, story 7-3). `patches/expo-audio@58.0.5.patch` calls back with
      * the bitmap already held. Drop the patch and this field freezes the notification again.
      */
     const lockScreenMetadata = (): AudioMetadata => ({

@@ -27,12 +27,17 @@
  *
  * ── Two integrity checks, because they catch different things ────────────────────────────────
  *
- * The DIGEST (SHA-256 over the downloaded bytes) catches corruption in transit. The ROW COUNT
+ * The DIGEST (SHA-256 over the downloaded file) catches corruption in transit. The ROW COUNT
  * catches truncation, which a digest structurally cannot see — a short-but-consistent file hashes
  * perfectly stably, so a catalogue digest minted from a short build agrees with itself forever.
  * `verify-artifacts.ts:201-210` encodes this for the bundled artifacts; a pack needs its own copy
  * because it is verified on the DEVICE, at install time. Both run on the `.part` file, BEFORE the
  * rename, so a pack that fails either never becomes readable.
+ *
+ * ⚠️ THE DIGEST IS STREAMED; NATIVE RETAINS A 512 MB SANITY CAP (story 8-5). It used to be
+ * `expo-crypto`'s one-buffer `digest` over `File.bytes()`, which put the whole pack in the JS heap
+ * and capped installs at 32 MB — below every classical tafsir. `File.digest('SHA-256')`
+ * (`expo-file-system` 58) hashes the file natively in 64 KB chunks; the bytes never enter JS.
  *
  * ── Failure is a value ───────────────────────────────────────────────────────────────────────
  *
@@ -45,11 +50,11 @@
  */
 
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto';
-import { Directory, File } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import { AppState } from 'react-native';
 
 import {
-  PACK_MAX_VERIFIABLE_BYTES,
+  PACK_NATIVE_MAX_BYTES,
   PACK_STALL_TIMEOUT_MS,
   PACKS_SUPPORTED,
   packFileName,
@@ -77,8 +82,13 @@ export type PackInstallFailure =
   | 'rows'
   /** The transfer delivered nothing for `PACK_STALL_TIMEOUT_MS`. */
   | 'stalled'
-  /** Bigger than this device can verify in one buffer — see `PACK_MAX_VERIFIABLE_BYTES`. */
+  /**
+   * Bigger than this platform will take: a browser session's `PACK_WEB_MAX_BYTES`, or on native a
+   * catalogue size past the `PACK_NATIVE_MAX_BYTES` sanity cap.
+   */
   | 'tooLarge'
+  /** Native: the device has less free space than the install needs. Nothing was fetched. */
+  | 'noSpace'
   /** The reader cancelled. Nothing is left behind and nothing is reported. */
   | 'cancelled'
   /** Anything else — a full disk, a permission, a 404. */
@@ -208,7 +218,9 @@ export function sweepStalePackParts(): void {
 }
 
 /**
- * Lowercase hex of a SHA-256 over the given bytes — the form the catalogue records.
+ * Lowercase hex of a SHA-256 over bytes already in memory — the form the catalogue records. WEB's
+ * digest only: the native install never reads a pack into JS and hashes the FILE natively
+ * (`File.digest`, see the header).
  *
  * `Uint8Array<ArrayBuffer>` rather than a bare `Uint8Array`: `expo-crypto`'s `BufferSource` cannot
  * accept a view onto a `SharedArrayBuffer`, and `File.bytes()` already answers the narrow form.
@@ -276,17 +288,27 @@ export async function installPack(
     return { ok: false, reason: 'failed' };
   }
 
-  // ⚠️ REFUSED BEFORE A SINGLE BYTE IS FETCHED WHEN THE CATALOGUE ALREADY SAYS IT IS TOO BIG.
-  // Spending a reader's data on a file that can only end in a verification we cannot perform is
-  // worse than saying no; see `PACK_MAX_VERIFIABLE_BYTES` for why the ceiling exists at all.
-  if (pack.bytes > PACK_MAX_VERIFIABLE_BYTES) return { ok: false, reason: 'tooLarge' };
-
   // ⚠️ ALREADY INSTALLED AT THIS VERSION IS A NO-OP, NOT A RE-DOWNLOAD. A pack file name carries
   // its version, so the same name can only ever hold the same verified build — re-fetching it
   // would spend a reader's data to arrive at the file already on disk. A NEWER version is a
   // different name and falls straight through to the transfer below.
   const target = packFile(pack.id, pack.packVersion);
   if (target?.exists) return { ok: true };
+
+  // ⚠️ REFUSED BEFORE A BYTE IS FETCHED: a catalogue size that is nonsense, or a device without
+  // room for it. The `.part` and the renamed file can coexist with the old version for the width
+  // of the commit, so the need is twice the pack. An UNKNOWN free space is not "full" — see
+  // `audioDownloads.ts` § `availableDownloadSpace` — and proceeds.
+  if (pack.bytes > PACK_NATIVE_MAX_BYTES) return { ok: false, reason: 'tooLarge' };
+  const free = freeDiskBytes();
+  if (free !== null && free < pack.bytes * 2) {
+    addBreadcrumb('http', 'pack refused: not enough space', {
+      id: pack.id,
+      free,
+      bytes: pack.bytes,
+    });
+    return { ok: false, reason: 'noSpace' };
+  }
   // A `.part` left by a killed run belongs to nobody; this attempt owns the path.
   deleteQuietly(part);
 
@@ -294,6 +316,8 @@ export async function installPack(
   inFlight.set(pack.id, controller);
   const watchdog = new AbortController();
   let stalled = false;
+  /** Set when the transfer outgrew the sanity cap mid-flight — a server sending more than it said. */
+  let oversize = false;
   let stallTimer: ReturnType<typeof setTimeout> | null = null;
   const disarm = () => {
     if (stallTimer) clearTimeout(stallTimer);
@@ -325,6 +349,11 @@ export async function installPack(
       signal: watchdog.signal,
       onProgress: ({ bytesWritten, totalBytes }) => {
         rearm();
+        if (bytesWritten > PACK_NATIVE_MAX_BYTES) {
+          oversize = true;
+          watchdog.abort();
+          return;
+        }
         // `-1`/`0` is "the server sent no Content-Length" — a real state that must not produce a
         // fraction a progress ring would draw backwards. The BYTES are still worth reporting.
         const known = totalBytes > 0;
@@ -337,16 +366,10 @@ export async function installPack(
     });
     disarm();
 
-    // ⚠️ THE CEILING IS RE-CHECKED AGAINST WHAT ACTUALLY LANDED, not only against what the
-    // catalogue promised. A catalogue understating a pack's size would otherwise walk straight
-    // into the buffer the pre-flight check exists to avoid.
-    if (part.size > PACK_MAX_VERIFIABLE_BYTES) {
-      addBreadcrumb('http', 'pack too large to verify', { id: pack.id, bytes: part.size });
-      deleteQuietly(part);
-      return { ok: false, reason: 'tooLarge' };
-    }
-
-    const actualDigest = await sha256Hex(await part.bytes());
+    // ⚠️ STREAMED, NATIVELY — never `part.bytes()`. A 54 MB tafsir (al-Alusi, the largest) read into one buffer is an OOM
+    // on a low-memory Android during the one step whose job is to be trustworthy; the native
+    // digest reads the file in 64 KB chunks and answers lowercase hex, the catalogue's form.
+    const actualDigest = (await part.digest('SHA-256')).toLowerCase();
     if (actualDigest !== pack.digest) {
       addBreadcrumb('http', 'pack digest mismatch', { id: pack.id });
       deleteQuietly(part);
@@ -364,7 +387,7 @@ export async function installPack(
     }
 
     // ⚠️ THE CANCEL IS RE-CHECKED HERE, ON THE LAST LINE BEFORE THE POINT OF NO RETURN. Verifying
-    // a 24 MB pack is not instant, and a reader who pressed stop during it was still getting the
+    // a 54 MB pack is not instant, and a reader who pressed stop during it was still getting the
     // pack installed: the abort had nothing left to interrupt, because the transfer had already
     // finished. A cancel means "do not end up with this", not "stop the socket".
     // (Story 8-2 review, C4.)
@@ -405,6 +428,7 @@ export async function installPack(
     return { ok: true };
   } catch (error) {
     deleteQuietly(part);
+    if (oversize) return { ok: false, reason: 'tooLarge' };
     if (options.signal?.aborted || (controller.signal.aborted && !stalled)) {
       return { ok: false, reason: 'cancelled' };
     }
@@ -418,6 +442,16 @@ export async function installPack(
     appState.remove();
     controller.signal.removeEventListener('abort', forwardAbort);
     inFlight.delete(pack.id);
+  }
+}
+
+/** Free bytes on internal storage, or `null` when the platform cannot say (never "zero"). */
+function freeDiskBytes(): number | null {
+  try {
+    const free: unknown = Paths.availableDiskSpace;
+    return typeof free === 'number' && Number.isFinite(free) && free >= 0 ? free : null;
+  } catch {
+    return null;
   }
 }
 

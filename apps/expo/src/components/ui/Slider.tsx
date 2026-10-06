@@ -38,6 +38,8 @@ import {
 } from '@expo/ui/community/slider';
 import { StyleSheet, View } from 'react-native';
 
+import { useTheme } from '@/lib/theme';
+
 /**
  * The community wrapper doesn't expose `testID`. We add it via a tag `View`
  * so jest-expo + RNTL can locate the slider.
@@ -51,12 +53,21 @@ import { StyleSheet, View } from 'react-native';
 export type SliderProps = ExpoSliderProps & { testID?: string };
 
 export function Slider({ testID, style, ...rest }: SliderProps) {
+  const { colors } = useTheme();
+  const defaults = {
+    // SDK 58's native Host and the web input already follow interface direction.
+    // An additional inversion would mirror an Arabic slider back to LTR.
+    inverted: false,
+    minimumTrackTintColor: colors.accent.primary,
+    maximumTrackTintColor: colors.background.tertiary,
+    thumbTintColor: colors.accent.primary,
+  };
   if (testID === undefined) {
-    return <ExpoSlider style={style} {...rest} />;
+    return <ExpoSlider {...defaults} style={style} {...rest} />;
   }
   return (
     <View testID={testID} style={style}>
-      <ExpoSlider {...rest} style={styles.fill} />
+      <ExpoSlider {...defaults} {...rest} style={styles.fill} />
     </View>
   );
 }

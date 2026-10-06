@@ -18,9 +18,8 @@
  * ⚠️ THE TAB BAR IS THE WAY OUT. These surfaces are tab routes (6-6): a tap reveals the chrome,
  * and the tab bar switches away — there is no close button and no `fullScreenModal` to escape
  * any more. The header's back control is history-conditional inside `AppHeader` (absent on a
- * cold tab home, never inert). The MODE TOGGLE is the third control: it navigates between the
- * two renderers and carries NO position of its own — one position, two renderers, and the
- * screens re-resolve the saved pair on focus, so the toggle cannot desynchronise them.
+ * cold tab home, never inert). The tab bar switches between the two renderers. They share one saved position and
+ * re-resolve it on focus.
  *
  * ⚠️ THE BARS ARE ALWAYS MOUNTED. Unmounting the hidden chrome would make the reveal a mount
  * rather than an animation (nothing to fade FROM), and it is what let the pre-fork build reach
@@ -54,7 +53,6 @@ import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { AppHeader, AppTabBar, HeaderActionButton, InlineError } from '@/components/ui';
-import { HOME_HREF, READ_HREF } from '@/constants/navigation';
 import { SPACING } from '@/constants/spacing';
 import { PlaybackOptionsSheet, ReciterSheet } from '@/features/audio';
 import { StudySheet } from '@/features/study';
@@ -67,7 +65,8 @@ export interface ReadingChromeProps {
   reveal: ChromeReveal;
   /** Shown in the header. `null` while the metadata read is in flight. */
   title: string | null;
-  /** Which renderer mounts this chrome — decides where the mode toggle goes. */
+  location?: string;
+  /** Which renderer opens the index; both reader modes remain in the tab bar. */
   mode: 'reading' | 'mushaf';
   /** Whether the recitation is currently playing — decides the transport glyph (story 7-1). */
   playing?: boolean;
@@ -87,6 +86,7 @@ export interface ReadingChromeProps {
 export function ReadingChrome({
   reveal,
   title,
+  location,
   mode,
   playing = false,
   onTogglePlay,
@@ -218,6 +218,7 @@ export function ReadingChrome({
             a selection writes — and, on a deep link, exits — toward the surface it came from. */}
         <AppHeader
           title={title ?? ''}
+          subtitle={location}
           interactive={reveal.interactive}
           onTitlePress={openIndex}
           titleHint={t('index.titleHint')}
@@ -254,7 +255,7 @@ export function ReadingChrome({
                   `toggle` rather than a new `hide`: this control is reachable only while
                   `interactive`, which is only true while the chrome is up. */}
               <HeaderActionButton
-                name="chevron-up"
+                name="close"
                 onPress={reveal.toggle}
                 color={colors.accent.primary}
                 accessibilityLabel={t('actions.hideChrome')}
@@ -262,18 +263,6 @@ export function ReadingChrome({
                 testID="chrome-dismiss"
               />
             </View>
-          }
-          leading={
-            <HeaderActionButton
-              name={mode === 'reading' ? 'view-agenda' : 'view-list'}
-              onPress={() => router.navigate(mode === 'reading' ? HOME_HREF : READ_HREF)}
-              color={colors.accent.primary}
-              accessibilityLabel={t(
-                mode === 'reading' ? 'actions.openMushaf' : 'actions.openReading'
-              )}
-              focusable={reveal.interactive}
-              testID="chrome-mode-toggle"
-            />
           }
         />
         {/* ⚠️ UNDER THE BAR, INSIDE THE REVEALED CHROME. A playback failure is silent otherwise —

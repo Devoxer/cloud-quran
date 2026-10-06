@@ -1,7 +1,7 @@
 import { usePathname, useRouter } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
-import { BackHandler } from 'react-native';
+import { BackHandler, Platform } from 'react-native';
 
 import { TABS } from '@/constants/navigation';
 
@@ -26,6 +26,7 @@ function useBackToHome(): void {
   const router = useRouter();
   const pathname = usePathname();
   useEffect(() => {
+    if (Platform.OS !== 'android') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (pathname === HOME || router.canGoBack()) return false;
       router.navigate(HOME);

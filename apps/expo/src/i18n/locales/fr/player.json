@@ -108,7 +108,8 @@
     "end": "Fin",
     "hoursMinutes": "{{hours}} h {{minutes}} min",
     "minutes": "{{minutes}} min",
-    "seconds": "{{seconds}} s"
+    "seconds": "{{seconds}} s",
+    "hours": "{{hours}} h"
   },
   "options": {
     "sheetTitle": "Lecture"

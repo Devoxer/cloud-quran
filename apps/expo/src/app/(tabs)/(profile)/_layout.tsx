@@ -19,7 +19,7 @@
  * every layout's anchor against the filesystem).
  */
 
-import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { AppHeader, AppTabBar } from '@/components/ui';
@@ -66,6 +66,7 @@ const RECITER_TITLE_LEAF = 'reciter-downloads';
 
 export default function ProfileLayout() {
   const { t } = useTranslation('navigation');
+  const router = useRouter();
   const { colors } = useTheme();
   const segments: string[] = useSegments();
   const leaf = segments[segments.length - 1] ?? 'account';
@@ -90,7 +91,11 @@ export default function ProfileLayout() {
           on a push (the chevron missed its first frame). The stack root is `account`; any other
           focused leaf is a pushed screen with history to pop. `AppHeader`'s docblock has the
           full story. */}
-      <AppHeader title={title} showBack={leaf !== 'account'} />
+      <AppHeader
+        title={title}
+        showBack={leaf !== 'account'}
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/account'))}
+      />
       <View style={styles.stack}>
         <Stack
           screenOptions={{

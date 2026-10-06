@@ -107,7 +107,7 @@ describe('windowAround', () => {
 describe('the meta line', () => {
   it('names the surah, the reference and which SIDE matched', () => {
     renderRow();
-    expect(screen.getByText('Al-Fatihah 1:3 \u00b7 Arabic')).toBeTruthy();
+    expect(screen.getByText('Al-Fatihah 1:3')).toBeTruthy();
   });
 
   it('says Translation when that is what matched', () => {
@@ -126,7 +126,7 @@ describe('the meta line', () => {
         translationMatch: '',
       },
     });
-    expect(screen.getByText('Surah 200 200:1 \u00b7 Arabic')).toBeTruthy();
+    expect(screen.getByText('Surah 200 200:1')).toBeTruthy();
   });
 });
 

@@ -59,7 +59,7 @@ import {
 } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { haptics } from '@/lib/haptics';
-import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
+import { isArabicUi, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -480,7 +480,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
-      letterSpacing: captionLetterSpacing(isRTL()),
+      letterSpacing: captionLetterSpacing(isArabicUi()),
       marginBottom: SPACING.sm,
       color: t.colors.text.tertiary,
     },

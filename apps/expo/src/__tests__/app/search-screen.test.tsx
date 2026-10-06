@@ -19,15 +19,11 @@
  */
 
 const mockBack = jest.fn();
+const mockDismiss = jest.fn();
 const mockReplace = jest.fn();
 const mockDismissAll = jest.fn();
 const mockCanDismiss = jest.fn(() => true);
-/**
- * ⚠️ THE POP LOOP READS THIS, AND IT HAS TO DRAIN. The exit pops until `canGoBack()` says there
- * is nothing left; a mock that answers a constant `true` would spin to the bound and assert
- * nothing useful. `depth` is how many pushed routes sit above `(tabs)` — 2 for the real path
- * (`surahs` → `search`), 0 for a deep link with nothing beneath it.
- */
+/** Number of root routes above the reader tabs; router actions dispatch asynchronously. */
 let mockStackDepth = 2;
 const mockCanGoBack = jest.fn(() => mockStackDepth > 0);
 
@@ -38,11 +34,22 @@ jest.mock('expo-router', () => ({
       return mockBack(...args);
     },
     canGoBack: mockCanGoBack,
+    dismiss: mockDismiss,
     replace: mockReplace,
     dismissAll: mockDismissAll,
     canDismiss: mockCanDismiss,
     push: jest.fn(),
     navigate: jest.fn(),
+  }),
+  useRootNavigationState: () => ({
+    index: mockStackDepth,
+    routes:
+      mockStackDepth > 0
+        ? [
+            { name: '(tabs)' },
+            ...Array.from({ length: mockStackDepth }, () => ({ name: 'search' })),
+          ]
+        : [{ name: 'search' }],
   }),
   useLocalSearchParams: () => mockRouteParams.current,
   useSegments: () => ['search'],
@@ -250,6 +257,16 @@ describe('matching, end to end through the real normaliser', () => {
 });
 
 describe('a result tap', () => {
+  it('pops only the real stack when canGoBack stays stale until queued actions dispatch', async () => {
+    mockCanGoBack.mockReturnValueOnce(true);
+    await renderScreen();
+    type('الرحمن');
+    pressAndSettle('search-result-1:3-open');
+    expect(mockDismiss).toHaveBeenCalledTimes(1);
+    expect(mockDismiss).toHaveBeenCalledWith(2);
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
   it('writes the pair ONCE and then unwinds the WHOLE stack, not one screen', async () => {
     await renderScreen();
     type('الرحمن');
@@ -261,11 +278,12 @@ describe('a result tap', () => {
     );
     // ⚠️ TWO pops, not one: search is pushed FROM the index, so a single `back()` would leave the
     // reader looking at the surah list with their verse loaded behind it.
-    expect(mockBack).toHaveBeenCalledTimes(2);
+    expect(mockDismiss).toHaveBeenCalledWith(2);
+    expect(mockBack).not.toHaveBeenCalled();
     // ⚠️ AND NO NAVIGATION. This is the regression guard for the measured WebKit crash: on a
     // deep-linked `/search` the tabs are already mounted beneath the modal, so `dismissAll()` or
     // `replace()` re-enters a mounted tree and re-renders until React throws "Maximum update
-    // depth exceeded". Popping reveals what is already there; navigating re-enters it.
+    // depth exceeded". Counted POP reveals what is already there; navigating re-enters it.
     expect(mockDismissAll).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
@@ -290,7 +308,8 @@ describe('a result tap', () => {
     act(() => {
       jest.runOnlyPendingTimers();
     });
-    expect(mockBack).toHaveBeenCalledTimes(2);
+    expect(mockDismiss).toHaveBeenCalledWith(2);
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it('ignores a second tap inside the deferral window — one destination, not two', async () => {
@@ -305,11 +324,12 @@ describe('a result tap', () => {
     expect(mockSetReadingPosition).toHaveBeenCalledWith(
       expect.objectContaining({ surah: 1, verse: 1 })
     );
-    expect(mockBack).toHaveBeenCalledTimes(2);
+    expect(mockDismiss).toHaveBeenCalledWith(2);
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it('replaces toward the opener home ONLY when there was nothing to pop — a deep link', async () => {
-    // Nothing pushed beneath: the loop pops zero times, and only then may we navigate, because
+    // No tabs beneath the picker: only then may we navigate, because
     // the alternative is dead-ending on a screen with no back control.
     mockStackDepth = 0;
     mockRouteParams.current = { mode: 'mushaf' };
@@ -322,14 +342,15 @@ describe('a result tap', () => {
 
   it('does NOT navigate once it has popped — the crash guard, stated as its own case', async () => {
     // ⚠️ The measured defect was a `replace`/`dismissAll` landing on a tab route that was ALREADY
-    // mounted under the modal. If the loop popped anything, we are where we belong and any
+    // mounted under the modal. After the counted pop, we are where we belong and any
     // further navigation re-enters that tree. A mutation that drops the `popped === 0` guard
     // reddens here and nowhere else.
     mockStackDepth = 2;
     await renderScreen();
     type('الرحمن');
     pressAndSettle('search-result-1:3-open');
-    expect(mockBack).toHaveBeenCalledTimes(2);
+    expect(mockDismiss).toHaveBeenCalledWith(2);
+    expect(mockBack).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -340,7 +361,8 @@ describe('a result tap', () => {
     type('الرحمن');
     pressAndSettle('search-result-1:3-open');
     expect(mockSetReadingPosition).not.toHaveBeenCalled();
-    expect(mockBack).toHaveBeenCalledTimes(2);
+    expect(mockDismiss).toHaveBeenCalledWith(2);
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });
 

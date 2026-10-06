@@ -169,15 +169,35 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
    * common case stays as quiet as it was.
    */
   const crossesSurahs = range.from.surah !== range.to.surah;
+  const surahName = (surah: number): string =>
+    surahDisplayName(SURAH_METADATA[surah - 1]) ??
+    t('common:bookmarks.surahFallback', { number: formatQuranNumber(surah) });
   const rowLabel = (row: StudyRow): string => {
-    const verseNumber = formatQuranNumber(row.verse);
+    const n = formatQuranNumber;
+    /**
+     * ⚠️ A PASSAGE IS LABELLED BY ITS WHOLE SPAN (story 8-5). Its text is about every ayah from
+     * the first to the last even when the range shows one of them, and a reader on 2:3 who sees
+     * 2:1–5 knows why the commentary opens two ayat early. A passage that crosses a surah spells
+     * both ends (`103:1–104:6`). When the listed rows span more than one surah, the surah's NAME
+     * leads the span exactly as it leads a single ayah's number. Digits and punctuation are
+     * isolated so a right-to-left interface cannot reorder the span around its dash.
+     */
+    if (row.lastSurah !== row.surah) {
+      return isolate(`${n(row.surah)}:${n(row.verse)}–${n(row.lastSurah)}:${n(row.lastVerse)}`);
+    }
+    if (row.lastVerse > row.verse) {
+      const span = `${n(row.verse)}–${n(row.lastVerse)}`;
+      if (!crossesSurahs) return isolate(`${n(row.surah)}:${span}`);
+      return t('common:study.rowLabel', {
+        name: isolate(surahName(row.surah)),
+        verse: isolate(span),
+      });
+    }
+    const verseNumber = n(row.verse);
     if (!crossesSurahs) return verseNumber;
-    const name =
-      surahDisplayName(SURAH_METADATA[row.surah - 1]) ??
-      t('common:bookmarks.surahFallback', { number: formatQuranNumber(row.surah) });
     // The surah name is CONTENT beside a number — isolated so the separator cannot reorder
     // around it once the catalogue carries a right-to-left title (`lib/format.ts` § isolate).
-    return t('common:study.rowLabel', { name: isolate(name), verse: verseNumber });
+    return t('common:study.rowLabel', { name: isolate(surahName(row.surah)), verse: verseNumber });
   };
 
   const chooseSource = useCallback(
@@ -237,13 +257,23 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
   const bodyStyle = { height: Math.min(height * SHEET_BODY_RATIO, SHEET_BODY_MAX) };
   const scopeLabels = STUDY_SCOPES.map((value) => t(`common:study.scopes.${value}`));
   const rows = state.kind === 'ready' || state.kind === 'empty' ? state.rows : [];
+  const rangeNumber =
+    range.from.verse === range.to.verse
+      ? formatQuranNumber(range.from.verse)
+      : `${formatQuranNumber(range.from.verse)}–${formatQuranNumber(range.to.verse)}`;
+  const title = crossesSurahs
+    ? `${surahName(range.from.surah)} ${formatQuranNumber(range.from.verse)} – ${surahName(range.to.surah)} ${formatQuranNumber(range.to.verse)}`
+    : t('common:study.rowLabel', {
+        name: isolate(surahName(range.from.surah)),
+        verse: isolate(rangeNumber),
+      });
 
   return (
     <BottomSheet
       open
       onClose={onClose}
-      title={t('common:study.title')}
-      snapPoints={SHEET_SNAP_POINTS}
+      title={title}
+      snapPoints={Platform.OS === 'android' ? undefined : SHEET_SNAP_POINTS}
       closeTestID="study-sheet-close"
       testID="study-sheet"
     >
@@ -391,7 +421,9 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
                 <StudyEntry
                   row={item}
                   contentDirection={source?.direction ?? null}
+                  contentLanguage={source?.language ?? null}
                   verseLabel={rowLabel(item)}
+                  selected={verse}
                   /* ⚠️ SILENT WHEN THERE IS NO SOURCE AT ALL (story 8-3 review, S1). Surah scope
                      on Al-Baqarah drew 286 copies of "Nothing for this ayah" beneath a panel that
                      had already said, once, that no source is installed. A per-row absence is
@@ -426,7 +458,7 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
         ) : null}
         {/* ⚠️ THE ONLY WAY TO LET A HELD SOURCE GO (story 8-3 review, C6). `/content` returns early
             on web, so `usePacks.remove` was unreachable there — a reader who tried three sources
-            held all three in the JS heap, up to 32 MB each, until they reloaded the page. It is
+            held all three in the JS heap, up to 128 MB each, until they reloaded the page. It is
             deliberately ABSENT on native, where the content screen owns removal and a delete here
             would be a second door onto a permanent action from inside a reading surface. */}
         {source && PACKS_SESSION_ONLY ? (
@@ -450,23 +482,74 @@ function StudySheetBody({ onClose, verse }: { onClose: () => void; verse: VerseP
   );
 }
 
-/** One ayah: the Quran, then what the source says about it. */
+/**
+ * The Arabic a row draws: one ayah as it is; several with an ayah marker after each, so a
+ * passage's ayat stay countable — and the marker of the ayah the reader SELECTED emphasised, so
+ * they can find their place inside a passage of thirty. Display marks are stripped at the draw
+ * site, never in the data.
+ */
+function rowArabic(
+  row: StudyRow,
+  selected: VersePair,
+  styles: { marker: object; markerSelected: object },
+  formatQuranNumber: (value: number) => string
+): React.ReactNode {
+  // One ayah stays a plain string — the shape every translation row has always rendered.
+  if (row.lastSurah === row.surah && row.lastVerse === row.verse && row.ayat.length === 1) {
+    return stripDisplayMarks(row.ayat[0].arabic);
+  }
+  return (
+    <>
+      {row.ayat.map((ayah, index) => {
+        const isSelected = ayah.surah === selected.surah && ayah.verse === selected.verse;
+        return (
+          <Text key={`${ayah.surah}:${ayah.verse}`}>
+            {index > 0 ? ' ' : ''}
+            {stripDisplayMarks(ayah.arabic)}{' '}
+            <Text
+              style={isSelected ? styles.markerSelected : styles.marker}
+              testID={
+                isSelected
+                  ? `study-marker-${ayah.surah}-${ayah.verse}-selected`
+                  : `study-marker-${ayah.surah}-${ayah.verse}`
+              }
+            >
+              ({formatQuranNumber(ayah.verse)})
+            </Text>
+          </Text>
+        );
+      })}
+    </>
+  );
+}
+
+/** One passage (or one ayah): the Quran, then what the source says about it, once. */
 function StudyEntry({
   row,
   contentDirection,
+  contentLanguage,
   verseLabel,
   saysAbsent,
+  selected,
 }: {
   row: StudyRow;
+  /** The ayah the reader selected — its marker is emphasised inside a multi-ayah passage. */
+  selected: VersePair;
   /** The SOURCE's own `direction` (story 8-4) — never a language lookup, never the interface's. */
   contentDirection: string | null;
+  contentLanguage: string | null;
   verseLabel: string;
   /** Whether "this source has nothing here" is worth saying — see the call site. */
   saysAbsent: boolean;
 }) {
   const { t } = useTranslation();
   const styles = useStyles();
+  const formatQuranNumber = useQuranNumerals();
   const contentStyle = isRTLContent(contentDirection) ? styles.rtl : styles.ltr;
+  // ⚠️ ONE `Text` PER PARAGRAPH, NOT ONE FOR THE WHOLE PASSAGE (story 8-5). A classical passage
+  // runs to 170,000 characters; one text node that size is one layout pass of it on Android.
+  // Paragraphs are separated by a blank line in every pack, so splitting there costs nothing.
+  const paragraphs = row.content === null ? [] : row.content.split('\n\n');
   return (
     <View style={styles.entry} testID={`study-entry-${row.surah}-${row.verse}`}>
       <Text style={styles.verseNumber}>{verseLabel}</Text>
@@ -474,7 +557,7 @@ function StudyEntry({
           (`lib/rtl.ts`), so every content site in this repo does this locally. `stripDisplayMarks`
           is the measured KFGQPC U+06DF defect; the stored text is never touched. */}
       <Text style={[styles.arabic, styles.rtl]} testID={`study-arabic-${row.surah}-${row.verse}`}>
-        {stripDisplayMarks(row.arabic)}
+        {rowArabic(row, selected, styles, formatQuranNumber)}
       </Text>
       {row.content === null ? (
         saysAbsent ? (
@@ -483,16 +566,27 @@ function StudyEntry({
           </Text>
         ) : null
       ) : (
-        <Text
-          style={[styles.contentText, contentStyle]}
-          testID={`study-content-${row.surah}-${row.verse}`}
-        >
-          {row.content}
-        </Text>
+        paragraphs.map((paragraph, index) => (
+          <Text
+            key={index}
+            style={[
+              styles.contentText,
+              contentStyle,
+              contentLanguage === 'ar' && styles.arabicProse,
+            ]}
+            testID={
+              index === 0
+                ? `study-content-${row.surah}-${row.verse}`
+                : `study-content-${row.surah}-${row.verse}-${index}`
+            }
+          >
+            {paragraph}
+          </Text>
+        ))
       )}
       {row.footnotes ? (
         <Text
-          style={[styles.footnotes, contentStyle]}
+          style={[styles.footnotes, contentStyle, contentLanguage === 'ar' && styles.arabicProse]}
           testID={`study-footnotes-${row.surah}-${row.verse}`}
         >
           {row.footnotes}
@@ -834,6 +928,20 @@ const useStyles = () =>
       fontSize: SHEET_ARABIC_FONT_SIZE,
       lineHeight: SHEET_ARABIC_FONT_SIZE * ARABIC_LINE_HEIGHT,
       color: theme.colors.text.primary,
+    },
+    /** An ayah marker inside a passage's Arabic: quiet, the theme's secondary text. */
+    marker: {
+      color: theme.colors.text.secondary,
+    },
+    /** The SELECTED ayah's marker: the theme accent, so the reader finds their place. */
+    markerSelected: {
+      color: theme.colors.accent.primary,
+      fontWeight: FONT_WEIGHT.semibold,
+    },
+    arabicProse: {
+      fontFamily: 'Amiri',
+      fontSize: FONT_SIZE.body * 1.15,
+      lineHeight: FONT_SIZE.body * 1.15 * 1.85,
     },
     contentText: {
       fontSize: FONT_SIZE.body,

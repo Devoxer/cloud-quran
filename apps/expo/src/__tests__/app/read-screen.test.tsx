@@ -1217,6 +1217,7 @@ describe('the chrome, and the gesture that reveals it', () => {
   });
 
   it('…and the same for the PREVIOUS-surah control', async () => {
+    mockReadingPositionRow.current = { surah: 2, verse: 1 };
     render(<Read />);
     await screen.findByTestId('prev-surah-button');
     fireEvent(screen.getByTestId('prev-surah-button'), 'pressIn');
@@ -1278,12 +1279,13 @@ describe('the chrome, and the gesture that reveals it', () => {
     await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(2));
   });
 
-  it('wraps from An-Nas back to Al-Fatiha rather than dead-ending', async () => {
+  it('stops at An-Nas instead of wrapping to Al-Fatihah', async () => {
     mockReadingPositionRow.current = { surah: 114, verse: 1 };
     render(<Read />);
     await screen.findByTestId('next-surah-button');
+    expect(screen.getByTestId('next-surah-button').props.accessibilityState.disabled).toBe(true);
     fireEvent.press(screen.getByTestId('next-surah-button'));
-    await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(1));
+    expect(mockGetSurahVerses).not.toHaveBeenCalledWith(1);
   });
 
   it('labels and navigates the PREVIOUS surah — the same single derivation, backwards (story 6-3)', async () => {
@@ -1296,14 +1298,12 @@ describe('the chrome, and the gesture that reveals it', () => {
     await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(1));
   });
 
-  it('wraps from Al-Fatiha back to An-Nas — 1 → 114, the other end (story 6-3)', async () => {
-    // MUTATION: `prevSurah` computing `surah - 1` without the wrap answers 0 here, and
-    // `getSurahVerses(0)` is an empty screen.
+  it('stops at Al-Fatihah instead of wrapping to An-Nas', async () => {
     render(<Read />);
-    await screen.findByText('أية 1:7');
-    expect(screen.getByText('Previous: An-Nas')).toBeTruthy();
+    await screen.findByTestId('prev-surah-button');
+    expect(screen.getByTestId('prev-surah-button').props.accessibilityState.disabled).toBe(true);
     fireEvent.press(screen.getByTestId('prev-surah-button'));
-    await waitFor(() => expect(mockGetSurahVerses).toHaveBeenCalledWith(114));
+    expect(mockGetSurahVerses).not.toHaveBeenCalledWith(114);
   });
 
   it('keeps both bars in the tree either way', async () => {
@@ -1322,9 +1322,9 @@ describe('the chrome, and the gesture that reveals it', () => {
     // the reading surface landed on controls nobody could see.
     render(<Read />);
     await screen.findByText('أية 1:1');
-    expect(screen.queryByTestId('chrome-mode-toggle')).toBeNull();
+    expect(screen.queryByTestId('chrome-title-entry')).toBeNull();
     await revealChrome();
-    expect(screen.getByTestId('chrome-mode-toggle')).toBeTruthy();
+    expect(screen.getByTestId('chrome-title-entry')).toBeTruthy();
   });
 
   it('a tappable verse is not a button — and is not tappable at all', async () => {
@@ -1348,11 +1348,11 @@ describe('the chrome, and the gesture that reveals it', () => {
     ).toBeUndefined();
   });
 
-  it('the mode toggle is in the revealed header and goes to the mushaf', async () => {
+  it('the tab bar switches back to the mushaf', async () => {
     render(<Read />);
     await screen.findByText('أية 1:1');
     await revealChrome();
-    fireEvent.press(screen.getByTestId('chrome-mode-toggle'));
+    fireEvent.press(screen.getByTestId('chrome-tab-index'));
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 });

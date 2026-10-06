@@ -693,7 +693,7 @@ describe('the lock-screen card', () => {
   /**
    * ⚠️ THE CARD CARRIES THE ARTWORK, AND NO TRACK DOES (SDK 58, story 5-9). expo-audio 58 has no
    * per-source artwork, so the metadata is the only road on both platforms. That is safe on
-   * Android only because `patches/expo-audio@58.0.4.patch` re-posts the notification for an
+   * Android only because `patches/expo-audio@58.0.5.patch` re-posts the notification for an
    * unchanged url — upstream's loader skips it with no `else`, which froze the shade's title on
    * the previous surah (story 7-3, Pixel 9 Pro). Every push carries it: native stores each push
    * as the card's ENTIRE metadata, so one without it would strip the cover.

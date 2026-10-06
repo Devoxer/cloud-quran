@@ -64,6 +64,9 @@ allowBuilds:
   # native build is safe — only affects Metro cache encode speed, not correctness.
   # Story 16.9 (SDK 54→56 upgrade).
   msgpackr-extract: false
+  # Expo 58.0.3's CLI pulls in @parcel/watcher; its prebuilt per-platform binaries ship as optional
+  # dependencies, so its build-from-source fallback script is not needed.
+  '@parcel/watcher': false
 
 # Force-install optional native prebuilt binaries for EVERY builder platform, not
 # just the host. Story 16.9: the EAS iOS builder (macOS/arm64) was NOT installing
@@ -113,11 +116,17 @@ minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@4.20260524.1' # worker dep, unrelated to expo SDK
 
 patchedDependencies:
+  # Keep the full scroll extent consistent after initial item measurements.
+  # Lift when FlashList recomputes the tail along with initialScrollIndex.
+  '@shopify/flash-list@2.3.2': patches/@shopify__flash-list@2.3.2.patch
   # SDK 58 (story 5-9): expo-audio 58 ships the playlist lock screen, next/previous and session
   # metadata upstream (#46020), so the 1,655-line SDK-56 patch is gone. What remains is the ANR
   # fix: the six lock-screen calls post to main instead of `runBlocking` on it (see `postOnMain`
   # in the patch). Pinned EXACT and excluded from `expo install` so a bump cannot detach it.
-  expo-audio@58.0.4: patches/expo-audio@58.0.4.patch
+  expo-audio@58.0.5: patches/expo-audio@58.0.5.patch
+  # Preserve runtime language direction when no build-time RTL override is configured.
+  # Lift this pin when Expo Localization stops resetting I18nManager on module creation.
+  expo-localization@58.0.3: patches/expo-localization@58.0.3.patch
   # Story 20.8 — Android language-switch blank-screen fix. The dep is pinned EXACT in
   # apps/expo/package.json (a `~` range would make this key stop matching and the patch would
   # detach silently) and listed in `expo.install.exclude`.

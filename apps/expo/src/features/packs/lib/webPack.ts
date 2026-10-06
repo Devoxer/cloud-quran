@@ -27,15 +27,20 @@
  * ⚠️ AND NOTHING HERE PERSISTS. The browser's HTTP cache is what stops the second visit costing a
  * second megabyte, exactly as `lib/mushafFonts.ts` leaves web fonts to it. OPFS and the Cache API
  * are deliberately out of scope (the story's "Ask First"), and the memory cost of a
- * tens-of-megabytes tafsir is the reason that question will eventually be asked.
+ * tens-of-megabytes tafsir is the reason that question will eventually be asked. Until then a held
+ * pack is capped at `PACK_WEB_MAX_BYTES` (128 MB — story 8-5), the largest tafsir with room.
  *
  * `lint:layers` rule 2: a feature `lib/` — `@/constants/packs`, `@/lib/quranDb`, `@/lib/errors`
  * and its own sibling. No UI, no routes, no other feature.
  */
 
-import { PACK_MAX_VERIFIABLE_BYTES, PACK_STALL_TIMEOUT_MS } from '@/constants/packs';
+import {
+  PACK_STALL_TIMEOUT_MS,
+  PACK_WEB_MAX_BYTES,
+  PACK_WEB_SESSION_BYTES,
+} from '@/constants/packs';
 import { addBreadcrumb, captureException, isDeviceOfflineError } from '@/lib/errors';
-import { isPackReadable, openPackFromBytes } from '@/lib/quranDb';
+import { closePack, isPackReadable, openPackFromBytes } from '@/lib/quranDb';
 import type { CataloguePack } from './catalogue';
 import type { InstalledPack } from './packStore';
 import { isTransientNetworkFailure, type PackInstallResult, sha256Hex } from './packStore';
@@ -43,6 +48,10 @@ import { isTransientNetworkFailure, type PackInstallResult, sha256Hex } from './
 /**
  * The packs held right now, by id. The MAP is the truth on web, exactly as the directory listing
  * is on native — `@/stores/packStore` mirrors it and never decides it.
+ *
+ * ⚠️ ITS ORDER IS RECENCY: oldest first. A hold — including a no-op re-hold of a pack already held
+ * — moves the pack to the end, so the first key is always the least recently used one, which is
+ * what {@link makeRoomFor} releases first.
  */
 const held = new Map<string, InstalledPack>();
 
@@ -88,12 +97,16 @@ export function forgetHeldPack(id: string): void {
 export async function holdPack(pack: CataloguePack): Promise<PackInstallResult> {
   const current = held.get(pack.id);
   // Already held at this version is a no-op, not a re-fetch: a pack file name carries its
-  // version, so the same name can only ever hold the same verified build.
-  if (current?.version === pack.packVersion) return { ok: true };
+  // version, so the same name can only ever hold the same verified build. It IS a use, though.
+  if (current?.version === pack.packVersion) {
+    held.delete(pack.id);
+    held.set(pack.id, current);
+    return { ok: true };
+  }
 
   // ⚠️ REFUSED BEFORE A SINGLE BYTE IS FETCHED. On web the ceiling is sharper than on native, not
   // softer: the bytes land in the JS heap, are hashed there, and then STAY there for the session.
-  if (pack.bytes > PACK_MAX_VERIFIABLE_BYTES) return { ok: false, reason: 'tooLarge' };
+  if (pack.bytes > PACK_WEB_MAX_BYTES) return { ok: false, reason: 'tooLarge' };
 
   const running = holding.get(pack.id);
   if (running) return running;
@@ -107,6 +120,30 @@ export async function holdPack(pack: CataloguePack): Promise<PackInstallResult> 
   // Attaching the cleanup to the promise makes it run exactly once, whoever is waiting.
   void attempt.finally(() => holding.delete(pack.id));
   return attempt;
+}
+
+/**
+ * Forget least-recently-used held packs until `pack` fits the session budget; answers their ids,
+ * whose handles the caller closes.
+ *
+ * ⚠️ THE SESSION HAS A TOTAL, NOT ONLY A PER-PACK CEILING (story 8-5 review). Each tafsir is up to
+ * 54 MB in the heap for as long as it is held, and nothing else ever lets one go on web but the
+ * sheet's release control. A reader comparing four classical tafsirs would otherwise hold ~200 MB.
+ * The pack being replaced (same id) is not counted — its successor supersedes it.
+ */
+function makeRoomFor(pack: CataloguePack): string[] {
+  const total = () =>
+    [...held.values()].reduce((sum, p) => (p.id === pack.id ? sum : sum + p.bytes), 0);
+  const released: string[] = [];
+  for (const id of [...held.keys()]) {
+    if (total() + pack.bytes <= PACK_WEB_SESSION_BYTES) break;
+    if (id === pack.id) continue;
+    addBreadcrumb('http', 'web pack released for room', { id, incoming: pack.id });
+    held.delete(id);
+    poisoned.delete(id);
+    released.push(id);
+  }
+  return released;
 }
 
 async function runHold(pack: CataloguePack): Promise<PackInstallResult> {
@@ -151,7 +188,7 @@ async function runHold(pack: CataloguePack): Promise<PackInstallResult> {
   try {
     // ⚠️ THE CEILING IS RE-CHECKED AGAINST WHAT ACTUALLY LANDED, not only against what the
     // catalogue promised — `installPack`'s rule, and the same understated-size case.
-    if (buffer.byteLength > PACK_MAX_VERIFIABLE_BYTES) {
+    if (buffer.byteLength > PACK_WEB_MAX_BYTES) {
       addBreadcrumb('http', 'web pack too large to verify', {
         id: pack.id,
         bytes: buffer.byteLength,
@@ -185,7 +222,12 @@ async function runHold(pack: CataloguePack): Promise<PackInstallResult> {
      */
     if (!isPackReadable(pack.id)) return { ok: false, reason: 'cancelled' };
 
+    // Keep working packs through a failed download or integrity check. Budget against the
+    // verified body's actual size, since the catalogue may understate it.
+    const released = makeRoomFor({ ...pack, bytes: buffer.byteLength });
+    if (released.length > 0) await Promise.all(released.map((id) => closePack(id)));
     poisoned.delete(pack.id);
+    held.delete(pack.id);
     held.set(pack.id, { id: pack.id, version: pack.packVersion, bytes: buffer.byteLength });
     return { ok: true };
   } catch (error) {

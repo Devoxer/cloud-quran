@@ -105,12 +105,23 @@
           "iosUrlScheme": "com.googleusercontent.apps.929745924239-tfjhe28tfuha9jjsn5duuoqgu1sqffca"
         }
       ],
-      "expo-localization",
+      [
+        "expo-localization",
+        {
+          "supportsRTL": true
+        }
+      ],
       "expo-sharing",
       [
         "expo-font",
         {
-          "fonts": ["./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf"]
+          "fonts": [
+            "./assets/fonts/kfgqpc/KFGQPCUthmanicScriptHAFS.ttf",
+            "./assets/fonts/amiri/Amiri-Regular.ttf",
+            "./assets/fonts/amiri/Amiri-Bold.ttf",
+            "./assets/fonts/surah-header/CloudQuranSurahLine.ttf",
+            "./assets/fonts/surah-header/CloudQuranSurahAccent.ttf"
+          ]
         }
       ],
       "expo-sqlite",

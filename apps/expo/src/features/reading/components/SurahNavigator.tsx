@@ -30,12 +30,12 @@ import { useThemedStyles } from '@/lib/useThemedStyles';
 
 /** The surah after `surah`, wrapping 114 → 1. */
 export function nextSurah(surah: number): number {
-  return (surah % SURAH_COUNT) + 1;
+  return Math.min(SURAH_COUNT, surah + 1);
 }
 
 /** The surah before `surah`, wrapping 1 → 114. */
 export function prevSurah(surah: number): number {
-  return surah === 1 ? SURAH_COUNT : surah - 1;
+  return Math.max(1, surah - 1);
 }
 
 export interface SurahNavigatorProps {
@@ -55,6 +55,7 @@ export interface SurahNavigatorProps {
    * chrome gesture behind it passes nothing.
    */
   onInteractionStart?: () => void;
+  current?: number;
 }
 
 export function SurahNavigator({
@@ -64,6 +65,7 @@ export function SurahNavigator({
   nextName,
   onNavigate,
   onInteractionStart,
+  current,
 }: SurahNavigatorProps) {
   const { t } = useTranslation();
   const styles = useThemedStyles((theme) => ({
@@ -103,6 +105,8 @@ export function SurahNavigator({
         onPress={() => onNavigate(prev)}
         onPressIn={onInteractionStart}
         style={styles.button}
+        disabled={current === 1}
+        accessibilityState={{ disabled: current === 1 }}
         testID="prev-surah-button"
       >
         <Text style={styles.label} numberOfLines={1}>
@@ -115,6 +119,8 @@ export function SurahNavigator({
         onPress={() => onNavigate(next)}
         onPressIn={onInteractionStart}
         style={styles.button}
+        disabled={current === SURAH_COUNT}
+        accessibilityState={{ disabled: current === SURAH_COUNT }}
         testID="next-surah-button"
       >
         <Text style={styles.label} numberOfLines={1}>

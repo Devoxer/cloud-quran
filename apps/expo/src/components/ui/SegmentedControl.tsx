@@ -44,6 +44,8 @@ export interface SegmentedControlProps {
   /** Accepted for back-compat with the prior native wrapper; ignored (theme-aware by default). */
   appearance?: 'light' | 'dark';
   style?: StyleProp<ViewStyle>;
+  /** What the control as a whole chooses — announced before the segment a reader lands on. */
+  accessibilityLabel?: string;
   testID?: string;
 }
 
@@ -55,6 +57,7 @@ export function SegmentedControl({
   enabled = true,
   tintColor,
   style,
+  accessibilityLabel,
   testID,
 }: SegmentedControlProps) {
   const styles = useStyles();
@@ -65,7 +68,11 @@ export function SegmentedControl({
     values.length === 0 ? -1 : Math.min(Math.max(selectedIndex, 0), values.length - 1);
 
   return (
-    <View style={[styles.track, !enabled && styles.disabled, style]} testID={testID}>
+    <View
+      style={[styles.track, !enabled && styles.disabled, style]}
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+    >
       {values.map((value, i) => {
         const active = i === activeIndex;
         return (

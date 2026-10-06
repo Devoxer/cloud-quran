@@ -12,7 +12,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PACK_CATALOGUE_URL } from '@/constants/packs';
+import { PACK_CATALOGUE_URL, PACK_WEB_MAX_BYTES } from '@/constants/packs';
 import { fetchCatalogue, parseCatalogue, parseCataloguePack } from './catalogue';
 import { buildPackGroups } from './packGroups';
 
@@ -240,8 +240,9 @@ describe('a catalogue that repeats an id (story 8-4)', () => {
  * ⚠️ IT IS READ FROM THE REPO, NOT FROM A FIXTURE, because the property is "every edition the
  * pipeline published survives the device's validation". A catalogue whose URLs, digests or
  * versions the parser refuses would ship a shelf with holes in it and every other gate green.
- * The literals below are QuranEnc's measured shape on 2026-09-29: 75 editions, 56 languages, six
- * of them right to left — including N'Ko, which no hand-written list in this repo had.
+ * The literals below are QuranEnc's measured shape on 2026-09-29 (76 editions since `oromo_rwwad`
+ * joined on 2026-10-05), 56 languages, six of them right to left — including N'Ko, which no
+ * hand-written list in this repo had.
  */
 describe('the committed catalogue', () => {
   const committed = JSON.parse(
@@ -263,13 +264,93 @@ describe('the committed catalogue', () => {
       'utf8'
     )
   );
-  const parsed = parseCatalogue(committed) ?? [];
+  const all = parseCatalogue(committed) ?? [];
+  const parsed = all.filter((pack) => pack.type === 'translation');
+  const tafsir = all.filter((pack) => pack.type === 'tafsir');
+  const irab = all.filter((pack) => pack.type === 'irab');
+  const meanings = all.filter((pack) => pack.type === 'meanings');
 
-  it('parses all 75 editions, dropping none', () => {
-    expect(committed.packs).toHaveLength(75);
-    expect(parsed).toHaveLength(75);
-    expect(new Set(parsed.map((pack) => pack.id)).size).toBe(75);
+  it('parses every pack, dropping none — counted BY TYPE (story 8-5)', () => {
+    expect(committed.packs).toHaveLength(179);
+    expect(all).toHaveLength(179);
+    expect(new Set(all.map((pack) => pack.id)).size).toBe(179);
+    expect(parsed).toHaveLength(76);
+    expect(tafsir).toHaveLength(96);
+    expect(irab).toHaveLength(5);
+    expect(meanings).toHaveLength(2);
+    // Every pack is of a type a study row reads (`features/study/lib/types.ts` §
+    // `PACK_TYPE_OF_STUDY_TYPE`); a stray type would sit on no row at all.
+    const rows = new Set(['meanings', 'tafsir', 'translation', 'irab', 'asbab']);
+    expect(all.every((pack) => rows.has(pack.type))).toBe(true);
+  });
+
+  it('names each pack by its type — `{type}-{language}-{work}`', () => {
+    for (const pack of all) expect(pack.id.startsWith(`${pack.type}-${pack.language}-`)).toBe(true);
+    expect(irab.map((pack) => pack.id).sort()).toEqual([
+      'irab-ar-daas',
+      'irab-ar-darwish',
+      'irab-ar-durr-masun',
+      'irab-ar-jadwal',
+      'irab-ar-muyassar',
+    ]);
+    expect(meanings.map((pack) => pack.id).sort()).toEqual([
+      'meanings-ar-muyassar-gharib',
+      'meanings-ar-tahlil-kalimat',
+    ]);
+  });
+
+  it('fits every pack inside what a web session will hold', () => {
+    // MUTATION: publish a pack over `PACK_WEB_MAX_BYTES` and web refuses it `tooLarge` — on the
+    // one platform the catalogue cannot be told apart by.
+    const over = all.filter((pack) => pack.bytes > PACK_WEB_MAX_BYTES).map((pack) => pack.id);
+    expect(over).toEqual([]);
+  });
+
+  it('carries the Oromo edition QuranEnc added on 2026-10-05', () => {
+    expect(
+      committed.packs.find((pack: { id: string }) => pack.id === 'translation-om-rwwad')
+    ).toMatchObject({
+      sourceKey: 'oromo_rwwad',
+      rows: 6236,
+    });
+  });
+
+  it('holds every translation at one row per ayah, unchanged by the tafsir build', () => {
     expect(parsed.every((pack) => pack.rows === 6236)).toBe(true);
+    expect(parsed.every((pack) => pack.id.startsWith('translation-'))).toBe(true);
+  });
+
+  it('holds every tafsir at one row per PASSAGE — fewer rows than ayat, never more', () => {
+    // A passage is stored once; a pack with more rows than the Quran has ayat repeated its text.
+    expect(tafsir.every((pack) => pack.rows > 0 && pack.rows <= 6236)).toBe(true);
+    expect(tafsir.every((pack) => pack.id.startsWith('tafsir-'))).toBe(true);
+    // Tabari's 3,636 passages, As-Saadi's 1,737 (QUL's 38:48–49 overlap merged): the two the
+    // acceptance criteria name.
+    expect(tafsir.find((pack) => pack.id === 'tafsir-ar-tabari')?.rows).toBe(3636);
+    expect(tafsir.find((pack) => pack.id === 'tafsir-ar-saadi')?.rows).toBe(1737);
+  });
+
+  it('offers Tabari above the old 32 MB native ceiling — the case story 8-5 exists for', () => {
+    expect(tafsir.find((pack) => pack.id === 'tafsir-ar-tabari')?.bytes).toBeGreaterThan(
+      32 * 1024 * 1024
+    );
+  });
+
+  it('carries As-Saadi in its seven languages and Swahili', () => {
+    expect(
+      tafsir
+        .filter((pack) => pack.id.endsWith('-saadi'))
+        .map((pack) => pack.language)
+        .sort()
+    ).toEqual(['ar', 'fa', 'id', 'ru', 'sq', 'sw', 'tr', 'ur']);
+  });
+
+  it('sets every Arabic-script passage pack right to left, from the pack’s own field', () => {
+    const passages = [...tafsir, ...irab, ...meanings];
+    expect(
+      [...new Set(passages.filter((p) => p.direction === 'rtl').map((p) => p.language))].sort()
+    ).toEqual(['ar', 'fa', 'ku', 'ps', 'ug', 'ur']);
+    expect([...irab, ...meanings].every((pack) => pack.direction === 'rtl')).toBe(true);
   });
 
   it('carries the six right-to-left editions QuranEnc marks, by data alone', () => {
@@ -286,7 +367,7 @@ describe('the committed catalogue', () => {
     const headings = rows.filter((row) => row.kind === 'language');
     expect(headings).toHaveLength(56);
     expect(headings[0]).toMatchObject({ kind: 'language', language: 'fr', count: 2 });
-    expect(rows.filter((row) => row.kind === 'pack')).toHaveLength(75);
+    expect(rows.filter((row) => row.kind === 'pack')).toHaveLength(76);
   });
 
   it('finds Urdu by its English name, its own name and its code', () => {

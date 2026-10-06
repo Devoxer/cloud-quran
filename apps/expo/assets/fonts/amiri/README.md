@@ -1,0 +1,1 @@
+Amiri Regular and Bold are bundled for Arabic study prose. Source: [aliftype/amiri](https://github.com/aliftype/amiri), `fonts/Amiri-Regular.ttf`, `fonts/Amiri-Bold.ttf` and `OFL.txt`, retrieved 2026-10-06. The SIL Open Font License is included in this directory. These fonts do not replace the Quran's Uthmani or encoded QPC page fonts.

@@ -109,7 +109,7 @@ import {
 } from './quranDb';
 
 /**
- * The pack schema, verbatim from `scripts/prepare-packs.ts`.
+ * The pack schema, verbatim from `scripts/pack-writer.ts` (the writer `prepare-packs.ts` calls).
  *
  * ⚠️ IT IS ASSERTED AGAINST THAT SCRIPT'S SOURCE BELOW. A copy of a schema that can drift from the
  * schema is worse than no fixture at all — it makes the suite agree with itself while the device
@@ -124,6 +124,26 @@ const PACK_DDL = `
     CREATE TABLE entries (
       surah_number INTEGER NOT NULL,
       verse_number INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      footnotes TEXT,
+      PRIMARY KEY (surah_number, verse_number)
+    );
+  `;
+
+/**
+ * The PASSAGE schema (story 8-5 — tafsir, i'rab, meanings), verbatim from the same module and
+ * asserted the same way.
+ */
+const TAFSIR_DDL = `
+    CREATE TABLE pack_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE entries (
+      surah_number INTEGER NOT NULL,
+      verse_number INTEGER NOT NULL,
+      last_verse INTEGER NOT NULL,
       text TEXT NOT NULL,
       footnotes TEXT,
       PRIMARY KEY (surah_number, verse_number)
@@ -203,10 +223,18 @@ describe('the schema this module reads', () => {
     // ⚠️ THE ANTI-VACUITY GUARD. Without it, renaming a column in BOTH places keeps this file
     // green while every published pack becomes unreadable by every shipped build.
     const script = readFileSync(
-      resolve(__dirname, '..', '..', '..', '..', 'scripts', 'prepare-packs.ts'),
+      resolve(__dirname, '..', '..', '..', '..', 'scripts', 'pack-writer.ts'),
       'utf8'
     );
     expect(script).toContain(PACK_DDL);
+  });
+
+  it('is ALSO the passage schema the pipeline writes for tafsir (story 8-5)', () => {
+    const script = readFileSync(
+      resolve(__dirname, '..', '..', '..', '..', 'scripts', 'pack-writer.ts'),
+      'utf8'
+    );
+    expect(script).toContain(TAFSIR_DDL);
   });
 
   it('installs packs where expo-sqlite opens them BY NAME', () => {
@@ -274,10 +302,11 @@ describe('reading a pack', () => {
     await openPack(PACK_ID, 1);
     const rows = await getPackSurah(PACK_ID, 1);
 
+    // A translation has no `last_verse`: every row is about its own ayah only.
     expect(rows).toEqual([
-      { surah: 1, verse: 1, text: FIRST_AYAH, footnotes: '[1] Une note.' },
-      { surah: 1, verse: 2, text: '1:2', footnotes: null },
-      { surah: 1, verse: 3, text: '1:3', footnotes: null },
+      { surah: 1, verse: 1, lastVerse: 1, text: FIRST_AYAH, footnotes: '[1] Une note.' },
+      { surah: 1, verse: 2, lastVerse: 2, text: '1:2', footnotes: null },
+      { surah: 1, verse: 3, lastVerse: 3, text: '1:3', footnotes: null },
     ]);
   });
 
@@ -340,10 +369,10 @@ describe('describing a pack', () => {
     // ⚠️ OFFLINE, `pack_meta` IS THE ONLY DESCRIPTION. An Urdu pack whose file did not carry its
     // direction would range left the moment the catalogue was unreachable.
     const script = readFileSync(
-      resolve(__dirname, '..', '..', '..', '..', 'scripts', 'prepare-packs.ts'),
+      resolve(__dirname, '..', '..', '..', '..', 'scripts', 'pack-writer.ts'),
       'utf8'
     );
-    expect(script).toContain("['direction', spec.direction],");
+    expect(script).toContain("['direction', meta.direction],");
   });
 });
 
@@ -424,7 +453,7 @@ describe('reading a RANGE from a pack', () => {
   it('reads a single ayah as a range of one', async () => {
     await openPack(PACK_ID, 1);
     const rows = await getPackRange(PACK_ID, { surah: 2, verse: 2 }, { surah: 2, verse: 2 });
-    expect(rows).toEqual([{ surah: 2, verse: 2, text: '2:2', footnotes: null }]);
+    expect(rows).toEqual([{ surah: 2, verse: 2, lastVerse: 2, text: '2:2', footnotes: null }]);
   });
 
   it('answers [] for a range this edition has nothing in — not an error', async () => {
@@ -516,5 +545,96 @@ describe('opening a pack from bytes', () => {
       ok: true,
     });
     expect(mockOpen.deserialized).toBe(before);
+  });
+});
+
+/**
+ * A PASSAGE PACK, AGAINST REAL SQL (story 8-5) — the spec's I/O matrix at the query.
+ *
+ * ⚠️ A TAFSIR PASSAGE IS STORED ONCE, AT ITS FIRST AYAH. The translation predicate — rows whose
+ * start lies inside the range — misses the passage 2:1–5 for a reader on 2:3, which is the
+ * commonest read there is, and the sheet would say "nothing for this ayah" under a commentary the
+ * pack holds. MUTATIONS: read passages with the translation predicate; drop `last_verse` from the
+ * overlap; compare the two columns separately (page 604's cross product).
+ */
+describe('reading a range from a PASSAGE pack', () => {
+  const TAFSIR_ID = 'tafsir-ar-saadi';
+
+  function buildPassagePack(
+    fileName: string,
+    passages: { surah: number; verse: number; lastVerse: number }[]
+  ): void {
+    rmSync(join(mockDir, fileName), { force: true });
+    const db = new DatabaseSync(join(mockDir, fileName));
+    db.exec('PRAGMA journal_mode = DELETE');
+    db.exec(TAFSIR_DDL);
+    db.prepare('INSERT INTO pack_meta (key, value) VALUES (?, ?)').run('type', 'tafsir');
+    const insert = db.prepare(
+      'INSERT INTO entries (surah_number, verse_number, last_verse, text, footnotes) VALUES (?, ?, ?, ?, ?)'
+    );
+    for (const p of passages) {
+      insert.run(p.surah, p.verse, p.lastVerse, `${p.surah}:${p.verse}-${p.lastVerse}`, null);
+    }
+    db.close();
+  }
+
+  const label = (rows: { surah: number; verse: number; lastVerse: number }[]) =>
+    rows.map((row) => `${row.surah}:${row.verse}-${row.lastVerse}`);
+
+  beforeEach(() =>
+    buildPassagePack(packFileName(TAFSIR_ID, 1), [
+      { surah: 1, verse: 1, lastVerse: 1 },
+      { surah: 1, verse: 2, lastVerse: 7 },
+      { surah: 2, verse: 1, lastVerse: 5 },
+      { surah: 2, verse: 6, lastVerse: 6 },
+      // A gap at 2:7.
+      { surah: 2, verse: 8, lastVerse: 10 },
+      { surah: 112, verse: 1, lastVerse: 4 },
+      { surah: 113, verse: 1, lastVerse: 5 },
+      { surah: 114, verse: 1, lastVerse: 6 },
+    ])
+  );
+
+  it('answers the passage that STARTS BEFORE an ayah-scope range', async () => {
+    await openPack(TAFSIR_ID, 1);
+    const rows = await getPackRange(TAFSIR_ID, { surah: 2, verse: 3 }, { surah: 2, verse: 3 });
+    expect(rows).toEqual([{ surah: 2, verse: 1, lastVerse: 5, text: '2:1-5', footnotes: null }]);
+  });
+
+  it('answers every passage a surah range crosses, each once', async () => {
+    await openPack(TAFSIR_ID, 1);
+    const rows = await getPackRange(TAFSIR_ID, { surah: 1, verse: 1 }, { surah: 1, verse: 7 });
+    expect(label(rows)).toEqual(['1:1-1', '1:2-7']);
+  });
+
+  it('answers page 604 in recitation order, with nothing from the cross product', async () => {
+    await openPack(TAFSIR_ID, 1);
+    const rows = await getPackRange(TAFSIR_ID, { surah: 112, verse: 1 }, { surah: 114, verse: 6 });
+    expect(label(rows)).toEqual(['112:1-4', '113:1-5', '114:1-6']);
+  });
+
+  it('answers NOTHING for an ayah no passage covers — the gap is the join’s to report', async () => {
+    await openPack(TAFSIR_ID, 1);
+    expect(await getPackRange(TAFSIR_ID, { surah: 2, verse: 7 }, { surah: 2, verse: 7 })).toEqual(
+      []
+    );
+    const around = await getPackRange(TAFSIR_ID, { surah: 2, verse: 6 }, { surah: 2, verse: 8 });
+    expect(label(around)).toEqual(['2:6-6', '2:8-10']);
+  });
+
+  it('reads a surah with each passage’s span', async () => {
+    await openPack(TAFSIR_ID, 1);
+    expect(label(await getPackSurah(TAFSIR_ID, 2))).toEqual(['2:1-5', '2:6-6', '2:8-10']);
+  });
+
+  it('counts PASSAGES as its rows — the number the catalogue publishes', async () => {
+    expect(await countPackRows(packFileName(TAFSIR_ID, 1))).toBe(8);
+  });
+
+  it('serves a passage pack opened from BYTES (web) through the same predicate', async () => {
+    const bytes = new Uint8Array(readFileSync(join(mockDir, packFileName(TAFSIR_ID, 1))));
+    expect(await openPackFromBytes(TAFSIR_ID, 1, bytes, 8)).toEqual({ ok: true });
+    const rows = await getPackRange(TAFSIR_ID, { surah: 2, verse: 4 }, { surah: 2, verse: 4 });
+    expect(label(rows)).toEqual(['2:1-5']);
   });
 });

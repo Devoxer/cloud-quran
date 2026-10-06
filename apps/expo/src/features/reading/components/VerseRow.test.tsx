@@ -215,7 +215,8 @@ describe('the ayah reference is a circular badge, sized off the reader', () => {
     const badge = badgeStyle(16);
     // A circle: width === height, and the radius is exactly half of it. `borderRadius` at
     // anything less than half turns the ring into a rounded square.
-    expect(badge.width).toBe(26);
+    expect(badge.minWidth).toBe(26);
+    expect(badge.width).toBeUndefined();
     expect(badge.height).toBe(26);
     expect(badge.borderRadius).toBe(13);
     expect(badge.borderWidth).toBe(1.5);
@@ -229,7 +230,8 @@ describe('the ayah reference is a circular badge, sized off the reader', () => {
     // a badge at a fixed pixel size would strand a 13pt ring beside 44pt Arabic.
     renderRow({ verse: 286, fontSize: 44 });
     const badge = badgeStyle(286);
-    expect(badge.width).toBe(40);
+    expect(badge.minWidth).toBe(40);
+    expect(badge.width).toBeUndefined();
     expect(badge.height).toBe(40);
     expect(badge.borderRadius).toBe(20);
     expect(styleOf('286').fontSize).toBe(22);

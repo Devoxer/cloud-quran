@@ -25,6 +25,10 @@ export { type CataloguePack } from './lib/catalogue';
 export {
   buildPackGroups,
   type GroupablePack,
+  isOnShelf,
   type PackListRow,
+  SHELF_TYPES,
+  type ShelfType,
+  shelvesPresent,
 } from './lib/packGroups';
 export { type PackInstallFailure } from './lib/packStore';

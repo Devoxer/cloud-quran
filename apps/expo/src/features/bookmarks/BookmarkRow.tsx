@@ -32,7 +32,7 @@ import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/co
 import { SPACING } from '@/constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { useQuranNumerals } from '@/lib/format';
-import { TEXT_ALIGN_START } from '@/lib/rtl';
+import { contentTextAlign, TEXT_ALIGN_START } from '@/lib/rtl';
 import { surahDisplayName } from '@/lib/surahName';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -94,7 +94,7 @@ function BookmarkRowInner({
       fontFamily: UTHMANI_FONT_FAMILY,
       fontSize: PREVIEW_FONT_SIZE,
       lineHeight: PREVIEW_FONT_SIZE * ARABIC_LINE_HEIGHT,
-      textAlign: 'right',
+      textAlign: contentTextAlign(true),
       writingDirection: 'rtl',
     },
   }));

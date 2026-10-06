@@ -72,7 +72,7 @@ import {
   SurahDownloadButton,
   useDownloadReciterId,
 } from '@/features/audio';
-import { useQuranNumerals } from '@/lib/format';
+import { isolate, useQuranNumerals } from '@/lib/format';
 import { surahDisplayName, surahIndexNames } from '@/lib/surahName';
 import { useTheme } from '@/lib/theme';
 import { usePosition } from '@/lib/usePosition';
@@ -262,7 +262,12 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
             <ListRow
               leading={<Text style={styles.number}>{formatQuranNumber(item.number)}</Text>}
               title={names.title}
-              subtitle={t('index.surahSubtitle', { name: names.gloss, verses, revelation })}
+              subtitle={t('index.surahSubtitle', {
+                count: item.verseCount,
+                name: isolate(names.gloss),
+                verses: isolate(verses),
+                revelation,
+              })}
               trailing={
                 names.trailing === null ? null : (
                   <Text style={styles.arabicName}>{names.trailing}</Text>
@@ -289,7 +294,6 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
       const isJuz = segment === 'juz';
       return (
         <ListRow
-          leading={<Text style={styles.number}>{formatQuranNumber(item.number)}</Text>}
           title={
             isJuz
               ? t('index.juzTitle', { number: formatQuranNumber(item.number) })
@@ -327,6 +331,8 @@ export function QuranIndexScreen({ mode }: QuranIndexScreenProps) {
           the only screen that keeps itself lit — and only while a queue is actually moving. */}
       {reciterId === null ? null : <DownloadKeepAwake reciterId={reciterId} />}
       <AppHeader
+        showBack
+        onBack={exit}
         title={t('titles.index')}
         trailing={
           <HeaderActionButton

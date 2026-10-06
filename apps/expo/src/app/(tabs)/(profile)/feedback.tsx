@@ -24,7 +24,7 @@ import { SPACING, screenContentStyle } from '@/constants/spacing';
 import { captionLetterSpacing, FONT_SIZE, FONT_WEIGHT, LINE_HEIGHT } from '@/constants/typography';
 import { feedbackMessageSchema } from '@/lib/forms/schemas';
 import { haptics } from '@/lib/haptics';
-import { isRTL, TEXT_ALIGN_START } from '@/lib/rtl';
+import { isArabicUi, TEXT_ALIGN_START } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -209,7 +209,7 @@ const useStyles = () =>
       fontSize: FONT_SIZE.caption,
       fontWeight: FONT_WEIGHT.semibold,
       textTransform: 'uppercase',
-      letterSpacing: captionLetterSpacing(isRTL()),
+      letterSpacing: captionLetterSpacing(isArabicUi()),
       marginBottom: SPACING.sm,
       marginTop: SPACING.lg,
       color: t.colors.text.tertiary,

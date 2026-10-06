@@ -223,20 +223,30 @@
       "rows": "La descarga está incompleta. No se instaló nada.",
       "stalled": "La descarga dejó de responder. No se instaló nada.",
       "failed": "No se pudo instalar el paquete.",
-      "tooLarge": "Este paquete es demasiado grande para que este dispositivo lo verifique."
+      "tooLarge": "Este paquete es demasiado grande para abrirlo aquí.",
+      "noSpace": "No hay espacio libre suficiente en este dispositivo. No se instaló nada."
     },
     "a11y": {
       "installPack": "Instalar {{name}}",
       "removePack": "Quitar {{name}}",
-      "cancelPack": "Cancelar la instalación de {{name}}"
+      "cancelPack": "Cancelar la instalación de {{name}}",
+      "types": "Tipo de paquete"
     },
     "storage_one": "{{number}} paquete instalado · {{size}}",
     "storage_many": "{{number}} de paquetes instalados · {{size}}",
     "storage_other": "{{number}} paquetes instalados · {{size}}",
     "diskUnavailable": "No se pudo leer lo que hay instalado en este dispositivo.",
     "searchPlaceholder": "Buscar por idioma o título",
+    "types": {
+      "translation": "Traducciones",
+      "tafsir": "Tafsir",
+      "irab": "I'rab",
+      "meanings": "Significados"
+    },
     "noMatchesTitle": "No se encontraron paquetes",
     "noMatchesBody": "Prueba el nombre de un idioma en inglés o en ese idioma.",
+    "emptyTypeTitle": "Aún no hay nada de este tipo",
+    "emptyTypeBody": "Los paquetes de este tipo aparecerán aquí cuando estén disponibles.",
     "bundled": {
       "label": "Incluido en la app",
       "description": "Lo usa la búsqueda. Siempre disponible, incluso sin conexión."

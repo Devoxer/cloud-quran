@@ -28,6 +28,9 @@ const mockPacks = {
 jest.mock('@/features/packs', () => ({
   // The REAL grouping — pure, and the grouping is part of what this screen promises.
   buildPackGroups: jest.requireActual('@/features/packs/lib/packGroups').buildPackGroups,
+  isOnShelf: jest.requireActual('@/features/packs/lib/packGroups').isOnShelf,
+  SHELF_TYPES: jest.requireActual('@/features/packs/lib/packGroups').SHELF_TYPES,
+  shelvesPresent: jest.requireActual('@/features/packs/lib/packGroups').shelvesPresent,
   usePacks: () => mockPacks,
 }));
 
@@ -341,12 +344,102 @@ describe('dozens of editions (story 8-4)', () => {
   });
 });
 
+/**
+ * TRANSLATIONS AND TAFSIR, TWO HALVES OF ONE SHELF (story 8-5).
+ *
+ * ⚠️ THE FILTER IS A TYPE, APPLIED BEFORE THE GROUPING. 103 tafsir packs beside 75 translations —
+ * 52 of them in the Arabic group alone — would bury both. MUTATION: drop the `isOnShelf` filter
+ * and the tafsir pack renders under the default translations half.
+ */
+describe('the type filter (story 8-5)', () => {
+  const tafsirRow = {
+    ...baseRow,
+    id: 'tafsir-ar-saadi',
+    type: 'tafsir',
+    language: 'ar',
+    languageName: 'العربية',
+    languageNameEnglish: 'Arabic',
+    direction: 'rtl',
+    title: 'تفسير السعدي',
+    offered: { ...OFFERED, id: 'tafsir-ar-saadi', type: 'tafsir' },
+  };
+
+  it('opens on translations and shows no tafsir there', () => {
+    mockPacks.rows = [baseRow, tafsirRow];
+    render(<ContentScreen />);
+    expect(screen.getByTestId('content-pack-translation-fr-rashid')).toBeTruthy();
+    expect(screen.queryByTestId('content-pack-tafsir-ar-saadi')).toBeNull();
+  });
+
+  it('switches to tafsir and shows tafsir only, grouped by language as before', () => {
+    mockPacks.rows = [baseRow, tafsirRow];
+    render(<ContentScreen />);
+    fireEvent.press(screen.getByText('Tafsir'));
+    expect(screen.getByTestId('content-pack-tafsir-ar-saadi')).toBeTruthy();
+    expect(screen.getByTestId('content-language-ar').props.children).toBe('العربية');
+    expect(screen.queryByTestId('content-pack-translation-fr-rashid')).toBeNull();
+  });
+
+  const irabRow = {
+    ...tafsirRow,
+    id: 'irab-ar-darwish',
+    type: 'irab',
+    title: 'إعراب القرآن لدرويش',
+    offered: { ...OFFERED, id: 'irab-ar-darwish', type: 'irab' },
+  };
+
+  it('offers a segment for every type on the shelf — and none for a type with nothing', () => {
+    mockPacks.rows = [baseRow, tafsirRow, irabRow];
+    render(<ContentScreen />);
+    expect(screen.getByTestId('content-types-0').props.accessibilityLabel).toBe('Translations');
+    expect(screen.getByTestId('content-types-1').props.accessibilityLabel).toBe('Tafsir');
+    expect(screen.getByTestId('content-types-2').props.accessibilityLabel).toBe("I'rab");
+    expect(screen.queryByTestId('content-types-3')).toBeNull();
+    // The control as a whole says what it chooses.
+    expect(screen.getByTestId('content-types').props.accessibilityLabel).toBe('Pack type');
+    fireEvent.press(screen.getByTestId('content-types-2'));
+    expect(screen.getByTestId('content-pack-irab-ar-darwish')).toBeTruthy();
+    expect(screen.queryByTestId('content-pack-tafsir-ar-saadi')).toBeNull();
+  });
+
+  it('KEEPS the search across a switch of type — "Arabic" on Tafsir is "Arabic" on I’rab', () => {
+    mockPacks.rows = [baseRow, tafsirRow, irabRow];
+    render(<ContentScreen />);
+    fireEvent.press(screen.getByText('Tafsir'));
+    fireEvent.changeText(screen.getByTestId('content-search-input'), 'arabic');
+    fireEvent.press(screen.getByTestId('content-types-2'));
+    expect(screen.getByTestId('content-search-input').props.value).toBe('arabic');
+    expect(screen.getByTestId('content-pack-irab-ar-darwish')).toBeTruthy();
+  });
+
+  it('says a shelf is EMPTY — not "no match" — when its last pack goes and no query is typed', () => {
+    mockPacks.rows = [
+      baseRow,
+      { ...irabRow, offered: null, installedVersion: 1, status: 'installed' },
+    ];
+    const { rerender } = render(<ContentScreen />);
+    fireEvent.press(screen.getByText("I'rab"));
+    // The reader removes their only I'rab pack; the catalogue offers none.
+    mockPacks.rows = [baseRow];
+    rerender(<ContentScreen />);
+    expect(screen.getByTestId('content-type-empty')).toBeTruthy();
+    expect(screen.queryByTestId('content-no-matches')).toBeNull();
+  });
+
+  it('keeps a pack of an unknown type on the translations half, where it can still be removed', () => {
+    mockPacks.rows = [{ ...baseRow, type: '', installedVersion: 1, status: 'installed' }];
+    render(<ContentScreen />);
+    expect(screen.getByTestId('content-pack-translation-fr-rashid-remove')).toBeTruthy();
+  });
+});
+
 describe('the bundled English', () => {
   it('is credited with its source and version, beside the packs', () => {
     render(<ContentScreen />);
-    // A LITERAL: the grant's three facts — the publisher's title, QuranEnc, and the version.
+    expect(screen.getAllByText('English Translation - Rowwad Translation Center')).toHaveLength(1);
+    // The adjacent credit keeps the publisher and edition without repeating the title.
     expect(screen.getByTestId('content-bundled-attribution').props.children).toBe(
-      'English Translation - Rowwad Translation Center · QuranEnc.com · v1.0.19'
+      'QuranEnc.com · v1.0.19'
     );
   });
 });

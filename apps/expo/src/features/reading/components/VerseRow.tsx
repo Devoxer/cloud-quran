@@ -4,7 +4,7 @@
  * ⚠️ THE ROW SETS ITS OWN DIRECTION, AND THE APP STAYS LTR. Cloud Quran has no RTL
  * infrastructure — `I18nManager.forceRTL` is unbuilt tree-wide, the interface ships one locale,
  * and turning the whole app around is not this story's goal. What Arabic text actually needs is
- * `writingDirection: 'rtl'` + `textAlign: 'right'` on the text itself, which is local, reversible,
+ * `writingDirection: 'rtl'` + `textAlign: contentTextAlign(true)` on the text itself, which is local, reversible,
  * and does not touch a single other screen. (The pre-fork row wrote
  * `textAlign: I18nManager.isRTL ? 'left' : 'right'`, which assumes an app-wide flip this app does
  * not do — under a forced RTL it would have left-aligned the Arabic. Not carried across.)
@@ -76,13 +76,14 @@
 
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { Icon } from '@/components/ui';
 import { ARABIC_LINE_HEIGHT, stripDisplayMarks, UTHMANI_FONT_FAMILY } from '@/constants/arabic';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
 import { FONT_WEIGHT } from '@/constants/typography';
 import { useQuranNumerals } from '@/lib/format';
+import { contentTextAlign } from '@/lib/rtl';
 import { useTheme } from '@/lib/theme';
 import { useThemedStyles } from '@/lib/useThemedStyles';
 
@@ -224,6 +225,7 @@ function VerseRowInner({
     // The pre-fork meta row: bookmark control at the visual LEFT, ayah badge at the RIGHT (the
     // Arabic below is right-aligned, so the badge stays column-aligned with the verse it labels).
     meta: {
+      ...(Platform.OS === 'web' ? {} : { direction: 'ltr' as const }),
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -247,7 +249,7 @@ function VerseRowInner({
     arabic: {
       color: theme.colors.text.primary,
       fontFamily: UTHMANI_FONT_FAMILY,
-      textAlign: 'right',
+      textAlign: contentTextAlign(true),
       writingDirection: 'rtl',
     },
     /**
@@ -280,7 +282,12 @@ function VerseRowInner({
    * the stroke on a 2× screen.
    */
   const badgeUnit = Math.round(fontSize * BADGE_UNIT_RATIO);
-  const badgeSize = { width: badgeUnit * 2, height: badgeUnit * 2, borderRadius: badgeUnit };
+  const badgeSize = {
+    minWidth: badgeUnit * 2,
+    height: badgeUnit * 2,
+    borderRadius: badgeUnit,
+    paddingHorizontal: badgeUnit / 2,
+  };
   const badgeNumberSize = { fontSize: badgeUnit * BADGE_NUMBER_RATIO };
 
   return (
@@ -288,7 +295,7 @@ function VerseRowInner({
       style={[styles.row, highlighted && styles.highlighted, selected && styles.selected]}
       testID={testID}
     >
-      <View style={styles.meta}>
+      <View style={styles.meta} {...(Platform.OS === 'web' ? { dir: 'ltr' } : {})}>
         {/* ⚠️ The FILLED state is `accent.primary` on `background.primary` — measured 2026-08-28
             at ≥ 4.05:1 on every palette × scheme against WCAG 1.4.11's 3:1 non-text bar, pinned
             in `palettes.contrast.test.ts`. Outline is `text.secondary` (4.5:1, the badge

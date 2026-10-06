@@ -104,22 +104,22 @@ export function packUrl(id: string, version: number): string {
 }
 
 /**
- * The largest pack this app will install, because it is the largest it can VERIFY.
+ * The largest pack WEB will hold (story 8-5).
  *
- * ⚠️ THIS IS A MEMORY CEILING, NOT A POLICY ONE, AND IT EXISTS BECAUSE THE DIGEST CANNOT BE
- * STREAMED HERE. `expo-crypto` exposes `digest(algorithm, data)` and no incremental form, so
- * verifying a pack means holding all of its bytes in the JS heap at once — and the next pack
- * types architecture §17 names are tafsir editions in the tens of megabytes (Ibn Kathir is 23.6 MB
- * deduped). An unbounded `file.bytes()` on a low-memory Android device is an OOM during the one
- * step whose entire job is to be trustworthy.
+ * ⚠️ NATIVE NEEDS NO VERIFICATION CEILING ANY MORE, AND THAT IS WHAT LETS TABARI INSTALL. Story 8-2
+ * capped every pack at 32 MB because the digest could not be streamed: `expo-crypto` hashes one
+ * buffer, so verifying meant holding the whole file in the JS heap. The large classical tafsirs
+ * run from 32 to 54 MB. `expo-file-system` 58 hashes a FILE natively in 64 KB chunks
+ * (`File.digest('SHA-256')`), so the native install verifies a pack of any size without the file
+ * ever entering JS (`features/packs/lib/packStore.ts`); it keeps only the sanity cap below.
  *
- * 32 MB clears every source the epic names with room, and a pack above it is REFUSED with a typed
- * reason rather than attempted and crashed. ⚠️ RAISING THIS NUMBER IS NOT THE FIX — the fix is an
- * incremental digest (a chunked `File.open()` read into a streaming hash), which needs a hashing
- * dependency and is therefore an owner call under the story's "Ask First". Until then the ceiling
- * is the honest answer. (Story 8-2 review, C5.)
+ * ⚠️ WEB KEEPS ONE, BECAUSE ON WEB THE BYTES ARE THE PACK. A web pack is fetched into memory,
+ * hashed there and then HELD there for the session (`features/packs/lib/webPack.ts`), so its size
+ * is a heap cost for as long as it is open. 128 MB clears the largest published pack — al-Alusi's
+ * tafsir, 54.1 MB measured 2026-10-05 — with room; anything above it is refused with `tooLarge`
+ * before a byte is fetched. `catalogue.test.ts` holds every published pack under it.
  */
-export const PACK_MAX_VERIFIABLE_BYTES = 32 * 1024 * 1024;
+export const PACK_WEB_MAX_BYTES = 128 * 1024 * 1024;
 
 /**
  * How long a transfer may deliver NO bytes before it is called stalled.
@@ -130,3 +130,17 @@ export const PACK_MAX_VERIFIABLE_BYTES = 32 * 1024 * 1024;
  * progress event, so a slow connection is never mistaken for a stalled one.
  */
 export const PACK_STALL_TIMEOUT_MS = 30_000;
+
+/**
+ * Everything web holds at once, across packs (story 8-5 review). Holding a pack that would push
+ * the session past it first releases the least recently used held packs — three classical tafsirs
+ * at ~50 MB each are otherwise ~150 MB of heap a reader never asked to keep.
+ */
+export const PACK_WEB_SESSION_BYTES = 192 * 1024 * 1024;
+
+/**
+ * A SANITY cap on one native install — not a verification limit (the digest streams) but a
+ * refusal of a catalogue whose `bytes` is nonsense. The largest published pack is 54 MB; a
+ * corrupt entry claiming gigabytes must not start an unbounded download onto a reader's phone.
+ */
+export const PACK_NATIVE_MAX_BYTES = 512 * 1024 * 1024;

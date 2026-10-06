@@ -90,7 +90,9 @@ describe('QuranEnc helpers', () => {
 
   it('names every language in both tables, and refuses one it has never heard of', () => {
     deepStrictEqual(Object.keys(LANGUAGE_NAMES).sort(), Object.keys(LANGUAGE_NAMES_ENGLISH).sort());
-    strictEqual(Object.keys(LANGUAGE_NAMES).length, 56);
+    // QuranEnc's 56, plus the four the tafsir packs add (story 8-5: ar, bn, it, ru).
+    strictEqual(Object.keys(LANGUAGE_NAMES).length, 60);
+    deepStrictEqual(languageNameOf('ar'), { native: 'العربية', english: 'Arabic' });
     deepStrictEqual(languageNameOf('ur'), { native: 'اردو', english: 'Urdu' });
     throws(() => languageNameOf('xx'), /No language name recorded for "xx"/);
   });

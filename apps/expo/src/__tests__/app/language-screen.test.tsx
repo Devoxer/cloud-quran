@@ -147,8 +147,8 @@ describe('numeral system', () => {
     // A `SettingsRow` description carries no testID of its own, so this reads the rendered text —
     // which is the assertion that matters anyway: the SAMPLE is the affordance.
     const { getByText } = render(<LanguageScreen />);
-    expect(getByText('٠ ١ ٢ ٣')).toBeTruthy();
-    expect(getByText('0 1 2 3')).toBeTruthy();
+    expect(getByText('\u2066٠ ١ ٢ ٣\u2069')).toBeTruthy();
+    expect(getByText('\u20660 1 2 3\u2069')).toBeTruthy();
   });
 
   /**

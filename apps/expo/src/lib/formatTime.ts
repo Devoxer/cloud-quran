@@ -28,7 +28,9 @@ export function formatSleepRemaining(remainingMs: number, endOfSection: boolean)
   if (endOfSection) return i18n.t('player:sleep.end');
   if (!(remainingMs > 0)) return '';
   const hm = (hours: number, minutes: number) =>
-    i18n.t('player:sleep.hoursMinutes', { hours, minutes });
+    minutes === 0
+      ? i18n.t('player:sleep.hours', { hours })
+      : i18n.t('player:sleep.hoursMinutes', { hours, minutes });
   if (remainingMs >= 3600000) {
     const hours = Math.floor(remainingMs / 3600000);
     const mins = Math.ceil((remainingMs % 3600000) / 60000);

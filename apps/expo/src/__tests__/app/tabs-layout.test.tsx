@@ -17,7 +17,7 @@ jest.mock(
 import { act } from '@testing-library/react-native';
 import { router, Stack } from 'expo-router';
 import { renderRouter, screen } from 'expo-router/testing-library';
-import { BackHandler, Text } from 'react-native';
+import { BackHandler, Platform, Text } from 'react-native';
 
 import TabLayout from '@/app/(tabs)/_layout';
 
@@ -47,6 +47,13 @@ it.each([
  * The handler is captured from `BackHandler.addEventListener`, the call the layout makes.
  */
 describe('hardware back', () => {
+  const originalPlatform = Platform.OS;
+  beforeEach(() => {
+    (Platform as { OS: string }).OS = 'android';
+  });
+  afterEach(() => {
+    (Platform as { OS: string }).OS = originalPlatform;
+  });
   function captureBack() {
     const handlers: (() => boolean)[] = [];
     jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {

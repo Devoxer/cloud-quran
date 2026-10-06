@@ -65,6 +65,7 @@ const TITLE_CHEVRON_SIZE = 18;
 
 export interface AppHeaderProps {
   title: string;
+  subtitle?: string;
   /** Start-edge slot (after the back control). ⚠️ Never name a prop `headerLeft` — reserved. */
   leading?: ReactNode;
   /** End-edge slot. ⚠️ Never name a prop `headerRight` — reserved. */
@@ -83,6 +84,7 @@ export interface AppHeaderProps {
    * knows its own stack — see the docblock for the measured one-commit staleness this closes.
    */
   showBack?: boolean;
+  onBack?: () => void;
   /**
    * Whether the bar is currently reachable. `false` takes the back control and the title entry out
    * of the WEB KEYBOARD tab order — see `ReadingChrome`'s note on the third accessibility tree.
@@ -93,11 +95,13 @@ export interface AppHeaderProps {
 
 export function AppHeader({
   title,
+  subtitle,
   leading,
   trailing,
   onTitlePress,
   titleHint,
   showBack,
+  onBack,
   interactive = true,
   testID = 'app-header',
 }: AppHeaderProps) {
@@ -153,17 +157,22 @@ export function AppHeader({
      * universal signal for TEXT SEARCH, which this is not, and which the Quran will eventually
      * want — spending that icon on a navigator would mislead now and collide later.
      *
-     * ⚠️ `chevron-forward`, NOT `chevron-down`: a DOWN chevron promises a dropdown that opens in
-     * place, and the index is a pushed SCREEN you navigate to and come back from. Forward is what
-     * the index's own `ListRow`s use for the same "this goes somewhere" meaning, and the
-     * `forward` name is direction-aware — it flips on its own if the UI is ever laid out RTL,
-     * which a literal right-pointing glyph would not.
+     * A down caret distinguishes the picker from the separate back control.
      */
     titleChevron: {
       marginStart: SPACING.xs,
     },
     titleInPress: {
-      flex: 0,
+      flexGrow: 0,
+      flexShrink: 1,
+    },
+    titleColumn: { flexShrink: 1 },
+    compactTitle: { fontSize: FONT_SIZE.bodySmall },
+    subtitle: {
+      fontSize: FONT_SIZE.caption,
+      color: theme.colors.text.secondary,
+      textAlign: TEXT_ALIGN_START,
+      marginHorizontal: SPACING.sm,
     },
   }));
 
@@ -172,7 +181,11 @@ export function AppHeader({
 
   const titleText = (
     <Text
-      style={[styles.title, onTitlePress ? styles.titleInPress : null]}
+      style={[
+        styles.title,
+        onTitlePress ? styles.titleInPress : null,
+        subtitle ? styles.compactTitle : null,
+      ]}
       numberOfLines={1}
       testID="chrome-title"
     >
@@ -185,7 +198,7 @@ export function AppHeader({
       {(showBack ?? router.canGoBack()) ? (
         <HeaderActionButton
           name="chevron-back"
-          onPress={() => router.back()}
+          onPress={onBack ?? (() => router.back())}
           color={colors.accent.primary}
           accessibilityLabel={t('common:actions.back')}
           focusable={interactive}
@@ -203,9 +216,16 @@ export function AppHeader({
           tabIndex={interactive ? 0 : -1}
           testID="chrome-title-entry"
         >
-          {titleText}
+          <View style={styles.titleColumn}>
+            {titleText}
+            {subtitle ? (
+              <Text style={styles.subtitle} numberOfLines={1} testID="chrome-location">
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
           <Icon
-            name="chevron-forward"
+            name="chevron-down"
             size={TITLE_CHEVRON_SIZE}
             color={colors.accent.primary}
             style={styles.titleChevron}

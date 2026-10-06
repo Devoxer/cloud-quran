@@ -108,7 +108,8 @@
     "end": "النهاية",
     "hoursMinutes": "{{hours}} س {{minutes}} د",
     "minutes": "{{minutes}} د",
-    "seconds": "{{seconds}} ث"
+    "seconds": "{{seconds}} ث",
+    "hours": "{{hours}} س"
   },
   "options": {
     "sheetTitle": "التشغيل"

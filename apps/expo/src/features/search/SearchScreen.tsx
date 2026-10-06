@@ -17,8 +17,8 @@
  * "Maximum update depth exceeded", dropping the whole app into the router ErrorBoundary.
  * Measured in WebKit, deterministic, and bisected three ways — `dismissAll()` crashes,
  * `replace(HOME_HREF)` crashes, `back()` does not, and the same flow entered from the index does
- * not crash at all. So the exit pops one route at a time until nothing pushed remains, which
- * reaches the reading surface in BOTH cases. A CANCEL is different and stays a single `back()`:
+ * not crash at all. So the exit pops the routes above the mounted tabs in one counted action,
+ * reaching the reading surface without repeated queued back actions. A CANCEL is different and stays a single `back()`:
  * a reader who changes their mind wants the screen they came from, not the top of the stack.
  *
  * ⚠️ THE POP IS DEFERRED ONE MACROTASK, AND IT IS A MEASURED FIX INHERITED FROM 6-3 RATHER THAN
@@ -39,10 +39,10 @@
  */
 
 import { FlashList } from '@shopify/flash-list';
-import { useRouter } from 'expo-router';
+import { useRootNavigationState, useRouter } from 'expo-router';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo, View } from 'react-native';
+import { AccessibilityInfo, KeyboardAvoidingView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader, EmptyState, ErrorView, LoadingView, SearchBar } from '@/components/ui';
@@ -54,10 +54,6 @@ import { SearchResultRow } from './components/SearchResultRow';
 import { useSearchCorpus } from './hooks/useSearchCorpus';
 import { isSearchable, type SearchResult, searchVerses } from './lib/search';
 
-/** How many pushed routes this screen will unwind before giving up. `(tabs)` → `surahs` → `search`
- *  is two; the bound only exists so a stale `canGoBack()` cannot spin the loop. */
-const MAX_POPS = 5;
-
 export interface SearchScreenProps {
   /** The surface the reader came from — decides the write's mode and the no-history exit. */
   mode: 'reading' | 'mushaf';
@@ -66,6 +62,7 @@ export interface SearchScreenProps {
 export function SearchScreen({ mode }: SearchScreenProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const rootState = useRootNavigationState();
   const { reportVerse } = usePosition(mode);
   const { verses, loading, error, reload } = useSearchCorpus();
   const [query, setQuery] = useState('');
@@ -103,7 +100,7 @@ export function SearchScreen({ mode }: SearchScreenProps) {
   // they meant. The guard is checked before the WRITE, not only before the navigation.
   const exiting = useRef(false);
   // ⚠️ AND THE TIMER IS CANCELLED ON UNMOUNT. The dismiss is deferred a macrotask, so a hardware
-  // back (or a cancel) inside that window would otherwise fire `dismissAll()` AFTER the reader
+  // back (or a cancel) inside that window would otherwise dismiss AFTER the reader
   // has already left — unwinding the stack out from under whatever they went to instead.
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -127,26 +124,22 @@ export function SearchScreen({ mode }: SearchScreenProps) {
         // ErrorBoundary. `dismissAll()` crashes. `replace(HOME_HREF)` crashes. `back()` — which
         // pops the modal and REVEALS what is already there — does not.
         //
-        // So: pop one route at a time until nothing pushed is left. That reaches the reading
-        // surface from the index too (`(tabs)` → `surahs` → `search` is two pops), which is what
-        // `dismissAll()` was doing and is what the acceptance criterion asks for — the search
-        // surface GONE, not merely one screen back. The bound is belt-and-braces: `canGoBack()`
-        // going stale would otherwise spin here.
-        let popped = 0;
-        while (popped < MAX_POPS && router.canGoBack()) {
-          router.back();
-          popped += 1;
-        }
-        // Popped NOTHING — a deep link with no stack beneath it at all. Only then navigate, and
+        // Router actions are queued: canGoBack() stays true while consecutive back() calls
+        // await dispatch, producing extra GO_BACK actions. Pop the known root-stack depth
+        // in one action instead. This reveals the mounted tabs without re-entering them.
+        const tabsIndex = rootState.routes.findIndex((route) => route.name === '(tabs)');
+        const popped = tabsIndex >= 0 ? Math.max(0, rootState.index - tabsIndex) : 0;
+        if (popped > 0) router.dismiss(popped);
+        // No tabs below the picker — a deep link with no reader stack beneath it. Only then navigate, and
         // only because the alternative is dead-ending on a screen with no back control. When the
-        // loop did pop, we are already where we belong and a `replace` here would re-enter the
+        // action did pop, we are already where we belong and a `replace` here would re-enter the
         // mounted tab tree, which is the crash this whole comment is about.
         if (popped === 0) {
           router.replace(mode === 'mushaf' ? HOME_HREF : READ_HREF);
         }
       }, 0);
     },
-    [reportVerse, router, mode]
+    [reportVerse, router, mode, rootState]
   );
 
   // ⚠️ CANCEL IS WIRED HERE RATHER THAN LEFT TO THE HEADER CHEVRON, because that chevron is
@@ -244,17 +237,18 @@ export function SearchScreen({ mode }: SearchScreenProps) {
 
   return (
     <View style={styles.screen} testID="search-screen">
-      <AppHeader title={t('navigation:titles.search')} />
+      <AppHeader title={t('navigation:titles.search')} showBack onBack={cancel} />
       <SearchBar
         value={query}
         onChangeText={setQuery}
         placeholder={t('common:search.placeholder')}
-        onCancel={cancel}
         style={styles.field}
         autoFocus
         testID="search-field"
       />
-      <View style={styles.content}>{body()}</View>
+      <KeyboardAvoidingView style={styles.content} behavior="padding">
+        {body()}
+      </KeyboardAvoidingView>
     </View>
   );
 }

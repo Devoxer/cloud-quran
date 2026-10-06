@@ -29,7 +29,8 @@
     "sideTranslation": "Translation",
     "rowA11y": "{{name}}, ayah {{verse}}, {{side}}. {{text}}. Opens this ayah.",
     "resultsA11y_one": "{{count}} result",
-    "resultsA11y_other": "{{count}} results"
+    "resultsA11y_other": "{{count}} results",
+    "rowMetaArabic": "{{name}} {{surah}}:{{verse}}"
   },
   "notFound": {
     "title": "Oops!",
@@ -71,7 +72,10 @@
     "pageErrorA11y": "Page {{page}}, failed to load",
     "pageErrorTitle": "This page could not be loaded",
     "pageErrorBody": "Its font is not on this device yet. Check your connection and try again.",
-    "toggleChrome": "Show or hide the toolbars"
+    "toggleChrome": "Show or hide the toolbars",
+    "nextPage": "Next page",
+    "previousPage": "Previous page",
+    "location": "Page {{page}} · Juz’ {{juz}} · Hizb {{hizb}}"
   },
   "bookmarks": {
     "add": "Add bookmark",

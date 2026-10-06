@@ -1,3 +1,4 @@
+import { useFonts } from 'expo-font';
 /**
  * MushafPage — one page of the Madinah mushaf, drawn from layout data + its per-page font
  * (story 6-2, adapted from the pre-fork `MushafMode/MushafPage.tsx`).
@@ -82,7 +83,7 @@
 
 import type { MushafLine } from 'quran-data';
 import { SURAH_COUNT, SURAH_METADATA } from 'quran-data';
-import { Fragment, useEffect } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -99,6 +100,7 @@ import {
 import { OPACITY } from '@/constants/opacity';
 import { RADII } from '@/constants/radii';
 import { SPACING } from '@/constants/spacing';
+import { SURAH_HEADER_FONTS, SURAH_HEADER_GLYPHS } from '@/constants/surah-header';
 import { FONT_SIZE } from '@/constants/typography';
 import { useQuranNumerals } from '@/lib/format';
 import { surahDisplayName } from '@/lib/surahName';
@@ -183,8 +185,6 @@ const useStyles = () =>
       paddingHorizontal: SPACING.xl,
     },
     specialPageFrame: {
-      borderWidth: 1.5,
-      borderRadius: RADII.lg,
       paddingVertical: SPACING.xxxl,
       paddingHorizontal: SPACING.lg,
       width: '100%',
@@ -201,20 +201,21 @@ const useStyles = () =>
       opacity: OPACITY.overlay,
     },
     surahHeaderFrame: {
+      width: '100%',
       alignItems: 'center',
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.xl,
-      marginHorizontal: SPACING.lg,
-      borderWidth: 2,
-      borderRadius: RADII.xl,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.background.secondary,
+      justifyContent: 'center',
+      marginVertical: SPACING.sm,
     },
     surahHeaderText: {
       color: theme.colors.text.primary,
-      fontFamily: UTHMANI_FONT_FAMILY,
-      writingDirection: 'rtl',
       textAlign: 'center',
+      includeFontPadding: false,
+    },
+    surahHeaderAccent: {
+      color: theme.colors.accent.soft,
+      position: 'absolute',
+      textAlign: 'center',
+      includeFontPadding: false,
     },
     basmalaLine: {
       flexDirection: 'row',
@@ -318,7 +319,13 @@ export function MushafPage({
     containerWidth * MUSHAF_GLYPH_SCALE,
     (usableHeight * MUSHAF_HEIGHT_BUDGET) / (PAGE_LINES * MUSHAF_LINE_HEIGHT_RATIO)
   );
-  const safeArea = { paddingTop: insets.top, paddingBottom: insets.bottom };
+  const safeArea = {
+    paddingTop: insets.top,
+    paddingBottom: insets.bottom,
+    maxWidth: isWeb ? MUSHAF_WEB_MAX_WIDTH : undefined,
+    width: '100%' as const,
+    alignSelf: 'center' as const,
+  };
   const isSpecialPage = pageNumber <= SPECIAL_PAGE_MAX;
 
   if (content.error !== null) {
@@ -524,11 +531,11 @@ function MushafLineView({
     const surahNumber = Number.parseInt(line.surah ?? '0', 10);
     const metadata = surahNumber > 0 ? SURAH_METADATA[surahNumber - 1] : null;
     return (
-      <View style={styles.surahHeaderFrame}>
-        <Text style={[styles.surahHeaderText, { fontSize: glyphFontSize }]}>
-          {metadata?.nameArabic ?? line.text ?? ''}
-        </Text>
-      </View>
+      <SurahBand
+        surah={surahNumber}
+        fallback={metadata?.nameArabic ?? line.text ?? ''}
+        styles={styles}
+      />
     );
   }
 
@@ -634,5 +641,48 @@ function MushafLineView({
         );
       })}
     </Text>
+  );
+}
+
+function SurahBand({
+  surah,
+  fallback,
+  styles,
+}: {
+  surah: number;
+  fallback: string;
+  styles: MushafStyles;
+}) {
+  const [width, setWidth] = useState(0);
+  const [loaded] = useFonts(SURAH_HEADER_FONTS);
+  const fontSize = (width * 2500) / 8256;
+  const geometry = { fontSize, lineHeight: fontSize * 0.45 };
+  const glyph = SURAH_HEADER_GLYPHS[surah - 1];
+  return (
+    <View
+      style={styles.surahHeaderFrame}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      testID={`surah-band-${surah}`}
+      accessibilityLabel={fallback}
+    >
+      {loaded && width > 0 && glyph ? (
+        <>
+          <Text
+            style={[styles.surahHeaderAccent, geometry, { fontFamily: 'CloudQuranSurahAccent' }]}
+            accessible={false}
+          >
+            {glyph}
+          </Text>
+          <Text
+            style={[styles.surahHeaderText, geometry, { fontFamily: 'CloudQuranSurahLine' }]}
+            accessible={false}
+          >
+            {glyph}
+          </Text>
+        </>
+      ) : (
+        <Text style={styles.surahHeaderText}>{fallback}</Text>
+      )}
+    </View>
   );
 }
